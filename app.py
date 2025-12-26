@@ -10,6 +10,7 @@ import json
 # Imports locais
 from config import Config
 from models import JournalEntry, BasePadrao, BaseMarcacao, AuditLog, GrupoConfig, EstabelecimentoLogo, get_db_session, init_db
+from sqlalchemy import or_
 from processors import processar_fatura_itau, processar_extrato_itau, processar_mercado_pago
 from classifiers import classificar_transacoes, regenerar_padroes
 from utils import deduplicate_transactions, get_duplicados_temp, clear_duplicados_temp, get_duplicados_count
@@ -243,14 +244,14 @@ def upload():
         if futuras_removidas > 0:
             flash(f'{futuras_removidas} transações futuras removidas', 'info')
         
-        return redirect(url_for('dashboard'))
+        return redirect(url_for('revisao_upload'))
     
     # GET - Mostra formulário de upload
     return render_template('upload.html')
 
 
-@app.route('/dashboard_old')
-def dashboard_old():
+@app.route('/revisao_upload')
+def revisao_upload():
     """Dashboard com resumo das transações processadas (versão antiga baseada em sessão)"""
     
     transacoes = session.get('transacoes', [])
@@ -308,7 +309,7 @@ def dashboard_old():
     duplicados_count = session.get('duplicados_count', 0)
     
     return render_template(
-        'dashboard.html',
+        'revisao_upload.html',
         stats_por_origem=stats_por_origem,
         origens=list(por_origem.keys()),
         total_transacoes=len(transacoes),
@@ -326,143 +327,57 @@ def duplicados():
     return render_template('duplicados.html', duplicados=duplicados_list)
 
 
-@app.route('/validar', methods=['GET', 'POST'])
+@app.route('/validar')
 def validar():
-    """Validação manual de transações"""
+    """Página simples para exibir transações não classificadas"""
     
-    if request.method == 'POST':
-        # Salva classificação manual
-        idx = int(request.form.get('idx', 0))
-        grupo = request.form.get('grupo', '')
-        subgrupo = request.form.get('subgrupo', '')
-        tipo_gasto = request.form.get('tipo_gasto', '')
+    db_session = get_db_session()
+    
+    try:
+        # Busca transações sem classificação
+        page = request.args.get('page', 1, type=int)
+        per_page = 10
         
-        transacoes = session.get('transacoes', [])
+        transacoes = db_session.query(JournalEntry).filter(
+            or_(
+                JournalEntry.GRUPO.is_(None),
+                JournalEntry.GRUPO == '',
+                JournalEntry.SUBGRUPO.is_(None),
+                JournalEntry.SUBGRUPO == '',
+                JournalEntry.TipoGasto.is_(None),
+                JournalEntry.TipoGasto == ''
+            )
+        ).order_by(JournalEntry.Data.desc()).limit(per_page).offset((page-1) * per_page).all()
         
-        if 0 <= idx < len(transacoes):
-            transacoes[idx]['GRUPO'] = grupo
-            transacoes[idx]['SUBGRUPO'] = subgrupo
-            transacoes[idx]['TipoGasto'] = tipo_gasto
-            transacoes[idx]['MarcacaoIA'] = 'Manual'
-            transacoes[idx]['ValidarIA'] = ''
-            
-            session['transacoes'] = transacoes
-            flash('Classificação salva!', 'success')
+        # Total para paginação
+        total = db_session.query(JournalEntry).filter(
+            or_(
+                JournalEntry.GRUPO.is_(None),
+                JournalEntry.GRUPO == '',
+                JournalEntry.SUBGRUPO.is_(None),
+                JournalEntry.SUBGRUPO == '',
+                JournalEntry.TipoGasto.is_(None),
+                JournalEntry.TipoGasto == ''
+            )
+        ).count()
         
-        # Redireciona para próxima
-        return redirect(url_for('validar', page=request.args.get('page', 1), tipo=request.args.get('tipo', 'pendentes')))
+        total_pages = (total + per_page - 1) // per_page
+        
+        print(f"Transações não classificadas: {total}")
+        
+        return render_template('validar.html', 
+                             transacoes=transacoes,
+                             page=page,
+                             total_pages=total_pages,
+                             total=total)
     
-    # GET - Lista transações para validar
-    tipo = request.args.get('tipo', 'pendentes')
-    transacoes = session.get('transacoes', [])
-    
-    # Filtros
-    filtro_grupo = request.args.get('grupo', '')
-    filtro_subgrupo = request.args.get('subgrupo', '')
-    filtro_tipo_gasto = request.args.get('tipo_gasto', '')
-    filtro_classificacao = request.args.get('classificacao', '')
-    
-    if tipo == 'todas':
-        # Mostra todas as transações
-        transacoes_validar = [(idx, t) for idx, t in enumerate(transacoes)]
-        titulo = 'Todas as Transações'
-    else:
-        # Mostra apenas pendentes
-        transacoes_validar = [
-            (idx, t) for idx, t in enumerate(transacoes)
-            if t.get('ValidarIA') == 'VALIDAR'
-        ]
-        titulo = 'Transações Pendentes de Validação'
-    
-    # Aplica filtros se houver
-    if filtro_grupo or filtro_subgrupo or filtro_tipo_gasto or filtro_classificacao:
-        transacoes_filtradas = []
-        for idx, trans in transacoes_validar:
-            match = True
-            if filtro_grupo and trans.get('GRUPO', '') != filtro_grupo:
-                match = False
-            if filtro_subgrupo and trans.get('SUBGRUPO', '') != filtro_subgrupo:
-                match = False
-            if filtro_tipo_gasto and trans.get('TipoGasto', '') != filtro_tipo_gasto:
-                match = False
-            if filtro_classificacao and trans.get('MarcacaoIA', '') != filtro_classificacao:
-                match = False
-            if match:
-                transacoes_filtradas.append((idx, trans))
-        transacoes_validar = transacoes_filtradas
-    
-    if not transacoes_validar:
-        if tipo == 'todas':
-            flash('Não há transações processadas', 'info')
-        else:
-            flash('Não há transações pendentes de validação', 'info')
+    except Exception as e:
+        app.logger.error(f"Erro na validação: {e}")
+        flash(f"Erro ao carregar transações: {e}", 'error')
         return redirect(url_for('dashboard'))
     
-    # Paginação
-    page = int(request.args.get('page', 1))
-    per_page = 20
-    total = len(transacoes_validar)
-    total_pages = (total + per_page - 1) // per_page
-    
-    start = (page - 1) * per_page
-    end = start + per_page
-    
-    transacoes_pagina = transacoes_validar[start:end]
-    
-    # Carrega grupos e subgrupos
-    db_session = get_db_session()
-    marcacoes = db_session.query(BaseMarcacao).all()
-    db_session.close()
-    
-    # Organiza grupos, subgrupos e tipos de gasto
-    grupos_dict = {}
-    tipo_gasto_dict = {}  # Para preencher automaticamente TipoGasto
-    
-    for m in marcacoes:
-        if m.GRUPO not in grupos_dict:
-            grupos_dict[m.GRUPO] = set()
-        grupos_dict[m.GRUPO].add(m.SUBGRUPO)
-        
-        # Mapeia grupo+subgrupo -> TipoGasto
-        chave = f"{m.GRUPO}|{m.SUBGRUPO}"
-        tipo_gasto_dict[chave] = m.TipoGasto
-    
-    # Converte sets para listas (JSON serializable)
-    grupos_dict = {k: sorted(list(v)) for k, v in grupos_dict.items()}
-    
-    grupos = sorted(grupos_dict.keys())
-    
-    # Verifica tipo de visualização
-    view_type = request.args.get('view', 'default')
-    
-    # Escolhe o template baseado no tipo de view
-    if view_type == 'dashboard':
-        template = 'validar_dashboard.html'
-    elif view_type == 'compact':
-        template = 'validar_compact.html'
-    elif view_type == 'icons':
-        template = 'validar_icons.html'
-    else:
-        template = 'validar.html'
-    
-    return render_template(
-        template,
-        transacoes=transacoes_pagina,
-        page=page,
-        total_pages=total_pages,
-        total=total,
-        grupos=grupos,
-        grupos_dict=grupos_dict,
-        tipo_gasto_dict=tipo_gasto_dict,
-        titulo=titulo,
-        tipo=tipo,
-        filtro_grupo=filtro_grupo,
-        filtro_subgrupo=filtro_subgrupo,
-        filtro_tipo_gasto=filtro_tipo_gasto,
-        filtro_classificacao=filtro_classificacao,
-        view_type=view_type,
-        transacoes_todas=transacoes_validar  # Para gráficos
-    )
+    finally:
+        db_session.close()
 
 
 @app.route('/validar/lote', methods=['POST'])
@@ -663,6 +578,178 @@ def listar_marcacoes():
         
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/validarV2')
+def validar_v2():
+    """Nova página de validação baseada no teste que funciona"""
+    
+    print(f"\n=== VALIDAR V2 ===")
+    
+    # Busca transações sem grupo (precisam validação)
+    db_session = get_db_session()
+    
+    # Filtros
+    filtro_classificacao = request.args.get('classificacao', 'nao_classificadas')
+    
+    if filtro_classificacao == 'nao_classificadas':
+        transacoes_validar = db_session.query(JournalEntry).filter(
+            JournalEntry.GRUPO.is_(None)
+        ).order_by(JournalEntry.Data.desc()).all()
+    else:
+        # Outras opções de filtro se necessário
+        transacoes_validar = db_session.query(JournalEntry).filter(
+            JournalEntry.GRUPO.is_(None)
+        ).order_by(JournalEntry.Data.desc()).all()
+    
+    # Paginação
+    page = int(request.args.get('page', 1))
+    per_page = 10
+    total = len(transacoes_validar)
+    total_pages = (total + per_page - 1) // per_page
+    start = (page - 1) * per_page
+    end = start + per_page
+    transacoes_pagina = transacoes_validar[start:end]
+    
+    # Carrega marcações
+    marcacoes = db_session.query(BaseMarcacao).all()
+    db_session.close()
+    
+    print(f"Transações para validar: {total}")
+    print(f"Marcações carregadas: {len(marcacoes)}")
+    
+    # Organiza dados para dropdowns
+    grupos_dict = {}
+    tipo_gasto_dict = {}
+    
+    for m in marcacoes:
+        if m.GRUPO not in grupos_dict:
+            grupos_dict[m.GRUPO] = set()
+        grupos_dict[m.GRUPO].add(m.SUBGRUPO)
+        
+        chave = f"{m.GRUPO}|{m.SUBGRUPO}"
+        tipo_gasto_dict[chave] = m.TipoGasto
+    
+    # Converte sets para listas
+    grupos_dict = {k: sorted(list(v)) for k, v in grupos_dict.items()}
+    grupos = sorted(grupos_dict.keys())
+    
+    print(f"Grupos organizados: {len(grupos)}")
+    print(f"==================")
+    
+    return render_template(
+        'validarV2.html',
+        transacoes=transacoes_pagina,
+        page=page,
+        total_pages=total_pages,
+        total=total,
+        grupos=grupos,
+        grupos_dict=grupos_dict,
+        tipo_gasto_dict=tipo_gasto_dict
+    )
+
+
+@app.route('/teste_dropdown')
+def teste_dropdown():
+    """Página simples para testar dropdowns"""
+    
+    print(f"\n=== TESTE DROPDOWN ===")
+    
+    # Carrega marcações
+    db_session = get_db_session()
+    marcacoes = db_session.query(BaseMarcacao).all()
+    db_session.close()
+    
+    print(f"Marcações carregadas: {len(marcacoes)}")
+    
+    # Organiza dados
+    grupos_dict = {}
+    tipo_gasto_dict = {}
+    
+    for m in marcacoes:
+        if m.GRUPO not in grupos_dict:
+            grupos_dict[m.GRUPO] = set()
+        grupos_dict[m.GRUPO].add(m.SUBGRUPO)
+        
+        chave = f"{m.GRUPO}|{m.SUBGRUPO}"
+        tipo_gasto_dict[chave] = m.TipoGasto
+    
+    # Converte sets para listas
+    grupos_dict = {k: sorted(list(v)) for k, v in grupos_dict.items()}
+    grupos = sorted(grupos_dict.keys())
+    
+    print(f"Grupos encontrados: {grupos}")
+    print(f"Alimentação tem subgrupos: {'Alimentação' in grupos_dict}")
+    if 'Alimentação' in grupos_dict:
+        print(f"Subgrupos da Alimentação: {grupos_dict['Alimentação']}")
+    print(f"=====================")
+    
+    return render_template(
+        'teste_dropdown.html',
+        grupos=grupos,
+        grupos_dict=grupos_dict,
+        tipo_gasto_dict=tipo_gasto_dict
+    )
+
+
+@app.route('/admin/marcacoes')
+def admin_marcacoes():
+    """Administração de marcações (grupos/subgrupos)"""
+    
+    db_session = get_db_session()
+    
+    # Filtros
+    grupo_filtro = request.args.get('grupo', '')
+    tipo_gasto_filtro = request.args.get('tipo_gasto', '')
+    busca = request.args.get('busca', '')
+    
+    # Query base
+    query = db_session.query(BaseMarcacao)
+    
+    if grupo_filtro:
+        query = query.filter(BaseMarcacao.GRUPO == grupo_filtro)
+    
+    if tipo_gasto_filtro:
+        query = query.filter(BaseMarcacao.TipoGasto == tipo_gasto_filtro)
+    
+    if busca:
+        query = query.filter(
+            or_(
+                BaseMarcacao.GRUPO.like(f'%{busca}%'),
+                BaseMarcacao.SUBGRUPO.like(f'%{busca}%')
+            )
+        )
+    
+    # Paginação
+    page = int(request.args.get('page', 1))
+    per_page = 50
+    
+    marcacoes_paginadas = query.order_by(BaseMarcacao.GRUPO, BaseMarcacao.SUBGRUPO).limit(per_page).offset((page-1)*per_page).all()
+    total = query.count()
+    total_pages = (total + per_page - 1) // per_page
+    
+    # Obter grupos únicos para filtro
+    grupos_unicos = db_session.query(BaseMarcacao.GRUPO).distinct().order_by(BaseMarcacao.GRUPO).all()
+    grupos_lista = [g[0] for g in grupos_unicos]
+    
+    # Obter tipos de gasto únicos para filtro
+    tipos_gasto_unicos = db_session.query(BaseMarcacao.TipoGasto).distinct().order_by(BaseMarcacao.TipoGasto).all()
+    tipos_gasto_lista = [t[0] for t in tipos_gasto_unicos]
+    
+    db_session.close()
+    
+    return render_template(
+        'admin_marcacoes.html',
+        marcacoes=marcacoes_paginadas,
+        page=page,
+        total_pages=total_pages,
+        total=total,
+        grupos_lista=grupos_lista,
+        tipos_gasto_lista=tipos_gasto_lista,
+        grupo_filtro=grupo_filtro,
+        tipo_gasto_filtro=tipo_gasto_filtro,
+        busca=busca
+    )
 
 
 @app.route('/admin/padroes')

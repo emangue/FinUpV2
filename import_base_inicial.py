@@ -1,15 +1,52 @@
 """
 Script para importar base inicial do base_dados_geral.xlsx
+⚠️ ATENÇÃO: Este script modifica MÚLTIPLAS bases de dados
+🛡️ RECOMENDADO: Use import_marcacoes_seguro.py apenas para BaseMarcacoesGastos
 """
 import pandas as pd
 from models import JournalEntry, BasePadrao, BaseMarcacao, init_db, get_db_session
 from datetime import datetime
 
 
+def confirmar_importacao_completa():
+    """Solicita confirmação para importação de todas as bases"""
+    print("⚠️ " + "="*60)
+    print("🔔 ATENÇÃO: IMPORTAÇÃO COMPLETA DE MÚLTIPLAS BASES")
+    print("="*65)
+    print("📊 Este script importará TODAS as seguintes bases:")
+    print("   1. BaseMarcacoesGastos → base_marcacoes")
+    print("   2. Journal Entries → journal_entries")
+    print("   3. Base_Padroes → base_padroes")
+    print()
+    print("🛡️  RECOMENDAÇÃO:")
+    print("   • Para apenas BaseMarcacoesGastos: use import_marcacoes_seguro.py")
+    print("   • Para importação completa: continue aqui")
+    print()
+    print("⚡ Esta operação pode SOBRESCREVER dados existentes!")
+    
+    resposta = input("\n❓ Deseja REALMENTE importar TODAS as bases? [s/N]: ").strip().lower()
+    return resposta in ['s', 'sim', 'y', 'yes']
+
+
+def confirmar_base_individual(nome_base, descricao):
+    """Confirma importação de uma base específica"""
+    print(f"\n📊 Importar {nome_base}?")
+    print(f"   Descrição: {descricao}")
+    
+    resposta = input(f"   Confirmar importação de {nome_base}? [S/n]: ").strip().lower()
+    return resposta in ['', 's', 'sim', 'y', 'yes']
+
+
 def importar_base_inicial():
     """Importa dados do arquivo base_dados_geral.xlsx"""
     
     print("🚀 Iniciando importação da base inicial...\n")
+    
+    # Confirmação inicial
+    if not confirmar_importacao_completa():
+        print("\n❌ Importação cancelada pelo usuário")
+        print("💡 Para importar apenas BaseMarcacoesGastos, use: python import_marcacoes_seguro.py")
+        return
     
     # Inicializa banco
     init_db()
@@ -26,41 +63,45 @@ def importar_base_inicial():
         
         # 1. Importar BaseMarcacoesGastos
         if 'BaseMarcacoesGastos' in xls.sheet_names:
-            print("📊 Importando BaseMarcacoesGastos...")
-            df_marcacoes = pd.read_excel(xls, 'BaseMarcacoesGastos')
-            
-            count = 0
-            for _, row in df_marcacoes.iterrows():
-                grupo = str(row.get('GRUPO', '')).strip()
-                subgrupo = str(row.get('SUBGRUPO', '')).strip()
-                tipo_gasto = str(row.get('TipoGasto', '')).strip()
+            if confirmar_base_individual("BaseMarcacoesGastos", "Marcações essenciais para dropdowns"):
+                print("📊 Importando BaseMarcacoesGastos...")
+                df_marcacoes = pd.read_excel(xls, 'BaseMarcacoesGastos')
                 
-                if not grupo:
-                    continue
-                
-                # Verifica se já existe
-                existe = session.query(BaseMarcacao).filter_by(
-                    GRUPO=grupo,
-                    SUBGRUPO=subgrupo,
-                    TipoGasto=tipo_gasto
-                ).first()
-                
-                if not existe:
-                    marcacao = BaseMarcacao(
+                count = 0
+                for _, row in df_marcacoes.iterrows():
+                    grupo = str(row.get('GRUPO', '')).strip()
+                    subgrupo = str(row.get('SUBGRUPO', '')).strip()
+                    tipo_gasto = str(row.get('TipoGasto', '')).strip()
+                    
+                    if not grupo:
+                        continue
+                    
+                    # Verifica se já existe
+                    existe = session.query(BaseMarcacao).filter_by(
                         GRUPO=grupo,
                         SUBGRUPO=subgrupo,
                         TipoGasto=tipo_gasto
-                    )
-                    session.add(marcacao)
-                    count += 1
-            
-            session.commit()
-            print(f"✓ {count} marcações importadas\n")
+                    ).first()
+                    
+                    if not existe:
+                        marcacao = BaseMarcacao(
+                            GRUPO=grupo,
+                            SUBGRUPO=subgrupo,
+                            TipoGasto=tipo_gasto
+                        )
+                        session.add(marcacao)
+                        count += 1
+                
+                session.commit()
+                print(f"✓ {count} marcações importadas\n")
+            else:
+                print("⏭️  BaseMarcacoesGastos ignorada\n")
         
         # 2. Importar Journal Entries
         if 'Journal Entries' in xls.sheet_names:
-            print("📊 Importando Journal Entries...")
-            df_journal = pd.read_excel(xls, 'Journal Entries')
+            if confirmar_base_individual("Journal Entries", "Transações históricas - PODE SOBRESCREVER dados existentes"):
+                print("📊 Importando Journal Entries...")
+                df_journal = pd.read_excel(xls, 'Journal Entries')
             
             count = 0
             for _, row in df_journal.iterrows():
@@ -123,11 +164,14 @@ def importar_base_inicial():
             
             session.commit()
             print(f"✓ {count} transações importadas\n")
+        else:
+            print("⏭️  Journal Entries ignorada\n")
         
         # 3. Importar Base_Padroes (se existir)
         if 'Base_Padroes' in xls.sheet_names:
-            print("📊 Importando Base_Padroes...")
-            df_padroes = pd.read_excel(xls, 'Base_Padroes')
+            if confirmar_base_individual("Base_Padroes", "Padrões de classificação aprendidos - PODE SOBRESCREVER dados existentes"):
+                print("📊 Importando Base_Padroes...")
+                df_padroes = pd.read_excel(xls, 'Base_Padroes')
             
             count = 0
             for _, row in df_padroes.iterrows():
@@ -160,11 +204,16 @@ def importar_base_inicial():
             
             session.commit()
             print(f"✓ {count} padrões importados\n")
+        else:
+            print("⏭️  Base_Padroes ignorada\n")
         
         session.close()
         
         print("✅ Importação concluída com sucesso!")
-        print("\n🚀 Para iniciar a aplicação, execute:")
+        print("\n� RECOMENDAÇÃO para futuras importações:")
+        print("   • Para BaseMarcacoesGastos apenas: python import_marcacoes_seguro.py")
+        print("   • Para importação completa: python import_base_inicial.py")
+        print("\n�🚀 Para iniciar a aplicação, execute:")
         print("   source venv/bin/activate")
         print("   python app.py")
         

@@ -125,6 +125,22 @@ ProjetoFinancasV3/
         └── *.{png,svg,webp,jpg}    # Arquivos de logo
 ```
 
+## � PROTEÇÃO DE BASES DE DADOS
+
+### ⚠️ ATENÇÃO: VALIDAÇÃO OBRIGATÓRIA
+
+**TODAS as operações que alterem as bases de dados requerem validação manual:**
+
+- ❌ **NUNCA** execute scripts de importação sem revisar o que será alterado
+- ✅ **SEMPRE** use os scripts com confirmação interativa
+- 🎯 **PRIORIDADE**: Base `BaseMarcacoesGastos` (essencial para dropdowns)
+- ⚡ **VALIDAÇÃO**: Outras bases (`Journal Entries`, `Base_Padroes`) podem ser validadas mas só alteradas com aprovação
+
+### Scripts Disponíveis
+
+- `import_marcacoes_seguro.py` - **RECOMENDADO**: Importa apenas BaseMarcacoesGastos com confirmação
+- `import_base_inicial.py` - **CUIDADO**: Importa todas as bases (use apenas se necessário)
+
 ## 🚀 Instalação e Uso
 
 ### 1. Instalação
@@ -142,18 +158,26 @@ source venv/bin/activate  # Mac/Linux
 pip install -r requirements.txt
 ```
 
-### 2. Importação Inicial
+### 2. Importação Inicial (SEGURA)
 
 ```bash
-# Importa dados do base_dados_geral.xlsx
+# RECOMENDADO: Importa apenas BaseMarcacoesGastos com validação
+python import_marcacoes_seguro.py
+```
+
+### 3. Importação Completa (SOMENTE SE NECESSÁRIO)
+
+```bash
+# CUIDADO: Importa todas as bases - confirme antes de usar
 python import_base_inicial.py
 ```
 
 Isso criará:
 - `financas.db` (banco SQLite)
-- Popula `journal_entries`, `base_padroes`, `base_marcacoes`
+- Popula principalmente `base_marcacoes` (necessário para funcionalidade)
+- Opcionalmente `journal_entries`, `base_padroes` (com confirmação)
 
-### 3. Executar Aplicação
+### 4. Executar Aplicação
 
 ```bash
 python app.py
