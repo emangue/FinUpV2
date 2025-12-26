@@ -1,0 +1,306 @@
+{% extends "base.html" %}
+
+{% block title %}Revisar {{ tipo_gasto }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    #dataTable tbody tr {
+        height: 40px;
+    }
+    #dataTable tbody td {
+        padding: 0.4rem 0.75rem;
+        vertical-align: middle;
+        line-height: 1.2;
+    }
+    #dataTable thead th {
+        padding: 0.5rem 0.75rem;
+    }
+    .table-responsive {
+        font-size: 0.9rem;
+    }
+    .badge {
+        font-size: 0.75rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800">Revisar Categoria: {{ tipo_gasto }}</h1>
+            <p class="text-muted mb-0">{{ transacoes|length }} transações classificadas como {{ tipo_gasto }}</p>
+        </div>
+        <a href="{{ url_for('upload.revisao_upload') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left me-2"></i>Voltar à Revisão
+        </a>
+    </div>
+
+    {% if transacoes %}
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 bg-info text-white">
+            <h6 class="m-0 font-weight-bold">
+                <i class="fas fa-list me-2"></i>Transações - {{ tipo_gasto }}
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover" id="dataTable" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Estabelecimento</th>
+                            <th>Valor</th>
+                            <th>Origem</th>
+                            <th>Grupo</th>
+                            <th>Subgrupo</th>
+                            <th>Tipo Gasto</th>
+                            <th style="width: 60px;">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in transacoes %}
+                        {% set t = item.transacao %}
+                        <tr data-indice="{{ item.indice }}">
+                            <td data-sort="{{ t.get('Data', '')|replace('/', '-') }}">{{ t.get('Data', 'N/A') }}</td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    {% set logo = t.get('Estabelecimento')|get_estabelecimento_logo %}
+                                    {% if logo %}
+                                        <img src="{{ logo }}" alt="" class="rounded-circle me-2" width="16" height="16" style="object-fit: cover;">
+                                    {% else %}
+                                        <div class="rounded-circle bg-light d-flex align-items-center justify-content-center me-2" style="width: 16px; height: 16px;">
+                                            <i class="fas fa-store text-muted" style="font-size: 8px;"></i>
+                                        </div>
+                                    {% endif %}
+                                    <span class="text-truncate" style="max-width: 200px;">{{ t.get('Estabelecimento') or 'Não informado' }}</span>
+                                </div>
+                            </td>
+                            <td class="{{ 'text-danger' if t.get('Valor', 0)|float < 0 else 'text-success' }} fw-bold">
+                                R$ {{ "%.2f"|format(t.get('Valor', 0)|float) }}
+                            </td>
+                            <td>
+                                <span class="badge bg-secondary">{{ t.get('origem', 'N/A') }}</span>
+                            </td>
+                            <td>
+                                <select class="form-select form-select-sm select-grupo" data-indice="{{ item.indice }}" data-grupo-atual="{{ t.get('GRUPO', '') }}" style="min-width: 150px;">
+                                    <option value="">Selecione...</option>
+                                    {% for grupo in grupos %}
+                                    <option value="{{ grupo }}" {% if t.get('GRUPO') == grupo %}selected{% endif %}>{{ grupo }}</option>
+                                    {% endfor %}
+                                </select>
+                            </td>
+                            <td>
+                                <select class="form-select form-select-sm select-subgrupo" data-indice="{{ item.indice }}" data-subgrupo-atual="{{ t.get('SUBGRUPO', '') }}" style="min-width: 150px;">
+                                    <option value="">Carregando...</option>
+                                </select>
+                            </td>
+                            <td>
+                                <input type="text" class="form-control form-control-sm tipo-gasto-display" value="{{ t.get('TipoGasto', '') }}" readonly placeholder="Auto" style="min-width: 100px; background-color: #e9ecef;">
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-success btn-salvar-linha" data-indice="{{ item.indice }}" title="Salvar classificação">
+                                    <i class="fas fa-save"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Resumo -->
+    <div class="card bg-light">
+        <div class="card-body">
+            <div class="row text-center">
+                <div class="col-md-6">
+                    <h5 class="text-primary">{{ transacoes|length }}</h5>
+                    <p class="mb-0">Transações</p>
+                </div>
+                <div class="col-md-6">
+                    <h5 class="{{ 'text-danger' if total_valor < 0 else 'text-success' }}">
+                        R$ {{ "%.2f"|format(total_valor) }}
+                    </h5>
+                    <p class="mb-0">Valor Total</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    {% else %}
+    <div class="alert alert-info">
+        <i class="fas fa-info-circle me-2"></i>
+        Nenhuma transação encontrada para esta categoria.
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Dados de grupos e tipo de gasto vindos do backend
+    const gruposDict = {{ grupos_dict|tojson }};
+    const tipoGastoDict = {{ tipo_gasto_dict|tojson }};
+    
+    $(document).ready(function() {
+        // Inicializa dropdowns de subgrupo para cada linha
+        $('.select-grupo').each(function() {
+            const selectGrupo = $(this);
+            const grupo = selectGrupo.val();
+            const row = selectGrupo.closest('tr');
+            const selectSubgrupo = row.find('.select-subgrupo');
+            const subgrupoAtual = selectSubgrupo.data('subgrupo-atual');
+            
+            if (grupo && gruposDict[grupo]) {
+                const subgrupos = gruposDict[grupo];
+                selectSubgrupo.html('<option value="">Selecione...</option>');
+                
+                subgrupos.forEach(function(subgrupo) {
+                    const option = $('<option></option>').val(subgrupo).text(subgrupo);
+                    // Marca o subgrupo atual como selecionado
+                    if (subgrupoAtual && subgrupo === subgrupoAtual) {
+                        option.prop('selected', true);
+                    }
+                    selectSubgrupo.append(option);
+                });
+                selectSubgrupo.prop('disabled', false);
+                
+                // Atualiza tipo de gasto se já houver subgrupo selecionado
+                const subgrupoVal = selectSubgrupo.val();
+                if (subgrupoVal) {
+                    const chave = grupo + '|' + subgrupoVal;
+                    if (tipoGastoDict[chave]) {
+                        row.find('.tipo-gasto-display').val(tipoGastoDict[chave]);
+                    }
+                }
+            } else {
+                selectSubgrupo.html('<option value="">Selecione grupo primeiro...</option>').prop('disabled', true);
+            }
+        });
+        
+        // Handler para mudança de grupo
+        $(document).on('change', '.select-grupo', function() {
+            const selectGrupo = $(this);
+            const grupo = selectGrupo.val();
+            const row = selectGrupo.closest('tr');
+            const selectSubgrupo = row.find('.select-subgrupo');
+            const tipoGastoDisplay = row.find('.tipo-gasto-display');
+            const btnSalvar = row.find('.btn-salvar-linha');
+            
+            if (!grupo) {
+                selectSubgrupo.html('<option value="">Selecione grupo primeiro...</option>').prop('disabled', true);
+                tipoGastoDisplay.val('');
+                btnSalvar.prop('disabled', true);
+                return;
+            }
+            
+            // Carrega subgrupos do grupo selecionado
+            if (gruposDict[grupo]) {
+                const subgrupos = gruposDict[grupo];
+                selectSubgrupo.html('<option value="">Selecione...</option>');
+                
+                subgrupos.forEach(function(subgrupo) {
+                    selectSubgrupo.append($('<option></option>').val(subgrupo).text(subgrupo));
+                });
+                
+                selectSubgrupo.prop('disabled', false);
+            }
+        });
+        
+        // Handler para mudança de subgrupo
+        $(document).on('change', '.select-subgrupo', function() {
+            const selectSubgrupo = $(this);
+            const subgrupo = selectSubgrupo.val();
+            const row = selectSubgrupo.closest('tr');
+            const selectGrupo = row.find('.select-grupo');
+            const grupo = selectGrupo.val();
+            const tipoGastoDisplay = row.find('.tipo-gasto-display');
+            const btnSalvar = row.find('.btn-salvar-linha');
+            
+            if (!subgrupo) {
+                tipoGastoDisplay.val('');
+                btnSalvar.prop('disabled', true);
+                return;
+            }
+            
+            // Busca tipo de gasto no dicionário
+            const chave = grupo + '|' + subgrupo;
+            if (tipoGastoDict[chave]) {
+                tipoGastoDisplay.val(tipoGastoDict[chave]);
+            } else {
+                tipoGastoDisplay.val('N/A');
+            }
+            
+            // Habilita botão salvar
+            btnSalvar.prop('disabled', false);
+        });
+        
+        // Handler para botão salvar individual
+        $(document).on('click', '.btn-salvar-linha', function() {
+            const btn = $(this);
+            const row = btn.closest('tr');
+            const indice = btn.data('indice');
+            const grupo = row.find('.select-grupo').val();
+            const subgrupo = row.find('.select-subgrupo').val();
+            const tipoGasto = row.find('.tipo-gasto-display').val();
+            
+            if (!grupo || !subgrupo || !tipoGasto) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Atenção',
+                    text: 'Selecione Grupo e Subgrupo antes de salvar!'
+                });
+                return;
+            }
+            
+            // Desabilita botão
+            btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+            
+            $.ajax({
+                url: '{{ url_for("upload.validar_lote") }}',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    indices: [indice],
+                    grupo: grupo,
+                    subgrupo: subgrupo,
+                    tipo_gasto: tipoGasto
+                }),
+                success: function(response) {
+                    if (response.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Sucesso!',
+                            text: 'Transação atualizada!',
+                            toast: true,
+                            position: 'top-end',
+                            showConfirmButton: false,
+                            timer: 2000
+                        });
+                        
+                        // Reabilita botão
+                        btn.prop('disabled', false).html('<i class="fas fa-save"></i>');
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Erro',
+                            text: response.message || 'Erro ao salvar'
+                        });
+                        btn.prop('disabled', false).html('<i class="fas fa-save"></i>');
+                    }
+                },
+                error: function() {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Erro',
+                        text: 'Erro ao comunicar com o servidor'
+                    });
+                    btn.prop('disabled', false).html('<i class="fas fa-save"></i>');
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}

@@ -3,7 +3,12 @@
 {% block title %}Admin - Marcações{% endblock %}
 
 {% block content %}
-<h2 class="mb-4"><i class="fas fa-tags"></i> Administração de Marcações</h2>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-tags"></i> Administração de Marcações</h2>
+    <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalNovaMarcacao">
+        <i class="fas fa-plus"></i> Nova Marcação
+    </button>
+</div>
 
 <div class="card mb-3">
     <div class="card-body">
@@ -150,4 +155,104 @@
         <li><strong>✅ Essencial para dropdowns</strong>: Alimenta os formulários de validação</li>
     </ul>
 </div>
+
+<!-- Modal Nova Marcação -->
+<div class="modal fade" id="modalNovaMarcacao" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-plus"></i> Nova Marcação</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="formNovaMarcacao">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Grupo <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="novo_grupo" required placeholder="Ex: Alimentação">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Subgrupo <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="novo_subgrupo" required placeholder="Ex: Supermercado">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Tipo de Gasto <span class="text-danger">*</span></label>
+                        <select class="form-select" id="novo_tipo_gasto" required>
+                            <option value="">Selecione...</option>
+                            {% for tipo in tipos_gasto_lista %}
+                            <option value="{{ tipo }}">{{ tipo }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> Esta marcação será adicionada aos dropdowns de validação.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-save"></i> Criar Marcação
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Handler para criar nova marcação
+    $('#formNovaMarcacao').on('submit', function(e) {
+        e.preventDefault();
+        
+        var grupo = $('#novo_grupo').val().trim();
+        var subgrupo = $('#novo_subgrupo').val().trim();
+        var tipoGasto = $('#novo_tipo_gasto').val();
+        
+        if (!grupo || !subgrupo || !tipoGasto) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Campos obrigatórios',
+                text: 'Preencha todos os campos!'
+            });
+            return;
+        }
+        
+        $.ajax({
+            url: '{{ url_for("admin.marcacoes_criar") }}',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                grupo: grupo,
+                subgrupo: subgrupo,
+                tipo_gasto: tipoGasto
+            }),
+            success: function(response) {
+                if (response.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Sucesso!',
+                        text: 'Marcação criada com sucesso!'
+                    }).then(() => {
+                        location.reload();
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Erro',
+                        text: response.message || 'Erro ao criar marcação'
+                    });
+                }
+            },
+            error: function() {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erro',
+                    text: 'Erro ao comunicar com o servidor'
+                });
+            }
+        });
+    });
+</script>
 {% endblock %}

@@ -58,24 +58,31 @@ def index():
 
         # === MÉTRICAS PRINCIPAIS ===
         
-        # Total despesas mês atual
+        # Total despesas mês atual (incluindo TODOS valores de Cartão de Crédito)
         total_despesas = db.query(func.sum(JournalEntry.Valor)).filter(
             JournalEntry.DT_Fatura == mes_atual_db,
-            JournalEntry.Valor < 0,
+            or_(
+                JournalEntry.Valor < 0,  # Despesas normais
+                JournalEntry.TipoTransacao == 'Cartão de Crédito'  # Todos cartões
+            ),
             JournalEntry.IgnorarDashboard.isnot(True)
         ).scalar() or 0
         
-        # Total despesas mês anterior
+        # Total despesas mês anterior  
         total_despesas_anterior = db.query(func.sum(JournalEntry.Valor)).filter(
             JournalEntry.DT_Fatura == mes_anterior_db,
-            JournalEntry.Valor < 0,
+            or_(
+                JournalEntry.Valor < 0,
+                JournalEntry.TipoTransacao == 'Cartão de Crédito'
+            ),
             JournalEntry.IgnorarDashboard.isnot(True)
         ).scalar() or 0
         
-        # Total receitas mês atual
+        # Total receitas mês atual (EXCLUINDO Cartão de Crédito)
         total_receitas = db.query(func.sum(JournalEntry.Valor)).filter(
             JournalEntry.DT_Fatura == mes_atual_db,
             JournalEntry.Valor > 0,
+            JournalEntry.TipoTransacao != 'Cartão de Crédito',  # Exclui cartões
             JournalEntry.IgnorarDashboard.isnot(True)
         ).scalar() or 0
         
@@ -83,6 +90,7 @@ def index():
         total_receitas_anterior = db.query(func.sum(JournalEntry.Valor)).filter(
             JournalEntry.DT_Fatura == mes_anterior_db,
             JournalEntry.Valor > 0,
+            JournalEntry.TipoTransacao != 'Cartão de Crédito',
             JournalEntry.IgnorarDashboard.isnot(True)
         ).scalar() or 0
         
@@ -212,15 +220,21 @@ def index():
             
             evolucao_meses.append(dt_ref.strftime('%b/%y'))
             
+            # Despesas incluindo TODOS cartões de crédito
             despesas_mes = abs(db.query(func.sum(JournalEntry.Valor)).filter(
                 JournalEntry.DT_Fatura == mes_ref,
-                JournalEntry.Valor < 0,
+                or_(
+                    JournalEntry.Valor < 0,
+                    JournalEntry.TipoTransacao == 'Cartão de Crédito'
+                ),
                 JournalEntry.IgnorarDashboard.isnot(True)
             ).scalar() or 0)
             
+            # Receitas EXCLUINDO cartões de crédito
             receitas_mes = db.query(func.sum(JournalEntry.Valor)).filter(
                 JournalEntry.DT_Fatura == mes_ref,
                 JournalEntry.Valor > 0,
+                JournalEntry.TipoTransacao != 'Cartão de Crédito',
                 JournalEntry.IgnorarDashboard.isnot(True)
             ).scalar() or 0
             

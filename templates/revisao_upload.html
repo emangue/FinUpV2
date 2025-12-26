@@ -61,7 +61,9 @@
                             <h6>Por Categoria:</h6>
                             {% for tipo, valor in stats.breakdown.items() %}
                             <div class="d-flex justify-content-between">
-                                <span>{{ tipo }}:</span>
+                                <a href="{{ url_for('upload.revisar_categoria', tipo_gasto=tipo) }}" class="text-decoration-none">
+                                    <span>{{ tipo }}:</span>
+                                </a>
                                 <strong>R$ {{ "%.2f"|format(valor) }}</strong>
                             </div>
                             {% endfor %}

@@ -428,7 +428,7 @@
                         indices: [linha.indice],  // Enviando como array
                         grupo: grupo,
                         subgrupo: subgrupo,
-                        tipo_gasto: tipoGasto === 'N/A' ? '' : tipoGasto
+                        tipo_gasto: tipoGasto
                     }),
                     success: function(response) {
                         if (response.success) {
@@ -543,7 +543,7 @@
                     indices: [indice],  // Enviando como array
                     grupo: grupo,
                     subgrupo: subgrupo,
-                    tipo_gasto: tipoGasto === 'N/A' ? '' : tipoGasto
+                    tipo_gasto: tipoGasto
                 }),
                 success: function(response) {
                     if (response.success) {

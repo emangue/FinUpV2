@@ -1,7 +1,7 @@
 """
 Admin Routes - Gestão de configurações
 """
-from flask import render_template, request, flash, jsonify
+from flask import render_template, request, flash, jsonify, redirect, url_for
 from werkzeug.utils import secure_filename
 import os
 from datetime import datetime
@@ -69,6 +69,47 @@ def marcacoes():
         tipo_gasto_filtro=tipo_gasto_filtro,
         busca=busca
     )
+
+
+@admin_bp.route('/marcacoes/criar', methods=['POST'])
+def marcacoes_criar():
+    """Cria nova marcação"""
+    try:
+        data = request.get_json()
+        grupo = data.get('grupo', '').strip()
+        subgrupo = data.get('subgrupo', '').strip()
+        tipo_gasto = data.get('tipo_gasto', '').strip()
+        
+        if not grupo or not subgrupo or not tipo_gasto:
+            return jsonify({'success': False, 'message': 'Todos os campos são obrigatórios'}), 400
+        
+        db_session = get_db_session()
+        
+        # Verificar se já existe
+        existe = db_session.query(BaseMarcacao).filter(
+            BaseMarcacao.GRUPO == grupo,
+            BaseMarcacao.SUBGRUPO == subgrupo
+        ).first()
+        
+        if existe:
+            db_session.close()
+            return jsonify({'success': False, 'message': 'Esta combinação de Grupo e Subgrupo já existe!'}), 400
+        
+        # Criar nova marcação
+        nova_marcacao = BaseMarcacao(
+            GRUPO=grupo,
+            SUBGRUPO=subgrupo,
+            TipoGasto=tipo_gasto
+        )
+        
+        db_session.add(nova_marcacao)
+        db_session.commit()
+        db_session.close()
+        
+        return jsonify({'success': True, 'message': 'Marcação criada com sucesso!'})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 
 @admin_bp.route('/padroes')

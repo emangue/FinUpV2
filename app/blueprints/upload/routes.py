@@ -201,6 +201,60 @@ def duplicados():
     return render_template('duplicados.html', duplicados=duplicados_list)
 
 
+@upload_bp.route('/revisar/categoria/<tipo_gasto>')
+def revisar_categoria(tipo_gasto):
+    """Visualizar transações de uma categoria específica"""
+    
+    transacoes = session.get('upload.transacoes', [])
+    
+    if not transacoes:
+        flash('Nenhuma transação em processamento. Faça upload de arquivos primeiro.', 'warning')
+        return redirect(url_for('upload.upload'))
+    
+    # Filtra transações pela categoria com índice
+    transacoes_categoria = []
+    for idx, t in enumerate(transacoes):
+        if t.get('TipoGasto') == tipo_gasto:
+            transacoes_categoria.append({
+                'indice': idx,
+                'transacao': t
+            })
+    
+    # Calcula total
+    total_valor = sum(item['transacao'].get('Valor', 0) for item in transacoes_categoria)
+    
+    # Carrega marcações para dropdown
+    db_session = get_db_session()
+    marcacoes = db_session.query(BaseMarcacao).all()
+    db_session.close()
+    
+    # Organiza dados para dropdowns
+    grupos_dict = {}
+    tipo_gasto_dict = {}
+    
+    for m in marcacoes:
+        if m.GRUPO not in grupos_dict:
+            grupos_dict[m.GRUPO] = set()
+        grupos_dict[m.GRUPO].add(m.SUBGRUPO)
+        
+        chave = f"{m.GRUPO}|{m.SUBGRUPO}"
+        tipo_gasto_dict[chave] = m.TipoGasto
+    
+    # Converte sets para listas
+    grupos_dict = {k: sorted(list(v)) for k, v in grupos_dict.items()}
+    grupos = sorted(grupos_dict.keys())
+    
+    return render_template(
+        'revisar_categoria.html',
+        transacoes=transacoes_categoria,
+        tipo_gasto=tipo_gasto,
+        total_valor=total_valor,
+        grupos=grupos,
+        grupos_dict=grupos_dict,
+        tipo_gasto_dict=tipo_gasto_dict
+    )
+
+
 @upload_bp.route('/validar')
 def validar():
     """Página para validar transações da sessão que não foram classificadas"""
