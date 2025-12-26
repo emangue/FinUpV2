@@ -4,11 +4,16 @@ Upload Routes - Processamento temporário de novos arquivos
 from flask import render_template, request, redirect, url_for, flash, session, jsonify
 from werkzeug.utils import secure_filename
 import os
+import pandas as pd
 from datetime import datetime
 
 from app.blueprints.upload import upload_bp
 from app.models import JournalEntry, BaseMarcacao, get_db_session
-from app.blueprints.upload.processors import processar_fatura_itau, processar_extrato_itau, processar_mercado_pago
+from app.blueprints.upload.processors import (
+    processar_fatura_itau, processar_extrato_itau, processar_mercado_pago,
+    processar_fatura_cartao, processar_extrato_conta
+)
+from app.blueprints.upload.utils import detectar_tipo_arquivo, detectar_colunas, mapear_colunas
 from app.blueprints.upload.classifiers import classificar_transacoes, regenerar_padroes
 from app.utils import deduplicate_transactions, get_duplicados_temp, clear_duplicados_temp
 from sqlalchemy import or_
@@ -19,7 +24,7 @@ UPLOAD_FOLDER = 'uploads_temp'
 
 
 def identificar_tipo_arquivo(filename):
-    """Identifica tipo de arquivo pelo nome"""
+    """[DEPRECATED] Identifica tipo de arquivo pelo nome - uso legado"""
     filename_lower = filename.lower()
     
     if 'fatura_itau' in filename_lower or 'fatura itau' in filename_lower:
@@ -32,9 +37,38 @@ def identificar_tipo_arquivo(filename):
     return None
 
 
+def ler_arquivo_para_dataframe(filepath, filename):
+    """Lê arquivo CSV ou XLSX e retorna DataFrame"""
+    extensao = filename.lower().split('.')[-1]
+    
+    try:
+        if extensao == 'csv':
+            # Tenta diferentes encodings
+            try:
+                df = pd.read_csv(filepath, encoding='utf-8')
+            except:
+                try:
+                    df = pd.read_csv(filepath, encoding='latin-1')
+                except:
+                    df = pd.read_csv(filepath, encoding='iso-8859-1')
+        
+        elif extensao in ['xlsx', 'xls']:
+            if extensao == 'xls':
+                df = pd.read_excel(filepath, engine='xlrd')
+            else:
+                df = pd.read_excel(filepath, engine='openpyxl')
+        else:
+            return None
+        
+        return df
+    except Exception as e:
+        print(f"❌ Erro ao ler arquivo {filename}: {e}")
+        return None
+
+
 @upload_bp.route('/', methods=['GET', 'POST'])
 def upload():
-    """Página de Upload de Arquivos"""
+    """Página de Upload de Arquivos com Detecção Inteligente"""
     
     if request.method == 'POST':
         # Limpa duplicados temporários de uploads anteriores
@@ -52,8 +86,7 @@ def upload():
             return redirect(request.url)
         
         # Processa todos os arquivos
-        todas_transacoes = []
-        arquivos_processados = []
+        arquivos_info = []
         
         for file in files:
             if file and file.filename:
@@ -62,66 +95,158 @@ def upload():
                 filepath = os.path.join(UPLOAD_FOLDER, filename)
                 file.save(filepath)
                 
-                # Identifica tipo
-                tipo = identificar_tipo_arquivo(filename)
+                # Lê arquivo
+                df = ler_arquivo_para_dataframe(filepath, filename)
                 
-                if not tipo:
-                    flash(f'Arquivo {filename} não reconhecido. Use nomes: fatura_itau, Extrato Conta Corrente, ou account_statement', 'warning')
+                if df is None:
+                    flash(f'Erro ao ler {filename}. Formato não suportado.', 'danger')
                     os.remove(filepath)
                     continue
                 
-                # Processa
-                try:
-                    if tipo == 'fatura_itau':
-                        transacoes = processar_fatura_itau(filepath, filename)
-                    elif tipo == 'extrato_itau':
-                        transacoes = processar_extrato_itau(filepath, filename)
-                    elif tipo == 'mercado_pago':
-                        transacoes = processar_mercado_pago(filepath, filename)
-                    
-                    todas_transacoes.extend(transacoes)
-                    arquivos_processados.append({
-                        'nome': filename,
-                        'tipo': tipo,
-                        'transacoes': len(transacoes)
-                    })
-                    
-                except Exception as e:
-                    flash(f'Erro ao processar {filename}: {str(e)}', 'danger')
+                # Detecta colunas
+                mapeamento = detectar_colunas(df)
                 
-                # Remove arquivo temporário
-                os.remove(filepath)
+                if not all(mapeamento.values()):
+                    # Não conseguiu detectar todas as colunas
+                    # Salva info para permitir mapeamento manual
+                    arquivos_info.append({
+                        'nome': filename,
+                        'filepath': filepath,
+                        'colunas': list(df.columns),
+                        'mapeamento_detectado': mapeamento,
+                        'precisa_mapeamento': True
+                    })
+                    continue
+                
+                # Detecta tipo (fatura vs extrato)
+                deteccao_tipo = detectar_tipo_arquivo(df)
+                
+                # Salva info do arquivo para confirmação
+                arquivos_info.append({
+                    'nome': filename,
+                    'filepath': filepath,
+                    'colunas': list(df.columns),
+                    'mapeamento': mapeamento,
+                    'tipo_detectado': deteccao_tipo['tipo'],
+                    'confianca': deteccao_tipo['confianca'],
+                    'indicadores': deteccao_tipo['indicadores_encontrados'],
+                    'precisa_mapeamento': False
+                })
         
-        if not todas_transacoes:
-            flash('Nenhuma transação foi extraída dos arquivos', 'warning')
+        if not arquivos_info:
+            flash('Nenhum arquivo válido foi processado', 'warning')
             return redirect(url_for('upload.upload'))
         
-        # Remove transações futuras
-        transacoes_atuais = [t for t in todas_transacoes if t.get('TransacaoFutura') == 'NÃO']
-        futuras_removidas = len(todas_transacoes) - len(transacoes_atuais)
+        # Armazena info dos arquivos na sessão para confirmação
+        session['upload.arquivos_pendentes'] = arquivos_info
         
-        # Deduplica contra journal_entries
-        transacoes_unicas, duplicados_count = deduplicate_transactions(transacoes_atuais)
-        
-        # Classifica automaticamente
-        transacoes_classificadas = classificar_transacoes(transacoes_unicas)
-        
-        # Armazena em sessão com namespace
-        session['upload.transacoes'] = transacoes_classificadas
-        session['upload.arquivos_processados'] = arquivos_processados
-        session['upload.duplicados_count'] = duplicados_count
-        session['upload.futuras_removidas'] = futuras_removidas
-        
-        flash(f'{len(transacoes_classificadas)} transações processadas com sucesso!', 'success')
-        if duplicados_count > 0:
-            flash(f'{duplicados_count} duplicados removidos', 'info')
-        if futuras_removidas > 0:
-            flash(f'{futuras_removidas} transações futuras removidas', 'info')
-        
-        return redirect(url_for('upload.revisao_upload'))
+        return redirect(url_for('upload.confirmar_upload'))
     
     # GET - Mostra formulário de upload
     return render_template('upload.html')
+
+
+@upload_bp.route('/confirmar')
+def confirmar_upload():
+    """Tela de confirmação com detecção automática de tipo e colunas"""
+    
+    arquivos_info = session.get('upload.arquivos_pendentes', [])
+    
+    if not arquivos_info:
+        flash('Nenhum arquivo pendente de confirmação', 'warning')
+        return redirect(url_for('upload.upload'))
+    
+    return render_template('confirmar_upload.html', arquivos=arquivos_info)
+
+
+@upload_bp.route('/processar_confirmados', methods=['POST'])
+def processar_confirmados():
+    """Processa arquivos após confirmação do usuário"""
+    
+    arquivos_info = session.get('upload.arquivos_pendentes', [])
+    
+    if not arquivos_info:
+        flash('Nenhum arquivo para processar', 'warning')
+        return redirect(url_for('upload.upload'))
+    
+    todas_transacoes = []
+    arquivos_processados = []
+    
+    for idx, arquivo_info in enumerate(arquivos_info):
+        filename = arquivo_info['nome']
+        filepath = arquivo_info['filepath']
+        
+        # Pega confirmação do usuário (pode ter sido mudado)
+        tipo_final = request.form.get(f'tipo_{idx}', arquivo_info.get('tipo_detectado'))
+        
+        # Pega mapeamento (pode ter sido ajustado)
+        if arquivo_info.get('precisa_mapeamento'):
+            mapeamento = {
+                'data': request.form.get(f'col_data_{idx}'),
+                'estabelecimento': request.form.get(f'col_estabelecimento_{idx}'),
+                'valor': request.form.get(f'col_valor_{idx}')
+            }
+        else:
+            mapeamento = arquivo_info['mapeamento']
+        
+        # Lê arquivo novamente
+        df = ler_arquivo_para_dataframe(filepath, filename)
+        
+        if df is None:
+            flash(f'Erro ao processar {filename}', 'danger')
+            os.remove(filepath)
+            continue
+        
+        # Processa com processador apropriado
+        try:
+            if tipo_final == 'fatura':
+                transacoes = processar_fatura_cartao(df, mapeamento, origem=f'Fatura - {filename}', file_name=filename)
+            else:  # extrato
+                transacoes = processar_extrato_conta(df, mapeamento, origem=f'Extrato - {filename}', file_name=filename)
+            
+            todas_transacoes.extend(transacoes)
+            arquivos_processados.append({
+                'nome': filename,
+                'tipo': tipo_final,
+                'transacoes': len(transacoes)
+            })
+            
+        except Exception as e:
+            flash(f'Erro ao processar {filename}: {str(e)}', 'danger')
+        
+        # Remove arquivo temporário
+        os.remove(filepath)
+    
+    # Limpa sessão de arquivos pendentes
+    session.pop('upload.arquivos_pendentes', None)
+    
+    if not todas_transacoes:
+        flash('Nenhuma transação foi extraída dos arquivos', 'warning')
+        return redirect(url_for('upload.upload'))
+    
+    # Remove transações futuras
+    transacoes_atuais = [t for t in todas_transacoes if t.get('TransacaoFutura') == 'NÃO']
+    futuras_removidas = len(todas_transacoes) - len(transacoes_atuais)
+    
+    # Deduplica contra journal_entries
+    transacoes_unicas, duplicados_count = deduplicate_transactions(transacoes_atuais)
+    
+    # Classifica automaticamente
+    transacoes_classificadas = classificar_transacoes(transacoes_unicas)
+    
+    # Armazena em sessão com namespace
+    session['upload.transacoes'] = transacoes_classificadas
+    session['upload.arquivos_processados'] = arquivos_processados
+    session['upload.duplicados_count'] = duplicados_count
+    session['upload.futuras_removidas'] = futuras_removidas
+    
+    flash(f'{len(transacoes_classificadas)} transações processadas com sucesso!', 'success')
+    if duplicados_count > 0:
+        flash(f'{duplicados_count} duplicados removidos', 'info')
+    if futuras_removidas > 0:
+        flash(f'{futuras_removidas} transações futuras removidas', 'info')
+    
+    return redirect(url_for('upload.revisao_upload'))
 
 
 @upload_bp.route('/revisao_upload')

@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+
+{% block title %}Confirmar Upload{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-10 mx-auto">
+        <div class="card shadow">
+            <div class="card-header bg-info text-white">
+                <h4 class="mb-0"><i class="fas fa-check-circle"></i> Confirmar Upload de Arquivos</h4>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">
+                    Detectamos automaticamente o tipo e as colunas dos arquivos. 
+                    Confirme se está correto ou ajuste conforme necessário.
+                </p>
+
+                <form method="POST" action="{{ url_for('upload.processar_confirmados') }}">
+                    {% for arquivo in arquivos %}
+                    {% set idx = loop.index0 %}
+                    <div class="card mb-3 border-primary">
+                        <div class="card-header bg-light">
+                            <h5 class="mb-0">
+                                <i class="fas fa-file"></i> {{ arquivo.nome }}
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <!-- Detecção de Tipo -->
+                            <div class="row mb-3">
+                                <div class="col-md-12">
+                                    <label class="form-label fw-bold">Tipo de Arquivo:</label>
+                                    
+                                    {% if arquivo.tipo_detectado %}
+                                        <div class="alert alert-success alert-sm mb-2">
+                                            <i class="fas fa-check-circle"></i> 
+                                            <strong>Detectado automaticamente:</strong>
+                                            {% if arquivo.tipo_detectado == 'fatura' %}
+                                                💳 <strong>Fatura de Cartão de Crédito</strong>
+                                            {% else %}
+                                                🏦 <strong>Extrato de Conta Corrente</strong>
+                                            {% endif %}
+                                            <small class="text-muted">
+                                                (Confiança: {{ (arquivo.confianca * 100)|round }}% 
+                                                - Indicadores: {{ arquivo.indicadores|join(', ') }})
+                                            </small>
+                                        </div>
+                                    {% else %}
+                                        <div class="alert alert-warning alert-sm mb-2">
+                                            <i class="fas fa-exclamation-triangle"></i> 
+                                            Não foi possível detectar automaticamente. Por favor, selecione:
+                                        </div>
+                                    {% endif %}
+                                    
+                                    <div class="btn-group d-flex" role="group">
+                                        <input type="radio" class="btn-check" name="tipo_{{ idx }}" 
+                                               id="tipo_fatura_{{ idx }}" value="fatura"
+                                               {% if arquivo.tipo_detectado == 'fatura' %}checked{% endif %}>
+                                        <label class="btn btn-outline-primary" for="tipo_fatura_{{ idx }}">
+                                            <i class="fas fa-credit-card"></i> Fatura de Cartão
+                                        </label>
+                                        
+                                        <input type="radio" class="btn-check" name="tipo_{{ idx }}" 
+                                               id="tipo_extrato_{{ idx }}" value="extrato"
+                                               {% if arquivo.tipo_detectado == 'extrato' %}checked{% endif %}>
+                                        <label class="btn btn-outline-success" for="tipo_extrato_{{ idx }}">
+                                            <i class="fas fa-university"></i> Extrato de Conta
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Mapeamento de Colunas -->
+                            <div class="row">
+                                <div class="col-md-12 mb-2">
+                                    <label class="form-label fw-bold">Mapeamento de Colunas:</label>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <label for="col_data_{{ idx }}" class="form-label">Data:</label>
+                                    {% if arquivo.precisa_mapeamento %}
+                                        <select class="form-select" name="col_data_{{ idx }}" id="col_data_{{ idx }}" required>
+                                            <option value="">Selecione...</option>
+                                            {% for col in arquivo.colunas %}
+                                                <option value="{{ col }}" 
+                                                    {% if arquivo.mapeamento_detectado.data == col %}selected{% endif %}>
+                                                    {{ col }}
+                                                </option>
+                                            {% endfor %}
+                                        </select>
+                                    {% else %}
+                                        <input type="text" class="form-control" value="{{ arquivo.mapeamento.data }}" readonly>
+                                        <small class="text-success"><i class="fas fa-check"></i> Detectado automaticamente</small>
+                                    {% endif %}
+                                </div>
+                                
+                                <div class="col-md-4">
+                                    <label for="col_estabelecimento_{{ idx }}" class="form-label">Estabelecimento:</label>
+                                    {% if arquivo.precisa_mapeamento %}
+                                        <select class="form-select" name="col_estabelecimento_{{ idx }}" id="col_estabelecimento_{{ idx }}" required>
+                                            <option value="">Selecione...</option>
+                                            {% for col in arquivo.colunas %}
+                                                <option value="{{ col }}"
+                                                    {% if arquivo.mapeamento_detectado.estabelecimento == col %}selected{% endif %}>
+                                                    {{ col }}
+                                                </option>
+                                            {% endfor %}
+                                        </select>
+                                    {% else %}
+                                        <input type="text" class="form-control" value="{{ arquivo.mapeamento.estabelecimento }}" readonly>
+                                        <small class="text-success"><i class="fas fa-check"></i> Detectado automaticamente</small>
+                                    {% endif %}
+                                </div>
+                                
+                                <div class="col-md-4">
+                                    <label for="col_valor_{{ idx }}" class="form-label">Valor:</label>
+                                    {% if arquivo.precisa_mapeamento %}
+                                        <select class="form-select" name="col_valor_{{ idx }}" id="col_valor_{{ idx }}" required>
+                                            <option value="">Selecione...</option>
+                                            {% for col in arquivo.colunas %}
+                                                <option value="{{ col }}"
+                                                    {% if arquivo.mapeamento_detectado.valor == col %}selected{% endif %}>
+                                                    {{ col }}
+                                                </option>
+                                            {% endfor %}
+                                        </select>
+                                    {% else %}
+                                        <input type="text" class="form-control" value="{{ arquivo.mapeamento.valor }}" readonly>
+                                        <small class="text-success"><i class="fas fa-check"></i> Detectado automaticamente</small>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+
+                    <div class="d-flex justify-content-between mt-4">
+                        <a href="{{ url_for('upload.upload') }}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left"></i> Voltar
+                        </a>
+                        <button type="submit" class="btn btn-success btn-lg">
+                            <i class="fas fa-check"></i> Processar Arquivos
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

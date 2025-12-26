@@ -15,6 +15,7 @@ class JournalEntry(Base):
     
     id = Column(Integer, primary_key=True)
     IdTransacao = Column(String(64), unique=True, nullable=False, index=True)
+    IdParcela = Column(String(64), nullable=True, index=True)  # Vincula parcelas da mesma compra
     Data = Column(String(10), nullable=False)  # DD/MM/AAAA
     Estabelecimento = Column(Text, nullable=False)
     Valor = Column(Float, nullable=False)
