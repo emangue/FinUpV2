@@ -13,7 +13,7 @@
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
         <div class="container">
-            <a class="navbar-brand" href="{{ url_for('dashboard') }}">
+            <a class="navbar-brand" href="{{ url_for('dashboard.index') }}">
                 <i class="fas fa-chart-line"></i> Gestão Financeira
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
@@ -22,12 +22,12 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('dashboard') }}">
+                        <a class="nav-link" href="{{ url_for('dashboard.index') }}">
                             <i class="fas fa-chart-pie"></i> Dashboard
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('upload') }}">
+                        <a class="nav-link" href="{{ url_for('upload.upload') }}">
                             <i class="fas fa-upload"></i> Upload
                         </a>
                     </li>
@@ -36,16 +36,16 @@
                             <i class="fas fa-cog"></i> Admin Padrões
                         </a>
                         <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="{{ url_for('admin_padroes') }}">
+                            <li><a class="dropdown-item" href="{{ url_for('admin.padroes') }}">
                                 <i class="fas fa-list"></i> Padrões
                             </a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('admin_marcacoes') }}">
+                            <li><a class="dropdown-item" href="{{ url_for('admin.marcacoes') }}">
                                 <i class="fas fa-tags"></i> Marcações
                             </a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('admin_grupos') }}">
+                            <li><a class="dropdown-item" href="{{ url_for('admin.grupos') }}">
                                 <i class="fas fa-layer-group"></i> Grupos
                             </a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('admin_logos') }}">
+                            <li><a class="dropdown-item" href="{{ url_for('admin.logos') }}">
                                 <i class="fas fa-images"></i> Logos
                             </a></li>
                         </ul>
