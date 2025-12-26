@@ -100,17 +100,29 @@ ProjetoFinancasV3/
 │   ├── auto_classifier.py          # Classificador automático
 │   └── pattern_generator.py        # Geração/regeneração de padrões
 │
+├── scripts/                        # Scripts utilitários
+│   ├── COMO_ADICIONAR_LOGOS.py     # Guia para adicionar logos
+│   └── check_groups.py             # Verificação de grupos
+│
 ├── templates/                      # Templates HTML (Jinja2)
-│   ├── base.html                   # Template base
-│   ├── upload.html                 # Página de upload/dashboard
-│   ├── validar.html                # Validação manual
-│   └── admin_padroes.html          # Admin de padrões
+│   ├── base.html                   # Template base com Chart.js
+│   ├── dashboard.html              # Dashboard analítico principal
+│   ├── upload.html                 # Upload e processamento de arquivos
+│   ├── transacoes.html             # Lista de transações com toggle
+│   ├── validar.html                # Validação manual de transações
+│   ├── duplicados.html             # Visualização de duplicados
+│   ├── admin_padroes.html          # Admin de padrões de classificação
+│   ├── admin_logos.html            # Admin de logos de estabelecimentos
+│   └── admin_grupos.html           # Admin de grupos e categorias
 │
 └── static/                         # Arquivos estáticos
     ├── css/
-    │   └── style.css               # Estilos CSS
-    └── js/
-        └── main.js                 # JavaScript do frontend
+    │   └── style.css               # Estilos CSS com Bootstrap 5
+    ├── js/
+    │   └── main.js                 # JavaScript frontend
+    └── logos/                      # Logos de estabelecimentos
+        ├── README.md               # Documentação dos logos
+        └── *.{png,svg,webp,jpg}    # Arquivos de logo
 ```
 
 ## 🚀 Instalação e Uso
@@ -185,23 +197,27 @@ Acesse: `http://localhost:5000`
 
 ## 📊 Funcionalidades Principais
 
-### Dashboard Analítico
-O sistema agora conta com um dashboard completo na página inicial:
-- **Filtros Temporais:** Selecione Mês/Ano para visualizar dados específicos.
-- **KPIs:** Cards com Total de Despesas, Receitas e Saldo do período.
-- **Gráficos Interativos:**
-  - Distribuição de gastos por Grupo (Gráfico de Rosca)
-  - Evolução de despesas e receitas (Gráfico de Barras)
-- **Formatação Brasileira:** Valores em R$ e datas no padrão BR.
-- **Botão "Ver Todas":** Acesso rápido à lista detalhada de transações do mês.
+### Dashboard Analítico Completo
+Sistema de dashboard avançado com visualizações interativas:
+- **Filtros Temporais:** Seletor de Mês/Ano para análise temporal
+- **KPIs Financeiros:** Cards com Total de Despesas, Receitas e Saldo
+- **Gráficos Interativos (Chart.js 4.4.0):**
+  - Gráfico de barras com evolução mensal dos últimos 6 meses (valores em milhares)
+  - Gráfico de pizza com insights das principais categorias de gastos
+  - Top 10 SubGrupos de gastos (em vez de estabelecimentos individuais)
+- **Modal de Detalhes:** Sistema de modais para visualizar detalhes completos de transações
+- **Formatação Brasileira:** Valores em R$ com separadores de milhares
+- **Seção de Categorias:** Área dedicada para futuras análises categóricas
 
-### Lista de Transações e Controle (Toggle)
-Nova interface dedicada para visualização e gestão de transações mensais:
-- **Listagem Detalhada:** Veja todas as transações do mês selecionado com logos, grupos e valores.
-- **Toggle "Status Dashboard":** Interruptor interativo para incluir ou excluir transações dos cálculos do dashboard.
-  - **Ligado (Verde):** Transação considerada nos totais e gráficos.
-  - **Desligado (Cinza):** Transação ignorada (ex: investimentos, transferências internas), mas mantida no histórico.
-- **Atualização em Tempo Real:** O dashboard recalcula automaticamente os totais ao alterar o status.
+### Sistema de Toggle para Controle de Dashboard
+Interface avançada para gestão granular de transações:
+- **Listagem Detalhada:** Visualização completa com logos, grupos e valores formatados
+- **Toggle "Status Dashboard":** Interruptor visual para controle de inclusão nos cálculos
+  - **Ativo (Verde):** Transação considerada nos totais e gráficos do dashboard
+  - **Inativo (Cinza):** Transação mantida no histórico mas excluída dos cálculos
+  - **Casos de uso:** Investimentos, transferências internas, transações especiais
+- **Atualização em Tempo Real:** Dashboard recalcula automaticamente via AJAX
+- **Persistência:** Status salvo no banco de dados para manter estado entre sessões
 
 ### Gestão de Logos
 Sistema inteligente para associar logos aos estabelecimentos:
@@ -261,15 +277,30 @@ Múltiplos matches para "SUPERMERCADO EXTRA": ['SUPERMERCADO', 'EXTRA']
 🔗 Transferências marcadas: 5
 ```
 
-## 🔄 Atualizações Futuras
+## 🔄 Funcionalidades Implementadas
 
-- [ ] Detector de transferências entre contas (atualmente marca para validação)
-- [ ] Exportação para Excel/CSV
-- [ ] Gráficos e dashboards analíticos
-- [ ] API REST para integrações
-- [ ] Multi-usuário com autenticação
-- [ ] Backup automático do banco
-- [ ] Importação de OFX/QIF
+- [x] **Dashboard Analítico Completo:** KPIs, gráficos interativos com Chart.js 4.4.0
+- [x] **Sistema de Upload Multi-formato:** CSV (Itaú), XLS (Extrato), XLSX (Mercado Pago)  
+- [x] **Classificação Automática Inteligente:** Base de padrões + histórico + palavras-chave
+- [x] **Sistema de Toggle para Dashboard:** Controle granular de inclusão de transações
+- [x] **Gestão de Logos:** Upload e associação de imagens aos estabelecimentos
+- [x] **Deduplicação Automática:** Prevenção de duplicatas contra base histórica
+- [x] **Interface de Validação Manual:** Para transações não classificadas automaticamente
+- [x] **API REST:** Endpoints para dados de transações e detalhes
+- [x] **Audit Log Completo:** Rastreamento de todas as operações do sistema
+- [x] **Formatação Brasileira:** Valores, datas e separadores no padrão nacional
+
+## 🔄 Roadmap Futuro
+
+- [ ] Detector inteligente de transferências entre contas
+- [ ] Exportação avançada para Excel/CSV com formatação
+- [ ] Dashboard de tendências e previsões financeiras  
+- [ ] API REST completa para integrações externas
+- [ ] Sistema multi-usuário com autenticação e permissões
+- [ ] Backup automático e versionamento do banco de dados
+- [ ] Importação de formatos OFX/QIF de outros bancos
+- [ ] Notificações e alertas de gastos por categoria
+- [ ] Análise de padrões e sugestões de economia
 
 ## 📄 Licença
 
@@ -277,5 +308,6 @@ Uso pessoal - Emanuel Guerra Leandro
 
 ---
 
-**Versão:** 1.0.0  
-**Última atualização:** 26/12/2025
+**Versão:** 2.0.0  
+**Última atualização:** 26/12/2025  
+**Status:** Produção ✅ - Sistema completo e funcional
