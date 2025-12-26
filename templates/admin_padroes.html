@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block title %}Admin - Padrões{% endblock %}
+
+{% block content %}
+<h2 class="mb-4"><i class="fas fa-cog"></i> Administração de Padrões</h2>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">Confiança:</label>
+                <select name="confianca" class="form-select">
+                    <option value="">Todas</option>
+                    <option value="alta">Alta</option>
+                    <option value="media">Média</option>
+                    <option value="baixa">Baixa</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Buscar:</label>
+                <input type="text" name="busca" class="form-control" placeholder="Nome do estabelecimento">
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="fas fa-search"></i> Filtrar
+                </button>
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <a href="{{ url_for('admin_padroes') }}" class="btn btn-secondary w-100">
+                    <i class="fas fa-times"></i> Limpar
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="alert alert-info">
+    <i class="fas fa-info-circle"></i> Total de <strong>{{ total }}</strong> padrões encontrados
+</div>
+
+<div class="table-responsive">
+    <table class="table table-hover">
+        <thead>
+            <tr>
+                <th>Padrão</th>
+                <th>Exemplos</th>
+                <th>Contagem</th>
+                <th>Confiança</th>
+                <th>Grupo</th>
+                <th>Subgrupo</th>
+                <th>Tipo Gasto</th>
+                <th>Valor Médio</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for padrao in padroes %}
+            <tr>
+                <td><small>{{ padrao.padrao_estabelecimento }}</small></td>
+                <td><small>{{ padrao.exemplos[:50] }}...</small></td>
+                <td>{{ padrao.contagem }}</td>
+                <td>
+                    <span class="badge bg-{% if padrao.confianca == 'alta' %}success{% elif padrao.confianca == 'media' %}warning{% else %}danger{% endif %}">
+                        {{ padrao.confianca }}
+                    </span>
+                </td>
+                <td>{{ padrao.grupo_sugerido }}</td>
+                <td>{{ padrao.subgrupo_sugerido }}</td>
+                <td>{{ padrao.tipo_gasto_sugerido }}</td>
+                <td>R$ {{ "%.2f"|format(padrao.valor_medio) }}</td>
+                <td>
+                    <span class="badge bg-{% if padrao.status == 'ativo' %}success{% else %}secondary{% endif %}">
+                        {{ padrao.status }}
+                    </span>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Paginação -->
+<nav>
+    <ul class="pagination justify-content-center">
+        {% if page > 1 %}
+        <li class="page-item">
+            <a class="page-link" href="{{ url_for('admin_padroes', page=page-1) }}">Anterior</a>
+        </li>
+        {% endif %}
+        
+        <li class="page-item disabled">
+            <span class="page-link">Página {{ page }} de {{ total_pages }}</span>
+        </li>
+        
+        {% if page < total_pages %}
+        <li class="page-item">
+            <a class="page-link" href="{{ url_for('admin_padroes', page=page+1) }}">Próxima</a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endblock %}

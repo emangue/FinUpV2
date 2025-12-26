@@ -1,0 +1,293 @@
+{% extends "base.html" %}
+
+{% block title %}{{ titulo }} - Vista com Ícones{% endblock %}
+
+{% block extra_css %}
+<style>
+.sticky-back-button {
+    position: fixed;
+    left: 20px;
+    top: 80px;
+    z-index: 1030;
+}
+
+.sticky-back-button .btn {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    min-width: 180px;
+}
+
+.icon-card {
+    border-radius: 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+    overflow: hidden;
+    margin-bottom: 1rem;
+    border-left: 5px solid;
+}
+
+.icon-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+}
+
+.card-icon-section {
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 100%);
+}
+
+.card-big-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    margin-right: 20px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+.card-main-info {
+    flex-grow: 1;
+}
+
+.card-establishment {
+    font-weight: 600;
+    font-size: 16px;
+    margin-bottom: 4px;
+    color: #212529;
+}
+
+.card-category {
+    font-size: 13px;
+    color: #6c757d;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.card-value-section {
+    text-align: right;
+    padding-right: 20px;
+}
+
+.card-value {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+
+.card-date {
+    font-size: 12px;
+    color: #6c757d;
+}
+
+.card-actions {
+    padding: 12px 20px;
+    background-color: #f8f9fa;
+    border-top: 1px solid #e9ecef;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.category-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 500;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Botão Fixo Lateral -->
+<div class="sticky-back-button">
+    <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-lg">
+        <i class="fas fa-arrow-left"></i> Voltar ao Dashboard
+    </a>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0"><i class="fas fa-icons"></i> {{ titulo }} - Vista com Ícones</h2>
+    <button class="btn btn-outline-primary" type="button" data-bs-toggle="offcanvas" data-bs-target="#viewOptionsMenu">
+        <i class="fas fa-ellipsis-v"></i> Opções de Visualização
+    </button>
+</div>
+
+{% if tipo == 'pendentes' %}
+<div class="alert alert-warning">
+    <i class="fas fa-exclamation-triangle"></i> Existem <strong>{{ total }}</strong> transações que precisam de validação manual.
+</div>
+{% else %}
+<div class="alert alert-info">
+    <i class="fas fa-info-circle"></i> Mostrando <strong>{{ total }}</strong> transações processadas.
+</div>
+{% endif %}
+
+<!-- Cards com Ícones -->
+<div class="row">
+    {% for idx, trans in transacoes %}
+    <div class="col-md-6 col-lg-4">
+        <div class="icon-card" style="border-left-color: {{ trans.GRUPO|get_group_color }};">
+            <div class="card-icon-section" style="background-color: {{ trans.GRUPO|get_group_color }}20;">
+                <!-- Ícone Grande ou Logo -->
+                {% set logo_path = trans.Estabelecimento|get_estabelecimento_logo %}
+                <div class="card-big-icon" style="background-color: {{ trans.GRUPO|get_group_color }};">
+                    {% if logo_path %}
+                        <img src="{{ logo_path }}" alt="{{ trans.Estabelecimento }}" class="logo-img">
+                    {% else %}
+                        <i class="fas {{ trans.GRUPO|get_group_icon }} text-white"></i>
+                    {% endif %}
+                </div>
+                
+                <!-- Info Principal -->
+                <div class="card-main-info">
+                    <div class="card-establishment">
+                        {{ trans.Estabelecimento[:30] or 'N/A' }}
+                        {% if trans.Estabelecimento and trans.Estabelecimento|length > 30 %}...{% endif %}
+                    </div>
+                    <div class="card-category">
+                        {% if trans.GRUPO %}
+                            <span class="category-badge" style="background-color: {{ trans.GRUPO|get_group_color }}20; color: {{ trans.GRUPO|get_group_color }};">
+                                <i class="fas fa-tag"></i> {{ trans.GRUPO }}
+                            </span>
+                            {% if trans.SUBGRUPO %}
+                            <span class="category-badge bg-light text-dark">
+                                {{ trans.SUBGRUPO }}
+                            </span>
+                            {% endif %}
+                        {% else %}
+                            <span class="text-muted"><i class="fas fa-question-circle"></i> Sem classificação</span>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Valor -->
+                <div class="card-value-section">
+                    <div class="card-value {% if trans.Valor and trans.Valor|float < 0 %}text-danger{% else %}text-success{% endif %}">
+                        {{ trans.Valor|replace('.', ',')|default('R$ 0,00', true) }}
+                    </div>
+                    <div class="card-date">
+                        <i class="far fa-calendar-alt"></i> {{ trans.Data }}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Ações -->
+            <div class="card-actions">
+                <div>
+                    <input type="checkbox" class="form-check-input transaction-checkbox-icons" data-idx="{{ idx }}">
+                    {% if trans.MarcacaoIA == 'Base_Padroes' %}
+                        <span class="badge bg-success ms-2">Base_Padroes</span>
+                    {% elif trans.MarcacaoIA == 'Journal Entries' %}
+                        <span class="badge bg-info ms-2">Journal Entries</span>
+                    {% elif trans.MarcacaoIA == 'Palavras-chave' %}
+                        <span class="badge bg-warning ms-2">Palavras-chave</span>
+                    {% elif trans.MarcacaoIA == 'Manual' or trans.MarcacaoIA == 'Manual (Lote)' %}
+                        <span class="badge bg-primary ms-2">{{ trans.MarcacaoIA }}</span>
+                    {% elif trans.MarcacaoIA == 'Não Encontrado' %}
+                        <span class="badge bg-secondary ms-2">Não Encontrado</span>
+                    {% else %}
+                        <span class="badge bg-light text-dark ms-2">{{ trans.MarcacaoIA or 'Pendente' }}</span>
+                    {% endif %}
+                </div>
+                <div>
+                    <button class="btn btn-sm btn-outline-primary" onclick="viewDetails({{ idx }})">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="editTransaction({{ idx }})">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Paginação -->
+{% if total_pages > 1 %}
+    <nav class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if page > 1 %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('validar', page=page-1, tipo=tipo, view='icons', grupo=filtro_grupo, subgrupo=filtro_subgrupo, tipo_gasto=filtro_tipo_gasto, classificacao=filtro_classificacao) }}">Anterior</a>
+            </li>
+            {% endif %}
+            
+            <li class="page-item disabled">
+                <span class="page-link">Página {{ page }} de {{ total_pages }}</span>
+            </li>
+            
+            {% if page < total_pages %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('validar', page=page+1, tipo=tipo, view='icons', grupo=filtro_grupo, subgrupo=filtro_subgrupo, tipo_gasto=filtro_tipo_gasto, classificacao=filtro_classificacao) }}">Próxima</a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+{% endif %}
+
+<!-- Offcanvas Menu -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="viewOptionsMenu">
+    <div class="offcanvas-header bg-primary text-white">
+        <h5 class="offcanvas-title"><i class="fas fa-eye"></i> Opções de Visualização</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
+    </div>
+    <div class="offcanvas-body">
+        <p class="text-muted">Escolha como deseja visualizar suas transações:</p>
+        <div class="list-group">
+            <a href="{{ url_for('validar', tipo=tipo, view='dashboard', grupo=filtro_grupo, subgrupo=filtro_subgrupo, tipo_gasto=filtro_tipo_gasto, classificacao=filtro_classificacao) }}" 
+               class="list-group-item list-group-item-action">
+                <i class="fas fa-chart-pie text-primary"></i> Dashboard com Resumo Visual
+            </a>
+            <a href="{{ url_for('validar', tipo=tipo, view='compact', grupo=filtro_grupo, subgrupo=filtro_subgrupo, tipo_gasto=filtro_tipo_gasto, classificacao=filtro_classificacao) }}" 
+               class="list-group-item list-group-item-action">
+                <i class="fas fa-list text-success"></i> Vista de Lista Compacta
+            </a>
+            <a href="{{ url_for('validar', tipo=tipo, view='icons', grupo=filtro_grupo, subgrupo=filtro_subgrupo, tipo_gasto=filtro_tipo_gasto, classificacao=filtro_classificacao) }}" 
+               class="list-group-item list-group-item-action active">
+                <i class="fas fa-icons text-white"></i> Cards com Ícones
+            </a>
+            <a href="{{ url_for('validar', tipo=tipo, grupo=filtro_grupo, subgrupo=filtro_subgrupo, tipo_gasto=filtro_tipo_gasto, classificacao=filtro_classificacao) }}" 
+               class="list-group-item list-group-item-action">
+                <i class="fas fa-th-large text-secondary"></i> Vista Padrão
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function viewDetails(idx) {
+    // Redireciona para vista padrão na transação específica
+    window.location.href = "{{ url_for('validar', tipo=tipo) }}&idx=" + idx;
+}
+
+function editTransaction(idx) {
+    alert('Edição rápida - Em desenvolvimento\nÍndice: ' + idx);
+}
+
+// Selecionar todas
+const selectAllBtn = document.createElement('button');
+selectAllBtn.className = 'btn btn-outline-primary btn-sm position-fixed';
+selectAllBtn.style.cssText = 'bottom: 20px; right: 20px; z-index: 1040; box-shadow: 0 4px 8px rgba(0,0,0,0.2);';
+selectAllBtn.innerHTML = '<i class="fas fa-check-double"></i> Selecionar Todas';
+selectAllBtn.onclick = function() {
+    const checkboxes = document.querySelectorAll('.transaction-checkbox-icons');
+    const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+    checkboxes.forEach(cb => cb.checked = !allChecked);
+    this.innerHTML = allChecked ? 
+        '<i class="fas fa-check-double"></i> Selecionar Todas' : 
+        '<i class="fas fa-times"></i> Desmarcar Todas';
+};
+document.body.appendChild(selectAllBtn);
+</script>
+{% endblock %}

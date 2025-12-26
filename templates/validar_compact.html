@@ -1,0 +1,326 @@
+{% extends "base.html" %}
+
+{% block title %}{{ titulo }} - Vista Compacta{% endblock %}
+
+{% block extra_css %}
+<style>
+.sticky-back-button {
+    position: fixed;
+    left: 20px;
+    top: 80px;
+    z-index: 1030;
+}
+
+.sticky-back-button .btn {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    min-width: 180px;
+}
+
+.compact-list-item {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid #e0e0e0;
+    transition: background-color 0.2s;
+    cursor: pointer;
+}
+
+.compact-list-item:hover {
+    background-color: #f8f9fa;
+}
+
+.compact-list-item:last-child {
+    border-bottom: none;
+}
+
+.item-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    margin-right: 16px;
+    flex-shrink: 0;
+}
+
+.item-details {
+    flex-grow: 1;
+    min-width: 0;
+}
+
+.item-name {
+    font-weight: 500;
+    font-size: 14px;
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.item-category {
+    font-size: 12px;
+    color: #6c757d;
+}
+
+.item-value {
+    font-size: 16px;
+    font-weight: 600;
+    margin-right: 16px;
+    flex-shrink: 0;
+}
+
+.item-badge {
+    flex-shrink: 0;
+}
+
+.compact-card {
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    margin-bottom: 1rem;
+}
+
+.item-checkbox {
+    margin-right: 12px;
+    flex-shrink: 0;
+}
+
+.expand-icon {
+    margin-left: 8px;
+    flex-shrink: 0;
+    transition: transform 0.3s;
+}
+
+.expanded .expand-icon {
+    transform: rotate(180deg);
+}
+
+.item-expanded-details {
+    padding: 16px;
+    background-color: #f8f9fa;
+    border-top: 1px solid #e0e0e0;
+    display: none;
+}
+
+.expanded .item-expanded-details {
+    display: block;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Botão Fixo Lateral -->
+<div class="sticky-back-button">
+    <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-lg">
+        <i class="fas fa-arrow-left"></i> Voltar ao Dashboard
+    </a>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0"><i class="fas fa-list"></i> {{ titulo }} - Vista Compacta</h2>
+    <button class="btn btn-outline-primary" type="button" data-bs-toggle="offcanvas" data-bs-target="#viewOptionsMenu">
+        <i class="fas fa-ellipsis-v"></i> Opções de Visualização
+    </button>
+</div>
+
+{% if tipo == 'pendentes' %}
+<div class="alert alert-warning">
+    <i class="fas fa-exclamation-triangle"></i> Existem <strong>{{ total }}</strong> transações que precisam de validação manual.
+</div>
+{% else %}
+<div class="alert alert-info">
+    <i class="fas fa-info-circle"></i> Mostrando <strong>{{ total }}</strong> transações processadas.
+</div>
+{% endif %}
+
+<!-- Lista Compacta de Transações -->
+<div class="card compact-card">
+    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+        <div>
+            <input type="checkbox" id="selectAllCompact" class="form-check-input me-2">
+            <strong>Transações</strong> ({{ transacoes|length }} nesta página)
+        </div>
+        <small class="text-muted">Clique para expandir detalhes</small>
+    </div>
+    <div class="card-body p-0">
+        {% for idx, trans in transacoes %}
+        <div class="compact-list-item" data-idx="{{ idx }}" onclick="toggleExpand(this)">
+            <input type="checkbox" class="form-check-input item-checkbox transaction-checkbox-compact" 
+                   data-idx="{{ idx }}" onclick="event.stopPropagation();">
+            
+            <!-- Ícone baseado no Grupo ou Logo do Estabelecimento -->
+            {% set logo_path = trans.Estabelecimento|get_estabelecimento_logo %}
+            <div class="item-icon" style="background-color: {{ trans.GRUPO|get_group_color }};">
+                {% if logo_path %}
+                    <img src="{{ logo_path }}" alt="{{ trans.Estabelecimento }}" class="logo-img">
+                {% else %}
+                    <i class="fas {{ trans.GRUPO|get_group_icon }} text-white"></i>
+                {% endif %}
+            </div>
+            
+            <!-- Detalhes principais -->
+            <div class="item-details">
+                <div class="item-name">{{ trans.Estabelecimento or 'N/A' }}</div>
+                <div class="item-category">
+                    {% if trans.GRUPO %}
+                        <i class="fas fa-tag"></i> {{ trans.GRUPO }}
+                        {% if trans.SUBGRUPO %} • {{ trans.SUBGRUPO }}{% endif %}
+                    {% else %}
+                        <span class="text-muted">Sem classificação</span>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Valor -->
+            <div class="item-value {% if trans.Valor and trans.Valor|float < 0 %}text-danger{% else %}text-success{% endif %}">
+                {{ trans.Valor|replace('.', ',')|default('R$ 0,00', true) }}
+            </div>
+            
+            <!-- Badge de Classificação -->
+            <div class="item-badge">
+                {% if trans.MarcacaoIA == 'Base_Padroes' %}
+                    <span class="badge bg-success">Base_Padroes</span>
+                {% elif trans.MarcacaoIA == 'Journal Entries' %}
+                    <span class="badge bg-info">Journal Entries</span>
+                {% elif trans.MarcacaoIA == 'Palavras-chave' %}
+                    <span class="badge bg-warning">Palavras-chave</span>
+                {% elif trans.MarcacaoIA == 'Manual' or trans.MarcacaoIA == 'Manual (Lote)' %}
+                    <span class="badge bg-primary">{{ trans.MarcacaoIA }}</span>
+                {% elif trans.MarcacaoIA == 'Não Encontrado' %}
+                    <span class="badge bg-secondary">Não Encontrado</span>
+                {% else %}
+                    <span class="badge bg-light text-dark">{{ trans.MarcacaoIA or 'Pendente' }}</span>
+                {% endif %}
+            </div>
+            
+            <!-- Ícone de expansão -->
+            <div class="expand-icon">
+                <i class="fas fa-chevron-down"></i>
+            </div>
+            
+            <!-- Detalhes expandidos (ocultos inicialmente) -->
+            <div class="item-expanded-details" onclick="event.stopPropagation();">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p class="mb-2"><strong>Data:</strong> {{ trans.Data }}</p>
+                        <p class="mb-2"><strong>Origem:</strong> {{ trans.Origem }}</p>
+                        <p class="mb-2"><strong>Tipo de Gasto:</strong> {{ trans.TipoGasto or 'N/A' }}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <button class="btn btn-sm btn-primary w-100 mb-2" 
+                                onclick="openEditModal({{ idx }}, {{ trans|tojson|forceescape }})">
+                            <i class="fas fa-edit"></i> Editar Classificação
+                        </button>
+                        <a href="{{ url_for('validar', page=page, tipo=tipo) }}" class="btn btn-sm btn-outline-secondary w-100">
+                            <i class="fas fa-eye"></i> Ver Detalhes Completos
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Paginação -->
+{% if total_pages > 1 %}
+    <nav>
+        <ul class="pagination justify-content-center">
+            {% if page > 1 %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('validar', page=page-1, tipo=tipo, view='compact', grupo=filtro_grupo, subgrupo=filtro_subgrupo, tipo_gasto=filtro_tipo_gasto, classificacao=filtro_classificacao) }}">Anterior</a>
+            </li>
+            {% endif %}
+            
+            <li class="page-item disabled">
+                <span class="page-link">Página {{ page }} de {{ total_pages }}</span>
+            </li>
+            
+            {% if page < total_pages %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('validar', page=page+1, tipo=tipo, view='compact', grupo=filtro_grupo, subgrupo=filtro_subgrupo, tipo_gasto=filtro_tipo_gasto, classificacao=filtro_classificacao) }}">Próxima</a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+{% endif %}
+
+<!-- Offcanvas Menu (mesmo da tela principal) -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="viewOptionsMenu">
+    <div class="offcanvas-header bg-primary text-white">
+        <h5 class="offcanvas-title"><i class="fas fa-eye"></i> Opções de Visualização</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
+    </div>
+    <div class="offcanvas-body">
+        <p class="text-muted">Escolha como deseja visualizar suas transações:</p>
+        <div class="list-group">
+            <a href="{{ url_for('validar', tipo=tipo, view='dashboard', grupo=filtro_grupo, subgrupo=filtro_subgrupo, tipo_gasto=filtro_tipo_gasto, classificacao=filtro_classificacao) }}" 
+               class="list-group-item list-group-item-action">
+                <i class="fas fa-chart-pie text-primary"></i> Dashboard com Resumo Visual
+            </a>
+            <a href="{{ url_for('validar', tipo=tipo, view='compact', grupo=filtro_grupo, subgrupo=filtro_subgrupo, tipo_gasto=filtro_tipo_gasto, classificacao=filtro_classificacao) }}" 
+               class="list-group-item list-group-item-action active">
+                <i class="fas fa-list text-white"></i> Vista de Lista Compacta
+            </a>
+            <a href="{{ url_for('validar', tipo=tipo, view='icons', grupo=filtro_grupo, subgrupo=filtro_subgrupo, tipo_gasto=filtro_tipo_gasto, classificacao=filtro_classificacao) }}" 
+               class="list-group-item list-group-item-action">
+                <i class="fas fa-icons text-info"></i> Cards com Ícones
+            </a>
+            <a href="{{ url_for('validar', tipo=tipo, grupo=filtro_grupo, subgrupo=filtro_subgrupo, tipo_gasto=filtro_tipo_gasto, classificacao=filtro_classificacao) }}" 
+               class="list-group-item list-group-item-action">
+                <i class="fas fa-th-large text-secondary"></i> Vista Padrão
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Função para expandir/colapsar itens
+function toggleExpand(element) {
+    element.closest('.compact-list-item').classList.toggle('expanded');
+}
+
+// Função para abrir modal de edição (implementar depois)
+function openEditModal(idx, trans) {
+    alert('Edição rápida - Em desenvolvimento\nTransação: ' + trans.Estabelecimento);
+}
+
+// Selecionar todas
+document.getElementById('selectAllCompact').addEventListener('change', function() {
+    const checkboxes = document.querySelectorAll('.transaction-checkbox-compact');
+    checkboxes.forEach(cb => cb.checked = this.checked);
+});
+
+// Funções helper para cores e ícones (serão implementadas no backend depois)
+function get_group_color(grupo) {
+    const colors = {
+        'Alimentação': '#FF6384',
+        'Transporte': '#36A2EB',
+        'Moradia': '#FFCE56',
+        'Saúde': '#4BC0C0',
+        'Educação': '#9966FF',
+        'Lazer': '#FF9F40',
+        'Assinaturas': '#FF6384',
+        'Vestuário': '#C9CBCF'
+    };
+    return colors[grupo] || '#6c757d';
+}
+
+function get_group_icon(grupo) {
+    const icons = {
+        'Alimentação': 'fa-utensils',
+        'Transporte': 'fa-car',
+        'Moradia': 'fa-home',
+        'Saúde': 'fa-heartbeat',
+        'Educação': 'fa-graduation-cap',
+        'Lazer': 'fa-gamepad',
+        'Assinaturas': 'fa-file-invoice',
+        'Vestuário': 'fa-tshirt'
+    };
+    return icons[grupo] || 'fa-tag';
+}
+</script>
+{% endblock %}

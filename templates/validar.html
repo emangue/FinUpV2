@@ -1,0 +1,681 @@
+{% extends "base.html" %}
+
+{% block title %}{{ titulo }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.sticky-batch-panel {
+    position: sticky;
+    top: 10px;
+    z-index: 1020;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.sticky-batch-panel .card-body {
+    background-color: #f8f9fa;
+}
+
+.sticky-back-button {
+    position: fixed;
+    left: 20px;
+    top: 80px;
+    z-index: 1030;
+}
+
+.sticky-back-button .btn {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    min-width: 180px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Botão Fixo Lateral -->
+<div class="sticky-back-button">
+    <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-lg">
+        <i class="fas fa-arrow-left"></i> Voltar ao Dashboard
+    </a>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0"><i class="fas fa-tasks"></i> {{ titulo }}</h2>
+    <button class="btn btn-outline-primary" type="button" data-bs-toggle="offcanvas" data-bs-target="#viewOptionsMenu">
+        <i class="fas fa-ellipsis-v"></i> Opções de Visualização
+    </button>
+</div>
+
+{% if tipo == 'pendentes' %}
+<div class="alert alert-warning">
+    <i class="fas fa-exclamation-triangle"></i> Existem <strong>{{ total }}</strong> transações que precisam de validação manual.
+</div>
+{% else %}
+<div class="alert alert-info">
+    <i class="fas fa-info-circle"></i> Mostrando <strong>{{ total }}</strong> transações processadas. Você pode revisar e editar qualquer classificação.
+</div>
+{% endif %}
+
+{% if transacoes %}
+    <!-- Filtros -->
+    <div class="card mb-3 border-info">
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0"><i class="fas fa-filter"></i> Filtros</h5>
+        </div>
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('validar') }}" id="filterForm">
+                <input type="hidden" name="tipo" value="{{ tipo }}">
+                <div class="row g-2">
+                    <div class="col-md-2">
+                        <label class="form-label">Grupo:</label>
+                        <select name="grupo" id="filter_grupo" class="form-select form-select-sm">
+                            <option value="">Todos</option>
+                            {% for grupo in grupos %}
+                            <option value="{{ grupo }}" {% if filtro_grupo == grupo %}selected{% endif %}>{{ grupo }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Subgrupo:</label>
+                        <select name="subgrupo" id="filter_subgrupo" class="form-select form-select-sm">
+                            <option value="">Todos</option>
+                            {% if filtro_grupo and grupos_dict.get(filtro_grupo) %}
+                                {% for subgrupo in grupos_dict[filtro_grupo] %}
+                                <option value="{{ subgrupo }}" {% if filtro_subgrupo == subgrupo %}selected{% endif %}>{{ subgrupo }}</option>
+                                {% endfor %}
+                            {% endif %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Tipo de Gasto:</label>
+                        <select name="tipo_gasto" id="filter_tipo_gasto" class="form-select form-select-sm">
+                            <option value="">Todos</option>
+                            <option value="Fixo" {% if filtro_tipo_gasto == 'Fixo' %}selected{% endif %}>Fixo</option>
+                            <option value="Ajustável" {% if filtro_tipo_gasto == 'Ajustável' %}selected{% endif %}>Ajustável</option>
+                            <option value="Variável" {% if filtro_tipo_gasto == 'Variável' %}selected{% endif %}>Variável</option>
+                            <option value="Fatura" {% if filtro_tipo_gasto == 'Fatura' %}selected{% endif %}>Fatura</option>
+                            <option value="Débito" {% if filtro_tipo_gasto == 'Débito' %}selected{% endif %}>Débito</option>
+                            <option value="Eventual" {% if filtro_tipo_gasto == 'Eventual' %}selected{% endif %}>Eventual</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Classificação:</label>
+                        <select name="classificacao" id="filter_classificacao" class="form-select form-select-sm">
+                            <option value="">Todas</option>
+                            <option value="Base_Padroes" {% if filtro_classificacao == 'Base_Padroes' %}selected{% endif %}>Base_Padroes</option>
+                            <option value="Journal Entries" {% if filtro_classificacao == 'Journal Entries' %}selected{% endif %}>Journal Entries</option>
+                            <option value="Palavras-chave" {% if filtro_classificacao == 'Palavras-chave' %}selected{% endif %}>Palavras-chave</option>
+                            <option value="Manual" {% if filtro_classificacao == 'Manual' %}selected{% endif %}>Manual</option>
+                            <option value="Manual (Lote)" {% if filtro_classificacao == 'Manual (Lote)' %}selected{% endif %}>Manual (Lote)</option>
+                            <option value="Fatura Cartão" {% if filtro_classificacao == 'Fatura Cartão' %}selected{% endif %}>Fatura Cartão</option>
+                            <option value="Não Encontrado" {% if filtro_classificacao == 'Não Encontrado' %}selected{% endif %}>Não Encontrado</option>
+                        </select>
+                    </div>
+                    <div class="col-md-1 d-flex align-items-end">
+                        <button type="submit" class="btn btn-sm btn-primary w-100">
+                            <i class="fas fa-filter"></i> Filtrar
+                        </button>
+                    </div>
+                    <div class="col-md-1 d-flex align-items-end">
+                        <a href="{{ url_for('validar', tipo=tipo) }}" class="btn btn-sm btn-secondary w-100">
+                            <i class="fas fa-times"></i> Limpar
+                        </a>
+                    </div>
+                </div>
+            </form>
+            <div class="mt-2">
+                <small class="text-muted">
+                    Mostrando {{ transacoes|length }} transação(ões) nesta página
+                    {% if filtro_grupo or filtro_subgrupo or filtro_tipo_gasto or filtro_classificacao %}
+                    <span class="badge bg-info">Filtro ativo</span>
+                    {% endif %}
+                </small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Painel de Classificação em Lote -->
+    <div class="card mb-4 border-primary sticky-batch-panel">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="fas fa-layer-group"></i> Classificação em Lote</h5>
+        </div>
+        <div class="card-body">
+            <div class="row align-items-end">
+                <div class="col-md-1">
+                    <div class="form-check">
+                        <input type="checkbox" class="form-check-input" id="select_all_batch">
+                        <label class="form-check-label" for="select_all_batch">
+                            <strong>Todas</strong>
+                        </label>
+                    </div>
+                    <small class="text-muted"><span id="selected_count">0</span> selecionadas</small>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Grupo:</label>
+                    <select id="batch_grupo" class="form-select">
+                        <option value="">Selecione...</option>
+                        {% for grupo in grupos %}
+                        <option value="{{ grupo }}">{{ grupo }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Subgrupo:</label>
+                    <select id="batch_subgrupo" class="form-select">
+                        <option value="">Selecione o grupo primeiro...</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Tipo de Gasto:</label>
+                    <input type="text" id="batch_tipo_gasto" class="form-control" placeholder="Automático" readonly>
+                </div>
+                <div class="col-md-2">
+                    <button type="button" class="btn btn-success w-100" id="apply_batch" disabled>
+                        <i class="fas fa-check-double"></i> Aplicar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% for idx, trans in transacoes %}
+    <div class="card mb-3 transaction-card" data-idx="{{ idx }}" data-grupo="{{ trans.GRUPO or '' }}" data-subgrupo="{{ trans.SUBGRUPO or '' }}" data-tipo-gasto="{{ trans.TipoGasto or '' }}" data-classificacao="{{ trans.MarcacaoIA or '' }}">
+        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+            <div>
+                <input type="checkbox" class="form-check-input me-2 transaction-checkbox" id="check_{{ idx }}" data-idx="{{ idx }}">
+                <strong>Transação {{ loop.index }} de {{ transacoes|length }}</strong> (Página {{ page }} de {{ total_pages }})
+            </div>
+            <div>
+                {% if trans.GRUPO and trans.SUBGRUPO %}
+                <span class="badge bg-secondary">{{ trans.GRUPO }} / {{ trans.SUBGRUPO }}</span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="row mb-3">
+                <div class="col-md-2">
+                    <strong>Data:</strong> {{ trans.Data }}
+                </div>
+                <div class="col-md-4">
+                    <strong>Estabelecimento:</strong> {{ trans.Estabelecimento }}
+                </div>
+                <div class="col-md-2">
+                    <strong>Valor:</strong> 
+                    <span class="{% if trans.Valor < 0 %}text-danger{% else %}text-success{% endif %}">
+                        R$ {{ "%.2f"|format(trans.Valor) }}
+                    </span>
+                </div>
+                <div class="col-md-2">
+                    <strong>Origem:</strong> {{ trans.origem }}
+                </div>
+                <div class="col-md-2">
+                    <strong>Classificação:</strong> 
+                    {% if trans.MarcacaoIA %}
+                        <span class="badge bg-{% if trans.ValidarIA == 'VALIDAR' %}warning{% elif trans.MarcacaoIA == 'Base_Padroes' %}success{% elif trans.MarcacaoIA == 'Journal Entries' %}info{% elif trans.MarcacaoIA == 'Palavras-chave' %}primary{% else %}secondary{% endif %}">
+                            {{ trans.MarcacaoIA }}
+                        </span>
+                    {% else %}
+                        <span class="badge bg-secondary">N/A</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <form method="POST">
+                <input type="hidden" name="idx" value="{{ idx }}">
+                
+                <div class="row">
+                    <div class="col-md-4">
+                        <label class="form-label">Grupo:</label>
+                        <select name="grupo" class="form-select grupo-select" required>
+                            <option value="">Selecione...</option>
+                            {% for grupo in grupos %}
+                            <option value="{{ grupo }}" {% if trans.GRUPO == grupo %}selected{% endif %}>{{ grupo }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Subgrupo:</label>
+                        <select name="subgrupo" class="form-select subgrupo-select" required>
+                            <option value="">Selecione o grupo primeiro...</option>
+                            {% if trans.SUBGRUPO %}
+                            <option value="{{ trans.SUBGRUPO }}" selected>{{ trans.SUBGRUPO }}</option>
+                            {% endif %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Tipo de Gasto:</label>
+                        <input type="text" name="tipo_gasto" class="form-control tipo-gasto-input" placeholder="Automático" value="{{ trans.TipoGasto or '' }}" readonly>
+                    </div>
+                    <div class="col-md-1 d-flex align-items-end">
+                        <button type="button" class="btn btn-success w-100" data-bs-toggle="modal" data-bs-target="#novaMarcacaoModal">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="mt-3 d-flex justify-content-between">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar e Próxima
+                    </button>
+                    {% if loop.last and page < total_pages %}
+                    <a href="{{ url_for('validar', page=page+1) }}" class="btn btn-secondary">
+                        Próxima Página <i class="fas fa-arrow-right"></i>
+                    </a>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
+    {% endfor %}
+
+    <!-- Paginação -->
+    <nav>
+        <ul class="pagination justify-content-center">
+            {% if page > 1 %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('validar', page=page-1, tipo=tipo, grupo=filtro_grupo, subgrupo=filtro_subgrupo, tipo_gasto=filtro_tipo_gasto, classificacao=filtro_classificacao) }}">Anterior</a>
+            </li>
+            {% endif %}
+            
+            <li class="page-item disabled">
+                <span class="page-link">Página {{ page }} de {{ total_pages }}</span>
+            </li>
+            
+            {% if page < total_pages %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('validar', page=page+1, tipo=tipo, grupo=filtro_grupo, subgrupo=filtro_subgrupo, tipo_gasto=filtro_tipo_gasto, classificacao=filtro_classificacao) }}">Próxima</a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+{% endif %}
+
+<!-- Modal para Nova Marcação -->
+<div class="modal fade" id="novaMarcacaoModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-plus-circle"></i> Nova Combinação Grupo/Subgrupo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> Crie uma nova combinação de Grupo, Subgrupo e Tipo de Gasto que ficará disponível para todas as transações.
+                </div>
+                <form id="formNovaMarcacao">
+                    <div class="mb-3">
+                        <label class="form-label">Grupo:</label>
+                        <input type="text" class="form-control" id="novoGrupo" placeholder="Ex: Alimentação, Moradia" required>
+                        <small class="text-muted">Ou selecione um existente das transações</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Subgrupo:</label>
+                        <input type="text" class="form-control" id="novoSubgrupo" placeholder="Ex: Restaurante, Supermercado" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Tipo de Gasto:</label>
+                        <select class="form-select" id="novoTipoGasto" required>
+                            <option value="">Selecione...</option>
+                            <option value="Fixo">Fixo</option>
+                            <option value="Ajustável">Ajustável</option>
+                            <option value="Variável">Variável</option>
+                            <option value="Eventual">Eventual</option>
+                        </select>
+                    </div>
+                </form>
+                <div id="mensagemModal"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnSalvarMarcacao">
+                    <i class="fas fa-save"></i> Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Offcanvas Menu Lateral - Opções de Visualização -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="viewOptionsMenu" aria-labelledby="viewOptionsMenuLabel">
+    <div class="offcanvas-header bg-primary text-white">
+        <h5 class="offcanvas-title" id="viewOptionsMenuLabel">
+            <i class="fas fa-eye"></i> Opções de Visualização
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body">
+        <p class="text-muted">Escolha como deseja visualizar suas transações:</p>
+        
+        <!-- Opção 1: Dashboard com Resumo Visual -->
+        <div class="card mb-3 border-primary">
+            <div class="card-body">
+                <h6 class="card-title">
+                    <i class="fas fa-chart-pie text-primary"></i> Dashboard com Resumo Visual
+                </h6>
+                <p class="card-text small">
+                    Visualize gráficos e estatísticas das suas transações por categoria, com resumo de gastos e distribuição percentual.
+                </p>
+                <button class="btn btn-sm btn-primary w-100" onclick="changeView('dashboard')">
+                    <i class="fas fa-eye"></i> Visualizar
+                </button>
+            </div>
+        </div>
+
+        <!-- Opção 2: Vista de Lista Compacta -->
+        <div class="card mb-3 border-success">
+            <div class="card-body">
+                <h6 class="card-title">
+                    <i class="fas fa-list text-success"></i> Vista de Lista Compacta
+                </h6>
+                <p class="card-text small">
+                    Lista condensada mostrando apenas informações essenciais: ícone, estabelecimento, valor e classificação em uma linha.
+                </p>
+                <button class="btn btn-sm btn-success w-100" onclick="changeView('compact')">
+                    <i class="fas fa-eye"></i> Visualizar
+                </button>
+            </div>
+        </div>
+
+        <!-- Opção 3: Cards com Ícones -->
+        <div class="card mb-3 border-info">
+            <div class="card-body">
+                <h6 class="card-title">
+                    <i class="fas fa-icons text-info"></i> Cards com Ícones
+                </h6>
+                <p class="card-text small">
+                    Cards visuais com ícones coloridos por categoria (Alimentação 🍽️, Transporte 🚗, Moradia 🏠), facilitando identificação rápida.
+                </p>
+                <button class="btn btn-sm btn-info w-100" onclick="changeView('icons')">
+                    <i class="fas fa-eye"></i> Visualizar
+                </button>
+            </div>
+        </div>
+
+        <hr>
+
+        <!-- Opção Atual (Padrão) -->
+        <div class="card border-secondary">
+            <div class="card-body">
+                <h6 class="card-title">
+                    <i class="fas fa-th-large text-secondary"></i> Vista Padrão (Atual)
+                </h6>
+                <p class="card-text small">
+                    Vista completa com todos os detalhes da transação e formulários de edição.
+                </p>
+                <button class="btn btn-sm btn-secondary w-100" onclick="changeView('default')">
+                    <i class="fas fa-undo"></i> Voltar ao Padrão
+                </button>
+            </div>
+        </div>
+
+        <div class="alert alert-info mt-3 small">
+            <i class="fas fa-info-circle"></i> <strong>Dica:</strong> Experimente cada visualização para encontrar a que melhor se adapta ao seu fluxo de trabalho!
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Dados de grupos, subgrupos e tipos de gasto
+const gruposDict = {{ grupos_dict|tojson }};
+const tipoGastoDict = {{ tipo_gasto_dict|tojson }};
+
+// ========== FILTROS ==========
+
+// Atualiza subgrupos do filtro quando grupo muda
+document.getElementById('filter_grupo').addEventListener('change', function() {
+    const subgrupoSelect = document.getElementById('filter_subgrupo');
+    const grupo = this.value;
+    
+    subgrupoSelect.innerHTML = '<option value="">Todos</option>';
+    
+    if (grupo && gruposDict[grupo]) {
+        const subgrupos = gruposDict[grupo];
+        subgrupos.forEach(subgrupo => {
+            const option = document.createElement('option');
+            option.value = subgrupo;
+            option.textContent = subgrupo;
+            subgrupoSelect.appendChild(option);
+        });
+    }
+});
+
+// ========== CLASSIFICAÇÃO EM LOTE ==========
+
+// Contador de selecionadas
+function updateSelectedCount() {
+    const checked = document.querySelectorAll('.transaction-checkbox:checked').length;
+    document.getElementById('selected_count').textContent = checked;
+    document.getElementById('apply_batch').disabled = checked === 0;
+}
+
+// Selecionar todas
+document.getElementById('select_all_batch').addEventListener('change', function() {
+    const checkboxes = document.querySelectorAll('.transaction-checkbox');
+    checkboxes.forEach(cb => {
+        cb.checked = this.checked;
+    });
+    updateSelectedCount();
+});
+
+// Atualiza contador quando individual muda
+document.querySelectorAll('.transaction-checkbox').forEach(cb => {
+    cb.addEventListener('change', function() {
+        updateSelectedCount();
+    });
+});
+
+// Atualiza subgrupos do lote quando grupo muda
+document.getElementById('batch_grupo').addEventListener('change', function() {
+    const subgrupoSelect = document.getElementById('batch_subgrupo');
+    const tipoGastoInput = document.getElementById('batch_tipo_gasto');
+    const grupo = this.value;
+    
+    subgrupoSelect.innerHTML = '<option value="">Selecione...</option>';
+    tipoGastoInput.value = '';
+    
+    if (grupo && gruposDict[grupo]) {
+        const subgrupos = gruposDict[grupo];
+        subgrupos.forEach(subgrupo => {
+            const option = document.createElement('option');
+            option.value = subgrupo;
+            option.textContent = subgrupo;
+            subgrupoSelect.appendChild(option);
+        });
+    }
+});
+
+// Preenche tipo de gasto do lote automaticamente
+document.getElementById('batch_subgrupo').addEventListener('change', function() {
+    const grupo = document.getElementById('batch_grupo').value;
+    const subgrupo = this.value;
+    const tipoGastoInput = document.getElementById('batch_tipo_gasto');
+    
+    if (grupo && subgrupo) {
+        const chave = `${grupo}|${subgrupo}`;
+        if (tipoGastoDict[chave]) {
+            tipoGastoInput.value = tipoGastoDict[chave];
+        } else {
+            tipoGastoInput.value = '';
+        }
+    }
+});
+
+// Aplicar classificação em lote
+document.getElementById('apply_batch').addEventListener('click', function() {
+    const grupo = document.getElementById('batch_grupo').value;
+    const subgrupo = document.getElementById('batch_subgrupo').value;
+    const tipoGasto = document.getElementById('batch_tipo_gasto').value;
+    
+    if (!grupo || !subgrupo || !tipoGasto) {
+        alert('Preencha Grupo, Subgrupo e Tipo de Gasto!');
+        return;
+    }
+    
+    // Coleta índices selecionados
+    const indices = [];
+    document.querySelectorAll('.transaction-checkbox:checked').forEach(cb => {
+        indices.push(cb.dataset.idx);
+    });
+    
+    if (indices.length === 0) {
+        alert('Selecione pelo menos uma transação!');
+        return;
+    }
+    
+    // Confirma
+    if (!confirm(`Aplicar classificação para ${indices.length} transação(ões)?`)) {
+        return;
+    }
+    
+    // Envia via AJAX
+    fetch('/validar/lote', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            indices: indices,
+            grupo: grupo,
+            subgrupo: subgrupo,
+            tipo_gasto: tipoGasto
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('Erro: ' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('Erro ao processar: ' + error);
+    });
+});
+
+// ========== CLASSIFICAÇÃO INDIVIDUAL ==========
+
+// Atualiza subgrupos e tipo de gasto quando grupo muda
+document.querySelectorAll('.grupo-select').forEach(select => {
+    select.addEventListener('change', function() {
+        const row = this.closest('.row');
+        const subgrupoSelect = row.querySelector('.subgrupo-select');
+        const tipoGastoInput = row.querySelector('.tipo-gasto-input');
+        const grupo = this.value;
+        
+        // Limpa subgrupos e tipo de gasto
+        subgrupoSelect.innerHTML = '<option value="">Selecione...</option>';
+        tipoGastoInput.value = '';
+        tipoGastoInput.removeAttribute('readonly');
+        
+        if (grupo && gruposDict[grupo]) {
+            const subgrupos = gruposDict[grupo];
+            subgrupos.forEach(subgrupo => {
+                const option = document.createElement('option');
+                option.value = subgrupo;
+                option.textContent = subgrupo;
+                subgrupoSelect.appendChild(option);
+            });
+        }
+    });
+});
+
+// Preenche tipo de gasto automaticamente quando subgrupo muda
+document.querySelectorAll('.subgrupo-select').forEach(select => {
+    select.addEventListener('change', function() {
+        const row = this.closest('.row');
+        const grupoSelect = row.querySelector('.grupo-select');
+        const tipoGastoInput = row.querySelector('.tipo-gasto-input');
+        const grupo = grupoSelect.value;
+        const subgrupo = this.value;
+        
+        if (grupo && subgrupo) {
+            const chave = `${grupo}|${subgrupo}`;
+            if (tipoGastoDict[chave]) {
+                tipoGastoInput.value = tipoGastoDict[chave];
+                tipoGastoInput.setAttribute('readonly', 'readonly');
+            } else {
+                tipoGastoInput.value = '';
+                tipoGastoInput.removeAttribute('readonly');
+                tipoGastoInput.placeholder = 'Digite o tipo de gasto';
+            }
+        }
+    });
+});
+
+// Salvar nova marcação via AJAX
+document.getElementById('btnSalvarMarcacao').addEventListener('click', function() {
+    const grupo = document.getElementById('novoGrupo').value.trim();
+    const subgrupo = document.getElementById('novoSubgrupo').value.trim();
+    const tipoGasto = document.getElementById('novoTipoGasto').value;
+    const mensagemDiv = document.getElementById('mensagemModal');
+    
+    if (!grupo || !subgrupo || !tipoGasto) {
+        mensagemDiv.innerHTML = '<div class="alert alert-danger">Preencha todos os campos!</div>';
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('grupo', grupo);
+    formData.append('subgrupo', subgrupo);
+    formData.append('tipo_gasto', tipoGasto);
+    
+    fetch('/api/adicionar_marcacao', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            mensagemDiv.innerHTML = '<div class="alert alert-success">Marcação criada com sucesso! Recarregue a página para usar.</div>';
+            
+            // Limpa form
+            document.getElementById('formNovaMarcacao').reset();
+            
+            // Fecha modal após 2 segundos e recarrega
+            setTimeout(() => {
+                location.reload();
+            }, 2000);
+        } else {
+            mensagemDiv.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+        }
+    })
+    .catch(error => {
+        mensagemDiv.innerHTML = '<div class="alert alert-danger">Erro ao salvar. Tente novamente.</div>';
+    });
+});
+
+// ========== OPÇÕES DE VISUALIZAÇÃO ==========
+
+function changeView(viewType) {
+    // Salva preferência no localStorage
+    localStorage.setItem('transactionViewType', viewType);
+    
+    // Redireciona para a rota apropriada
+    const currentUrl = new URL(window.location.href);
+    currentUrl.searchParams.set('view', viewType);
+    window.location.href = currentUrl.toString();
+}
+
+// Restaura visualização salva ao carregar página
+document.addEventListener('DOMContentLoaded', function() {
+    const savedView = localStorage.getItem('transactionViewType');
+    const urlParams = new URLSearchParams(window.location.search);
+    const viewParam = urlParams.get('view');
+    
+    if (viewParam) {
+        // View via URL tem prioridade
+        applyView(viewParam);
+    } else if (savedView && savedView !== 'default') {
+        // Aplica view salva
+        applyView(savedView);
+    }
+});
+
+function applyView(viewType) {
+    // Implementação será feita no backend
+    // Por enquanto apenas atualiza a URL
+    console.log('Aplicando visualização:', viewType);
+}
+</script>
+{% endblock %}

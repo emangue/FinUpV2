@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard 3 - Teste Template</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { background-color: #f8f9fa; }
+        .chart-container {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .chart-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #2c3e50;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid mt-4">
+        <div class="row mb-4">
+            <div class="col-12">
+                <h1 class="text-center text-primary mb-4">
+                    🔬 Dashboard 3 - Teste Template (SEM base.html)
+                </h1>
+                <div class="alert alert-warning text-center">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Testando se o conflito está no base.html ou nas bibliotecas
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Gráfico de Pizza -->
+            <div class="col-lg-6 mb-4">
+                <div class="chart-container">
+                    <h5 class="chart-title">🍰 Despesas por Categoria</h5>
+                    <div style="height: 300px; display: flex; align-items: center; justify-content: center;">
+                        <canvas id="chartGrupos" width="300" height="300"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Gráfico de Barras -->
+            <div class="col-lg-6 mb-4">
+                <div class="chart-container">
+                    <h5 class="chart-title">📊 Evolução Mensal</h5>
+                    <div style="height: 300px; display: flex; align-items: center; justify-content: center;">
+                        <canvas id="chartEvolucao" width="400" height="300"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Debug Info -->
+        <div class="row">
+            <div class="col-12">
+                <div class="chart-container">
+                    <h5 class="chart-title">🔍 Debug Info</h5>
+                    <div id="debugInfo" class="alert alert-secondary">
+                        <strong>Carregando...</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="text-center mt-4">
+            <a href="/dashboard" class="btn btn-primary">← Dashboard Principal</a>
+            <a href="/dashboard2" class="btn btn-secondary">Dashboard 2</a>
+            <a href="/test_basic_chart" class="btn btn-success">Teste Básico</a>
+        </div>
+    </div>
+
+    <!-- Carregar apenas Chart.js primeiro -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    
+    <script>
+        console.log('🚀 Dashboard 3 iniciando...');
+        
+        // Dados vindos do Flask
+        const dados = {
+            grupos_labels: {{ grupos_labels|tojson }},
+            grupos_valores: {{ grupos_valores|tojson }}, 
+            grupos_cores: {{ grupos_cores|tojson }},
+            evolucao_meses: {{ evolucao_meses|tojson }},
+            evolucao_receitas: {{ evolucao_receitas|tojson }},
+            evolucao_despesas: {{ evolucao_despesas|tojson }}
+        };
+        
+        console.log('📋 Dados recebidos:', dados);
+        
+        const debugInfo = {
+            'Chart.js disponível': typeof Chart !== 'undefined',
+            'Dados grupos_labels': dados.grupos_labels,
+            'Dados grupos_valores': dados.grupos_valores,
+            'Elemento chartGrupos': document.getElementById('chartGrupos') !== null,
+            'Elemento chartEvolucao': document.getElementById('chartEvolucao') !== null,
+            'Template rendering OK': dados.grupos_labels.length > 0
+        };
+        
+        document.getElementById('debugInfo').innerHTML = '<pre>' + JSON.stringify(debugInfo, null, 2) + '</pre>';
+        
+        // Helper para formatar moeda
+        const formatCurrency = (value) => value.toLocaleString('pt-BR', { 
+            minimumFractionDigits: 2, 
+            maximumFractionDigits: 2 
+        });
+
+        // Aguardar DOM estar pronto
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('📄 DOM pronto, criando gráficos...');
+            
+            try {
+                // 🍰 Gráfico de Pizza
+                const ctxGrupos = document.getElementById('chartGrupos');
+                if (ctxGrupos && typeof Chart !== 'undefined') {
+                    console.log('🍰 Criando gráfico de pizza...');
+                    
+                    new Chart(ctxGrupos.getContext('2d'), {
+                        type: 'doughnut',
+                        data: {
+                            labels: dados.grupos_labels,
+                            datasets: [{
+                                data: dados.grupos_valores,
+                                backgroundColor: dados.grupos_cores,
+                                borderWidth: 3,
+                                borderColor: '#fff'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    position: 'bottom',
+                                    labels: { padding: 20, font: { size: 12 } }
+                                },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            let label = context.label || '';
+                                            let value = Math.abs(context.parsed);
+                                            let total = context.dataset.data.reduce((a, b) => Math.abs(a) + Math.abs(b), 0);
+                                            let percentage = ((Math.abs(context.parsed) / total) * 100).toFixed(1);
+                                            return label + ': R$ ' + formatCurrency(value) + ' (' + percentage + '%)';
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                    console.log('✅ Gráfico de pizza criado!');
+                }
+
+                // 📊 Gráfico de Barras
+                const ctxEvolucao = document.getElementById('chartEvolucao');
+                if (ctxEvolucao && typeof Chart !== 'undefined') {
+                    console.log('📊 Criando gráfico de barras...');
+                    
+                    new Chart(ctxEvolucao.getContext('2d'), {
+                        type: 'bar',
+                        data: {
+                            labels: dados.evolucao_meses,
+                            datasets: [{
+                                label: 'Receitas',
+                                data: dados.evolucao_receitas,
+                                backgroundColor: 'rgba(40, 167, 69, 0.8)',
+                                borderColor: 'rgba(40, 167, 69, 1)',
+                                borderWidth: 1,
+                                borderRadius: 6
+                            }, {
+                                label: 'Despesas',
+                                data: dados.evolucao_despesas,
+                                backgroundColor: 'rgba(220, 53, 69, 0.8)',
+                                borderColor: 'rgba(220, 53, 69, 1)',
+                                borderWidth: 1,
+                                borderRadius: 6
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    position: 'top',
+                                    labels: { padding: 20, font: { size: 12 } }
+                                },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            let label = context.dataset.label || '';
+                                            let value = Math.abs(context.parsed.y);
+                                            return label + ': R$ ' + formatCurrency(value);
+                                        }
+                                    }
+                                }
+                            },
+                            scales: {
+                                x: { grid: { display: false } },
+                                y: {
+                                    beginAtZero: true,
+                                    ticks: {
+                                        callback: function(value) {
+                                            return 'R$ ' + formatCurrency(Math.abs(value));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                    console.log('✅ Gráfico de barras criado!');
+                }
+                
+            } catch (error) {
+                console.error('❌ Erro na criação dos gráficos:', error);
+            }
+        });
+    </script>
+    
+    <!-- Só então carregar Bootstrap -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

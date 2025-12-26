@@ -1,0 +1,243 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard 2 - Teste de Gráficos{% endblock %}
+
+{% block extra_css %}
+<style>
+.chart-container {
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+}
+
+.chart-title {
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin-bottom: 20px;
+    color: #2c3e50;
+    text-align: center;
+}
+
+body {
+    background-color: #f8f9fa;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="text-center text-primary mb-4">
+                🧪 Dashboard 2 - Teste de Gráficos
+            </h1>
+            <div class="alert alert-info text-center">
+                <i class="fas fa-info-circle"></i>
+                Esta é uma versão simplificada do dashboard para testar se os gráficos funcionam
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Gráfico de Pizza -->
+        <div class="col-lg-6 mb-4">
+            <div class="chart-container">
+                <h5 class="chart-title">🍰 Despesas por Categoria</h5>
+                <div style="height: 300px; display: flex; align-items: center; justify-content: center;">
+                    <canvas id="chartGrupos" width="300" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Gráfico de Barras -->
+        <div class="col-lg-6 mb-4">
+            <div class="chart-container">
+                <h5 class="chart-title">📊 Evolução Mensal</h5>
+                <div style="height: 300px; display: flex; align-items: center; justify-content: center;">
+                    <canvas id="chartEvolucao" width="400" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Debug Info -->
+    <div class="row">
+        <div class="col-12">
+            <div class="chart-container">
+                <h5 class="chart-title">🔍 Informações de Debug</h5>
+                <div id="debugInfo" class="alert alert-secondary">
+                    <strong>Aguardando carregamento dos dados...</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="text-center mt-4">
+        <a href="{{ url_for('dashboard') }}" class="btn btn-outline-primary">
+            ← Voltar para Dashboard Principal
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 Dashboard2 iniciando...');
+    
+    // Debug: Mostrar dados recebidos
+    const debugInfo = {
+        'Chart.js disponível': typeof Chart !== 'undefined',
+        'Grupos Labels': {{ grupos_labels|tojson }},
+        'Grupos Valores': {{ grupos_valores|tojson }},
+        'Grupos Cores': {{ grupos_cores|tojson }},
+        'Evolução Meses': {{ evolucao_meses|tojson }},
+        'Evolução Receitas': {{ evolucao_receitas|tojson }},
+        'Evolução Despesas': {{ evolucao_despesas|tojson }},
+        'Elemento chartGrupos': document.getElementById('chartGrupos') !== null,
+        'Elemento chartEvolucao': document.getElementById('chartEvolucao') !== null
+    };
+    
+    console.log('📋 Debug Info:', debugInfo);
+    
+    // Atualizar div de debug
+    const debugDiv = document.getElementById('debugInfo');
+    debugDiv.innerHTML = '<pre>' + JSON.stringify(debugInfo, null, 2) + '</pre>';
+
+    // Helper para formatar moeda
+    const formatCurrency = (value) => value.toLocaleString('pt-BR', { 
+        minimumFractionDigits: 2, 
+        maximumFractionDigits: 2 
+    });
+
+    try {
+        // 🍰 Gráfico de Pizza - Distribuição por Grupo
+        const ctxGrupos = document.getElementById('chartGrupos');
+        if (ctxGrupos && typeof Chart !== 'undefined') {
+            console.log('🍰 Criando gráfico de pizza...');
+            
+            const chartGrupos = new Chart(ctxGrupos.getContext('2d'), {
+                type: 'doughnut',
+                data: {
+                    labels: {{ grupos_labels|tojson }},
+                    datasets: [{
+                        data: {{ grupos_valores|tojson }},
+                        backgroundColor: {{ grupos_cores|tojson }},
+                        borderWidth: 3,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { 
+                                padding: 20, 
+                                font: { size: 12 },
+                                usePointStyle: true
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.label || '';
+                                    let value = Math.abs(context.parsed);
+                                    let total = context.dataset.data.reduce((a, b) => Math.abs(a) + Math.abs(b), 0);
+                                    let percentage = ((Math.abs(context.parsed) / total) * 100).toFixed(1);
+                                    return label + ': R$ ' + formatCurrency(value) + ' (' + percentage + '%)';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            console.log('✅ Gráfico de pizza criado com sucesso!');
+        } else {
+            console.error('❌ Erro: Elemento chartGrupos não encontrado ou Chart.js não carregado');
+        }
+
+        // 📊 Gráfico de Barras - Evolução Mensal
+        const ctxEvolucao = document.getElementById('chartEvolucao');
+        if (ctxEvolucao && typeof Chart !== 'undefined') {
+            console.log('📊 Criando gráfico de barras...');
+            
+            const chartEvolucao = new Chart(ctxEvolucao.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: {{ evolucao_meses|tojson }},
+                    datasets: [{
+                        label: 'Receitas',
+                        data: {{ evolucao_receitas|tojson }},
+                        backgroundColor: 'rgba(40, 167, 69, 0.8)',
+                        borderColor: 'rgba(40, 167, 69, 1)',
+                        borderWidth: 1,
+                        borderRadius: 6,
+                        borderSkipped: false
+                    }, {
+                        label: 'Despesas',
+                        data: {{ evolucao_despesas|tojson }},
+                        backgroundColor: 'rgba(220, 53, 69, 0.8)',
+                        borderColor: 'rgba(220, 53, 69, 1)',
+                        borderWidth: 1,
+                        borderRadius: 6,
+                        borderSkipped: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { intersect: false, mode: 'index' },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: { 
+                                padding: 20, 
+                                usePointStyle: true,
+                                font: { size: 12, weight: '500' }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    let value = Math.abs(context.parsed.y);
+                                    return label + ': R$ ' + formatCurrency(value);
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: false },
+                            ticks: { font: { size: 11 } }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(0,0,0,0.1)' },
+                            ticks: {
+                                callback: function(value) {
+                                    return 'R$ ' + formatCurrency(Math.abs(value));
+                                },
+                                font: { size: 10 }
+                            }
+                        }
+                    }
+                }
+            });
+            console.log('✅ Gráfico de barras criado com sucesso!');
+        } else {
+            console.error('❌ Erro: Elemento chartEvolucao não encontrado ou Chart.js não carregado');
+        }
+        
+    } catch (error) {
+        console.error('❌ Erro geral na criação dos gráficos:', error);
+        debugDiv.innerHTML += '<br><br><div class="alert alert-danger"><strong>Erro:</strong> ' + error.message + '</div>';
+    }
+});
+</script>
+{% endblock %}
