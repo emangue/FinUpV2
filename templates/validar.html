@@ -254,118 +254,246 @@
     const gruposDict = {{ grupos_dict|tojson }};
     const tipoGastoDict = {{ tipo_gasto_dict|tojson }};
     
-    // Função para adicionar log ao console de debug
-    function debugLog(message, type = 'info') {
-        const timestamp = new Date().toLocaleTimeString('pt-BR');
-        const icons = {
-            'info': '🔍',
-            'success': '✅',
-            'error': '❌',
-            'warning': '⚠️',
-            'data': '📊'
-        };
-        const colors = {
-            'info': '#17a2b8',
-            'success': '#28a745',
-            'error': '#dc3545',
-            'warning': '#ffc107',
-            'data': '#6f42c1'
-        };
-        
-        const icon = icons[type] || '📝';
-        const color = colors[type] || '#666';
-        
-        const logEntry = `<div style="color: ${color}; margin-bottom: 5px;">
-            <strong>[${timestamp}]</strong> ${icon} ${message}
-        </div>`;
-        
-        $('#debug-console').append(logEntry);
-        // Auto-scroll para o final
-        $('#debug-console').parent().scrollTop($('#debug-console').parent()[0].scrollHeight);
-    }
-    
-    debugLog('Grupos carregados: ' + Object.keys(gruposDict).length, 'data');
-    debugLog('Dados: ' + JSON.stringify(Object.keys(gruposDict)), 'data');
-    
     $(document).ready(function() {
-        debugLog('Document ready executado', 'success');
-        
         // Inicializa DataTable sem paginação (usamos paginação customizada)
         var table = $('#dataTable').DataTable({
             "language": {
                 "url": "//cdn.datatables.net/plug-ins/1.10.24/i18n/Portuguese-Brasil.json"
             },
-            "order": [[ 0, "desc" ]],
+            "order": [[ 1, "desc" ]],  // Coluna 1 agora (antes era 0, mas adicionamos checkbox)
             "paging": false,
             "info": false,
             "searching": false
         });
         
-        debugLog('DataTable inicializado', 'success');
+        // Select All checkbox
+        $('#select-all').on('change', function() {
+            $('.row-checkbox').prop('checked', this.checked).trigger('change');
+        });
         
-        // Handler para TESTE SIMPLES
-        $('#teste-grupo').on('change', function() {
-            var grupo = $(this).val();
-            var selectSubgrupo = $('#teste-subgrupo');
+        // Individual checkbox
+        $(document).on('change', '.row-checkbox', function() {
+            // Atualiza select-all
+            if (!this.checked) {
+                $('#select-all').prop('checked', false);
+            } else {
+                if ($('.row-checkbox:checked').length === $('.row-checkbox').length) {
+                    $('#select-all').prop('checked', true);
+                }
+            }
             
-            debugLog('🧪 TESTE - Grupo selecionado: ' + grupo, 'warning');
+            // Mostra/esconde box de ação em lote
+            var numSelecionados = $('.row-checkbox:checked').length;
+            if (numSelecionados > 0) {
+                $('#box-acao-lote').slideDown();
+                $('#contador-selecionados').text(numSelecionados + ' selecionada' + (numSelecionados > 1 ? 's' : ''));
+            } else {
+                $('#box-acao-lote').slideUp();
+                // Limpa campos do lote
+                $('#lote-grupo').val('');
+                $('#lote-subgrupo').html('<option value="">Selecione grupo primeiro...</option>').prop('disabled', true);
+                $('#lote-tipo-gasto').val('');
+                $('#btn-aplicar-lote').prop('disabled', true);
+            }
+        });
+        
+        // Dropdown de grupo do lote
+        $('#lote-grupo').on('change', function() {
+            var grupo = $(this).val();
+            var selectSubgrupo = $('#lote-subgrupo');
             
             if (!grupo) {
                 selectSubgrupo.html('<option value="">Selecione grupo primeiro...</option>').prop('disabled', true);
-                debugLog('🧪 TESTE - Grupo vazio, subgrupo desabilitado', 'warning');
+                $('#lote-tipo-gasto').val('');
+                $('#btn-aplicar-lote').prop('disabled', true);
                 return;
             }
             
             if (gruposDict[grupo]) {
                 var subgrupos = gruposDict[grupo];
-                debugLog('🧪 TESTE - Subgrupos encontrados: ' + subgrupos.length, 'success');
-                
                 selectSubgrupo.html('<option value="">Selecione...</option>');
+                
                 subgrupos.forEach(function(subgrupo) {
                     selectSubgrupo.append('<option value="' + subgrupo + '">' + subgrupo + '</option>');
                 });
-                selectSubgrupo.prop('disabled', false);
                 
-                debugLog('🧪 TESTE - Subgrupo habilitado com ' + subgrupos.length + ' opções', 'success');
-            } else {
-                debugLog('🧪 TESTE - Nenhum subgrupo encontrado para: ' + grupo, 'error');
+                selectSubgrupo.prop('disabled', false);
             }
         });
         
-        $('#teste-subgrupo').on('change', function() {
+        // Dropdown de subgrupo do lote
+        $('#lote-subgrupo').on('change', function() {
             var subgrupo = $(this).val();
-            if (subgrupo) {
-                debugLog('🧪 TESTE - Subgrupo selecionado: ' + subgrupo, 'success');
+            var grupo = $('#lote-grupo').val();
+            
+            if (!subgrupo) {
+                $('#lote-tipo-gasto').val('');
+                $('#btn-aplicar-lote').prop('disabled', true);
+                return;
             }
+            
+            // Auto-preenche TipoGasto
+            var chave = grupo + '|' + subgrupo;
+            if (tipoGastoDict[chave]) {
+                $('#lote-tipo-gasto').val(tipoGastoDict[chave]);
+            } else {
+                $('#lote-tipo-gasto').val('N/A');
+            }
+            
+            // Habilita botão aplicar
+            $('#btn-aplicar-lote').prop('disabled', false);
         });
+        
+        // Botão aplicar em lote
+        $('#btn-aplicar-lote').on('click', function() {
+            var grupo = $('#lote-grupo').val();
+            var subgrupo = $('#lote-subgrupo').val();
+            var tipoGasto = $('#lote-tipo-gasto').val();
+            
+            if (!grupo || !subgrupo) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erro',
+                    text: 'Selecione Grupo e Subgrupo!'
+                });
+                return;
+            }
+            
+            // Pega todas as linhas selecionadas
+            var linhasSelecionadas = [];
+            $('.row-checkbox:checked').each(function() {
+                var row = $(this).closest('tr');
+                linhasSelecionadas.push({
+                    indice: row.data('indice'),
+                    row: row
+                });
+            });
+            
+            if (linhasSelecionadas.length === 0) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Atenção',
+                    text: 'Nenhuma transação selecionada!'
+                });
+                return;
+            }
+            
+            // Confirmação
+            Swal.fire({
+                icon: 'question',
+                title: 'Confirmar Classificação em Lote?',
+                html: `
+                    <p>Classificar <strong>${linhasSelecionadas.length} transação(ões)</strong> como:</p>
+                    <p><strong>Grupo:</strong> ${grupo}</p>
+                    <p><strong>Subgrupo:</strong> ${subgrupo}</p>
+                    <p><strong>Tipo Gasto:</strong> ${tipoGasto}</p>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Sim, aplicar!',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    aplicarClassificacaoLote(linhasSelecionadas, grupo, subgrupo, tipoGasto);
+                }
+            });
+        });
+        
+        // Função para aplicar classificação em lote
+        function aplicarClassificacaoLote(linhas, grupo, subgrupo, tipoGasto) {
+            var btn = $('#btn-aplicar-lote');
+            btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-1"></i> Processando...');
+            
+            // Processa uma por uma em sequência
+            var index = 0;
+            function processarProxima() {
+                if (index >= linhas.length) {
+                    // Concluído
+                    btn.prop('disabled', false).html('<i class="fas fa-check-double me-1"></i> Aplicar em Lote');
+                    
+                    // Limpa seleção
+                    $('.row-checkbox').prop('checked', false);
+                    $('#box-acao-lote').slideUp();
+                    
+                    // Verifica se ainda há transações
+                    if ($('#dataTable tbody tr').length === 0) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Concluído!',
+                            text: 'Todas as transações foram classificadas!',
+                            confirmButtonText: 'Ir para Revisão'
+                        }).then((result) => {
+                            if (result.isConfirmed) {
+                                window.location.href = '{{ url_for("upload.revisao_upload") }}';
+                            }
+                        });
+                    } else {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Sucesso!',
+                            text: linhas.length + ' transação(ões) classificada(s)!'
+                        });
+                    }
+                    return;
+                }
+                
+                var linha = linhas[index];
+                
+                $.ajax({
+                    url: '{{ url_for("upload.validar_lote") }}',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        indice: linha.indice,
+                        grupo: grupo,
+                        subgrupo: subgrupo,
+                        tipo_gasto: tipoGasto === 'N/A' ? '' : tipoGasto
+                    }),
+                    success: function(response) {
+                        if (response.success) {
+                            // Remove a linha
+                            linha.row.fadeOut(200, function() {
+                                $(this).remove();
+                                index++;
+                                processarProxima();
+                            });
+                        } else {
+                            index++;
+                            processarProxima();
+                        }
+                    },
+                    error: function() {
+                        index++;
+                        processarProxima();
+                    }
+                });
+            }
+            
+            processarProxima();
+        }
         
         // Handler para mudança de grupo na tabela
         $(document).on('change', '.select-grupo', function() {
-            debugLog('Evento change detectado no select-grupo', 'info');
-            
             var selectGrupo = $(this);
             var indice = selectGrupo.data('indice');
             var grupo = selectGrupo.val();
+            var row = selectGrupo.closest('tr');
             
-            debugLog('Grupo selecionado: ' + grupo + ' | Índice: ' + indice, 'data');
-            
-            // Encontra o select de subgrupo na mesma linha
-            var selectSubgrupo = selectGrupo.closest('tr').find('.select-subgrupo');
-            
-            debugLog('Select subgrupo encontrado: ' + (selectSubgrupo.length > 0 ? 'SIM' : 'NÃO'), selectSubgrupo.length > 0 ? 'success' : 'error');
+            // Encontra elementos na mesma linha
+            var selectSubgrupo = row.find('.select-subgrupo');
+            var tipoGastoDisplay = row.find('.tipo-gasto-display');
+            var btnSalvar = row.find('.btn-salvar-linha');
             
             if (!grupo) {
                 // Limpa e desabilita subgrupo se grupo foi desmarcado
                 selectSubgrupo.html('<option value="">Selecione grupo primeiro...</option>').prop('disabled', true);
-                debugLog('Grupo vazio - subgrupo desabilitado', 'warning');
+                tipoGastoDisplay.val('');
+                btnSalvar.prop('disabled', true);
                 return;
             }
             
             // Carrega subgrupos do grupo selecionado
             if (gruposDict[grupo]) {
                 var subgrupos = gruposDict[grupo];
-                debugLog('Subgrupos encontrados: ' + JSON.stringify(subgrupos), 'success');
-                
                 selectSubgrupo.html('<option value="">Selecione...</option>');
                 
                 subgrupos.forEach(function(subgrupo) {
@@ -373,26 +501,119 @@
                 });
                 
                 selectSubgrupo.prop('disabled', false);
-                debugLog('Subgrupo habilitado e populado com ' + subgrupos.length + ' opções', 'success');
-                
-                // Abre o dropdown automaticamente após habilitar
-                setTimeout(function() {
-                    selectSubgrupo.focus();
-                    // Simula click para abrir o dropdown
-                    if (selectSubgrupo[0] && selectSubgrupo[0].showPicker) {
-                        try {
-                            selectSubgrupo[0].showPicker();
-                            debugLog('Dropdown aberto com showPicker()', 'success');
-                        } catch(e) {
-                            // Fallback se showPicker não for suportado
-                            selectSubgrupo.click();
-                            debugLog('Dropdown aberto com click() - fallback', 'warning');
-                        }
-                    }
-                }, 100);
-            } else {
-                debugLog('ERRO: Nenhum subgrupo encontrado para o grupo: ' + grupo, 'error');
             }
+        });
+        
+        // Handler para mudança de subgrupo
+        $(document).on('change', '.select-subgrupo', function() {
+            var selectSubgrupo = $(this);
+            var subgrupo = selectSubgrupo.val();
+            var row = selectSubgrupo.closest('tr');
+            
+            if (!subgrupo) {
+                row.find('.tipo-gasto-display').val('');
+                row.find('.btn-salvar-linha').prop('disabled', true);
+                return;
+            }
+            
+            // Pega o grupo selecionado
+            var grupo = row.find('.select-grupo').val();
+            
+            // Auto-preenche TipoGasto se disponível
+            var chave = grupo + '|' + subgrupo;
+            if (tipoGastoDict[chave]) {
+                row.find('.tipo-gasto-display').val(tipoGastoDict[chave]);
+            } else {
+                row.find('.tipo-gasto-display').val('N/A');
+            }
+            
+            // Habilita botão salvar
+            row.find('.btn-salvar-linha').prop('disabled', false);
+        });
+        
+        // Handler para salvar linha individual
+        $(document).on('click', '.btn-salvar-linha', function() {
+            var btn = $(this);
+            var row = btn.closest('tr');
+            var indice = btn.data('indice');
+            
+            var grupo = row.find('.select-grupo').val();
+            var subgrupo = row.find('.select-subgrupo').val();
+            var tipoGasto = row.find('.tipo-gasto-display').val();
+            
+            if (!grupo || !subgrupo) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erro',
+                    text: 'Selecione Grupo e Subgrupo antes de salvar!'
+                });
+                return;
+            }
+            
+            // Desabilita botão
+            btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+            
+            $.ajax({
+                url: '{{ url_for("upload.validar_lote") }}',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    indice: indice,
+                    grupo: grupo,
+                    subgrupo: subgrupo,
+                    tipo_gasto: tipoGasto === 'N/A' ? '' : tipoGasto
+                }),
+                success: function(response) {
+                    if (response.success) {
+                        // Remove a linha da tabela
+                        row.fadeOut(400, function() {
+                            $(this).remove();
+                            
+                            // Verifica se ainda há transações
+                            if ($('#dataTable tbody tr').length === 0) {
+                                Swal.fire({
+                                    icon: 'success',
+                                    title: 'Concluído!',
+                                    text: 'Todas as transações foram classificadas!',
+                                    confirmButtonText: 'Ir para Revisão'
+                                }).then((result) => {
+                                    if (result.isConfirmed) {
+                                        window.location.href = '{{ url_for("upload.revisao_upload") }}';
+                                    }
+                                });
+                            } else {
+                                // Toast pequeno de sucesso
+                                const Toast = Swal.mixin({
+                                    toast: true,
+                                    position: 'top-end',
+                                    showConfirmButton: false,
+                                    timer: 2000,
+                                    timerProgressBar: true
+                                });
+                                Toast.fire({
+                                    icon: 'success',
+                                    title: 'Transação classificada!'
+                                });
+                            }
+                        });
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Erro',
+                            text: response.message || 'Erro ao salvar classificação'
+                        });
+                        btn.prop('disabled', false).html('<i class="fas fa-save"></i>');
+                    }
+                },
+                error: function() {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Erro',
+                        text: 'Erro ao comunicar com o servidor'
+                    });
+                    btn.prop('disabled', false).html('<i class="fas fa-save"></i>');
+                }
+            });
         });
         
         // Handler para mudança de subgrupo
