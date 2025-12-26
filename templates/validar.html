@@ -425,7 +425,7 @@
                     method: 'POST',
                     contentType: 'application/json',
                     data: JSON.stringify({
-                        indice: linha.indice,
+                        indices: [linha.indice],  // Enviando como array
                         grupo: grupo,
                         subgrupo: subgrupo,
                         tipo_gasto: tipoGasto === 'N/A' ? '' : tipoGasto
@@ -540,7 +540,7 @@
                 method: 'POST',
                 contentType: 'application/json',
                 data: JSON.stringify({
-                    indice: indice,
+                    indices: [indice],  // Enviando como array
                     grupo: grupo,
                     subgrupo: subgrupo,
                     tipo_gasto: tipoGasto === 'N/A' ? '' : tipoGasto
