@@ -319,6 +319,7 @@ def classificar_transacoes(transacoes):
     """
     Classifica lista de transações automaticamente
     LÓGICA DO N8N:
+    0. IdParcela (busca exata por compra parcelada - MÁXIMA PRIORIDADE)
     1. Fatura de cartão (prioridade máxima)
     2. Ignorar titular
     3. Base_Padroes (confiança='alta')
@@ -360,6 +361,7 @@ def classificar_transacoes(transacoes):
         nao_encontradas = 0
         ignoradas = 0
         por_tipo = {
+            'IdParcela': 0,
             'Fatura Cartão': 0,
             'Ignorar - Nome do Titular': 0,
             'Base_Padroes': 0,
@@ -371,6 +373,28 @@ def classificar_transacoes(transacoes):
         for trans in transacoes:
             estabelecimento = trans.get('Estabelecimento', '')
             valor = trans.get('Valor')
+            id_parcela = trans.get('IdParcela')
+            
+            # 0. IdParcela (busca exata por compra parcelada - MÁXIMA PRIORIDADE)
+            if id_parcela:
+                # Busca outra parcela da mesma compra que já tenha classificação
+                parcela_existente = session.query(JournalEntry).filter(
+                    JournalEntry.IdParcela == id_parcela,
+                    JournalEntry.GRUPO.isnot(None),
+                    JournalEntry.GRUPO != ''
+                ).first()
+                
+                if parcela_existente:
+                    trans.update({
+                        'GRUPO': parcela_existente.GRUPO,
+                        'SUBGRUPO': parcela_existente.SUBGRUPO,
+                        'TipoGasto': parcela_existente.TipoGasto,
+                        'MarcacaoIA': 'IdParcela',
+                        'ValidarIA': ''
+                    })
+                    por_tipo['IdParcela'] += 1
+                    classificadas += 1
+                    continue
             
             # 1. Fatura de cartão (prioridade máxima)
             fatura = detectar_fatura_cartao(estabelecimento)
@@ -429,6 +453,7 @@ def classificar_transacoes(transacoes):
             nao_encontradas += 1
         
         print(f"\n📊 Resultado da classificação:")
+        print(f"  IdParcela: {por_tipo['IdParcela']}")
         print(f"  Fatura Cartão: {por_tipo['Fatura Cartão']}")
         print(f"  Ignorar - Titular: {por_tipo['Ignorar - Nome do Titular']}")
         print(f"  Base_Padroes: {por_tipo['Base_Padroes']}")

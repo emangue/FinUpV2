@@ -151,6 +151,7 @@ def processar_fatura_cartao(df, mapeamento, origem='Fatura', file_name=''):
                 
                 transacoes.append({
                     'IdTransacao': id_transacao,
+                    'IdParcela': None,  # Transações sem parcela não têm IdParcela
                     'Data': data_br,
                     'Estabelecimento': estabelecimento_raw,
                     'Valor': arredondar_2_decimais(valor),
@@ -182,6 +183,14 @@ def processar_fatura_cartao(df, mapeamento, origem='Fatura', file_name=''):
             # Ordena por número de parcela
             linhas_parcelas.sort(key=lambda x: x['parcela'])
             
+            # Gera IdParcela único para todas as parcelas desta compra
+            # Baseia-se no estabelecimento + valor unitário + total de parcelas
+            # Usa hash simples sem data pois queremos agrupar todas as parcelas
+            valor_primeira_parcela = linhas_parcelas[0]['valor'] if linhas_parcelas else 0
+            import hashlib
+            chave_parcela = f"{estabelecimento_base}|{abs(valor_primeira_parcela):.2f}|{total_parcelas}"
+            id_parcela = hashlib.md5(chave_parcela.encode()).hexdigest()[:16]
+            
             # Gera uma transação para cada parcela
             for parcela_data in linhas_parcelas:
                 contador_seq += 1
@@ -202,6 +211,7 @@ def processar_fatura_cartao(df, mapeamento, origem='Fatura', file_name=''):
                 
                 transacoes.append({
                     'IdTransacao': id_transacao,
+                    'IdParcela': id_parcela,  # Vincula todas as parcelas desta compra
                     'Data': parcela_data['data'],
                     'Estabelecimento': f"{estabelecimento_base} ({parcela_num}/{total_parcelas})",
                     'Valor': arredondar_2_decimais(parcela_data['valor']),
