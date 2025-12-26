@@ -2,90 +2,502 @@
 
 {% block title %}Validar Transações{% endblock %}
 
+{% block extra_css %}
+<style>
+    #dataTable tbody tr {
+        height: 40px;
+    }
+    #dataTable tbody td {
+        padding: 0.4rem 0.75rem;
+        vertical-align: middle;
+        line-height: 1.2;
+    }
+    #dataTable thead th {
+        padding: 0.5rem 0.75rem;
+    }
+    .table-responsive {
+        font-size: 0.9rem;
+    }
+    .badge {
+        font-size: 0.75rem;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container-fluid">
-    <h2 class="mb-4"><i class="fas fa-check-double"></i> Validar Transações</h2>
-    
-    <!-- Estatísticas -->
-    <div class="row mb-4">
-        <div class="col-md-4">
-            <div class="card text-white bg-primary">
-                <div class="card-body">
-                    <h5 class="card-title"><i class="fas fa-exclamation-circle"></i> Para Validar</h5>
-                    <p class="card-text display-6">{{ transacoes|length }}</p>
-                </div>
-            </div>
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800">Validar Transações</h1>
+            <p class="text-muted mb-0">{{ total }} transações precisam de classificação (mostrando {{ transacoes|length }})</p>
         </div>
-        <div class="col-md-8">
-            <div class="alert alert-info">
-                <i class="fas fa-info-circle"></i> 
-                <strong>Transações não classificadas:</strong> Estas transações precisam ser categorizadas manualmente.
+        <a href="{{ url_for('upload.upload') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left me-2"></i>Voltar ao Upload
+        </a>
+    </div>
+
+    {% if total > 0 %}
+    <!-- Controle de itens por página -->
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <form method="GET" class="row g-2 align-items-center">
+                <div class="col-auto">
+                    <label class="col-form-label">Itens por página:</label>
+                </div>
+                <div class="col-auto">
+                    <select name="per_page" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
+                        <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
+                        <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+                        <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+                    </select>
+                </div>
+                <input type="hidden" name="page" value="{{ page }}">
+            </form>
+        </div>
+    </div>
+
+    {% if transacoes %}
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-exclamation-circle me-2"></i>Transações Não Classificadas
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover" id="dataTable" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th style="width: 40px;">
+                                <input type="checkbox" class="form-check-input" id="select-all">
+                            </th>
+                            <th>Data</th>
+                            <th>Estabelecimento</th>
+                            <th>Valor</th>
+                            <th>Origem</th>
+                            <th>Grupo</th>
+                            <th>Subgrupo</th>
+                            <th>Tipo Gasto</th>
+                            <th style="width: 60px;">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in transacoes %}
+                        {% set t = item.transacao %}
+                        <tr data-indice="{{ item.indice }}">
+                            <td>
+                                <input type="checkbox" class="form-check-input row-checkbox">
+                            </td>
+                            <td data-sort="{{ t.get('Data', '')|replace('/', '-') }}">{{ t.get('Data', 'N/A') }}</td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    {% set logo = t.get('Estabelecimento')|get_estabelecimento_logo %}
+                                    {% if logo %}
+                                        <img src="{{ logo }}" alt="" class="rounded-circle me-2" width="16" height="16" style="object-fit: cover;">
+                                    {% else %}
+                                        <div class="rounded-circle bg-light d-flex align-items-center justify-content-center me-2" style="width: 16px; height: 16px;">
+                                            <i class="fas fa-store text-muted" style="font-size: 8px;"></i>
+                                        </div>
+                                    {% endif %}
+                                    <span class="text-truncate" style="max-width: 200px;">{{ t.get('Estabelecimento') or 'Não informado' }}</span>
+                                </div>
+                            </td>
+                            <td class="{{ 'text-danger' if t.get('Valor', 0)|float < 0 else 'text-success' }} fw-bold">
+                                R$ {{ "%.2f"|format(t.get('Valor', 0)|float) }}
+                            </td>
+                            <td>
+                                <span class="badge bg-info">{{ t.get('origem', 'N/A') }}</span>
+                            </td>
+                            <td>
+                                <select class="form-select form-select-sm select-grupo" data-indice="{{ item.indice }}" style="min-width: 150px;">
+                                    <option value="">Selecione...</option>
+                                    {% for grupo in grupos %}
+                                    <option value="{{ grupo }}">{{ grupo }}</option>
+                                    {% endfor %}
+                                </select>
+                            </td>
+                            <td>
+                                <select class="form-select form-select-sm select-subgrupo" data-indice="{{ item.indice }}" style="min-width: 150px;" disabled>
+                                    <option value="">Selecione grupo primeiro...</option>
+                                </select>
+                            </td>
+                            <td>
+                                <input type="text" class="form-control form-control-sm tipo-gasto-display" readonly placeholder="Auto" style="min-width: 100px; background-color: #e9ecef;">
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-success btn-salvar-linha" data-indice="{{ item.indice }}" disabled title="Salvar classificação">
+                                    <i class="fas fa-save"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
     
-    <!-- Lista de Transações -->
-    {% if transacoes %}
-        <div class="row">
-            {% for transacao in transacoes %}
-            <div class="col-md-6 mb-3">
-                <div class="card">
-                    <div class="card-header">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <span class="badge bg-warning">Não Classificada</span>
-                            <small class="text-muted">{{ transacao.Data if transacao.Data else 'N/A' }}</small>
-                        </div>
-                    </div>
-                    <div class="card-body">
-                        <h5 class="card-title">{{ transacao.Estabelecimento or 'Estabelecimento não informado' }}</h5>
-                        <p class="card-text">
-                            <strong>Histórico:</strong> {{ transacao.HISTORICO or 'N/A' }}<br>
-                            <strong>Origem:</strong> {{ transacao.origem or 'N/A' }}
-                        </p>
-                        <div class="d-flex justify-content-between align-items-center">
-                            <span class="badge {% if transacao.Valor > 0 %}bg-success{% else %}bg-danger{% endif %} fs-6">
-                                R$ {{ "%.2f"|format(transacao.Valor) if transacao.Valor else '0.00' }}
-                            </span>
-                            <small class="text-muted">ID: {{ transacao.id }}</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-        
-        <!-- Paginação (se necessário) -->
-        {% if total_pages > 1 %}
-        <nav class="mt-4">
-            <ul class="pagination justify-content-center">
-                {% if page > 1 %}
-                <li class="page-item">
-                    <a class="page-link" href="{{ url_for('validar', page=page-1) }}">Anterior</a>
-                </li>
-                {% endif %}
-                
-                <li class="page-item disabled">
-                    <span class="page-link">Página {{ page }} de {{ total_pages }}</span>
-                </li>
-                
-                {% if page < total_pages %}
-                <li class="page-item">
-                    <a class="page-link" href="{{ url_for('validar', page=page+1) }}">Próxima</a>
-                </li>
-                {% endif %}
-            </ul>
-        </nav>
-        {% endif %}
-        
+    <!-- Paginação -->
+    {% if total_pages > 1 %}
+    <nav class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if page > 1 %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('upload.validar', page=page-1, per_page=per_page) }}">
+                    <i class="fas fa-chevron-left"></i> Anterior
+                </a>
+            </li>
+            {% endif %}
+            
+            <li class="page-item disabled">
+                <span class="page-link">Página {{ page }} de {{ total_pages }}</span>
+            </li>
+            
+            {% if page < total_pages %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('upload.validar', page=page+1, per_page=per_page) }}">
+                    Próxima <i class="fas fa-chevron-right"></i>
+                </a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+    
     {% else %}
-        <div class="alert alert-success text-center">
-            <i class="fas fa-check-circle fa-3x mb-3"></i>
-            <h4>Parabéns! 🎉</h4>
-            <p>Todas as transações foram classificadas.</p>
-            <a href="{{ url_for('dashboard.index') }}" class="btn btn-primary">
-                <i class="fas fa-chart-line"></i> Ver Dashboard
-            </a>
-        </div>
+    <div class="alert alert-warning text-center mt-3">
+        <i class="fas fa-info-circle fa-2x mb-2"></i>
+        <h5>Nenhuma transação nesta página</h5>
+        <p class="mb-0">Volte para a <a href="{{ url_for('upload.validar', page=1, per_page=per_page) }}">primeira página</a></p>
+    </div>
+    {% endif %}
+    
+    {% else %}
+    <div class="alert alert-success text-center">
+        <i class="fas fa-check-circle fa-3x mb-3"></i>
+        <h4>Parabéns! 🎉</h4>
+        <p>Todas as transações foram classificadas.</p>
+        <a href="{{ url_for('dashboard.index') }}" class="btn btn-primary">
+            <i class="fas fa-chart-line"></i> Ver Dashboard
+        </a>
+    </div>
     {% endif %}
 </div>
+
+<!-- Modal de Classificação -->
+<div class="modal fade" id="modalClassificar" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Classificar Transação</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formClassificar">
+                    <input type="hidden" id="indice" name="indice">
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Estabelecimento:</label>
+                        <p id="modal-estabelecimento" class="text-muted mb-0"></p>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Histórico:</label>
+                        <p id="modal-historico" class="text-muted mb-0"></p>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Valor:</label>
+                        <p id="modal-valor" class="text-muted mb-0"></p>
+                    </div>
+                    
+                    <hr>
+                    
+                    <div class="mb-3">
+                        <label for="grupo" class="form-label">Grupo <span class="text-danger">*</span></label>
+                        <select class="form-select" id="grupo" name="grupo" required>
+                            <option value="">Selecione um grupo...</option>
+                            {% for grupo in grupos %}
+                            <option value="{{ grupo }}">{{ grupo }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="subgrupo" class="form-label">Subgrupo <span class="text-danger">*</span></label>
+                        <select class="form-select" id="subgrupo" name="subgrupo" required disabled>
+                            <option value="">Selecione um grupo primeiro...</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="tipo_gasto" class="form-label">Tipo de Gasto <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="tipo_gasto" name="tipo_gasto" readonly>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnSalvarClassificacao">
+                    <i class="fas fa-save me-1"></i> Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Dados de grupos e tipo de gasto vindos do backend
+    const gruposDict = {{ grupos_dict|tojson }};
+    const tipoGastoDict = {{ tipo_gasto_dict|tojson }};
+    
+    // Função para adicionar log ao console de debug
+    function debugLog(message, type = 'info') {
+        const timestamp = new Date().toLocaleTimeString('pt-BR');
+        const icons = {
+            'info': '🔍',
+            'success': '✅',
+            'error': '❌',
+            'warning': '⚠️',
+            'data': '📊'
+        };
+        const colors = {
+            'info': '#17a2b8',
+            'success': '#28a745',
+            'error': '#dc3545',
+            'warning': '#ffc107',
+            'data': '#6f42c1'
+        };
+        
+        const icon = icons[type] || '📝';
+        const color = colors[type] || '#666';
+        
+        const logEntry = `<div style="color: ${color}; margin-bottom: 5px;">
+            <strong>[${timestamp}]</strong> ${icon} ${message}
+        </div>`;
+        
+        $('#debug-console').append(logEntry);
+        // Auto-scroll para o final
+        $('#debug-console').parent().scrollTop($('#debug-console').parent()[0].scrollHeight);
+    }
+    
+    debugLog('Grupos carregados: ' + Object.keys(gruposDict).length, 'data');
+    debugLog('Dados: ' + JSON.stringify(Object.keys(gruposDict)), 'data');
+    
+    $(document).ready(function() {
+        debugLog('Document ready executado', 'success');
+        
+        // Inicializa DataTable sem paginação (usamos paginação customizada)
+        var table = $('#dataTable').DataTable({
+            "language": {
+                "url": "//cdn.datatables.net/plug-ins/1.10.24/i18n/Portuguese-Brasil.json"
+            },
+            "order": [[ 0, "desc" ]],
+            "paging": false,
+            "info": false,
+            "searching": false
+        });
+        
+        debugLog('DataTable inicializado', 'success');
+        
+        // Handler para TESTE SIMPLES
+        $('#teste-grupo').on('change', function() {
+            var grupo = $(this).val();
+            var selectSubgrupo = $('#teste-subgrupo');
+            
+            debugLog('🧪 TESTE - Grupo selecionado: ' + grupo, 'warning');
+            
+            if (!grupo) {
+                selectSubgrupo.html('<option value="">Selecione grupo primeiro...</option>').prop('disabled', true);
+                debugLog('🧪 TESTE - Grupo vazio, subgrupo desabilitado', 'warning');
+                return;
+            }
+            
+            if (gruposDict[grupo]) {
+                var subgrupos = gruposDict[grupo];
+                debugLog('🧪 TESTE - Subgrupos encontrados: ' + subgrupos.length, 'success');
+                
+                selectSubgrupo.html('<option value="">Selecione...</option>');
+                subgrupos.forEach(function(subgrupo) {
+                    selectSubgrupo.append('<option value="' + subgrupo + '">' + subgrupo + '</option>');
+                });
+                selectSubgrupo.prop('disabled', false);
+                
+                debugLog('🧪 TESTE - Subgrupo habilitado com ' + subgrupos.length + ' opções', 'success');
+            } else {
+                debugLog('🧪 TESTE - Nenhum subgrupo encontrado para: ' + grupo, 'error');
+            }
+        });
+        
+        $('#teste-subgrupo').on('change', function() {
+            var subgrupo = $(this).val();
+            if (subgrupo) {
+                debugLog('🧪 TESTE - Subgrupo selecionado: ' + subgrupo, 'success');
+            }
+        });
+        
+        // Handler para mudança de grupo na tabela
+        $(document).on('change', '.select-grupo', function() {
+            debugLog('Evento change detectado no select-grupo', 'info');
+            
+            var selectGrupo = $(this);
+            var indice = selectGrupo.data('indice');
+            var grupo = selectGrupo.val();
+            
+            debugLog('Grupo selecionado: ' + grupo + ' | Índice: ' + indice, 'data');
+            
+            // Encontra o select de subgrupo na mesma linha
+            var selectSubgrupo = selectGrupo.closest('tr').find('.select-subgrupo');
+            
+            debugLog('Select subgrupo encontrado: ' + (selectSubgrupo.length > 0 ? 'SIM' : 'NÃO'), selectSubgrupo.length > 0 ? 'success' : 'error');
+            
+            if (!grupo) {
+                // Limpa e desabilita subgrupo se grupo foi desmarcado
+                selectSubgrupo.html('<option value="">Selecione grupo primeiro...</option>').prop('disabled', true);
+                debugLog('Grupo vazio - subgrupo desabilitado', 'warning');
+                return;
+            }
+            
+            // Carrega subgrupos do grupo selecionado
+            if (gruposDict[grupo]) {
+                var subgrupos = gruposDict[grupo];
+                debugLog('Subgrupos encontrados: ' + JSON.stringify(subgrupos), 'success');
+                
+                selectSubgrupo.html('<option value="">Selecione...</option>');
+                
+                subgrupos.forEach(function(subgrupo) {
+                    selectSubgrupo.append('<option value="' + subgrupo + '">' + subgrupo + '</option>');
+                });
+                
+                selectSubgrupo.prop('disabled', false);
+                debugLog('Subgrupo habilitado e populado com ' + subgrupos.length + ' opções', 'success');
+                
+                // Abre o dropdown automaticamente após habilitar
+                setTimeout(function() {
+                    selectSubgrupo.focus();
+                    // Simula click para abrir o dropdown
+                    if (selectSubgrupo[0] && selectSubgrupo[0].showPicker) {
+                        try {
+                            selectSubgrupo[0].showPicker();
+                            debugLog('Dropdown aberto com showPicker()', 'success');
+                        } catch(e) {
+                            // Fallback se showPicker não for suportado
+                            selectSubgrupo.click();
+                            debugLog('Dropdown aberto com click() - fallback', 'warning');
+                        }
+                    }
+                }, 100);
+            } else {
+                debugLog('ERRO: Nenhum subgrupo encontrado para o grupo: ' + grupo, 'error');
+            }
+        });
+        
+        // Handler para mudança de subgrupo
+        $(document).on('change', '.select-subgrupo', function() {
+            var selectSubgrupo = $(this);
+            var indice = selectSubgrupo.data('indice');
+            var subgrupo = selectSubgrupo.val();
+            
+            if (!subgrupo) return;
+            
+            // Pega o grupo selecionado
+            var grupo = selectSubgrupo.closest('tr').find('.select-grupo').val();
+            
+            // Abre modal para confirmar e adicionar TipoGasto
+            $('#indice').val(indice);
+            $('#grupo').val(grupo);
+            $('#subgrupo').html('<option value="' + subgrupo + '" selected>' + subgrupo + '</option>').prop('disabled', true);
+            
+            // Auto-preenche TipoGasto se disponível
+            var chave = grupo + '|' + subgrupo;
+            if (tipoGastoDict[chave]) {
+                $('#tipo_gasto').val(tipoGastoDict[chave]);
+            } else {
+                $('#tipo_gasto').val('');
+            }
+            
+            $('#modalClassificar').modal('show');
+        });
+        
+        // Quando seleciona um grupo, carrega os subgrupos
+        $('#grupo').on('change', function() {
+            var grupo = $(this).val();
+            var subgrupoSelect = $('#subgrupo');
+            
+            if (grupo && gruposDict[grupo]) {
+                var subgrupos = gruposDict[grupo];
+                subgrupoSelect.html('<option value="">Selecione um subgrupo...</option>');
+                
+                subgrupos.forEach(function(subgrupo) {
+                    subgrupoSelect.append('<option value="' + subgrupo + '">' + subgrupo + '</option>');
+                });
+                
+                subgrupoSelect.prop('disabled', false);
+            } else {
+                subgrupoSelect.html('<option value="">Selecione um grupo primeiro...</option>').prop('disabled', true);
+            }
+            
+            // Limpa tipo gasto
+            $('#tipo_gasto').val('');
+        });
+        
+        // Quando seleciona um subgrupo, preenche tipo de gasto automaticamente
+        $('#subgrupo').on('change', function() {
+            var grupo = $('#grupo').val();
+            var subgrupo = $(this).val();
+            
+            if (grupo && subgrupo) {
+                var chave = grupo + '|' + subgrupo;
+                var tipoGasto = tipoGastoDict[chave] || '';
+                $('#tipo_gasto').val(tipoGasto);
+            } else {
+                $('#tipo_gasto').val('');
+            }
+        });
+        
+        // Salvar classificação
+        $('#btnSalvarClassificacao').on('click', function() {
+            var form = $('#formClassificar');
+            
+            if (!form[0].checkValidity()) {
+                form[0].reportValidity();
+                return;
+            }
+            
+            var dados = {
+                indice: $('#indice').val(),
+                grupo: $('#grupo').val(),
+                subgrupo: $('#subgrupo').val(),
+                tipo_gasto: $('#tipo_gasto').val()
+            };
+            
+            // Desabilita botão
+            $(this).prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-1"></i> Salvando...');
+            
+            $.ajax({
+                url: '{{ url_for("upload.validar_lote") }}',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(dados),
+                success: function(response) {
+                    if (response.success) {
+                        // Fecha modal e recarrega página
+                        $('#modalClassificar').modal('hide');
+                        location.reload();
+                    } else {
+                        alert('Erro ao salvar: ' + (response.error || 'Erro desconhecido'));
+                        $('#btnSalvarClassificacao').prop('disabled', false).html('<i class="fas fa-save me-1"></i> Salvar');
+                    }
+                },
+                error: function(xhr) {
+                    alert('Erro ao salvar: ' + (xhr.responseJSON?.error || 'Erro desconhecido'));
+                    $('#btnSalvarClassificacao').prop('disabled', false).html('<i class="fas fa-save me-1"></i> Salvar');
+                }
+            });
+        });
+    });
+</script>
 {% endblock %}

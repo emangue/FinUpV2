@@ -91,7 +91,7 @@
     <ul class="pagination justify-content-center">
         {% if page > 1 %}
         <li class="page-item">
-            <a class="page-link" href="{{ url_for('admin_marcacoes', page=page-1, grupo=grupo_filtro, tipo_gasto=tipo_gasto_filtro, busca=busca) }}">Anterior</a>
+            <a class="page-link" href="{{ url_for('admin.marcacoes', page=page-1, grupo=grupo_filtro, tipo_gasto=tipo_gasto_filtro, busca=busca) }}">Anterior</a>
         </li>
         {% endif %}
         
@@ -101,7 +101,7 @@
         
         {% if page < total_pages %}
         <li class="page-item">
-            <a class="page-link" href="{{ url_for('admin_marcacoes', page=page+1, grupo=grupo_filtro, tipo_gasto=tipo_gasto_filtro, busca=busca) }}">Próxima</a>
+            <a class="page-link" href="{{ url_for('admin.marcacoes', page=page+1, grupo=grupo_filtro, tipo_gasto=tipo_gasto_filtro, busca=busca) }}">Próxima</a>
         </li>
         {% endif %}
     </ul>

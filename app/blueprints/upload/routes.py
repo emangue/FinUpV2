@@ -237,9 +237,9 @@ def validar():
     
     # Paginação
     page = int(request.args.get('page', 1))
-    per_page = 10
+    per_page = int(request.args.get('per_page', 10))
     total = len(transacoes_validar)
-    total_pages = (total + per_page - 1) // per_page
+    total_pages = (total + per_page - 1) // per_page if per_page > 0 else 1
     start = (page - 1) * per_page
     end = start + per_page
     transacoes_pagina = transacoes_validar[start:end]
@@ -258,6 +258,7 @@ def validar():
         transacoes=transacoes_com_indice,
         page=page,
         total_pages=total_pages,
+        per_page=per_page,
         total=total,
         grupos=grupos,
         grupos_dict=grupos_dict,

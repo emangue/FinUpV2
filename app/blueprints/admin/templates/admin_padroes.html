@@ -85,7 +85,7 @@
     <ul class="pagination justify-content-center">
         {% if page > 1 %}
         <li class="page-item">
-            <a class="page-link" href="{{ url_for('admin_padroes', page=page-1) }}">Anterior</a>
+            <a class="page-link" href="{{ url_for('admin.padroes', page=page-1) }}">Anterior</a>
         </li>
         {% endif %}
         
@@ -95,7 +95,7 @@
         
         {% if page < total_pages %}
         <li class="page-item">
-            <a class="page-link" href="{{ url_for('admin_padroes', page=page+1) }}">Próxima</a>
+            <a class="page-link" href="{{ url_for('admin.padroes', page=page+1) }}">Próxima</a>
         </li>
         {% endif %}
     </ul>

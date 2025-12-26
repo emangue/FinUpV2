@@ -14,6 +14,43 @@ Este sistema substitui o workflow n8n anterior, oferecendo uma interface web par
 
 ## 🏗️ Arquitetura do Sistema
 
+### ⚙️ Modularização com Flask Blueprints
+
+O sistema utiliza **Application Factory Pattern** com 3 blueprints independentes:
+
+1. **Dashboard Blueprint** (`/dashboard/`)
+   - Dados permanentes do banco de dados
+   - Analytics, visualizações e edição de transações
+   - Acessa: `JournalEntry`, `BaseMarcacao`, `GrupoConfig`, `AuditLog`
+
+2. **Upload Blueprint** (`/upload/`)
+   - Dados temporários em sessão (namespace `upload.*`)
+   - Processamento de arquivos, validação e salvamento
+   - Acessa: `JournalEntry` (para salvar), `BaseMarcacao` (para dropdowns)
+
+3. **Admin Blueprint** (`/admin/`)
+   - Configurações e gerenciamento de bases
+   - CRUD de marcações, padrões, grupos e logos
+   - Acessa: `BaseMarcacao`, `BasePadrao`, `GrupoConfig`, `EstabelecimentoLogo`
+
+**Princípio de Modularidade:**
+- ✅ **Permitido:** Importar modelos compartilhados (`models.py`) - são dados centralizados
+- ✅ **Permitido:** Upload blueprint consultar `BaseMarcacao` para dropdowns de validação
+- ❌ **Proibido:** Blueprints importarem rotas ou lógica de outros blueprints
+- ❌ **Proibido:** Compartilhar dados entre blueprints via variáveis globais
+
+**⚠️ GARANTIA DE MODULARIDADE:**
+Qualquer alteração que possa comprometer a arquitetura modular será **SEMPRE** apresentada para aprovação antes da implementação, incluindo:
+- Análise de impacto na separação de responsabilidades
+- Alternativas que preservem a modularidade
+- Justificativa técnica caso a quebra seja necessária
+- Consequências de longo prazo para manutenibilidade
+
+**Exemplo: Dropdown de Grupos na Validação**
+- O blueprint `upload` acessa `BaseMarcacao.query.distinct(BaseMarcacao.GRUPO)`
+- Isso **não quebra** modularidade pois `BaseMarcacao` é um modelo compartilhado
+- A separação é mantida: dados permanentes (Dashboard) vs temporários (Upload)
+
 ### Fluxo de Processamento
 
 ```
