@@ -228,68 +228,6 @@
     </div>
     {% endif %}
 </div>
-
-<!-- Modal de Classificação -->
-<div class="modal fade" id="modalClassificar" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Classificar Transação</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <form id="formClassificar">
-                    <input type="hidden" id="indice" name="indice">
-                    
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Estabelecimento:</label>
-                        <p id="modal-estabelecimento" class="text-muted mb-0"></p>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Histórico:</label>
-                        <p id="modal-historico" class="text-muted mb-0"></p>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Valor:</label>
-                        <p id="modal-valor" class="text-muted mb-0"></p>
-                    </div>
-                    
-                    <hr>
-                    
-                    <div class="mb-3">
-                        <label for="grupo" class="form-label">Grupo <span class="text-danger">*</span></label>
-                        <select class="form-select" id="grupo" name="grupo" required>
-                            <option value="">Selecione um grupo...</option>
-                            {% for grupo in grupos %}
-                            <option value="{{ grupo }}">{{ grupo }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="subgrupo" class="form-label">Subgrupo <span class="text-danger">*</span></label>
-                        <select class="form-select" id="subgrupo" name="subgrupo" required disabled>
-                            <option value="">Selecione um grupo primeiro...</option>
-                        </select>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="tipo_gasto" class="form-label">Tipo de Gasto <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="tipo_gasto" name="tipo_gasto" readonly>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-primary" id="btnSalvarClassificacao">
-                    <i class="fas fa-save me-1"></i> Salvar
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
 {% endblock %}
 
 {% block extra_js %}
