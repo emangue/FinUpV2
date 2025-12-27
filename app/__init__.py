@@ -1,5 +1,4 @@
 """
-"""
 Flask Application Factory - Sistema de Gestão Financeira
 
 Versão: 2.1.0
