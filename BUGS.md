@@ -6,24 +6,7 @@ Este documento lista bugs identificados que precisam ser corrigidos.
 
 ## 🔴 Alta Prioridade
 
-### 1. Switch não funciona na tela de Transações
-**Localização:** `/dashboard/transacoes?mes=YYYY-MM`
-
-**Descrição:** O switch "Status Dashboard" na tabela de transações não está respondendo aos cliques. Ele deveria alternar o status da transação (ativo/inativo no dashboard).
-
-**Impacto:** Usuários não conseguem ocultar transações do dashboard.
-
-**Arquivos Envolvidos:**
-- `templates/transacoes.html`
-- `app/blueprints/dashboard/routes.py` (possivelmente falta rota de toggle)
-- `static/js/main.js` (JavaScript do switch)
-
-**Possível Causa:** 
-- Falta implementação da rota backend para processar o toggle
-- JavaScript não está capturando o evento de clique
-- URL da requisição AJAX pode estar incorreta após modularização
-
-**Status:** 🔴 Não Corrigido
+_(Nenhum bug nesta categoria no momento)_
 
 ---
 
@@ -41,7 +24,77 @@ _(Nenhum bug nesta categoria no momento)_
 
 ## ✅ Bugs Resolvidos
 
-### 1. IdParcela não sendo salvo no banco de dados ✅
+### 1. Switch não funciona na tela de Transações ✅
+**Data da Correção:** 27/12/2025  
+**Status:** ✅ **RESOLVIDO**
+
+**Descrição do Bug:**  
+O switch "Status Dashboard" na tabela de transações não estava respondendo aos cliques. Os usuários não conseguiam alternar o status da transação (ativo/inativo no dashboard) para ocultar transações específicas.
+
+**Impacto:**
+- ❌ Usuários não conseguiam ocultar transações do dashboard
+- ❌ Funcionalidade de toggle completamente inoperante
+- ❌ Badge visual não atualizava
+
+**Causa Raiz:**  
+A rota backend `/dashboard/toggle_dashboard/<id>` existia e funcionava corretamente em [routes.py](app/blueprints/dashboard/routes.py) (linha 452), mas o JavaScript em `static/js/main.js` **não tinha listener de eventos** para capturar o clique do switch.
+
+```javascript
+// ❌ ANTES (sem listener)
+// Arquivo main.js não tinha código para capturar evento 'change' do switch
+```
+
+**Solução Implementada:**  
+Adicionado event listener completo em `static/js/main.js` que:
+- Captura evento `change` em switches com classe `.toggle-dashboard`
+- Faz requisição AJAX POST para `/dashboard/toggle_dashboard/{id}`
+- Atualiza badge visual instantaneamente (Ignorado ↔ Considerado)
+- Desabilita switch durante requisição (evita duplo-clique)
+- Reverte switch automaticamente em caso de erro
+- Logs no console para debug
+
+```javascript
+// ✅ DEPOIS (com listener completo)
+document.addEventListener('DOMContentLoaded', function() {
+    const toggles = document.querySelectorAll('.toggle-dashboard');
+    
+    toggles.forEach(toggle => {
+        toggle.addEventListener('change', function() {
+            const idTransacao = this.getAttribute('data-id');
+            const ignorar = !this.checked;
+            
+            fetch(`/dashboard/toggle_dashboard/${idTransacao}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ignorar: ignorar })
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Atualiza badge e estado visual
+            });
+        });
+    });
+});
+```
+
+**Arquivos Modificados:**
+- [static/js/main.js](static/js/main.js) (+66 linhas)
+- [app/__init__.py](app/__init__.py) (correção de syntax error no docstring)
+
+**Validação:**  
+✅ Testado em produção - logs do servidor confirmam requisições bem-sucedidas  
+✅ Switch alterna status corretamente  
+✅ Badge atualiza instantaneamente (Ignorado ↔ Considerado)  
+✅ Dados persistem no banco após refresh da página  
+✅ Erro tratado com rollback automático do switch  
+
+**Commits:**
+- `351bf38` - Implementa listener JavaScript para toggle  
+- `09add97` - Corrige syntax error e finaliza correção
+
+---
+
+### 2. IdParcela não sendo salvo no banco de dados ✅
 **Data da Correção:** 27/12/2025  
 **Status:** ✅ **RESOLVIDO**
 
