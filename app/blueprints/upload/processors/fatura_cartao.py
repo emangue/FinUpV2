@@ -1,6 +1,18 @@
 """
 Processador Genérico de Fatura de Cartão de Crédito
-Aceita qualquer CSV/XLSX de fatura com mapeamento de colunas
+
+Versão: 2.1.0
+Data: 27/12/2025
+Status: stable
+
+🔒 ARQUIVO CRÍTICO - Requer versionamento obrigatório
+
+Aceita qualquer CSV/XLSX de fatura com mapeamento de colunas.
+Processa transações de cartão, detecta parcelas e gera IDs únicos.
+
+Histórico:
+- 2.0.0: Otimização de performance (bulk insert, correção N+1 query)
+- 2.1.0: Sistema de versionamento implementado
 """
 import pandas as pd
 import re

@@ -1,5 +1,27 @@
 """
 Models do banco de dados SQLAlchemy
+
+Versão: 2.1.0
+Data: 27/12/2025
+Status: stable
+
+🔒 ARQUIVO CRÍTICO - Requer versionamento obrigatório
+
+Define todas as tabelas do banco de dados e seus relacionamentos.
+Qualquer mudança no schema deve seguir o workflow de versionamento:
+1. python scripts/version_manager.py start app/models.py
+2. Fazer modificações
+3. python scripts/version_manager.py finish app/models.py "descrição"
+
+Tabelas:
+- JournalEntry: Transações finais processadas
+- BaseParcelas: Controle de parcelas de compras
+- BasePadrao: Padrões de classificação automática
+- BaseMarcacao: Validação de classificações
+- DuplicadoTemp: Detecção de duplicatas
+- AuditLog: Log de operações
+- GrupoConfig: Grupos de categorização
+- EstabelecimentoLogo: Logos de estabelecimentos
 """
 from datetime import datetime
 from sqlalchemy import create_engine, Column, Integer, String, Float, Text, DateTime, Boolean

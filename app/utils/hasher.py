@@ -1,5 +1,19 @@
 """
 Utilitários para hash FNV-1a 64-bit
+
+Versão: 2.1.0
+Data: 27/12/2025
+Status: stable
+
+🔒 ARQUIVO CRÍTICO - Requer versionamento obrigatório
+
+Implementa geração de hashes FNV-1a 64-bit para criação de IDs únicos.
+Mudanças neste arquivo afetam a integridade dos dados e identificação
+de transações duplicadas.
+
+Histórico:
+- 2.0.0: Migração de MD5 para FNV-1a 64-bit (correção bug colisão VPD)
+- 2.1.0: Sistema de versionamento implementado
 """
 
 

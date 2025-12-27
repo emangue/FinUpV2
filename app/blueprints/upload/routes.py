@@ -1,5 +1,19 @@
 """
 Upload Routes - Processamento temporário de novos arquivos
+
+Versão: 2.1.0
+Data: 27/12/2025
+Status: stable
+
+🔒 ARQUIVO CRÍTICO - Requer versionamento obrigatório
+
+Gerencia o fluxo de upload, processamento e validação de arquivos financeiros.
+Inclui auto-sync de parcelas e dedu plicação automática.
+
+Histórico:
+- 2.0.0: Implementação de auto-sync de BaseParcelas (linha ~580-610)
+- 2.0.0: Correção IdParcela não sendo salvo (linha ~540)
+- 2.1.0: Sistema de versionamento implementado
 """
 from flask import render_template, request, redirect, url_for, flash, session, jsonify
 from werkzeug.utils import secure_filename

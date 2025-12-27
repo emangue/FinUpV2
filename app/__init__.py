@@ -1,8 +1,19 @@
 """
+"""
 Flask Application Factory - Sistema de Gestão Financeira
+
+Versão: 2.1.0
+Data: 27/12/2025
+Status: stable
+
+Módulo principal do sistema que implementa o Application Factory Pattern.
+Responsável por criar e configurar a aplicação Flask com todos os blueprints,
+extensões e configurações necessárias.
 """
 from flask import Flask
 import os
+
+__version__ = "2.1.0"
 
 from app.config import Config
 from app.models import init_db
