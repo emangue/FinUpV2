@@ -7,8 +7,8 @@ import os
 from datetime import datetime
 
 from app.blueprints.admin import admin_bp
-from app.models import BaseMarcacao, BasePadrao, GrupoConfig, EstabelecimentoLogo, get_db_session
-from sqlalchemy import or_
+from app.models import BaseMarcacao, BasePadrao, BaseParcelas, JournalEntry, GrupoConfig, EstabelecimentoLogo, get_db_session
+from sqlalchemy import or_, desc
 
 
 @admin_bp.route('/marcacoes')
@@ -151,6 +151,99 @@ def padroes():
         page=page,
         total_pages=total_pages,
         total=total
+    )
+
+
+@admin_bp.route('/parcelas')
+def parcelas():
+    """Administração de parcelas (contratos)"""
+    
+    db_session = get_db_session()
+    
+    # Filtros
+    status_filtro = request.args.get('status', '')
+    busca = request.args.get('busca', '')
+    
+    # Query base
+    query = db_session.query(BaseParcelas)
+    
+    if status_filtro:
+        query = query.filter(BaseParcelas.status == status_filtro)
+    
+    if busca:
+        query = query.filter(BaseParcelas.estabelecimento_base.like(f'%{busca}%'))
+    
+    # Paginação
+    page = int(request.args.get('page', 1))
+    per_page = 50
+    
+    parcelas_paginadas = query.order_by(BaseParcelas.status, BaseParcelas.estabelecimento_base).limit(per_page).offset((page-1)*per_page).all()
+    total = query.count()
+    total_pages = (total + per_page - 1) // per_page
+    
+    db_session.close()
+    
+    return render_template(
+        'admin_parcelas.html',
+        parcelas=parcelas_paginadas,
+        page=page,
+        total_pages=total_pages,
+        total=total,
+        status_filtro=status_filtro,
+        busca=busca
+    )
+
+
+@admin_bp.route('/transacoes')
+def transacoes():
+    """Administração de todas as transações (JournalEntry)"""
+    
+    db_session = get_db_session()
+    
+    # Filtros
+    busca = request.args.get('busca', '')
+    id_parcela_filtro = request.args.get('id_parcela', '')
+    grupo_filtro = request.args.get('grupo', '')
+    
+    # Query base
+    query = db_session.query(JournalEntry)
+    
+    if busca:
+        query = query.filter(JournalEntry.Estabelecimento.like(f'%{busca}%'))
+    
+    if id_parcela_filtro:
+        query = query.filter(JournalEntry.IdParcela.like(f'%{id_parcela_filtro}%'))
+        
+    if grupo_filtro:
+        query = query.filter(JournalEntry.GRUPO == grupo_filtro)
+    
+    # Paginação
+    page = int(request.args.get('page', 1))
+    per_page = 50
+    
+    # Ordenação padrão: Data desc, ID desc
+    # Como Data é string DD/MM/AAAA, a ordenação direta não funciona bem cronologicamente
+    # Idealmente converteríamos, mas para admin simples vamos ordenar por ID desc (mais recentes inseridos)
+    transacoes_paginadas = query.order_by(desc(JournalEntry.id)).limit(per_page).offset((page-1)*per_page).all()
+    total = query.count()
+    total_pages = (total + per_page - 1) // per_page
+    
+    # Grupos para filtro
+    grupos_unicos = db_session.query(JournalEntry.GRUPO).distinct().order_by(JournalEntry.GRUPO).all()
+    grupos_lista = [g[0] for g in grupos_unicos if g[0]]
+    
+    db_session.close()
+    
+    return render_template(
+        'admin_transacoes.html',
+        transacoes=transacoes_paginadas,
+        page=page,
+        total_pages=total_pages,
+        total=total,
+        busca=busca,
+        id_parcela_filtro=id_parcela_filtro,
+        grupo_filtro=grupo_filtro,
+        grupos_lista=grupos_lista
     )
 
 

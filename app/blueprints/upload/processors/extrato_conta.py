@@ -5,8 +5,8 @@ Aceita qualquer CSV/XLSX de extrato com mapeamento de colunas
 import pandas as pd
 import re
 from datetime import datetime
-from utils.hasher import generate_id_simples
-from utils.normalizer import normalizar_estabelecimento, arredondar_2_decimais
+from app.utils.hasher import generate_id_simples
+from app.utils.normalizer import normalizar_estabelecimento, arredondar_2_decimais
 
 
 def processar_extrato_conta(df, mapeamento, origem='Extrato', file_name=''):
@@ -33,6 +33,7 @@ def processar_extrato_conta(df, mapeamento, origem='Extrato', file_name=''):
         df_trabalho = df.copy()
         transacoes = []
         contador_seq = 0
+        hash_counter = {}  # Contador para hashes duplicados no mesmo arquivo
         
         for idx, row in df_trabalho.iterrows():
             contador_seq += 1
@@ -98,8 +99,16 @@ def processar_extrato_conta(df, mapeamento, origem='Extrato', file_name=''):
             # Normaliza estabelecimento
             estabelecimento_norm = normalizar_estabelecimento(estabelecimento_raw)
             
-            # Gera ID único
-            id_transacao = f"{generate_id_simples(data_br, estabelecimento_norm, valor)}_{contador_seq}"
+            # Gera ID base
+            id_base = generate_id_simples(data_br, estabelecimento_norm, valor)
+            
+            # Se o hash já existe no arquivo atual, adiciona sufixo
+            if id_base in hash_counter:
+                hash_counter[id_base] += 1
+                id_transacao = f"{id_base}_{hash_counter[id_base]}"
+            else:
+                hash_counter[id_base] = 0
+                id_transacao = id_base
             
             # Verifica se é futura
             try:

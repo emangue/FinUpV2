@@ -55,6 +55,11 @@ Thumbs.db
 # Uploads
 uploads/
 temp_*
+uploads_temp/
+
+# Temporary scripts and data
+_temp_scripts/
+_csvs_historico/
 
 # Environment variables
 .env

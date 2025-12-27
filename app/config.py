@@ -16,7 +16,7 @@ class Config:
     # Upload de arquivos
     MAX_CONTENT_LENGTH = 50 * 1024 * 1024  # 50MB max file size
     UPLOAD_EXTENSIONS = {'.csv', '.xls', '.xlsx'}
-    ALLOWED_FILENAMES = ['fatura_itau', 'Extrato Conta Corrente', 'account_statement']
+    # Nota: Com detecção automática de colunas, qualquer arquivo CSV/XLSX é aceito
     
     # Sessão
     SESSION_TYPE = 'filesystem'

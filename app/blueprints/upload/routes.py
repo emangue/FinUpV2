@@ -8,33 +8,19 @@ import pandas as pd
 from datetime import datetime
 
 from app.blueprints.upload import upload_bp
-from app.models import JournalEntry, BaseMarcacao, get_db_session
+from app.models import JournalEntry, BaseMarcacao, BaseParcelas, get_db_session
 from app.blueprints.upload.processors import (
-    processar_fatura_itau, processar_extrato_itau, processar_mercado_pago,
     processar_fatura_cartao, processar_extrato_conta
 )
 from app.blueprints.upload.utils import detectar_tipo_arquivo, detectar_colunas, mapear_colunas
 from app.blueprints.upload.classifiers import classificar_transacoes, regenerar_padroes
 from app.utils import deduplicate_transactions, get_duplicados_temp, clear_duplicados_temp
+from app.utils.normalizer import normalizar_estabelecimento, detectar_parcela
 from sqlalchemy import or_
 
 
 # Constantes
 UPLOAD_FOLDER = 'uploads_temp'
-
-
-def identificar_tipo_arquivo(filename):
-    """[DEPRECATED] Identifica tipo de arquivo pelo nome - uso legado"""
-    filename_lower = filename.lower()
-    
-    if 'fatura_itau' in filename_lower or 'fatura itau' in filename_lower:
-        return 'fatura_itau'
-    elif 'extrato conta corrente' in filename_lower:
-        return 'extrato_itau'
-    elif 'account_statement' in filename_lower or 'mercado pago' in filename_lower:
-        return 'mercado_pago'
-    
-    return None
 
 
 def ler_arquivo_para_dataframe(filepath, filename):
@@ -514,6 +500,13 @@ def salvar():
     db_session = get_db_session()
     
     try:
+        # [OTIMIZAÇÃO] Busca todos os contratos de parcelas de uma vez para evitar N+1 queries
+        ids_parcela = [t.get('IdParcela') for t in transacoes_salvar if t.get('IdParcela')]
+        contratos_dict = {}
+        if ids_parcela:
+            contratos = db_session.query(BaseParcelas).filter(BaseParcelas.id_parcela.in_(ids_parcela)).all()
+            contratos_dict = {c.id_parcela: c for c in contratos}
+        
         salvos = 0
         for trans in transacoes_salvar:
             # Verifica se deve ignorar no dashboard
@@ -543,13 +536,83 @@ def salvar():
                 TipoLancamento=trans.get('TipoLancamento'),
                 TransacaoFutura=trans.get('TransacaoFutura'),
                 IdOperacao=trans.get('IdOperacao'),
+                IdParcela=trans.get('IdParcela'),  # [CRÍTICO] Salva IdParcela na transação
                 IgnorarDashboard=ignorar,
                 created_at=datetime.utcnow()
             )
             db_session.add(entry)
+            
+            # Atualiza BaseParcelas se for parcelado
+            id_parcela = trans.get('IdParcela')
+            if id_parcela:
+                contrato = contratos_dict.get(id_parcela)  # [OTIMIZAÇÃO] Lookup O(1) ao invés de query
+                
+                if contrato:
+                    # Atualiza contagem se ainda não finalizado
+                    if contrato.status == 'ativo':
+                        contrato.qtd_pagas += 1
+                        if contrato.qtd_pagas >= contrato.qtd_parcelas:
+                            contrato.status = 'finalizado'
+                else:
+                    # Cria novo contrato
+                    info_parcela = detectar_parcela(trans.get('Estabelecimento'))
+                    qtd_total = info_parcela['total'] if info_parcela else 0
+                    
+                    if qtd_total > 0:
+                        novo_contrato = BaseParcelas(
+                            id_parcela=id_parcela,
+                            estabelecimento_base=normalizar_estabelecimento(trans.get('Estabelecimento')),
+                            valor_parcela=abs(trans.get('Valor')),
+                            qtd_parcelas=qtd_total,
+                            grupo_sugerido=grupo,
+                            subgrupo_sugerido=trans.get('SUBGRUPO'),
+                            tipo_gasto_sugerido=trans.get('TipoGasto'),
+                            qtd_pagas=1,
+                            valor_total_plano=abs(trans.get('Valor')) * qtd_total,
+                            data_inicio=trans.get('Data'),
+                            status='finalizado' if qtd_total == 1 else 'ativo'
+                        )
+                        db_session.add(novo_contrato)
+                        contratos_dict[id_parcela] = novo_contrato  # [OTIMIZAÇÃO] Adiciona ao cache
+            
             salvos += 1
         
         db_session.commit()
+        
+        # [AUTO-SYNC] Sincroniza BaseParcelas automaticamente após salvar
+        try:
+            from collections import defaultdict
+            
+            # 1. Migra parcelas para BaseParcelas
+            transacoes_parceladas = db_session.query(JournalEntry).filter(
+                JournalEntry.IdParcela.isnot(None),
+                JournalEntry.IdParcela != '',
+                JournalEntry.TipoTransacao == 'Cartão de Crédito'
+            ).all()
+            
+            grupos = defaultdict(list)
+            for t in transacoes_parceladas:
+                grupos[t.IdParcela].append(t)
+            
+            for id_parcela, items in grupos.items():
+                contrato = db_session.query(BaseParcelas).filter_by(id_parcela=id_parcela).first()
+                if contrato:
+                    contrato.qtd_pagas = len(items)
+                    if contrato.qtd_pagas >= contrato.qtd_parcelas:
+                        contrato.status = 'finalizado'
+            
+            # 2. Remove órfãos
+            used_ids = db_session.query(JournalEntry.IdParcela).distinct().all()
+            used_ids = {id[0] for id in used_ids if id[0]}
+            
+            contratos = db_session.query(BaseParcelas).all()
+            for c in contratos:
+                if c.id_parcela not in used_ids:
+                    db_session.delete(c)
+            
+            db_session.commit()
+        except Exception as e:
+            print(f"⚠️  Erro ao sincronizar BaseParcelas: {e}")
         
         # Limpa duplicados temporários
         clear_duplicados_temp()

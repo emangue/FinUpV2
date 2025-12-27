@@ -50,8 +50,8 @@ def normalizar_estabelecimento(estabelecimento):
     if not estabelecimento:
         return ""
     
-    # Remove parcelas no formato XX/YY do final
-    estab = re.sub(r'\s*\d{1,2}/\d{1,2}\s*$', '', estabelecimento)
+    # Remove parcelas no formato XX/YY ou (XX/YY) do final
+    estab = re.sub(r'\s*\(?\d{1,2}/\d{1,2}\)?\s*$', '', estabelecimento)
     
     # Normaliza
     estab = normalizar(estab)
@@ -103,7 +103,7 @@ def detectar_parcela(estabelecimento, origem=''):
     Returns:
         dict or None: {'parcela': int, 'total': int} ou None
     """
-    match = re.search(r'\s*(\d{1,2})/(\d{1,2})\s*$', estabelecimento)
+    match = re.search(r'\s*\(?(\d{1,2})/(\d{1,2})\)?\s*$', estabelecimento)
     
     if not match:
         return None

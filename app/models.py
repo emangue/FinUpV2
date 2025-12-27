@@ -15,6 +15,7 @@ class JournalEntry(Base):
     
     id = Column(Integer, primary_key=True)
     IdTransacao = Column(String(64), unique=True, nullable=False, index=True)
+    IdParcela = Column(String(64), nullable=True, index=True)  # Vincula parcelas da mesma compra
     Data = Column(String(10), nullable=False)  # DD/MM/AAAA
     Estabelecimento = Column(Text, nullable=False)
     Valor = Column(Float, nullable=False)
@@ -67,6 +68,45 @@ class JournalEntry(Base):
             'IdOperacao': self.IdOperacao,
             'IgnorarDashboard': self.IgnorarDashboard,
             'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+
+class BaseParcelas(Base):
+    """Base de dados de compras parceladas (contratos)"""
+    __tablename__ = 'base_parcelas'
+    
+    id = Column(Integer, primary_key=True)
+    id_parcela = Column(String(64), unique=True, nullable=False, index=True)  # Hash único do contrato
+    estabelecimento_base = Column(Text, nullable=False)  # Nome normalizado
+    valor_parcela = Column(Float, nullable=False)
+    qtd_parcelas = Column(Integer, nullable=False)
+    
+    # Classificação
+    grupo_sugerido = Column(String(100))
+    subgrupo_sugerido = Column(String(100))
+    tipo_gasto_sugerido = Column(String(100))
+    
+    # Estado
+    qtd_pagas = Column(Integer, default=0)
+    valor_total_plano = Column(Float)
+    data_inicio = Column(String(10))
+    status = Column(String(20), default='ativo')  # ativo/finalizado
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'id_parcela': self.id_parcela,
+            'estabelecimento_base': self.estabelecimento_base,
+            'valor_parcela': self.valor_parcela,
+            'qtd_parcelas': self.qtd_parcelas,
+            'grupo_sugerido': self.grupo_sugerido,
+            'subgrupo_sugerido': self.subgrupo_sugerido,
+            'tipo_gasto_sugerido': self.tipo_gasto_sugerido,
+            'qtd_pagas': self.qtd_pagas,
+            'status': self.status
         }
 
 

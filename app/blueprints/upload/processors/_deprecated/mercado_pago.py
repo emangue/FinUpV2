@@ -4,8 +4,8 @@ Processador de Extrato Mercado Pago (XLSX)
 import pandas as pd
 import re
 from datetime import datetime
-from utils.hasher import fnv1a_64_hash
-from utils.normalizer import normalizar_estabelecimento
+from app.utils.hasher import fnv1a_64_hash
+from app.utils.normalizer import normalizar_estabelecimento
 
 
 def processar_mercado_pago(file_path, file_name):
@@ -44,6 +44,7 @@ def processar_mercado_pago(file_path, file_name):
         linhas = [l.strip() for l in linhas if l.strip()]
         
         contador_seq = 0  # Contador para garantir IDs únicos
+        hash_counter = {}  # Contador para hashes duplicados no mesmo arquivo
         i = 0
         while i < len(linhas):
             contador_seq += 1  # Incrementa contador
@@ -93,10 +94,18 @@ def processar_mercado_pago(file_path, file_name):
             # Define tipo
             tipo_transacao = 'Receitas' if valor > 0 else 'Despesas'
             
-            # Gera ID via hash FNV-1a com contador sequencial
+            # Gera ID base via hash FNV-1a
             estab_norm = normalizar_estabelecimento(estabelecimento)
-            chave = f"{data_br}|{estab_norm}|{valor:.2f}|{contador_seq}"
-            id_transacao = fnv1a_64_hash(chave)
+            chave = f"{data_br}|{estab_norm}|{valor:.2f}"
+            id_base = fnv1a_64_hash(chave)
+            
+            # Se o hash já existe no arquivo atual, adiciona sufixo
+            if id_base in hash_counter:
+                hash_counter[id_base] += 1
+                id_transacao = f"{id_base}_{hash_counter[id_base]}"
+            else:
+                hash_counter[id_base] = 0
+                id_transacao = id_base
             
             transacoes.append({
                 'IdTransacao': id_transacao,

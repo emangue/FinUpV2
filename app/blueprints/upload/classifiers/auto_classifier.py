@@ -3,8 +3,8 @@ Classificador automático de transações
 Implementação baseada no n8n:
 Base_Padroes → Journal Entries → Palavras-chave (repescagem) → Não Encontrado
 """
-from models import BasePadrao, JournalEntry, BaseMarcacao, get_db_session
-from utils.normalizer import normalizar, tokens_validos, normalizar_estabelecimento
+from app.models import BasePadrao, JournalEntry, BaseMarcacao, get_db_session
+from app.utils.normalizer import normalizar, tokens_validos, normalizar_estabelecimento
 import re
 
 
@@ -108,6 +108,13 @@ def intersecao_tokens(tokens_a, tokens_b):
     return count
 
 
+def limpar_padrao_segmentado(nome_padrao):
+    """Remove sufixo [RANGE] do nome do padrão para comparação"""
+    if not nome_padrao:
+        return ""
+    return re.sub(r'\s*\[.*?\]$', '', nome_padrao)
+
+
 def encontrar_por_padroes(estabelecimento, valor, padroes):
     """
     Busca na base de padrões aprendidos (Base_Padroes)
@@ -127,8 +134,10 @@ def encontrar_por_padroes(estabelecimento, valor, padroes):
         if not padrao.grupo_sugerido or not padrao.subgrupo_sugerido or not padrao.tipo_gasto_sugerido:
             continue
         
-        padrao_norm = normalizar_estabelecimento(padrao.padrao_estabelecimento)
-        tokens_padrao = tokens_validos(padrao.padrao_estabelecimento)
+        # Remove sufixo de segmentação para comparação (ex: "IBERIA [1K-2K]" -> "IBERIA")
+        nome_limpo = limpar_padrao_segmentado(padrao.padrao_estabelecimento)
+        padrao_norm = normalizar_estabelecimento(nome_limpo)
+        tokens_padrao = tokens_validos(nome_limpo)
         
         score = 0
         
@@ -319,6 +328,7 @@ def classificar_transacoes(transacoes):
     """
     Classifica lista de transações automaticamente
     LÓGICA DO N8N:
+    0. IdParcela (busca exata por compra parcelada - MÁXIMA PRIORIDADE)
     1. Fatura de cartão (prioridade máxima)
     2. Ignorar titular
     3. Base_Padroes (confiança='alta')
@@ -360,6 +370,7 @@ def classificar_transacoes(transacoes):
         nao_encontradas = 0
         ignoradas = 0
         por_tipo = {
+            'IdParcela': 0,
             'Fatura Cartão': 0,
             'Ignorar - Nome do Titular': 0,
             'Base_Padroes': 0,
@@ -371,6 +382,28 @@ def classificar_transacoes(transacoes):
         for trans in transacoes:
             estabelecimento = trans.get('Estabelecimento', '')
             valor = trans.get('Valor')
+            id_parcela = trans.get('IdParcela')
+            
+            # 0. IdParcela (busca exata por compra parcelada - MÁXIMA PRIORIDADE)
+            if id_parcela:
+                # Busca outra parcela da mesma compra que já tenha classificação
+                parcela_existente = session.query(JournalEntry).filter(
+                    JournalEntry.IdParcela == id_parcela,
+                    JournalEntry.GRUPO.isnot(None),
+                    JournalEntry.GRUPO != ''
+                ).first()
+                
+                if parcela_existente:
+                    trans.update({
+                        'GRUPO': parcela_existente.GRUPO,
+                        'SUBGRUPO': parcela_existente.SUBGRUPO,
+                        'TipoGasto': parcela_existente.TipoGasto,
+                        'MarcacaoIA': 'IdParcela',
+                        'ValidarIA': ''
+                    })
+                    por_tipo['IdParcela'] += 1
+                    classificadas += 1
+                    continue
             
             # 1. Fatura de cartão (prioridade máxima)
             fatura = detectar_fatura_cartao(estabelecimento)
@@ -429,6 +462,7 @@ def classificar_transacoes(transacoes):
             nao_encontradas += 1
         
         print(f"\n📊 Resultado da classificação:")
+        print(f"  IdParcela: {por_tipo['IdParcela']}")
         print(f"  Fatura Cartão: {por_tipo['Fatura Cartão']}")
         print(f"  Ignorar - Titular: {por_tipo['Ignorar - Nome do Titular']}")
         print(f"  Base_Padroes: {por_tipo['Base_Padroes']}")

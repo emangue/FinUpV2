@@ -4,8 +4,8 @@ Processador de Extrato Itaú (XLS)
 import pandas as pd
 import re
 from datetime import datetime
-from utils.hasher import generate_id_simples
-from utils.normalizer import normalizar
+from app.utils.hasher import generate_id_simples
+from app.utils.normalizer import normalizar
 
 
 def processar_extrato_itau(file_path, file_name):
@@ -32,6 +32,7 @@ def processar_extrato_itau(file_path, file_name):
         
         transacoes = []
         contador_seq = 0  # Contador para garantir IDs únicos
+        hash_counter = {}  # Contador para hashes duplicados no mesmo arquivo
         
         # Extrai nome do titular (padrão: NOME CPF)
         nome_titular = None
@@ -69,8 +70,16 @@ def processar_extrato_itau(file_path, file_name):
             else:
                 tipo_transacao = '(Espaços em branco)'
             
-            # Gera ID com contador sequencial para garantir unicidade
-            id_transacao = f"{generate_id_simples(data_completa, estabelecimento, valor)}_{contador_seq}"
+            # Gera ID base
+            id_base = generate_id_simples(data_completa, estabelecimento, valor)
+            
+            # Se o hash já existe no arquivo atual, adiciona sufixo
+            if id_base in hash_counter:
+                hash_counter[id_base] += 1
+                id_transacao = f"{id_base}_{hash_counter[id_base]}"
+            else:
+                hash_counter[id_base] = 0
+                id_transacao = id_base
             
             # Verifica se é futura
             try:

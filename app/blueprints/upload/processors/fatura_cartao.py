@@ -5,8 +5,8 @@ Aceita qualquer CSV/XLSX de fatura com mapeamento de colunas
 import pandas as pd
 import re
 from datetime import datetime
-from utils.hasher import generate_id_simples
-from utils.normalizer import normalizar_estabelecimento, detectar_parcela, arredondar_2_decimais
+from app.utils.hasher import generate_id_transacao
+from app.utils.normalizer import normalizar_estabelecimento, detectar_parcela, arredondar_2_decimais
 
 
 def processar_fatura_cartao(df, mapeamento, origem='Fatura', file_name=''):
@@ -33,6 +33,7 @@ def processar_fatura_cartao(df, mapeamento, origem='Fatura', file_name=''):
         df_trabalho = df.copy()
         transacoes = []
         contador_seq = 0
+        hash_counter = {}  # Contador para hashes duplicados no mesmo arquivo
         
         # Tenta extrair ano/mês do nome do arquivo (formato: algo-AAAAMM.extensão)
         match = re.search(r'-(\d{4})(\d{2})', file_name)
@@ -105,10 +106,10 @@ def processar_fatura_cartao(df, mapeamento, origem='Fatura', file_name=''):
                 print(f"⚠️  Valor inválido na linha {idx}: {valor_raw}")
                 continue
             
-            # IMPORTANTE: Inverte sinal para faturas (valores vêm positivos)
-            # Faturas são despesas, então devem ser negativas
-            if valor > 0:
-                valor = -valor
+            # IMPORTANTE: Inverte sinal para padronizar
+            # CSV: despesas positivas, estornos negativos
+            # Banco: despesas negativas, estornos positivos
+            valor = -valor
             
             # Detecta parcela
             parcela_info = detectar_parcela(estabelecimento_raw, origem)
@@ -120,8 +121,10 @@ def processar_fatura_cartao(df, mapeamento, origem='Fatura', file_name=''):
                 # Remove " 01/12" do final do estabelecimento
                 estabelecimento_base = re.sub(r'\s*\d{1,2}/\d{1,2}\s*$', '', estabelecimento_raw).strip()
                 
-                # Cria chave para agrupar
-                chave = f"{estabelecimento_base}_{total_parcelas}"
+                # Cria chave para agrupar - inclui valor para diferenciar compras distintas
+                # FIX: Adiciona valor na chave para evitar misturar compras diferentes
+                # com mesmo estabelecimento e quantidade de parcelas
+                chave = f"{estabelecimento_base}_{total_parcelas}_{abs(valor):.2f}"
                 
                 if chave not in parcelas_map:
                     parcelas_map[chave] = {
@@ -139,8 +142,16 @@ def processar_fatura_cartao(df, mapeamento, origem='Fatura', file_name=''):
                 })
             else:
                 # Não tem parcela - adiciona direto
-                estabelecimento_norm = normalizar_estabelecimento(estabelecimento_raw)
-                id_transacao = f"{generate_id_simples(data_br, estabelecimento_norm, valor)}_{contador_seq}"
+                # Gera ID base consistente com o banco de dados (FNV-1a)
+                id_base = generate_id_transacao(data_br, estabelecimento_raw, valor)
+                
+                # Se o hash já existe no arquivo atual, adiciona sufixo
+                if id_base in hash_counter:
+                    hash_counter[id_base] += 1
+                    id_transacao = f"{id_base}_{hash_counter[id_base]}"
+                else:
+                    hash_counter[id_base] = 0
+                    id_transacao = id_base
                 
                 # Verifica se é futura
                 try:
@@ -175,6 +186,7 @@ def processar_fatura_cartao(df, mapeamento, origem='Fatura', file_name=''):
                 })
         
         # Processa parcelas agrupadas
+        parcelas_processadas = 0
         for chave, info in parcelas_map.items():
             linhas_parcelas = info['linhas']
             total_parcelas = info['total_parcelas']
@@ -188,19 +200,32 @@ def processar_fatura_cartao(df, mapeamento, origem='Fatura', file_name=''):
             # Usa hash simples sem data pois queremos agrupar todas as parcelas
             valor_primeira_parcela = linhas_parcelas[0]['valor'] if linhas_parcelas else 0
             import hashlib
-            chave_parcela = f"{estabelecimento_base}|{abs(valor_primeira_parcela):.2f}|{total_parcelas}"
+            
+            # FIX: Normaliza estabelecimento para garantir mesmo hash independente de maiúsculas/minúsculas
+            estab_norm_hash = normalizar_estabelecimento(estabelecimento_base)
+            chave_parcela = f"{estab_norm_hash}|{abs(valor_primeira_parcela):.2f}|{total_parcelas}"
             id_parcela = hashlib.md5(chave_parcela.encode()).hexdigest()[:16]
+            
+            parcelas_processadas += len(linhas_parcelas)
             
             # Gera uma transação para cada parcela
             for parcela_data in linhas_parcelas:
                 contador_seq += 1
                 parcela_num = parcela_data['parcela']
                 
-                # Normaliza estabelecimento
-                estabelecimento_norm = normalizar_estabelecimento(estabelecimento_base)
+                # Reconstrói nome com parcela para gerar ID correto
+                nome_com_parcela = f"{estabelecimento_base} ({parcela_num}/{total_parcelas})"
                 
-                # ID único com parcela
-                id_transacao = f"{generate_id_simples(parcela_data['data'], estabelecimento_norm, parcela_data['valor'])}_{contador_seq}_p{parcela_num}"
+                # ID base único com parcela (consistente com banco de dados)
+                id_base = generate_id_transacao(parcela_data['data'], nome_com_parcela, parcela_data['valor'])
+                
+                # Se o hash já existe no arquivo atual, adiciona sufixo
+                if id_base in hash_counter:
+                    hash_counter[id_base] += 1
+                    id_transacao = f"{id_base}_{hash_counter[id_base]}"
+                else:
+                    hash_counter[id_base] = 0
+                    id_transacao = id_base
                 
                 # Verifica se é futura
                 try:
@@ -209,9 +234,14 @@ def processar_fatura_cartao(df, mapeamento, origem='Fatura', file_name=''):
                 except:
                     eh_futura = False
                 
+                # VALIDAÇÃO CRÍTICA: IdParcela NUNCA pode ser None para transações parceladas
+                if not id_parcela:
+                    raise ValueError(f"IdParcela está None para transação parcelada: {estabelecimento_base} ({parcela_num}/{total_parcelas})")
+                
                 transacoes.append({
                     'IdTransacao': id_transacao,
-                    'IdParcela': id_parcela,  # Vincula todas as parcelas desta compra
+                    'IdParcela': id_parcela,  # SEMPRE gerado para parcelas
+                    'parcela_atual': parcela_num,  # Adiciona número da parcela para deduplicação
                     'Data': parcela_data['data'],
                     'Estabelecimento': f"{estabelecimento_base} ({parcela_num}/{total_parcelas})",
                     'Valor': arredondar_2_decimais(parcela_data['valor']),
@@ -235,6 +265,8 @@ def processar_fatura_cartao(df, mapeamento, origem='Fatura', file_name=''):
                 })
         
         print(f"✓ {len(transacoes)} transações extraídas da fatura")
+        if parcelas_processadas > 0:
+            print(f"  ⚡ {parcelas_processadas} transações parceladas com IdParcela gerado")
         return transacoes
         
     except Exception as e:

@@ -38,9 +38,9 @@ def generate_id_transacao(data, estabelecimento, valor):
         str: IdTransacao (hash FNV-1a 64-bit)
     """
     # Normaliza estabelecimento (remove acentos, caracteres especiais)
-    from utils.normalizer import normalizar_estabelecimento
+    from app.utils.normalizer import normalizar
     
-    estab_norm = normalizar_estabelecimento(estabelecimento)
+    estab_norm = normalizar(estabelecimento)
     valor_str = f"{float(valor):.2f}"
     
     # Chave: Data|EstabelecimentoNormalizado|Valor
@@ -62,7 +62,7 @@ def generate_id_simples(data, estabelecimento, valor):
     Returns:
         str: Hash simples
     """
-    from utils.normalizer import normalizar_estabelecimento
+    from app.utils.normalizer import normalizar_estabelecimento
     
     # Normaliza estabelecimento para garantir consistência
     estab_norm = normalizar_estabelecimento(estabelecimento)

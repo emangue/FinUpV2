@@ -1,12 +1,12 @@
 """
 Deduplicador de transações contra journal_entries
 """
-from models import JournalEntry, DuplicadoTemp, get_db_session
+from app.models import JournalEntry, DuplicadoTemp, BaseParcelas, get_db_session
 
 
 def deduplicate_transactions(transactions):
     """
-    Deduplica transações comparando com journal_entries
+    Deduplica transações comparando com journal_entries e base_parcelas
     
     Args:
         transactions (list): Lista de dicionários de transações
@@ -27,13 +27,46 @@ def deduplicate_transactions(transactions):
             row[0] for row in session.query(JournalEntry.IdTransacao).all()
         )
         
+        # Busca informações de parcelas pagas
+        # Mapa: id_parcela -> qtd_pagas
+        parcelas_pagas = {}
+        
+        # Coleta IDs de parcela das transações de entrada
+        ids_parcela_entrada = set(
+            t.get('IdParcela') for t in transactions if t.get('IdParcela')
+        )
+        
+        if ids_parcela_entrada:
+            rows = session.query(BaseParcelas.id_parcela, BaseParcelas.qtd_pagas).filter(
+                BaseParcelas.id_parcela.in_(ids_parcela_entrada)
+            ).all()
+            parcelas_pagas = {row[0]: row[1] for row in rows}
+        
         transacoes_unicas = []
         duplicados = []
         
         for trans in transactions:
             id_transacao = trans.get('IdTransacao')
+            id_parcela = trans.get('IdParcela')
+            parcela_atual = trans.get('parcela_atual')
             
+            is_duplicate = False
+            reason = ""
+            
+            # 1. Checa IdTransacao (duplicata exata)
             if id_transacao in existing_ids:
+                is_duplicate = True
+                reason = 'IdTransacao já existe na base Journal Entries'
+            
+            # 2. Checa Base de Parcelas (se for parcela)
+            elif id_parcela and parcela_atual and id_parcela in parcelas_pagas:
+                qtd_pagas = parcelas_pagas[id_parcela]
+                # Se a parcela atual for menor ou igual à quantidade já paga, é duplicata
+                if parcela_atual <= qtd_pagas:
+                    is_duplicate = True
+                    reason = f'Parcela {parcela_atual} já processada (Base de Parcelas indica {qtd_pagas} pagas)'
+            
+            if is_duplicate:
                 # É duplicado
                 duplicados.append(trans)
                 
@@ -44,7 +77,7 @@ def deduplicate_transactions(transactions):
                     Estabelecimento=trans.get('Estabelecimento'),
                     Valor=trans.get('Valor'),
                     origem=trans.get('origem'),
-                    motivo_duplicacao='IdTransacao já existe na base Journal Entries'
+                    motivo_duplicacao=reason
                 )
                 session.add(duplicado)
             else:

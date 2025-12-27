@@ -4,8 +4,8 @@ Processador de Fatura Itaú (CSV)
 import pandas as pd
 import re
 from datetime import datetime
-from utils.hasher import generate_id_simples
-from utils.normalizer import normalizar_estabelecimento, detectar_parcela, arredondar_2_decimais
+from app.utils.hasher import generate_id_transacao
+from app.utils.normalizer import normalizar_estabelecimento, detectar_parcela, arredondar_2_decimais
 
 
 def processar_fatura_itau(file_path, file_name):
@@ -32,6 +32,7 @@ def processar_fatura_itau(file_path, file_name):
         
         transacoes = []
         contador_seq = 0  # Contador para garantir IDs únicos
+        hash_counter = {}  # Contador para hashes duplicados no mesmo arquivo
         
         # Extrai ano/mês do nome do arquivo (fatura_itau-202512.csv)
         match = re.search(r'fatura_itau-(\d{4})(\d{2})', file_name)
@@ -68,6 +69,8 @@ def processar_fatura_itau(file_path, file_name):
                 continue
             
             # Inverte o sinal do valor da fatura
+            # CSV: despesas positivas, estornos negativos
+            # Banco: despesas negativas, estornos positivos
             valor = -valor
             
             # Detecta parcela
@@ -101,8 +104,16 @@ def processar_fatura_itau(file_path, file_name):
                 })
             else:
                 # Sem parcela
-                # Adiciona contador sequencial para garantir unicidade
-                id_transacao = f"{generate_id_simples(data_br, lancamento, valor)}_{contador_seq}"
+                # Gera ID base consistente com o banco de dados
+                id_base = generate_id_transacao(data_br, lancamento, valor)
+                
+                # Se o hash já existe no arquivo atual, adiciona sufixo
+                if id_base in hash_counter:
+                    hash_counter[id_base] += 1
+                    id_transacao = f"{id_base}_{hash_counter[id_base]}"
+                else:
+                    hash_counter[id_base] = 0
+                    id_transacao = id_base
                 
                 transacoes.append({
                     'IdTransacao': id_transacao,
@@ -136,11 +147,23 @@ def processar_fatura_itau(file_path, file_name):
             for parcela_data in parcelas_list:
                 eh_futura = parcela_data['parcela_atual'] > menor_parcela
                 
-                # Adiciona contador sequencial para garantir unicidade
-                id_transacao = f"{generate_id_simples(parcela_data['data'], parcela_data['estabelecimento'], parcela_data['valor'])}_{parcela_data['seq']}"
+                # Reconstrói nome com parcela
+                nome_com_parcela = f"{parcela_data['estabelecimento_base']} ({parcela_data['parcela_atual']}/{parcela_data['total_parcelas']})"
+                
+                # Gera ID base consistente
+                id_base = generate_id_transacao(parcela_data['data'], nome_com_parcela, parcela_data['valor'])
+                
+                # Se o hash já existe no arquivo atual, adiciona sufixo
+                if id_base in hash_counter:
+                    hash_counter[id_base] += 1
+                    id_transacao = f"{id_base}_{hash_counter[id_base]}"
+                else:
+                    hash_counter[id_base] = 0
+                    id_transacao = id_base
                 
                 transacoes.append({
                     'IdTransacao': id_transacao,
+                    'parcela_atual': parcela_data['parcela_atual'],  # Adiciona número da parcela para deduplicação
                     'Data': parcela_data['data'],
                     'Estabelecimento': parcela_data['estabelecimento'],
                     'Valor': parcela_data['valor'],

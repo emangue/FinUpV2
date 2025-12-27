@@ -181,7 +181,7 @@
             
             <!-- Botão Principal de Salvamento -->
             <div class="col-md-4">
-                <form method="POST" action="{{ url_for('upload.salvar') }}" class="d-grid">
+                <form method="POST" action="{{ url_for('upload.salvar') }}" class="d-grid" id="formSalvar">
                     <input type="hidden" name="origens_selecionadas" id="origens_input" value="">
                     <button type="submit" class="btn btn-success btn-lg" id="btnSalvar">
                         <i class="fas fa-save"></i> Salvar Selecionadas na Base
@@ -198,6 +198,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const origemCheckboxes = document.querySelectorAll('.origem-checkbox');
     const origensInput = document.getElementById('origens_input');
     const btnSalvar = document.getElementById('btnSalvar');
+    const formSalvar = document.getElementById('formSalvar');
+    const precisamValidacao = {{ precisam_validacao }};
     
     // Função para atualizar input hidden
     function atualizarOrigensInput() {
@@ -215,6 +217,27 @@ document.addEventListener('DOMContentLoaded', function() {
             btnSalvar.disabled = false;
         }
     }
+    
+    // Intercepta o submit do form
+    formSalvar.addEventListener('submit', function(e) {
+        if (precisamValidacao > 0) {
+            e.preventDefault();
+            
+            // Mostra popup de confirmação
+            const mensagem = `⚠️ ATENÇÃO!\n\n` +
+                           `Existem ${precisamValidacao} transação(ões) que ainda NÃO foram validadas.\n\n` +
+                           `Salvar sem validar pode resultar em:\n` +
+                           `• Classificações incorretas\n` +
+                           `• Necessidade de correções manuais posteriores\n` +
+                           `• Dados imprecisos no dashboard\n\n` +
+                           `Deseja realmente salvar sem validar todas as transações?`;
+            
+            if (confirm(mensagem)) {
+                // Se confirmou, submete o form
+                formSalvar.submit();
+            }
+        }
+    });
     
     // Controle "Selecionar Todas"
     selecionarTodas.addEventListener('change', function() {

@@ -4,7 +4,7 @@ Script para importar base inicial do base_dados_geral.xlsx
 🛡️ RECOMENDADO: Use import_marcacoes_seguro.py apenas para BaseMarcacoesGastos
 """
 import pandas as pd
-from models import JournalEntry, BasePadrao, BaseMarcacao, init_db, get_db_session
+from app.models import JournalEntry, BasePadrao, BaseMarcacao, init_db, get_db_session
 from datetime import datetime
 
 

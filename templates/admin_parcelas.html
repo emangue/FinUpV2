@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}Admin - Parcelas{% endblock %}
+
+{% block content %}
+<h2 class="mb-4"><i class="fas fa-file-invoice-dollar"></i> Administração de Parcelas</h2>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">Status:</label>
+                <select name="status" class="form-select">
+                    <option value="">Todos</option>
+                    <option value="ativo" {% if status_filtro == 'ativo' %}selected{% endif %}>Ativo</option>
+                    <option value="finalizado" {% if status_filtro == 'finalizado' %}selected{% endif %}>Finalizado</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Buscar:</label>
+                <input type="text" name="busca" class="form-control" placeholder="Estabelecimento" value="{{ busca }}">
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="fas fa-search"></i> Filtrar
+                </button>
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <a href="{{ url_for('admin.parcelas') }}" class="btn btn-secondary w-100">
+                    <i class="fas fa-times"></i> Limpar
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="alert alert-info">
+    <i class="fas fa-info-circle"></i> Total de <strong>{{ total }}</strong> contratos de parcelamento encontrados
+</div>
+
+<div class="table-responsive">
+    <table class="table table-hover">
+        <thead>
+            <tr>
+                <th>Estabelecimento Base</th>
+                <th>Valor Parcela</th>
+                <th>Progresso</th>
+                <th>Total Plano</th>
+                <th>Grupo</th>
+                <th>Subgrupo</th>
+                <th>Tipo Gasto</th>
+                <th>Status</th>
+                <th>ID Hash</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for parcela in parcelas %}
+            <tr>
+                <td><strong>{{ parcela.estabelecimento_base }}</strong></td>
+                <td>R$ {{ "%.2f"|format(parcela.valor_parcela) }}</td>
+                <td>
+                    <div class="d-flex align-items-center">
+                        <span class="me-2">{{ parcela.qtd_pagas }}/{{ parcela.qtd_parcelas }}</span>
+                        <div class="progress flex-grow-1" style="height: 5px;">
+                            <div class="progress-bar" role="progressbar" 
+                                 style="width: {{ (parcela.qtd_pagas / parcela.qtd_parcelas * 100)|int }}%"></div>
+                        </div>
+                    </div>
+                </td>
+                <td>R$ {{ "%.2f"|format(parcela.valor_total_plano or 0) }}</td>
+                <td>{{ parcela.grupo_sugerido or '-' }}</td>
+                <td>{{ parcela.subgrupo_sugerido or '-' }}</td>
+                <td>{{ parcela.tipo_gasto_sugerido or '-' }}</td>
+                <td>
+                    <span class="badge bg-{% if parcela.status == 'ativo' %}success{% else %}secondary{% endif %}">
+                        {{ parcela.status }}
+                    </span>
+                </td>
+                <td><small class="text-muted" style="font-family: monospace; user-select: all;">{{ parcela.id_parcela }}</small></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Paginação -->
+<nav>
+    <ul class="pagination justify-content-center">
+        {% if page > 1 %}
+        <li class="page-item">
+            <a class="page-link" href="{{ url_for('admin.parcelas', page=page-1, status=status_filtro, busca=busca) }}">Anterior</a>
+        </li>
+        {% endif %}
+        
+        <li class="page-item disabled">
+            <span class="page-link">Página {{ page }} de {{ total_pages }}</span>
+        </li>
+        
+        {% if page < total_pages %}
+        <li class="page-item">
+            <a class="page-link" href="{{ url_for('admin.parcelas', page=page+1, status=status_filtro, busca=busca) }}">Próxima</a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endblock %}

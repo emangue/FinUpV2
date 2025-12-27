@@ -3,7 +3,7 @@ Script SEGURO para importar APENAS BaseMarcacoesGastos com validação interativ
 Criado para proteger as bases de dados contra alterações não autorizadas
 """
 import pandas as pd
-from models import BaseMarcacao, init_db, get_db_session
+from app.models import BaseMarcacao, init_db, get_db_session
 import sqlite3
 
 

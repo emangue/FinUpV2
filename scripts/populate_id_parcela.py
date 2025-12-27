@@ -9,9 +9,9 @@ from pathlib import Path
 # Adiciona o diretório raiz ao path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from models import get_db_session, JournalEntry
-from utils.hasher import generate_id_simples
-from utils.normalizer import detectar_parcela
+from app.models import get_db_session, JournalEntry
+from app.utils.hasher import generate_id_simples
+from app.utils.normalizer import detectar_parcela
 from sqlalchemy import func
 
 

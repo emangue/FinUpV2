@@ -2,9 +2,9 @@
 Gerador/Regenerador de padrões automáticos
 Versão simplificada
 """
-from models import JournalEntry, BasePadrao, get_db_session
-from utils.normalizer import normalizar_estabelecimento, get_faixa_valor, arredondar_2_decimais
-from utils.hasher import fnv1a_64_hash
+from app.models import JournalEntry, BasePadrao, get_db_session
+from app.utils.normalizer import normalizar_estabelecimento, get_faixa_valor, arredondar_2_decimais
+from app.utils.hasher import fnv1a_64_hash
 from datetime import datetime
 
 
