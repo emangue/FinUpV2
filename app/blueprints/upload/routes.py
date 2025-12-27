@@ -23,6 +23,7 @@ from datetime import datetime
 
 from app.blueprints.upload import upload_bp
 from app.models import JournalEntry, BaseMarcacao, BaseParcelas, get_db_session
+from app.utils.processors.preprocessors import is_extrato_itau_xls, preprocessar_extrato_itau_xls
 from app.blueprints.upload.processors import (
     processar_fatura_cartao, processar_extrato_conta
 )
@@ -54,7 +55,26 @@ def ler_arquivo_para_dataframe(filepath, filename):
         
         elif extensao in ['xlsx', 'xls']:
             if extensao == 'xls':
-                df = pd.read_excel(filepath, engine='xlrd')
+                # Lê arquivo XLS bruto (sem assumir header)
+                df_raw = pd.read_excel(filepath, engine='xlrd', header=None)
+                
+                # Verifica se é extrato Itaú XLS especial
+                if is_extrato_itau_xls(df_raw, filename):
+                    df, validacao = preprocessar_extrato_itau_xls(df_raw)
+                    
+                    # Armazenar informações de validação na sessão
+                    session['validacao_extrato'] = {
+                        'valido': validacao['valido'],
+                        'mensagem': validacao['mensagem'],
+                        'saldo_anterior': validacao.get('saldo_anterior'),
+                        'saldo_final': validacao.get('saldo_final_arquivo'),
+                        'soma_transacoes': validacao.get('soma_transacoes'),
+                        'diferenca': validacao.get('diferenca'),
+                        'periodo': validacao.get('periodo')
+                    }
+                else:
+                    # Arquivo XLS normal - relê com header padrão
+                    df = pd.read_excel(filepath, engine='xlrd')
             else:
                 df = pd.read_excel(filepath, engine='openpyxl')
         else:
@@ -103,6 +123,9 @@ def upload():
                     os.remove(filepath)
                     continue
                 
+                # Verificar se foi preprocessado (extrato Itaú XLS)
+                eh_extrato_itau = session.get('validacao_extrato') is not None
+                
                 # Detecta colunas
                 mapeamento = detectar_colunas(df)
                 
@@ -114,12 +137,20 @@ def upload():
                         'filepath': filepath,
                         'colunas': list(df.columns),
                         'mapeamento_detectado': mapeamento,
-                        'precisa_mapeamento': True
+                        'precisa_mapeamento': True,
+                        'tipo_detectado': 'extrato' if eh_extrato_itau else None
                     })
                     continue
                 
-                # Detecta tipo (fatura vs extrato)
-                deteccao_tipo = detectar_tipo_arquivo(df)
+                # Detecta tipo (fatura vs extrato) - se não for Itaú XLS
+                if eh_extrato_itau:
+                    deteccao_tipo = {
+                        'tipo': 'extrato',
+                        'confianca': 1.0,
+                        'indicadores_encontrados': ['Extrato Itaú XLS (preprocessado)']
+                    }
+                else:
+                    deteccao_tipo = detectar_tipo_arquivo(df)
                 
                 # Salva info do arquivo para confirmação
                 arquivos_info.append({
@@ -179,15 +210,21 @@ def processar_confirmados():
         # Pega confirmação do usuário (pode ter sido mudado)
         tipo_final = request.form.get(f'tipo_{idx}', arquivo_info.get('tipo_detectado'))
         
-        # Pega mapeamento (pode ter sido ajustado)
-        if arquivo_info.get('precisa_mapeamento'):
+        # Pega mapeamento (pode ter sido ajustado ou vem do formulário)
+        col_data_form = request.form.get(f'col_data_{idx}')
+        col_estab_form = request.form.get(f'col_estabelecimento_{idx}')
+        col_valor_form = request.form.get(f'col_valor_{idx}')
+        
+        if col_data_form and col_estab_form and col_valor_form:
+            # Usa valores do formulário (sempre enviados agora via hidden inputs)
             mapeamento = {
-                'data': request.form.get(f'col_data_{idx}'),
-                'estabelecimento': request.form.get(f'col_estabelecimento_{idx}'),
-                'valor': request.form.get(f'col_valor_{idx}')
+                'data': col_data_form,
+                'estabelecimento': col_estab_form,
+                'valor': col_valor_form
             }
         else:
-            mapeamento = arquivo_info['mapeamento']
+            # Fallback para mapeamento da sessão
+            mapeamento = arquivo_info.get('mapeamento', {})
         
         # Lê arquivo novamente
         df = ler_arquivo_para_dataframe(filepath, filename)
@@ -290,16 +327,24 @@ def revisao_upload():
                 'breakdown': por_tipo_gasto
             }
         else:
-            # Para extratos: despesas e receitas separadas
+            # Para extratos: despesas e receitas separadas + breakdown por TipoGasto
             despesas = sum(t.get('Valor', 0) for t in trans_list if t.get('Valor', 0) < 0)
             receitas = sum(t.get('Valor', 0) for t in trans_list if t.get('Valor', 0) > 0)
+            
+            # Breakdown por TipoGasto
+            por_tipo_gasto = {}
+            for t in trans_list:
+                tipo = t.get('TipoGasto') or 'Não Classificado'
+                valor = t.get('Valor', 0)
+                por_tipo_gasto[tipo] = por_tipo_gasto.get(tipo, 0) + valor
             
             stats_por_origem[origem] = {
                 'tipo': 'extrato',
                 'despesas': abs(despesas),
                 'receitas': receitas,
                 'saldo': receitas + despesas,
-                'quantidade': len(trans_list)
+                'quantidade': len(trans_list),
+                'breakdown': por_tipo_gasto
             }
     
     # Conta transações que precisam validação
@@ -514,15 +559,40 @@ def salvar():
     db_session = get_db_session()
     
     try:
+        # [PROTEÇÃO] Verifica duplicatas contra journal_entries antes de salvar
+        ids_transacao_salvar = [t.get('IdTransacao') for t in transacoes_salvar]
+        existing_ids = set(
+            row[0] for row in db_session.query(JournalEntry.IdTransacao).filter(
+                JournalEntry.IdTransacao.in_(ids_transacao_salvar)
+            ).all()
+        )
+        
+        # Filtra transações que já existem
+        transacoes_novas = []
+        duplicatas_encontradas = 0
+        for t in transacoes_salvar:
+            if t.get('IdTransacao') in existing_ids:
+                duplicatas_encontradas += 1
+                print(f"⚠️ Duplicata bloqueada: {t.get('Data')} - {t.get('Estabelecimento')} - R$ {t.get('Valor')}")
+            else:
+                transacoes_novas.append(t)
+        
+        if duplicatas_encontradas > 0:
+            flash(f'{duplicatas_encontradas} duplicata(s) detectada(s) e bloqueada(s)', 'warning')
+        
+        if not transacoes_novas:
+            flash('Todas as transações selecionadas já existem no banco de dados', 'warning')
+            return redirect(url_for('upload.revisao_upload'))
+        
         # [OTIMIZAÇÃO] Busca todos os contratos de parcelas de uma vez para evitar N+1 queries
-        ids_parcela = [t.get('IdParcela') for t in transacoes_salvar if t.get('IdParcela')]
+        ids_parcela = [t.get('IdParcela') for t in transacoes_novas if t.get('IdParcela')]
         contratos_dict = {}
         if ids_parcela:
             contratos = db_session.query(BaseParcelas).filter(BaseParcelas.id_parcela.in_(ids_parcela)).all()
             contratos_dict = {c.id_parcela: c for c in contratos}
         
         salvos = 0
-        for trans in transacoes_salvar:
+        for trans in transacoes_novas:
             # Verifica se deve ignorar no dashboard
             grupo = trans.get('GRUPO')
             ignorar = grupo in ['Transferências', 'Investimentos']

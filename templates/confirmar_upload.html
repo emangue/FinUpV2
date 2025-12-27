@@ -25,6 +25,37 @@
                             </h5>
                         </div>
                         <div class="card-body">
+                            <!-- Validação de Extrato (se houver) -->
+                            {% if session.get('validacao_extrato') %}
+                            <div class="alert {% if session.validacao_extrato.valido %}alert-success{% else %}alert-warning{% endif %} mb-3">
+                                <h6 class="alert-heading">
+                                    {% if session.validacao_extrato.valido %}
+                                        <i class="fas fa-check-circle"></i> Validação de Integridade
+                                    {% else %}
+                                        <i class="fas fa-exclamation-triangle"></i> Aviso de Validação
+                                    {% endif %}
+                                </h6>
+                                <p class="mb-2"><strong>{{ session.validacao_extrato.mensagem }}</strong></p>
+                                <hr>
+                                <div class="row small">
+                                    <div class="col-md-6">
+                                        <p class="mb-1">📊 <strong>Saldo Anterior:</strong> R$ {{ "%.2f"|format(session.validacao_extrato.saldo_anterior) }}</p>
+                                        <p class="mb-1">💰 <strong>Soma das Transações:</strong> R$ {{ "%.2f"|format(session.validacao_extrato.soma_transacoes) }}</p>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <p class="mb-1">🎯 <strong>Saldo Final:</strong> R$ {{ "%.2f"|format(session.validacao_extrato.saldo_final) }}</p>
+                                        <p class="mb-1">📉 <strong>Diferença:</strong> R$ {{ "%.4f"|format(session.validacao_extrato.diferenca) }}</p>
+                                    </div>
+                                </div>
+                                {% if session.validacao_extrato.periodo %}
+                                <hr>
+                                <p class="mb-0 small text-muted">
+                                    <i class="fas fa-calendar"></i> Período: {{ session.validacao_extrato.periodo.data_inicial }} até {{ session.validacao_extrato.periodo.data_final }}
+                                </p>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                            
                             <!-- Detecção de Tipo -->
                             <div class="row mb-3">
                                 <div class="col-md-12">
@@ -91,6 +122,7 @@
                                         </select>
                                     {% else %}
                                         <input type="text" class="form-control" value="{{ arquivo.mapeamento.data }}" readonly>
+                                        <input type="hidden" name="col_data_{{ idx }}" value="{{ arquivo.mapeamento.data }}">
                                         <small class="text-success"><i class="fas fa-check"></i> Detectado automaticamente</small>
                                     {% endif %}
                                 </div>
@@ -109,6 +141,7 @@
                                         </select>
                                     {% else %}
                                         <input type="text" class="form-control" value="{{ arquivo.mapeamento.estabelecimento }}" readonly>
+                                        <input type="hidden" name="col_estabelecimento_{{ idx }}" value="{{ arquivo.mapeamento.estabelecimento }}">
                                         <small class="text-success"><i class="fas fa-check"></i> Detectado automaticamente</small>
                                     {% endif %}
                                 </div>
@@ -127,6 +160,7 @@
                                         </select>
                                     {% else %}
                                         <input type="text" class="form-control" value="{{ arquivo.mapeamento.valor }}" readonly>
+                                        <input type="hidden" name="col_valor_{{ idx }}" value="{{ arquivo.mapeamento.valor }}">
                                         <small class="text-success"><i class="fas fa-check"></i> Detectado automaticamente</small>
                                     {% endif %}
                                 </div>
