@@ -425,6 +425,91 @@ db_session.commit()
 
 ---
 
+### 📋 7.3. Atualização Automática da Base Padrões
+
+**Momento:** Automaticamente após salvamento das transações  
+**Arquivo:** [app/blueprints/upload/routes.py](app/blueprints/upload/routes.py) (linha 627)  
+**Função:** `regenerar_padroes()` em [app/blueprints/upload/classifiers/pattern_generator.py](app/blueprints/upload/classifiers/pattern_generator.py)
+
+**Fluxo de atualização:**
+
+```
+1. Após commit das transações no banco:
+   db.session.commit()  # Salva todas as transações
+   ↓
+2. Migrar e limpar BaseParcelas (passo 7.1 e 7.2)
+   ↓
+3. Chamar regenerar_padroes() automaticamente:
+   └─ Extrai TODOS os padrões das transações classificadas
+   ↓
+4. Para cada transação COM classificação:
+   a) Normalizar estabelecimento
+   b) Extrair: Grupo, Subgrupo, TipoGasto, Marcações
+   c) Criar padrão: {
+        "padrao": "estabelecimento_normalizado",
+        "grupo": "Alimentação",
+        "subgrupo": "Delivery",
+        "tipo_gasto": "Necessário",
+        "marcacoes": ["ifood", "delivery"]
+      }
+   ↓
+5. Armazenar na tabela padroes_classificacao:
+   └─ Formato JSON:
+      {
+        "padroes": [
+          {"padrao": "ifood", "grupo": "Alimentação", ...},
+          {"padrao": "uber", "grupo": "Transporte", ...},
+          ...
+        ]
+      }
+   ↓
+6. Commit da atualização
+```
+
+**Exemplo prático:**
+```python
+# Transação recém-salva:
+Estabelecimento: "IFOOD *RESTAURANTE ABC"
+Grupo: "Alimentação"
+Subgrupo: "Delivery"
+
+# Normalização:
+padrao_norm = "ifood restaurante abc"
+
+# Padrão gerado:
+{
+  "padrao": "ifood restaurante abc",
+  "grupo": "Alimentação",
+  "subgrupo": "Delivery",
+  "tipo_gasto": "Necessário",
+  "marcacoes": []
+}
+
+# Próxima vez que importar "IFOOD *OUTRO LUGAR":
+# → Sistema sugere automaticamente "Alimentação > Delivery"
+```
+
+**Benefícios:**
+- ✅ **Aprendizado automático**: Sistema aprende com suas classificações
+- ✅ **Base sempre atualizada**: Novos estabelecimentos são adicionados automaticamente
+- ✅ **Menos trabalho manual**: Classificações futuras são sugeridas
+- ✅ **Consistência**: Mesmos estabelecimentos sempre classificados igual
+- ✅ **Sem intervenção**: Atualização totalmente automática após cada upload
+
+**Ordem de execução no salvamento:**
+```
+routes.py - save_uploaded_file():
+
+1. db.session.add_all(journal_entries)  # Adiciona transações
+2. db.session.commit()                   # Salva no banco ← PONTO CRÍTICO
+3. BaseParcelas: migrate_parcelas()      # Atualiza contratos
+4. BaseParcelas: cleanup_orphans()       # Remove órfãos
+5. BasePadroes: regenerar_padroes()      # Atualiza padrões ← AUTOMÁTICO
+6. return {'success': True}
+```
+
+---
+
 ### 🎨 8. Classificação Automática (Opcional)
 
 **Momento:** Após salvamento, se usuário clicar em "Classificar"  
@@ -530,7 +615,216 @@ db_session.commit()
 
 ## 🔑 Conceitos Importantes
 
+### 📌 Sistema de Hashing e Identificação
+
+O sistema utiliza **hashing criptográfico** para gerar identificadores únicos e consistentes para transações e contratos de parcelamento. Isso garante que:
+- ✅ Mesma transação sempre gera mesmo ID (idempotência)
+- ✅ Duplicatas são detectadas automaticamente
+- ✅ Parcelas são agrupadas corretamente
+- ✅ Importações múltiplas não geram duplicatas
+
+---
+
+### IdTransacao - Hash FNV-1a 64-bit
+
+**Arquivo:** [app/utils/hasher.py](app/utils/hasher.py) - Função `generate_id_transacao()`
+
+**Algoritmo:** FNV-1a (Fowler-Noll-Vo)
+- Hash de 64 bits (número inteiro)
+- Extremamente rápido (mais rápido que MD5/SHA)
+- Baixa taxa de colisão para nosso caso de uso
+
+**Fórmula:**
+```python
+hash = FNV_offset_basis (14695981039346656037)
+
+Para cada byte em (data + estabelecimento + valor):
+    hash = hash XOR byte
+    hash = hash * FNV_prime (1099511628211)
+
+IdTransacao = str(hash)
+```
+
+**Entrada (normalizada):**
+```python
+data_str = "25/12/2025"
+estabelecimento_norm = "IFOOD"  # Normalizado (uppercase, sem espaços extras)
+valor_norm = "-125.50"  # Com sinal e 2 decimais
+
+entrada = f"{data_str}{estabelecimento_norm}{valor_norm}"
+# Resultado: "25/12/2025IFOOD-125.50"
+
+IdTransacao = fnv1a_64(entrada)
+# Exemplo: "12345678901234567"
+```
+
+**Exemplo real:**
+```python
+Data: 14/03/2025
+Estabelecimento: "EBN    *VPD TRAVEL"
+Valor: -388.90
+
+Normalização:
+data_str = "14/03/2025"
+estab_norm = "EBNVPDTRAVEL"  # Remove espaços e *
+valor_norm = "-388.90"
+
+IdTransacao = fnv1a_64("14/03/2025EBNVPDTRAVEL-388.90")
+# Resultado: "3208065508694991340" (exemplo)
+```
+
+**Propriedades:**
+- ✅ **Determinístico**: Mesma entrada → Mesmo hash sempre
+- ✅ **Único**: Colisão extremamente improvável (2^64 possibilidades)
+- ✅ **Rápido**: ~100 nanossegundos por hash
+- ⚠️ **Colisão no mesmo arquivo**: Tratada com sufixo `_1`, `_2`, etc
+
+**Tratamento de colisões:**
+```python
+if IdTransacao in hash_counter:
+    hash_counter[IdTransacao] += 1
+    IdTransacao = f"{IdTransacao}_{hash_counter[IdTransacao]}"
+    # Exemplo: "12345678901234567_1"
+```
+
+---
+
+### IdParcela - Hash MD5 16-char
+
+**Arquivo:** [app/blueprints/upload/processors/fatura_cartao.py](app/blueprints/upload/processors/fatura_cartao.py) (~linha 200)
+
+**Algoritmo:** MD5 (Message Digest 5)
+- Hash de 128 bits (16 bytes hexadecimal)
+- Reduzido para 16 caracteres (primeiros 64 bits)
+- Usado apenas para identificação, não segurança
+
+**Fórmula:**
+```python
+import hashlib
+
+estabelecimento_norm = normalizar_estabelecimento("LOJA XYZ 10/10")
+valor_parcela = 100.00
+total_parcelas = 10
+
+chave = f"{estabelecimento_norm}|{abs(valor_parcela):.2f}|{total_parcelas}"
+# Exemplo: "loja xyz|100.00|10"
+
+hash_completo = hashlib.md5(chave.encode()).hexdigest()
+# Exemplo: "abc123def456789012345678901234567890"
+
+IdParcela = hash_completo[:16]
+# Resultado: "abc123def456" (16 caracteres)
+```
+
+**Entrada (normalizada):**
+```python
+# ANTES da normalização:
+Estabelecimento: "LOJA XYZ LTDA 10/10"
+Valor: 100.00
+Total: 10
+
+# DEPOIS da normalização:
+estab_norm = "loja xyz ltda"  # Lowercase, remove "10/10"
+valor_norm = "100.00"  # 2 decimais
+total = "10"
+
+chave_parcela = "loja xyz ltda|100.00|10"
+IdParcela = md5(chave_parcela)[:16]
+```
+
+**Exemplo real (VPD Travel):**
+```python
+Estabelecimento original: "EBN    *VPD TRAVEL (10/10)"
+Valor parcela: 388.90
+Total parcelas: 10
+
+Normalização:
+estab_norm = "ebn vpd travel"  # Remove *, espaços extras, (10/10)
+
+chave = "ebn vpd travel|388.90|10"
+IdParcela = md5(chave)[:16]
+# Resultado: "e11fde956855a2ef" (exemplo real)
+```
+
+**Por que o VALOR está na chave?**
+```
+Problema SEM valor:
+Compra 1: VPD TRAVEL 10x R$ 388,90 → IdParcela: abc123
+Compra 2: VPD TRAVEL 10x R$ 332,19 → IdParcela: abc123 ❌ (MESMO!)
+Resultado: Parcelas misturadas incorretamente
+
+Solução COM valor:
+Compra 1: VPD TRAVEL 10x R$ 388,90 → IdParcela: abc123
+Compra 2: VPD TRAVEL 10x R$ 332,19 → IdParcela: def456 ✅ (DIFERENTE!)
+Resultado: Cada compra tem seu próprio contrato
+```
+
+**Propriedades:**
+- ✅ **Agrupa parcelas**: Todas as parcelas da mesma compra têm mesmo IdParcela
+- ✅ **Diferencia compras**: Valores diferentes → IDs diferentes
+- ✅ **Compatível com banco**: 16 chars é compacto e indexável
+- ✅ **Legível**: Hexadecimal é fácil de debugar
+
+---
+
+### Normalização de Estabelecimentos
+
+**Arquivo:** [app/utils/normalizer.py](app/utils/normalizer.py) - Função `normalizar_estabelecimento()`
+
+**Processo de normalização:**
+
+1. **Remover informações de parcela**
+   ```python
+   "LOJA XYZ 10/10" → "LOJA XYZ"
+   "RESTAURANTE (5/12)" → "RESTAURANTE"
+   ```
+
+2. **Converter para minúsculas**
+   ```python
+   "LOJA XYZ" → "loja xyz"
+   ```
+
+3. **Remover caracteres especiais**
+   ```python
+   "LOJA*XYZ-ABC" → "loja xyz abc"
+   "MP*PAGAMENTO" → "mp pagamento"
+   ```
+
+4. **Normalizar espaços**
+   ```python
+   "LOJA    XYZ" → "loja xyz"
+   "  LOJA XYZ  " → "loja xyz"
+   ```
+
+5. **Remover prefixos comuns**
+   ```python
+   "MP*IFOOD" → "ifood"
+   "EC *UBER" → "uber"
+   "PAGSEGURO *LOJA" → "loja"
+   ```
+
+**Exemplo completo:**
+```python
+Original: "EBN    *VPD TRAVEL (10/10)"
+
+Passo 1: Remove (10/10)  → "EBN    *VPD TRAVEL"
+Passo 2: Lowercase       → "ebn    *vpd travel"
+Passo 3: Remove *        → "ebn     vpd travel"
+Passo 4: Normaliza espaço → "ebn vpd travel"
+
+Resultado final: "ebn vpd travel"
+```
+
+**Uso:**
+- ✅ **IdParcela**: Usa normalização completa
+- ✅ **Classificação**: Busca padrões em texto normalizado
+- ✅ **Deduplicação**: Compara estabelecimentos normalizados
+- ⚠️ **Display**: Mantém texto original para exibição ao usuário
+
+---
+
 ### IdTransacao
+
 - Hash FNV-1a 64-bit gerado a partir de: `data + estabelecimento + valor`
 - Garante unicidade mesmo com importações duplicadas
 - Sufixo `_N` adicionado se houver colisão no mesmo arquivo
