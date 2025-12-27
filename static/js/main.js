@@ -47,6 +47,180 @@ document.addEventListener('DOMContentLoaded', function() {
         }, false);
     });
 })();
+// Editor de Cores dos Grupos
+function abrirEditorCores() {
+    // Carrega grupos e cores via AJAX
+    fetch('/admin/api/grupos-cores')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const container = document.getElementById('listaGruposCores');
+                container.innerHTML = '';
+                
+                data.grupos.forEach(grupo => {
+                    const col = document.createElement('div');
+                    col.className = 'col-md-6';
+                    col.innerHTML = `
+                        <div class="grupo-cor-item">
+                            <label class="form-label fw-bold">
+                                <i class="fas ${grupo.icone}"></i> ${grupo.nome}
+                            </label>
+                            <div class="input-group">
+                                <input type="color" 
+                                       class="form-control form-control-color" 
+                                       id="cor-${grupo.id}" 
+                                       value="${grupo.cor}" 
+                                       title="Escolha a cor">
+                                <input type="text" 
+                                       class="form-control" 
+                                       value="${grupo.cor}" 
+                                       readonly 
+                                       style="max-width: 100px;">
+                            </div>
+                        </div>
+                    `;
+                    container.appendChild(col);
+                    
+                    // Sincroniza color picker com texto
+                    const colorInput = col.querySelector('input[type="color"]');
+                    const textInput = col.querySelector('input[type="text"]');
+                    colorInput.addEventListener('input', function() {
+                        textInput.value = this.value;
+                    });
+                });
+                
+                // Abre modal
+                const modal = new bootstrap.Modal(document.getElementById('modalEditorCores'));
+                modal.show();
+            } else {
+                alert('Erro ao carregar grupos: ' + (data.error || 'Erro desconhecido'));
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao conectar com o servidor.');
+        });
+}
+
+function salvarCores() {
+    // Coleta cores alteradas
+    const cores = {};
+    document.querySelectorAll('input[type="color"]').forEach(input => {
+        const grupoId = input.id.replace('cor-', '');
+        cores[grupoId] = input.value;
+    });
+    
+    // Envia via AJAX
+    fetch('/admin/api/grupos-cores', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ cores: cores })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Fecha modal
+            const modalElement = document.getElementById('modalEditorCores');
+            const modal = bootstrap.Modal.getInstance(modalElement);
+            modal.hide();
+            
+            // Recarrega página para atualizar gráficos
+            window.location.reload();
+        } else {
+            alert('Erro ao salvar cores: ' + (data.error || 'Erro desconhecido'));
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('Erro ao conectar com o servidor.');
+    });
+}
+
+// Editor de Cores dos Grupos
+function abrirEditorCores() {
+    fetch('/admin/api/grupos-cores')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const container = document.getElementById('listaGruposCores');
+                container.innerHTML = '';
+                
+                data.grupos.forEach(grupo => {
+                    const col = document.createElement('div');
+                    col.className = 'col-md-6';
+                    col.innerHTML = `
+                        <div class="grupo-cor-item">
+                            <label class="form-label fw-bold">
+                                <i class="fas ${grupo.icone}"></i> ${grupo.nome}
+                            </label>
+                            <div class="input-group">
+                                <input type="color" 
+                                       class="form-control form-control-color" 
+                                       id="cor-${grupo.id}" 
+                                       value="${grupo.cor}" 
+                                       title="Escolha a cor">
+                                <input type="text" 
+                                       class="form-control" 
+                                       value="${grupo.cor}" 
+                                       readonly 
+                                       style="max-width: 100px;">
+                            </div>
+                        </div>
+                    `;
+                    container.appendChild(col);
+                    
+                    const colorInput = col.querySelector('input[type="color"]');
+                    const textInput = col.querySelector('input[type="text"]');
+                    colorInput.addEventListener('input', function() {
+                        textInput.value = this.value;
+                    });
+                });
+                
+                const modal = new bootstrap.Modal(document.getElementById('modalEditorCores'));
+                modal.show();
+            } else {
+                alert('Erro ao carregar grupos: ' + (data.error || 'Erro desconhecido'));
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao conectar com o servidor.');
+        });
+}
+
+function salvarCores() {
+    const cores = {};
+    document.querySelectorAll('input[type="color"]').forEach(input => {
+        const grupoId = input.id.replace('cor-', '');
+        cores[grupoId] = input.value;
+    });
+    
+    fetch('/admin/api/grupos-cores', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ cores: cores })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const modalElement = document.getElementById('modalEditorCores');
+            const modal = bootstrap.Modal.getInstance(modalElement);
+            modal.hide();
+            window.location.reload();
+        } else {
+            alert('Erro ao salvar cores: ' + (data.error || 'Erro desconhecido'));
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('Erro ao conectar com o servidor.');
+    });
+}
+
 // Toggle de Status Dashboard nas transações
 document.addEventListener('DOMContentLoaded', function() {
     const toggles = document.querySelectorAll('.toggle-dashboard');

@@ -330,6 +330,125 @@ def grupos_deletar(grupo_id):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@admin_bp.route('/api/grupos-cores', methods=['GET'])
+def api_grupos_cores_get():
+    """API para obter cores dos grupos"""
+    try:
+        from app.models import BaseMarcacao
+        from app.filters import get_group_color_helper
+        
+        db = get_db_session()
+        
+        # Busca grupos únicos da BaseMarcacao
+        grupos_base = db.query(BaseMarcacao.GRUPO).distinct().order_by(BaseMarcacao.GRUPO).all()
+        
+        # Para cada grupo, busca config ou usa padrão
+        grupos_data = []
+        for (grupo_nome,) in grupos_base:
+            if not grupo_nome:
+                continue
+                
+            # Busca config existente
+            config = db.query(GrupoConfig).filter_by(nome=grupo_nome, ativo=True).first()
+            
+            if config:
+                grupo_id = config.id
+                cor = config.cor or get_group_color_helper(grupo_nome)
+                icone = config.icone or 'fa-folder'
+            else:
+                # Cria entrada temporária para permitir edição
+                grupo_id = f"new_{grupo_nome}"  # ID temporário
+                cor = get_group_color_helper(grupo_nome)
+                icone = get_group_icon_default(grupo_nome)
+            
+            grupos_data.append({
+                'id': grupo_id,
+                'nome': grupo_nome,
+                'cor': cor,
+                'icone': icone
+            })
+        
+        db.close()
+        return jsonify({'success': True, 'grupos': grupos_data})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def get_group_icon_default(grupo):
+    """Retorna ícone padrão para grupo"""
+    icons = {
+        'Alimentação': 'fa-utensils',
+        'Transporte': 'fa-car',
+        'Moradia': 'fa-home',
+        'Casa': 'fa-home',
+        'Saúde': 'fa-heartbeat',
+        'Educação': 'fa-graduation-cap',
+        'Lazer': 'fa-gamepad',
+        'Entretenimento': 'fa-gamepad',
+        'Assinaturas': 'fa-file-invoice',
+        'Vestuário': 'fa-tshirt',
+        'Roupas': 'fa-tshirt',
+        'Investimentos': 'fa-chart-line',
+        'Impostos': 'fa-landmark',
+        'Seguros': 'fa-shield-alt',
+        'Doações': 'fa-hand-holding-heart',
+        'Carro': 'fa-car',
+        'Presentes': 'fa-gift',
+        'Limpeza': 'fa-broom',
+        'Salário': 'fa-money-bill-wave',
+        'Outros': 'fa-tag'
+    }
+    return icons.get(grupo, 'fa-folder')
+
+
+@admin_bp.route('/api/grupos-cores', methods=['POST'])
+def api_grupos_cores_post():
+    """API para atualizar cores dos grupos"""
+    try:
+        from app.models import BaseMarcacao
+        
+        data = request.get_json()
+        cores = data.get('cores', {})
+        
+        if not cores:
+            return jsonify({'success': False, 'error': 'Nenhuma cor fornecida'}), 400
+        
+        db = get_db_session()
+        
+        for grupo_id, cor in cores.items():
+            # Se é ID temporário (new_NomeGrupo), cria novo config
+            if str(grupo_id).startswith('new_'):
+                grupo_nome = str(grupo_id).replace('new_', '')
+                
+                # Verifica se já existe
+                config = db.query(GrupoConfig).filter_by(nome=grupo_nome).first()
+                if not config:
+                    config = GrupoConfig(
+                        nome=grupo_nome,
+                        cor=cor,
+                        icone=get_group_icon_default(grupo_nome),
+                        ativo=True
+                    )
+                    db.add(config)
+                else:
+                    config.cor = cor
+            else:
+                # ID real, apenas atualiza
+                grupo = db.query(GrupoConfig).filter_by(id=int(grupo_id)).first()
+                if grupo:
+                    grupo.cor = cor
+        
+        db.commit()
+        db.close()
+        
+        flash('Cores atualizadas com sucesso!', 'success')
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @admin_bp.route('/logos')
 def logos():
     """Administração de logos de estabelecimentos"""
