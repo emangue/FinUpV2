@@ -16,13 +16,15 @@
                         <li><strong>Fatura Itaú:</strong> fatura_itau-AAAAMM.csv</li>
                         <li><strong>Extrato Itaú:</strong> Extrato Conta Corrente*.xls</li>
                         <li><strong>Mercado Pago:</strong> account_statement*.xlsx</li>
+                        <li><strong>Banco do Brasil:</strong> Extrato*.csv, Ourocard*.ofx</li>
+                        <li><strong>BTG:</strong> Extrato*.xlsx</li>
                     </ul>
                 </div>
 
                 <form method="POST" enctype="multipart/form-data">
                     <div class="mb-3">
                         <label for="files" class="form-label">Selecione os arquivos:</label>
-                        <input class="form-control" type="file" id="files" name="files[]" multiple required accept=".csv,.xls,.xlsx">
+                        <input class="form-control" type="file" id="files" name="files[]" multiple required accept=".csv,.xls,.xlsx,.ofx">
                         <div class="form-text">Você pode selecionar múltiplos arquivos de uma vez</div>
                     </div>
 
