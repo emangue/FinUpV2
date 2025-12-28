@@ -1,13 +1,19 @@
 // JavaScript principal
 
-// Auto-hide alerts após 5 segundos
+// Auto-hide alerts após 5 segundos (exceto validações de integridade)
 document.addEventListener('DOMContentLoaded', function() {
     const alerts = document.querySelectorAll('.alert:not(.alert-info)');
     alerts.forEach(alert => {
-        setTimeout(() => {
-            const bsAlert = new bootstrap.Alert(alert);
-            bsAlert.close();
-        }, 5000);
+        // Não ocultar alerts com validação de integridade ou extrato
+        const isValidacao = alert.textContent.includes('Validação de Integridade') || 
+                           alert.textContent.includes('Extrato validado');
+        
+        if (!isValidacao) {
+            setTimeout(() => {
+                const bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
+            }, 5000);
+        }
     });
 });
 
