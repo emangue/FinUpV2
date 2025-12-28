@@ -1,7 +1,7 @@
 """
 Models do banco de dados SQLAlchemy
 
-Versão: 2.1.0
+Versão: 2.2.0
 Data: 27/12/2025
 Status: stable
 
@@ -22,6 +22,9 @@ Tabelas:
 - AuditLog: Log de operações
 - GrupoConfig: Grupos de categorização
 - EstabelecimentoLogo: Logos de estabelecimentos
+
+Histórico:
+- 2.2.0 (27/12/2025): Adiciona colunas banco e tipodocumento em JournalEntry
 """
 from datetime import datetime
 from sqlalchemy import create_engine, Column, Integer, String, Float, Text, DateTime, Boolean
@@ -52,6 +55,8 @@ class JournalEntry(Base):
     NomeTitular = Column(String(200))
     DataPostagem = Column(String(10))  # DD/MM/AAAA
     origem = Column(String(50), nullable=False, index=True)
+    banco = Column(String(50), nullable=True, index=True)  # Itaú, BTG, Mercado Pago, Genérico
+    tipodocumento = Column(String(50), nullable=True)  # Extrato, Fatura Cartão de Crédito
     MarcacaoIA = Column(String(100))
     ValidarIA = Column(String(10))
     CartaoCodigo8 = Column(String(20))
@@ -81,6 +86,8 @@ class JournalEntry(Base):
             'NomeTitular': self.NomeTitular,
             'DataPostagem': self.DataPostagem,
             'origem': self.origem,
+            'banco': self.banco,
+            'tipodocumento': self.tipodocumento,
             'MarcacaoIA': self.MarcacaoIA,
             'ValidarIA': self.ValidarIA,
             'CartaoCodigo8': self.CartaoCodigo8,

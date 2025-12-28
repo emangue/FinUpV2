@@ -23,7 +23,7 @@ from datetime import datetime
 
 from app.blueprints.upload import upload_bp
 from app.models import JournalEntry, BaseMarcacao, BaseParcelas, get_db_session
-from app.utils.processors.preprocessors import is_extrato_itau_xls, preprocessar_extrato_itau_xls
+from app.utils.processors.preprocessors import detect_and_preprocess
 from app.blueprints.upload.processors import (
     processar_fatura_cartao, processar_extrato_conta
 )
@@ -39,51 +39,77 @@ UPLOAD_FOLDER = 'uploads_temp'
 
 
 def ler_arquivo_para_dataframe(filepath, filename):
-    """Lê arquivo CSV ou XLSX e retorna DataFrame"""
+    """
+    Lê arquivo CSV ou XLSX e retorna DataFrame + metadados
+    
+    Usa direcionador automático para detectar banco e preprocessar se necessário
+    
+    Returns:
+        tuple: (DataFrame, dict metadados) onde metadados contém:
+            - banco: str nome do banco
+            - tipodocumento: str tipo do documento
+            - validacao: dict resultado da validação ou None
+            - preprocessado: bool
+    """
     extensao = filename.lower().split('.')[-1]
     
     try:
+        # 1. Ler arquivo bruto sem processamento
         if extensao == 'csv':
             # Tenta diferentes encodings
             try:
-                df = pd.read_csv(filepath, encoding='utf-8')
+                df_raw = pd.read_csv(filepath, encoding='utf-8')
             except:
                 try:
-                    df = pd.read_csv(filepath, encoding='latin-1')
+                    df_raw = pd.read_csv(filepath, encoding='latin-1')
                 except:
-                    df = pd.read_csv(filepath, encoding='iso-8859-1')
+                    df_raw = pd.read_csv(filepath, encoding='iso-8859-1')
         
         elif extensao in ['xlsx', 'xls']:
+            # Lê arquivo bruto sem headers (permite detecção)
             if extensao == 'xls':
-                # Lê arquivo XLS bruto (sem assumir header)
                 df_raw = pd.read_excel(filepath, engine='xlrd', header=None)
-                
-                # Verifica se é extrato Itaú XLS especial
-                if is_extrato_itau_xls(df_raw, filename):
-                    df, validacao = preprocessar_extrato_itau_xls(df_raw)
-                    
-                    # Armazenar informações de validação na sessão
-                    session['validacao_extrato'] = {
-                        'valido': validacao['valido'],
-                        'mensagem': validacao['mensagem'],
-                        'saldo_anterior': validacao.get('saldo_anterior'),
-                        'saldo_final': validacao.get('saldo_final_arquivo'),
-                        'soma_transacoes': validacao.get('soma_transacoes'),
-                        'diferenca': validacao.get('diferenca'),
-                        'periodo': validacao.get('periodo')
-                    }
-                else:
-                    # Arquivo XLS normal - relê com header padrão
-                    df = pd.read_excel(filepath, engine='xlrd')
             else:
-                df = pd.read_excel(filepath, engine='openpyxl')
+                df_raw = pd.read_excel(filepath, engine='openpyxl', header=None)
         else:
-            return None
+            return None, None
         
-        return df
+        # 2. Tentar detectar e preprocessar automaticamente
+        try:
+            resultado = detect_and_preprocess(df_raw, filename)
+            
+            df = resultado['df']
+            metadados = {
+                'banco': resultado['banco'],
+                'tipodocumento': resultado['tipodocumento'],
+                'validacao': resultado.get('validacao'),
+                'preprocessado': resultado['preprocessado']
+            }
+            
+            # Armazenar validação na sessão se houver
+            if metadados['validacao']:
+                session['validacao_extrato'] = {
+                    'banco': metadados['banco'],
+                    'valido': metadados['validacao']['valido'],
+                    'mensagem': metadados['validacao']['mensagem'],
+                    'saldo_anterior': metadados['validacao'].get('saldo_anterior'),
+                    'saldo_final': metadados['validacao'].get('saldo_final_arquivo'),
+                    'soma_transacoes': metadados['validacao'].get('soma_transacoes'),
+                    'diferenca': metadados['validacao'].get('diferenca'),
+                    'periodo': metadados['validacao'].get('periodo')
+                }
+            
+            return df, metadados
+            
+        except ValueError as e:
+            # Arquivo não reconhecido - erro explicativo
+            print(f"❌ {str(e)}")
+            flash(str(e), 'danger')
+            return None, None
+        
     except Exception as e:
         print(f"❌ Erro ao ler arquivo {filename}: {e}")
-        return None
+        return None, None
 
 
 @upload_bp.route('/', methods=['GET', 'POST'])
@@ -116,15 +142,18 @@ def upload():
                 file.save(filepath)
                 
                 # Lê arquivo
-                df = ler_arquivo_para_dataframe(filepath, filename)
+                df, metadados = ler_arquivo_para_dataframe(filepath, filename)
                 
-                if df is None:
-                    flash(f'Erro ao ler {filename}. Formato não suportado.', 'danger')
+                if df is None or metadados is None:
+                    # Erro já exibido via flash na função
                     os.remove(filepath)
                     continue
                 
-                # Verificar se foi preprocessado (extrato Itaú XLS)
-                eh_extrato_itau = session.get('validacao_extrato') is not None
+                # Extrair informações do preprocessamento
+                banco = metadados['banco']
+                tipodocumento = metadados['tipodocumento']
+                validacao = metadados.get('validacao')
+                preprocessado = metadados['preprocessado']
                 
                 # Detecta colunas
                 mapeamento = detectar_colunas(df)
@@ -138,16 +167,17 @@ def upload():
                         'colunas': list(df.columns),
                         'mapeamento_detectado': mapeamento,
                         'precisa_mapeamento': True,
-                        'tipo_detectado': 'extrato' if eh_extrato_itau else None
+                        'tipo_detectado': tipodocumento,
+                        'banco': banco
                     })
                     continue
                 
-                # Detecta tipo (fatura vs extrato) - se não for Itaú XLS
-                if eh_extrato_itau:
+                # Usar detecção do direcionador se preprocessado, senão detectar tipo
+                if preprocessado:
                     deteccao_tipo = {
-                        'tipo': 'extrato',
+                        'tipo': 'fatura' if 'Fatura' in tipodocumento else 'extrato',
                         'confianca': 1.0,
-                        'indicadores_encontrados': ['Extrato Itaú XLS (preprocessado)']
+                        'indicadores_encontrados': [f'{banco} (preprocessado com validação)']
                     }
                 else:
                     deteccao_tipo = detectar_tipo_arquivo(df)
@@ -161,7 +191,10 @@ def upload():
                     'tipo_detectado': deteccao_tipo['tipo'],
                     'confianca': deteccao_tipo['confianca'],
                     'indicadores': deteccao_tipo['indicadores_encontrados'],
-                    'precisa_mapeamento': False
+                    'precisa_mapeamento': False,
+                    'banco': banco,
+                    'tipodocumento': tipodocumento,
+                    'validacao': validacao
                 })
         
         if not arquivos_info:
