@@ -1,9 +1,16 @@
 # Sistema de Gestão Financeira Automatizada
 
-**Versão Atual:** 2.2.1  
-**Última Atualização:** 27/12/2025
+**Versão Atual:** 3.0.1  
+**Última Atualização:** 28/12/2025
 
 Sistema web desenvolvido em Python/Flask para processamento automatizado de extratos e faturas bancárias, com classificação inteligente de transações e interface de validação manual.
+
+## 🆕 Novidades da Versão 3.0.1 (28/12/2025)
+
+- **✅ Preprocessador BB CSV Corrigido:** Upload de extratos Banco do Brasil agora funcional
+- **✅ Base de Padrões Personalizada:** Cada novo usuário inicia com base vazia
+- **✅ Sistema Multi-Usuário:** Isolamento completo de dados e padrões por usuário
+- **✅ Aprendizado Personalizado:** Padrões construídos desde a primeira transação
 
 ## 📋 Visão Geral
 

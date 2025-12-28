@@ -1,8 +1,45 @@
 # 📊 Status do Projeto - Sistema de Gestão Financeira
 
-**Data:** 26/12/2025  
-**Versão:** 2.0.0 🚀  
-**Status:** **Produção Completa ✅**
+**Data:** 28/12/2025  
+**Versão:** 3.0.1 🚀  
+**Status:** **Produção Multi-Usuário ✅**
+
+---
+
+## 🆕 Últimas Atualizações (28/12/2025)
+
+### ✅ Versão 3.0.1 - Correções e Melhorias
+- [x] **Preprocessador BB CSV Corrigido**
+  - [x] Alinhamento de colunas: `lançamento` e `valor (R$)`
+  - [x] Validação com campo `mensagem` obrigatório
+  - [x] Teste: 66 transações processadas com sucesso
+- [x] **Base de Padrões Personalizada**
+  - [x] Novos usuários iniciam com base vazia
+  - [x] 373 padrões removidos da Ana Beatriz
+  - [x] Aprendizado personalizado desde primeira transação
+
+### ✅ Versão 3.0.0 - Arquitetura de Preprocessadores
+- [x] **Sistema de Detecção Automática**
+  - [x] `detect_and_preprocess()` - Direcionador inteligente
+  - [x] Preprocessador Extrato BB CSV (latin-1)
+  - [x] Preprocessador BTG (validação Saldo Diário)
+  - [x] Preprocessador Mercado Pago (INITIAL/FINAL_BALANCE)
+- [x] **Colunas `banco` e `tipodocumento` em JournalEntry**
+- [x] **Documentação completa da arquitetura**
+
+### ✅ Versão 2.2.0 - Sistema Multi-Usuário
+- [x] **Autenticação com Flask-Login**
+  - [x] Modelo User com hash de senha
+  - [x] Login, logout e proteção de rotas
+  - [x] Sistema de roles (admin/user)
+- [x] **Isolamento de Dados**
+  - [x] Relacionamentos user_id em todas as tabelas
+  - [x] Filtros automáticos por usuário logado
+  - [x] View consolidada para Admin (ver dados de usuários conectados)
+- [x] **Sistema de Notificações**
+  - [x] Badges com contadores de pendências
+  - [x] Context processor global
+  - [x] Visibilidade Admin diferenciada
 
 ---
 

@@ -1,6 +1,6 @@
 # 🔢 Versão do Projeto
 
-**Versão Atual:** `2.1.1`  
+**Versão Atual:** `3.0.1`  
 **Status:** `stable` 🟢  
 **Data da Última Atualização:** 28/12/2025
 
@@ -10,11 +10,11 @@
 
 | Campo | Valor |
 |-------|-------|
-| **Versão Major** | 2 |
-| **Versão Minor** | 1 |
-| **Versão Patch** | 0 |
+| **Versão Major** | 3 |
+| **Versão Minor** | 0 |
+| **Versão Patch** | 1 |
 | **Status** | stable |
-| **Nome do Release** | "Modularização e Versionamento" |
+| **Nome do Release** | "Multi-Usuário e Preprocessadores" |
 
 ---
 
@@ -25,7 +25,10 @@
 - ✅ Auto-sync de parcelas integrado
 - ✅ Sistema de audit log completo
 - ✅ Interface admin para grupos e logos
-- ✅ **Sistema de versionamento e documentação de mudanças**
+- ✅ Sistema de versionamento e documentação de mudanças
+- ✅ **Sistema multi-usuário com autenticação**
+- ✅ **Preprocessadores modulares (BB, BTG, Mercado Pago)**
+- ✅ **Base de padrões personalizada por usuário**
 
 ---
 
@@ -53,6 +56,9 @@ Este projeto segue [Semantic Versioning 2.0.0](https://semver.org/):
 
 | Versão | Data | Descrição |
 |--------|------|-----------|
+| **3.0.1** | 28/12/2025 | **Fix:** Preprocessador BB CSV corrigido + Base limpa para novos usuários |
+| **3.0.0** | 27/12/2025 | **Major:** Arquitetura unificada de preprocessadores (BB, BTG, Mercado Pago) |
+| **2.2.0** | 28/12/2025 | Sistema multi-usuário com Flask-Login + relacionamentos |
 | **2.1.0** | 27/12/2025 | Sistema de versionamento e documentação implementado |
 | **2.0.0** | 26/12/2025 | Modularização completa com Blueprints, produção estável |
 | **1.x.x** | Dez/2025 | Versões iniciais monolíticas (ver BUGS.md para histórico) |
@@ -83,4 +89,4 @@ git tag -l "v*" --sort=-version:refname
 
 ---
 
-**Última verificação:** 27/12/2025 às 14:00 BRT
+**Última verificação:** 28/12/2025 às 14:00 BRT
