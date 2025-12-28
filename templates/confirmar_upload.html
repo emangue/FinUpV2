@@ -39,12 +39,12 @@
                                 <hr>
                                 <div class="row small">
                                     <div class="col-md-6">
-                                        <p class="mb-1">📊 <strong>Saldo Anterior:</strong> R$ {{ "%.2f"|format(session.validacao_extrato.saldo_anterior) }}</p>
-                                        <p class="mb-1">💰 <strong>Soma das Transações:</strong> R$ {{ "%.2f"|format(session.validacao_extrato.soma_transacoes) }}</p>
+                                        <p class="mb-1">📊 <strong>Saldo Anterior:</strong> R$ {{ "%.2f"|format(session.validacao_extrato.saldo_anterior|default(0)) }}</p>
+                                        <p class="mb-1">💰 <strong>Soma das Transações:</strong> R$ {{ "%.2f"|format(session.validacao_extrato.soma_transacoes|default(0)) }}</p>
                                     </div>
                                     <div class="col-md-6">
-                                        <p class="mb-1">🎯 <strong>Saldo Final:</strong> R$ {{ "%.2f"|format(session.validacao_extrato.saldo_final) }}</p>
-                                        <p class="mb-1">📉 <strong>Diferença:</strong> R$ {{ "%.4f"|format(session.validacao_extrato.diferenca) }}</p>
+                                        <p class="mb-1">🎯 <strong>Saldo Final:</strong> R$ {{ "%.2f"|format(session.validacao_extrato.saldo_final|default(0)) }}</p>
+                                        <p class="mb-1">📉 <strong>Diferença:</strong> R$ {{ "%.4f"|format(session.validacao_extrato.diferenca|default(0)) }}</p>
                                     </div>
                                 </div>
                                 {% if session.validacao_extrato.periodo %}
