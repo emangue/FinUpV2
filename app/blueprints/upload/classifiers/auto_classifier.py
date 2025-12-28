@@ -4,6 +4,7 @@ Implementação baseada no n8n:
 Base_Padroes → Journal Entries → Palavras-chave (repescagem) → Não Encontrado
 """
 from app.models import BasePadrao, JournalEntry, BaseMarcacao, get_db_session
+from app.models_ignorar import IgnorarEstabelecimento
 from app.utils.normalizer import normalizar, tokens_validos, normalizar_estabelecimento
 import re
 
@@ -420,7 +421,34 @@ def classificar_transacoes(transacoes):
                     'SUBGRUPO': '',
                     'TipoGasto': '',
                     'MarcacaoIA': 'Ignorar - Nome do Titular',
-                    'ValidarIA': ''
+                    'ValidarIA': '',
+                    'Ignorar': 'SIM'
+                })
+                por_tipo['Ignorar - Nome do Titular'] += 1
+                ignoradas += 1
+                continue
+            
+            # 2.1 Ignorar estabelecimentos da lista do admin
+            origem = trans.get('origem', '')
+            tipo_arquivo = 'cartao' if 'Fatura' in origem else 'extrato' if 'Extrato' in origem else 'ambos'
+            estabelecimentos_ignorar = session.query(IgnorarEstabelecimento).filter(
+                (IgnorarEstabelecimento.tipo == 'ambos') | (IgnorarEstabelecimento.tipo == tipo_arquivo)
+            ).all()
+            
+            deve_ignorar = False
+            for ig in estabelecimentos_ignorar:
+                if ig.nome.lower() in estabelecimento.lower():
+                    deve_ignorar = True
+                    break
+            
+            if deve_ignorar:
+                trans.update({
+                    'GRUPO': '',
+                    'SUBGRUPO': '',
+                    'TipoGasto': '',
+                    'MarcacaoIA': 'Ignorar - Lista Admin',
+                    'ValidarIA': '',
+                    'Ignorar': 'SIM'
                 })
                 por_tipo['Ignorar - Nome do Titular'] += 1
                 ignoradas += 1
@@ -456,10 +484,16 @@ def classificar_transacoes(transacoes):
                 'SUBGRUPO': '',
                 'TipoGasto': '',
                 'MarcacaoIA': 'Não Encontrado',
-                'ValidarIA': 'VALIDAR'
+                'ValidarIA': 'VALIDAR',
+                'Ignorar': 'NÃO'
             })
             por_tipo['Não Encontrado'] += 1
             nao_encontradas += 1
+        
+        # Inicializar campo Ignorar para todas as transações que não foram marcadas
+        for trans in transacoes:
+            if 'Ignorar' not in trans:
+                trans['Ignorar'] = 'NÃO'
         
         print(f"\n📊 Resultado da classificação:")
         print(f"  IdParcela: {por_tipo['IdParcela']}")

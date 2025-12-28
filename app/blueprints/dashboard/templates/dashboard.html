@@ -217,16 +217,8 @@
 
 <!-- Gráficos e Análises -->
 <div class="row mb-4">
-    <!-- Evolução Mensal -->
-    <div class="col-lg-8 mb-4">
-        <div class="chart-card">
-            <h5 class="chart-title">Evolução Mensal - Receitas vs Despesas (Últimos 6 Meses)</h5>
-            <canvas id="chartEvolucao" height="200"></canvas>
-        </div>
-    </div>
-    
-    <!-- Distribuição por Grupo -->
-    <div class="col-lg-4 mb-4">
+    <!-- Distribuição por Grupo (REDUZIDO PARA ALINHAR COM TABELA) -->
+    <div class="col-lg-3 mb-4">
         <div class="chart-card">
             <h5 class="chart-title">Despesas por Categoria</h5>
             <div style="height: 200px; display: flex; align-items: center; justify-content: center; color: #6c757d;">
@@ -234,20 +226,114 @@
             </div>
         </div>
     </div>
+    
+    <!-- Evolução Mensal (EXPANDIDO PARA ALINHAR COM TABELA) -->
+    <div class="col-lg-9 mb-4">
+        <div class="chart-card">
+            <h5 class="chart-title">Evolução Mensal - Receitas vs Despesas (Últimos 6 Meses)</h5>
+            <div style="height: 300px; position: relative;">
+                <canvas id="chartEvolucao"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Breakdown de Despesas -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="chart-card">
+            <h5 class="chart-title"><i class="fas fa-chart-bar me-2"></i>Breakdown de Despesas do Mês</h5>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Categoria</th>
+                            {% for item in breakdown_6_meses %}
+                            <th class="text-end">{{ item.mes }}</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>
+                                <i class="fas fa-wallet text-primary me-2"></i>
+                                <strong>Despesas Gerais</strong>
+                                <small class="text-muted d-block ms-4">Despesas exceto cartão</small>
+                            </td>
+                            {% for item in breakdown_6_meses %}
+                            <td class="text-end text-danger" style="cursor: pointer;" 
+                                onclick="irParaTransacoes('{{ item.mes }}', 'despesa')"
+                                title="Clique para ver transações">
+                                R$ {{ item.despesas_gerais|format_currency }}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        <tr>
+                            <td>
+                                <i class="fas fa-credit-card text-warning me-2"></i>
+                                <strong>Cartão de Crédito</strong>
+                                <small class="text-muted d-block ms-4">Total em cartões</small>
+                            </td>
+                            {% for item in breakdown_6_meses %}
+                            <td class="text-end text-warning" style="cursor: pointer;"
+                                onclick="irParaTransacoes('{{ item.mes }}', 'cartao')"
+                                title="Clique para ver transações">
+                                R$ {{ item.cartao_credito|format_currency }}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        <tr class="table-info">
+                            <td>
+                                <i class="fas fa-balance-scale text-info me-2"></i>
+                                <strong>Resultado Primário</strong>
+                                <small class="text-muted d-block ms-4">Receitas - Despesas</small>
+                            </td>
+                            {% for item in breakdown_6_meses %}
+                            <td class="text-end {% if item.resultado_primario >= 0 %}text-success{% else %}text-danger{% endif %} fw-bold" 
+                                style="cursor: pointer;"
+                                onclick="irParaTransacoes('{{ item.mes }}', 'todas')"
+                                title="Clique para ver transações">
+                                R$ {{ item.resultado_primario|format_currency }}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        <tr>
+                            <td>
+                                <i class="fas fa-chart-line text-success me-2"></i>
+                                <strong>Investimento Líquido</strong>
+                                <small class="text-muted d-block ms-4">Total investido no mês</small>
+                            </td>
+                            {% for item in breakdown_6_meses %}
+                            <td class="text-end text-success" style="cursor: pointer;"
+                                onclick="irParaTransacoes('{{ item.mes }}', 'investimento')"
+                                title="Clique para ver transações">
+                                R$ {{ item.investimento_liquido|format_currency }}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 </div>
 
 <div class="row mb-4">
-    <!-- Top 10 SubGrupos -->
+    <!-- Top 10 Transações -->
     <div class="col-lg-8 mb-4">
         <div class="chart-card">
-            <h5 class="chart-title">Top 10 SubGrupos</h5>
+            <h5 class="chart-title">Top 10 Transações Mais Caras do Mês</h5>
             <div id="topEstabelecimentos">
                 {% for item in top_estabelecimentos %}
-                <div class="top-item" style="cursor: pointer;" onclick="abrirDetalhesSubgrupo('{{ item.estabelecimento }}')">
+                <div class="top-item" style="cursor: pointer;" 
+                     onclick="abrirPopupTransacao('{{ item.id }}', '{{ item.data }}', '{{ item.estabelecimento|replace("'", "\\'") }}', '{{ item.grupo }}', '{{ item.subgrupo }}', {{ item.total }}, '{{ item.origem }}')">
                     <div class="top-item-icon" style="background-color: {{ item.grupo|get_group_color }};">
                         <i class="fas {{ item.grupo|get_group_icon }} text-white"></i>
                     </div>
-                    <div class="top-item-name">{{ item.estabelecimento }}</div>
+                    <div class="top-item-name">
+                        <strong>{{ item.estabelecimento }}</strong>
+                        <small class="text-muted d-block">{{ item.data }} • {{ item.origem }}</small>
+                    </div>
                     <div class="top-item-value text-danger">R$ {{ item.total|abs|format_currency }}</div>
                     <div class="top-item-bar">
                         <div class="top-item-bar-fill" style="width: {{ item.percentual }}%;"></div>
@@ -330,7 +416,7 @@
                     </thead>
                     <tbody>
                         {% for trans in ultimas_transacoes %}
-                        <tr style="cursor: pointer;" onclick="abrirDetalhesTransacao('{{ trans.ID }}')">
+                        <tr style="cursor: pointer;" onclick="abrirDetalhesTransacao('{{ trans.id }}')">
                             <td>
                                 {% if trans.Data %}
                                     {% if trans.Data is string %}
@@ -379,7 +465,7 @@
     </div>
 </div>
 
-<!-- Modal para Detalhes da Transação -->
+<!-- Modal para Detalhes da Transação (popup das últimas transações) -->
 <div class="modal fade" id="modalDetalhesTransacao" tabindex="-1" aria-labelledby="modalDetalhesLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -396,6 +482,28 @@
                             <span class="visually-hidden">Carregando...</span>
                         </div>
                     </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Detalhes do Top10 (popup do Top10 Transações) -->
+<div class="modal fade" id="modalTop10Detalhes" tabindex="-1" aria-labelledby="modalTop10Label" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalTop10Label">
+                    <i class="fas fa-star"></i> Detalhes da Transação - Top 10
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="conteudoTop10">
+                    <!-- Será preenchido dinamicamente -->
                 </div>
             </div>
             <div class="modal-footer">
@@ -473,8 +581,90 @@ function abrirDetalhesTransacao(transacaoId) {
         });
 }
 
+function abrirPopupTransacao(id, data, estabelecimento, grupo, subgrupo, valor, origem) {
+    const modal = new bootstrap.Modal(document.getElementById('modalTop10Detalhes'));
+    const conteudo = document.getElementById('conteudoTop10');
+    
+    const valorFormatado = Math.abs(valor).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    
+    conteudo.innerHTML = `
+        <div class="card border-0 shadow-sm">
+            <div class="card-body">
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <h6 class="text-muted text-uppercase mb-3">
+                            <i class="fas fa-info-circle me-2"></i>Informações da Transação
+                        </h6>
+                        <table class="table table-borderless table-sm">
+                            <tr>
+                                <td class="fw-bold text-muted">ID:</td>
+                                <td><code>${id}</code></td>
+                            </tr>
+                            <tr>
+                                <td class="fw-bold text-muted">Data:</td>
+                                <td><i class="fas fa-calendar-alt text-primary me-2"></i>${data}</td>
+                            </tr>
+                            <tr>
+                                <td class="fw-bold text-muted">Estabelecimento:</td>
+                                <td><strong>${estabelecimento}</strong></td>
+                            </tr>
+                            <tr>
+                                <td class="fw-bold text-muted">Origem:</td>
+                                <td>
+                                    <span class="badge bg-info">
+                                        <i class="fas ${origem === 'Cartão de Crédito' ? 'fa-credit-card' : 'fa-university'} me-1"></i>
+                                        ${origem}
+                                    </span>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-muted text-uppercase mb-3">
+                            <i class="fas fa-tags me-2"></i>Classificação
+                        </h6>
+                        <table class="table table-borderless table-sm">
+                            <tr>
+                                <td class="fw-bold text-muted">Grupo:</td>
+                                <td>
+                                    <span class="badge" style="background-color: {{ "${grupo}"|get_group_color }};">
+                                        ${grupo || 'Não classificado'}
+                                    </span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="fw-bold text-muted">SubGrupo:</td>
+                                <td>${subgrupo || '<span class="text-muted">N/A</span>'}</td>
+                            </tr>
+                            <tr>
+                                <td colspan="2" class="pt-3">
+                                    <div class="alert alert-danger mb-0 text-center">
+                                        <h4 class="mb-0 fw-bold">
+                                            <i class="fas fa-dollar-sign me-2"></i>
+                                            R$ ${valorFormatado}
+                                        </h4>
+                                        <small class="text-muted">Valor da transação</small>
+                                    </div>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="d-flex justify-content-end mt-3">
+                    <a href="/admin/transacoes?search=${id}" class="btn btn-sm btn-outline-primary" target="_blank">
+                        <i class="fas fa-external-link-alt me-2"></i>Ver no Admin
+                    </a>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    modal.show();
+}
+
 function abrirDetalhesSubgrupo(subgrupo) {
-    // Por enquanto, só mostra um alerta
+    // Manter compatibilidade (caso seja chamado em outro lugar)
     Swal.fire({
         title: 'Detalhes do SubGrupo',
         text: `Você clicou no subgrupo: ${subgrupo}`,
@@ -533,7 +723,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     },
                     options: {
                         responsive: true,
-                        maintainAspectRatio: true,
+                        maintainAspectRatio: false,
                         interaction: { intersect: false, mode: 'index' },
                         plugins: {
                             legend: {
@@ -685,5 +875,60 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }, 100); // Aguardar 100ms para garantir que tudo carregou
 });
+
+/**
+ * Redireciona para página de transações com filtros pré-aplicados
+ * @param {string} mesLabel - Formato "Out/25" ou "Oct/25"
+ * @param {string} tipo - 'despesa', 'cartao', 'investimento', 'todas'
+ */
+function irParaTransacoes(mesLabel, tipo) {
+    // Converter "Out/25" ou "Oct/25" para "2025-10"
+    const meses = {
+        // Português
+        'Jan': '01', 'Fev': '02', 'Mar': '03', 'Abr': '04',
+        'Mai': '05', 'Jun': '06', 'Jul': '07', 'Ago': '08',
+        'Set': '09', 'Out': '10', 'Nov': '11', 'Dez': '12',
+        // Inglês (fallback)
+        'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04',
+        'May': '05', 'Jun': '06', 'Jul': '07', 'Aug': '08',
+        'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
+    };
+    
+    // Validar split e conversão
+    if (!mesLabel || !mesLabel.includes('/')) {
+        console.error('Formato de mês inválido:', mesLabel);
+        return;
+    }
+    
+    const [mesNome, ano] = mesLabel.split('/');
+    const mesNum = meses[mesNome.trim()];
+    
+    if (!mesNum) {
+        console.error('Mês não reconhecido:', mesNome);
+        return;
+    }
+    
+    const anoCompleto = '20' + ano.trim();
+    const mesFormatado = `${anoCompleto}-${mesNum}`;
+    
+    // Guardar mês atual do dashboard na sessão para retornar depois
+    const mesAtualDashboard = '{{ mes_atual }}';
+    sessionStorage.setItem('dashboardMesOriginal', mesAtualDashboard);
+    
+    // Construir URL com filtros
+    let url = `/dashboard/transacoes?mes=${mesFormatado}`;
+    
+    if (tipo === 'despesa') {
+        url += '&tipo=despesa';
+    } else if (tipo === 'cartao') {
+        url += '&tipo=cartao';
+    } else if (tipo === 'investimento') {
+        // Filtrar por categoria "Investimento"
+        url += '&categoria=Investimentos';
+    }
+    // Para 'todas' não adiciona filtro de tipo
+    
+    window.location.href = url;
+}
 </script>
 {% endblock %}

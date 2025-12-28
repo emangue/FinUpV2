@@ -25,12 +25,19 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-2 d-flex align-items-end">
-                <button type="submit" class="btn btn-primary w-100">
+            <div class="col-md-4">
+                <label class="form-label">Origem:</label>
+                <select name="origem" class="form-select">
+                    <option value="">Todas</option>
+                    {% for origem in origens_lista %}
+                    <option value="{{ origem }}" {% if origem_filtro == origem %}selected{% endif %}>{{ origem }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100 me-2">
                     <i class="fas fa-search"></i> Filtrar
                 </button>
-            </div>
-            <div class="col-md-2 d-flex align-items-end">
                 <a href="{{ url_for('admin.transacoes') }}" class="btn btn-secondary w-100">
                     <i class="fas fa-times"></i> Limpar
                 </a>
@@ -43,53 +50,73 @@
     <i class="fas fa-info-circle"></i> Total de <strong>{{ total }}</strong> transações encontradas
 </div>
 
-<div class="table-responsive">
-    <table class="table table-hover table-sm">
-        <thead>
-            <tr>
-                <th>Data</th>
-                <th>Estabelecimento</th>
-                <th>Valor</th>
-                <th>Grupo</th>
-                <th>Subgrupo</th>
-                <th>Tipo Gasto</th>
-                <th>IdParcela</th>
-                <th>Origem</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for transacao in transacoes %}
-            <tr>
-                <td>{{ transacao.Data }}</td>
-                <td>{{ transacao.Estabelecimento }}</td>
-                <td class="{{ 'text-danger' if transacao.Valor < 0 else 'text-success' }}">
-                    R$ {{ "%.2f"|format(transacao.Valor) }}
-                </td>
-                <td>{{ transacao.GRUPO or '-' }}</td>
-                <td>{{ transacao.SUBGRUPO or '-' }}</td>
-                <td>{{ transacao.TipoGasto or '-' }}</td>
-                <td>
-                    {% if transacao.IdParcela %}
-                    <small class="text-muted" style="font-family: monospace; user-select: all;" title="{{ transacao.IdParcela }}">
-                        {{ transacao.IdParcela }}
-                    </small>
-                    {% else %}
-                    -
-                    {% endif %}
-                </td>
-                <td><small>{{ transacao.origem }}</small></td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
+<form id="form-massa" method="POST" action="{{ url_for('admin.transacoes_acao_massa') }}">
+    <div class="mb-2 d-flex gap-2">
+        <button type="submit" name="acao" value="deletar" class="btn btn-danger btn-sm" onclick="return confirm('Deseja realmente deletar as transações selecionadas?')">
+            <i class="fas fa-trash"></i> Deletar selecionadas
+        </button>
+        <button type="submit" name="acao" value="ajustar" class="btn btn-warning btn-sm">
+            <i class="fas fa-edit"></i> Ajustar selecionadas
+        </button>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover table-sm align-middle">
+            <thead>
+                <tr>
+                    <th><input type="checkbox" id="check-all" onclick="toggleAllChecks(this)"></th>
+                    <th>Data</th>
+                    <th>Estabelecimento</th>
+                    <th>Valor</th>
+                    <th>Grupo</th>
+                    <th>Subgrupo</th>
+                    <th>Tipo Gasto</th>
+                    <th>IdParcela</th>
+                    <th>Origem</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for transacao in transacoes %}
+                <tr>
+                    <td><input type="checkbox" name="ids[]" value="{{ transacao.id }}"></td>
+                    <td>{{ transacao.Data }}</td>
+                    <td>{{ transacao.Estabelecimento }}</td>
+                    <td class="{{ 'text-danger' if transacao.Valor < 0 else 'text-success' }}">
+                        R$ {{ "%.2f"|format(transacao.Valor) }}
+                    </td>
+                    <td>{{ transacao.GRUPO or '-' }}</td>
+                    <td>{{ transacao.SUBGRUPO or '-' }}</td>
+                    <td>{{ transacao.TipoGasto or '-' }}</td>
+                    <td>
+                        {% if transacao.IdParcela %}
+                        <small class="text-muted" style="font-family: monospace; user-select: all;" title="{{ transacao.IdParcela }}">
+                            {{ transacao.IdParcela }}
+                        </small>
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+                    <td><small>{{ transacao.origem }}</small></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</form>
+<script>
+function toggleAllChecks(source) {
+    const checkboxes = document.querySelectorAll('input[name="ids[]"]');
+    for (const cb of checkboxes) {
+        cb.checked = source.checked;
+    }
+}
+</script>
 
 <!-- Paginação -->
 <nav>
     <ul class="pagination justify-content-center">
         {% if page > 1 %}
         <li class="page-item">
-            <a class="page-link" href="{{ url_for('admin.transacoes', page=page-1, busca=busca, id_parcela=id_parcela_filtro, grupo=grupo_filtro) }}">Anterior</a>
+            <a class="page-link" href="{{ url_for('admin.transacoes', page=page-1, busca=busca, id_parcela=id_parcela_filtro, grupo=grupo_filtro, origem=origem_filtro) }}">Anterior</a>
         </li>
         {% endif %}
         
@@ -99,7 +126,7 @@
         
         {% if page < total_pages %}
         <li class="page-item">
-            <a class="page-link" href="{{ url_for('admin.transacoes', page=page+1, busca=busca, id_parcela=id_parcela_filtro, grupo=grupo_filtro) }}">Próxima</a>
+            <a class="page-link" href="{{ url_for('admin.transacoes', page=page+1, busca=busca, id_parcela=id_parcela_filtro, grupo=grupo_filtro, origem=origem_filtro) }}">Próxima</a>
         </li>
         {% endif %}
     </ul>

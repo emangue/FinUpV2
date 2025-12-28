@@ -5,7 +5,7 @@ Aceita qualquer CSV/XLSX de extrato com mapeamento de colunas
 import pandas as pd
 import re
 from datetime import datetime
-from app.utils.hasher import generate_id_simples
+from app.utils.hasher import generate_id_transacao
 from app.utils.normalizer import normalizar_estabelecimento, arredondar_2_decimais
 
 
@@ -99,8 +99,8 @@ def processar_extrato_conta(df, mapeamento, origem='Extrato', file_name=''):
             # Normaliza estabelecimento
             estabelecimento_norm = normalizar_estabelecimento(estabelecimento_raw)
             
-            # Gera ID base
-            id_base = generate_id_simples(data_br, estabelecimento_norm, valor)
+            # Gera ID usando FNV-1a (consistente com outros processadores)
+            id_base = generate_id_transacao(data_br, estabelecimento_raw, valor)
             
             # Se o hash já existe no arquivo atual, adiciona sufixo
             if id_base in hash_counter:

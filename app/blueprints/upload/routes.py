@@ -393,9 +393,33 @@ def revisar_categoria(tipo_gasto):
     # Calcula total
     total_valor = sum(item['transacao'].get('Valor', 0) for item in transacoes_categoria)
     
-    # Carrega marcações para dropdown
+    # Carrega marcações para dropdown e lista de ignorados
     db_session = get_db_session()
     marcacoes = db_session.query(BaseMarcacao).all()
+    
+    # Verifica lista de ignorados e atualiza campo Ignorar se necessário
+    from app.models_ignorar import IgnorarEstabelecimento
+    estabelecimentos_ignorar = db_session.query(IgnorarEstabelecimento).all()
+    
+    for item in transacoes_categoria:
+        trans = item['transacao']
+        estabelecimento = trans.get('Estabelecimento', '')
+        origem = trans.get('origem', '')
+        tipo_arquivo = 'cartao' if 'Fatura' in origem else 'extrato' if 'Extrato' in origem else 'ambos'
+        
+        # Verifica se estabelecimento está na lista de ignorados
+        deve_ignorar = False
+        for ig in estabelecimentos_ignorar:
+            if (ig.tipo == 'ambos' or ig.tipo == tipo_arquivo) and ig.nome.lower() in estabelecimento.lower():
+                deve_ignorar = True
+                break
+        
+        # Atualiza campo Ignorar na transação original
+        if deve_ignorar and trans.get('Ignorar') != 'SIM':
+            trans['Ignorar'] = 'SIM'
+        elif not deve_ignorar and 'Ignorar' not in trans:
+            trans['Ignorar'] = 'NÃO'
+    
     db_session.close()
     
     # Organiza dados para dropdowns
@@ -499,6 +523,7 @@ def validar_lote():
         grupo = data.get('grupo', '')
         subgrupo = data.get('subgrupo', '')
         tipo_gasto = data.get('tipo_gasto', '')
+        ignorar = data.get('ignorar', 'NÃO')
         
         transacoes = session.get('upload.transacoes', [])
         
@@ -515,6 +540,7 @@ def validar_lote():
                 transacoes[idx]['GRUPO'] = grupo
                 transacoes[idx]['SUBGRUPO'] = subgrupo
                 transacoes[idx]['TipoGasto'] = tipo_gasto
+                transacoes[idx]['Ignorar'] = ignorar
                 transacoes[idx]['MarcacaoIA'] = 'Manual (Lote)'
                 transacoes[idx]['ValidarIA'] = ''
                 count += 1
@@ -595,7 +621,9 @@ def salvar():
         for trans in transacoes_novas:
             # Verifica se deve ignorar no dashboard
             grupo = trans.get('GRUPO')
-            ignorar = grupo in ['Transferências', 'Investimentos']
+            ignorar_grupo = grupo in ['Transferências', 'Investimentos']
+            ignorar_manual = trans.get('Ignorar') == 'SIM'
+            ignorar = ignorar_grupo or ignorar_manual
             
             entry = JournalEntry(
                 IdTransacao=trans.get('IdTransacao'),

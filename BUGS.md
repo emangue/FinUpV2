@@ -1,4 +1,68 @@
-# 🐛 Bugs Conhecidos - Projeto Finanças V3
+# � Melhorias e Correções - Projeto Finanças V3
+
+---
+## 🐛 Bugs Ativos (27/12/2025)
+
+### 1. Botão "Voltar ao Dashboard" não funciona
+**Status:** 🔴 Ativo  
+**Descrição:** O botão "Voltar ao Dashboard" na tela de transações não executa a navegação. A função `voltarDashboard(event)` está definida mas não é acionada corretamente.  
+**Impacto:** Usuário precisa usar navegação manual do browser para voltar ao dashboard.  
+**Template afetado:** `/templates/transacoes.html` (linha 34)  
+**Próximos passos:** Debugar JavaScript, verificar event.preventDefault() e sessionStorage.  
+
+---
+## 🚀 Melhorias de Robustez e Proteção (27/12/2025)
+
+### 1. Deduplicação Inteligente e Proteção de Dados
+- Implementada deduplicação automática antes do salvamento, evitando transações duplicadas no banco.
+- Verificação de parcelas já pagas (BaseParcelas) e transações únicas (IdTransacao).
+- Feedback visual ao usuário sobre duplicatas removidas (tela de revisão).
+
+### 2. Validação Matemática de Extratos
+- Para extratos Itaú XLS, o sistema detecta automaticamente headers e início dos dados.
+- Validação matemática: Saldo Anterior + Soma das Transações = Saldo Final (tolerância 0.01).
+- Bloqueia upload se houver inconsistência, protegendo integridade financeira.
+
+### 3. Rollback e Versionamento Seguro
+- Sistema de versionamento por arquivo crítico (scripts/version_manager.py):
+    - start/finish/rollback garantem rastreabilidade e rollback seguro.
+- Bloqueio de commits em modo -dev/-test.
+- Documentação automática de mudanças em changes/.
+
+### 4. Modularização de Processadores
+- Processadores para cada tipo de arquivo (fatura_cartao, extrato_conta, extrato_itau_xls).
+- Fácil extensão para novos formatos.
+- Processadores antigos movidos para _deprecated/.
+
+### 5. Auto-sync de Bases
+- BaseParcelas e BasePadroes atualizadas automaticamente após cada upload.
+- Scripts manuais (migrate_parcelas, cleanup_orphans) agora integrados ao fluxo principal.
+
+### 6. Classificação Automática Multi-nível
+- Classificador hierárquico (IdParcela, Fatura Cartão, Base_Padroes, Journal Entries, Palavras-chave, Não Encontrado).
+- 93%+ das transações classificadas automaticamente em testes reais.
+
+### 7. Lições Aprendidas
+- Sempre preservar nomes originais de colunas até o final do pipeline.
+- Usar hidden inputs para garantir passagem de mapeamentos em formulários.
+- Session storage para validação cruzada entre requests.
+- Logging detalhado para debugging e rastreabilidade.
+
+---
+
+## 🚀 Avanços e Melhorias - 27/12/2025
+
+- Detecção automática de "Extrato de Conta" para arquivos Itaú XLS (flag especial, headers dinâmicos)
+- Validação matemática de saldo (Saldo Anterior + Σ Transações = Saldo Final) com tolerância 0.01
+- Classificador automático 6 níveis (IdParcela, Fatura Cartão, Base_Padroes, Journal Entries, Palavras-chave, Não Encontrado)
+- 93%+ das transações classificadas automaticamente (exemplo: 83 Base_Padroes, 2 Journal Entries, 5 Fatura Cartão, 6 pendentes)
+- Nomes corretos das colunas preservados na confirmação
+- Deduplicação inteligente antes da revisão (sem salvar duplicatas)
+- Auto-sync de BaseParcelas e BasePadroes após cada upload
+- Estrutura de processadores modularizada (fácil adicionar novos formatos)
+- Rollback e versionamento testados e funcionando (scripts/version_manager.py)
+- Commit e tag git para versão estável v2.1.0-stable
+
 
 Este documento lista bugs identificados que precisam ser corrigidos.
 

@@ -55,6 +55,7 @@
                             <th>Grupo</th>
                             <th>Subgrupo</th>
                             <th>Tipo Gasto</th>
+                            <th>Ignorar</th>
                             <th style="width: 60px;">Ações</th>
                         </tr>
                     </thead>
@@ -97,6 +98,13 @@
                             </td>
                             <td>
                                 <input type="text" class="form-control form-control-sm tipo-gasto-display" value="{{ t.get('TipoGasto', '') }}" readonly placeholder="Auto" style="min-width: 100px; background-color: #e9ecef;">
+                            </td>
+                            <td>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input switch-ignorar" type="checkbox" id="ignorar_{{ item.indice }}" data-indice="{{ item.indice }}"
+                                        {% if t.get('Ignorar') == 'SIM' %}checked{% endif %}>
+                                    <label class="form-check-label small" for="ignorar_{{ item.indice }}">Ignorar</label>
+                                </div>
                             </td>
                             <td>
                                 <button class="btn btn-sm btn-success btn-salvar-linha" data-indice="{{ item.indice }}" title="Salvar classificação">
@@ -245,6 +253,7 @@
             const grupo = row.find('.select-grupo').val();
             const subgrupo = row.find('.select-subgrupo').val();
             const tipoGasto = row.find('.tipo-gasto-display').val();
+            const ignorar = row.find('.switch-ignorar').is(':checked') ? 'SIM' : 'NÃO';
             
             if (!grupo || !subgrupo || !tipoGasto) {
                 Swal.fire({
@@ -266,7 +275,8 @@
                     indices: [indice],
                     grupo: grupo,
                     subgrupo: subgrupo,
-                    tipo_gasto: tipoGasto
+                    tipo_gasto: tipoGasto,
+                    ignorar: ignorar
                 }),
                 success: function(response) {
                     if (response.success) {

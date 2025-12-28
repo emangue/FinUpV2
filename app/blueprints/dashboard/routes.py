@@ -181,32 +181,28 @@ def index():
                 if variacao < -20 and (not maior_economia or variacao < maior_economia['variacao']):
                     maior_economia = {'grupo': grupo, 'variacao': variacao}
         
-        # === TOP 10 SUBGRUPOS ===
-        top_subgrupos_query = db.query(
-            JournalEntry.SUBGRUPO,
-            JournalEntry.GRUPO,
-            func.sum(JournalEntry.Valor).label('total')
-        ).filter(
+        # === TOP 10 TRANSAÇÕES ===
+        top_transacoes_query = db.query(JournalEntry).filter(
             JournalEntry.DT_Fatura == mes_atual_db,
             JournalEntry.Valor < 0,
-            JournalEntry.IgnorarDashboard.isnot(True),
-            JournalEntry.SUBGRUPO.isnot(None)
-        ).group_by(
-            JournalEntry.SUBGRUPO,
-            JournalEntry.GRUPO
+            JournalEntry.IgnorarDashboard.isnot(True)
         ).order_by(
-            func.sum(JournalEntry.Valor).asc()
+            JournalEntry.Valor.asc()
         ).limit(10).all()
         
-        max_valor = abs(top_subgrupos_query[0][2]) if top_subgrupos_query else 1
+        max_valor = abs(top_transacoes_query[0].Valor) if top_transacoes_query else 1
         top_estabelecimentos = [
             {
-                'estabelecimento': item[0],
-                'grupo': item[1],
-                'total': item[2],
-                'percentual': (abs(item[2]) / max_valor * 100)
+                'id': item.id,
+                'data': item.Data if item.Data else 'N/A',  # Data já é string 'DD/MM/AAAA'
+                'estabelecimento': item.Estabelecimento,
+                'grupo': item.GRUPO,
+                'subgrupo': item.SUBGRUPO,
+                'total': item.Valor,
+                'percentual': (abs(item.Valor) / max_valor * 100),
+                'origem': item.TipoTransacao or 'N/A'
             }
-            for item in top_subgrupos_query
+            for item in top_transacoes_query
         ]
         
         # === EVOLUÇÃO MENSAL (últimos 6 meses) ===
@@ -214,11 +210,16 @@ def index():
         evolucao_despesas = []
         evolucao_receitas = []
         
+        # Mapeamento manual para garantir consistência (português)
+        meses_pt = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+        
         for i in range(5, -1, -1):
             dt_ref = dt_atual - relativedelta(months=i)
             mes_ref = dt_ref.strftime('%Y%m')
             
-            evolucao_meses.append(dt_ref.strftime('%b/%y'))
+            # Formato manual: "Mês/Ano" (ex: "Jul/25")
+            mes_label = f"{meses_pt[dt_ref.month - 1]}/{dt_ref.strftime('%y')}"
+            evolucao_meses.append(mes_label)
             
             # Despesas incluindo TODOS cartões de crédito
             despesas_mes = abs(db.query(func.sum(JournalEntry.Valor)).filter(
@@ -249,6 +250,67 @@ def index():
             JournalEntry.Data.desc()
         ).limit(10).all()
         
+        # === BREAKDOWN DE DESPESAS - ÚLTIMOS 6 MESES ===
+        breakdown_6_meses = []
+        # Mapeamento inverso para conversão
+        meses_para_num = {
+            'Jan': '01', 'Fev': '02', 'Mar': '03', 'Abr': '04',
+            'Mai': '05', 'Jun': '06', 'Jul': '07', 'Ago': '08',
+            'Set': '09', 'Out': '10', 'Nov': '11', 'Dez': '12'
+        }
+        
+        for mes_label in evolucao_meses:
+            # Converter formato "Out/25" para "202510"
+            try:
+                mes_nome, ano_curto = mes_label.split('/')
+                mes_num = meses_para_num.get(mes_nome.strip())
+                if not mes_num:
+                    continue
+                mes_db = f"20{ano_curto.strip()}{mes_num}"
+            except:
+                continue
+            
+            # Despesas Gerais (despesas não-cartão)
+            despesas_gerais = abs(db.query(func.sum(JournalEntry.Valor)).filter(
+                JournalEntry.DT_Fatura == mes_db,
+                JournalEntry.Valor < 0,
+                JournalEntry.TipoTransacao != 'Cartão de Crédito',
+                JournalEntry.IgnorarDashboard.isnot(True)
+            ).scalar() or 0)
+            
+            # Cartão de Crédito
+            cartao = abs(db.query(func.sum(JournalEntry.Valor)).filter(
+                JournalEntry.DT_Fatura == mes_db,
+                JournalEntry.TipoTransacao == 'Cartão de Crédito',
+                JournalEntry.IgnorarDashboard.isnot(True)
+            ).scalar() or 0)
+            
+            # Receitas
+            receitas = abs(db.query(func.sum(JournalEntry.Valor)).filter(
+                JournalEntry.DT_Fatura == mes_db,
+                JournalEntry.Valor > 0,
+                JournalEntry.IgnorarDashboard.isnot(True)
+            ).scalar() or 0)
+            
+            # Investimentos (GRUPO contém 'Investimento' - invertido para positivo)
+            investimentos_raw = db.query(func.sum(JournalEntry.Valor)).filter(
+                JournalEntry.DT_Fatura == mes_db,
+                JournalEntry.GRUPO.ilike('%Investimento%')
+            ).scalar() or 0
+            # Inverte o sinal: se é negativo (saída), vira positivo (investido)
+            investimentos = abs(investimentos_raw)
+            
+            # Resultado Primário = Receitas - (Despesas Gerais + Cartão)
+            resultado_primario = receitas - (despesas_gerais + cartao)
+            
+            breakdown_6_meses.append({
+                'mes': mes_label,
+                'despesas_gerais': despesas_gerais,
+                'cartao_credito': cartao,
+                'resultado_primario': resultado_primario,
+                'investimento_liquido': investimentos
+            })
+        
         stats = {
             'total_despesas': total_despesas,
             'total_receitas': total_receitas,
@@ -266,6 +328,7 @@ def index():
         
         return render_template('dashboard.html',
                              stats=stats,
+                             breakdown_6_meses=breakdown_6_meses,
                              grupos_labels=grupos_labels,
                              grupos_valores=grupos_valores,
                              grupos_cores=grupos_cores,
@@ -283,13 +346,21 @@ def index():
 
 @dashboard_bp.route('/transacoes')
 def transacoes():
-    """Lista todas as transações de um mês específico"""
+    """Lista todas as transações de um mês específico com filtros"""
     
     mes_param = request.args.get('mes')
     if not mes_param:
         return redirect(url_for('dashboard.index'))
         
     mes_db = mes_param.replace('-', '')
+    
+    # Filtros
+    filtro_estabelecimento = request.args.get('estabelecimento', '').strip()
+    filtro_categoria = request.args.get('categoria', '')
+    # Aceita múltiplos tipos (vem como lista do formulário)
+    filtros_tipos = request.args.getlist('tipo')  # despesa, cartao, receita
+    # Filtro de status dashboard: 'consideradas' ou 'todas'
+    filtro_dashboard = request.args.get('dashboard', 'consideradas')
     
     try:
         dt_obj = datetime.strptime(mes_db, "%Y%m")
@@ -299,20 +370,75 @@ def transacoes():
     
     db = get_db_session()
     try:
-        transacoes = db.query(JournalEntry).filter(
+        # Query base
+        query = db.query(JournalEntry).filter(
             JournalEntry.DT_Fatura == mes_db
-        ).order_by(JournalEntry.Data.desc()).all()
+        )
+        
+        # Aplicar filtros
+        if filtro_estabelecimento:
+            query = query.filter(
+                JournalEntry.Estabelecimento.ilike(f'%{filtro_estabelecimento}%')
+            )
+        
+        if filtro_categoria:
+            query = query.filter(JournalEntry.GRUPO == filtro_categoria)
+        
+        # Filtro de status dashboard
+        if filtro_dashboard == 'consideradas':
+            # Apenas transações consideradas (IgnorarDashboard = False ou NULL)
+            query = query.filter(
+                (JournalEntry.IgnorarDashboard == False) | (JournalEntry.IgnorarDashboard == None)
+            )
+        # Se 'todas', não aplica filtro (mostra incluindo ignoradas)
+        
+        # Filtro de tipo com múltiplas seleções
+        if filtros_tipos:
+            from sqlalchemy import or_, and_
+            condicoes = []
+            
+            if 'despesa' in filtros_tipos:
+                # Despesas não-cartão
+                condicoes.append(
+                    and_(
+                        JournalEntry.Valor < 0,
+                        JournalEntry.TipoTransacao != 'Cartão de Crédito'
+                    )
+                )
+            
+            if 'cartao' in filtros_tipos:
+                # Cartão de crédito
+                condicoes.append(
+                    JournalEntry.TipoTransacao == 'Cartão de Crédito'
+                )
+            
+            if 'receita' in filtros_tipos:
+                # Receitas (valor positivo)
+                condicoes.append(JournalEntry.Valor > 0)
+            
+            if condicoes:
+                query = query.filter(or_(*condicoes))
+        
+        transacoes = query.order_by(JournalEntry.Data.desc()).all()
+        
+        # Calcular soma dos valores filtrados
+        soma_filtrada = sum(t.Valor for t in transacoes)
         
         # Buscar todos os grupos para o dropdown
         grupos = db.query(BaseMarcacao.GRUPO).distinct().order_by(BaseMarcacao.GRUPO).all()
-        grupos_lista = [g[0] for g in grupos]
+        grupos_lista = [g[0] for g in grupos if g[0]]
         
         return render_template('transacoes.html',
                              transacoes=transacoes,
                              mes_atual=mes_param,
                              mes_exibicao=mes_exibicao,
                              total_transacoes=len(transacoes),
-                             grupos_lista=grupos_lista)
+                             soma_filtrada=soma_filtrada,
+                             grupos_lista=grupos_lista,
+                             filtro_estabelecimento=filtro_estabelecimento,
+                             filtro_categoria=filtro_categoria,
+                             filtros_tipos=filtros_tipos,
+                             filtro_dashboard=filtro_dashboard)
     finally:
         db.close()
 
@@ -323,14 +449,14 @@ def api_transacao_detalhes(transacao_id):
     try:
         db = get_db_session()
         transacao = db.query(JournalEntry).filter(
-            JournalEntry.ID == transacao_id
+            JournalEntry.id == transacao_id
         ).first()
         
         if not transacao:
             return jsonify({'error': 'Transação não encontrada'}), 404
         
         detalhes = {
-            'ID': transacao.ID,
+            'ID': transacao.id,
             'Data': transacao.Data.strftime('%d/%m/%Y') if transacao.Data else 'N/A',
             'Estabelecimento': transacao.Estabelecimento,
             'Valor': float(transacao.Valor),
@@ -347,6 +473,80 @@ def api_transacao_detalhes(transacao_id):
         return jsonify(detalhes)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+@dashboard_bp.route('/api/transacao_completa/<int:transacao_id>')
+def api_transacao_completa(transacao_id):
+    """API para buscar dados completos de uma transação para edição"""
+    try:
+        db = get_db_session()
+        transacao = db.query(JournalEntry).filter(
+            JournalEntry.id == transacao_id
+        ).first()
+        
+        if not transacao:
+            return jsonify({'error': 'Transação não encontrada'}), 404
+        
+        dados = {
+            'id': transacao.id,
+            'IdTransacao': transacao.IdTransacao,
+            'Data': transacao.Data,
+            'Estabelecimento': transacao.Estabelecimento,
+            'Valor': float(transacao.Valor),
+            'GRUPO': transacao.GRUPO,
+            'SUBGRUPO': transacao.SUBGRUPO,
+            'TipoTransacao': transacao.TipoTransacao,
+            'IgnorarDashboard': transacao.IgnorarDashboard or False
+        }
+        
+        db.close()
+        return jsonify(dados)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@dashboard_bp.route('/api/atualizar_transacao', methods=['POST'])
+def api_atualizar_transacao():
+    """API para atualizar uma transação"""
+    try:
+        dados = request.get_json()
+        transacao_id = dados.get('id')
+        
+        if not transacao_id:
+            return jsonify({'success': False, 'error': 'ID não fornecido'}), 400
+        
+        db = get_db_session()
+        transacao = db.query(JournalEntry).filter(
+            JournalEntry.id == transacao_id
+        ).first()
+        
+        if not transacao:
+            db.close()
+            return jsonify({'success': False, 'error': 'Transação não encontrada'}), 404
+        
+        # Atualizar campos
+        if 'valor' in dados:
+            transacao.Valor = dados['valor']
+            transacao.ValorPositivo = abs(dados['valor'])
+        
+        if 'estabelecimento' in dados:
+            transacao.Estabelecimento = dados['estabelecimento']
+        
+        if 'grupo' in dados:
+            transacao.GRUPO = dados['grupo']
+        
+        if 'subgrupo' in dados:
+            transacao.SUBGRUPO = dados['subgrupo']
+        
+        if 'ignorar_dashboard' in dados:
+            transacao.IgnorarDashboard = dados['ignorar_dashboard']
+        
+        db.commit()
+        db.close()
+        
+        return jsonify({'success': True, 'message': 'Transação atualizada com sucesso'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @dashboard_bp.route('/api/subgrupos/<grupo>')

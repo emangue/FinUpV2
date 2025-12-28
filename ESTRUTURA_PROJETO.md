@@ -1,5 +1,66 @@
 # 📁 Estrutura do Projeto - Gestão Financeira V3
 
+---
+
+## �️ Arquitetura e Organização do Sistema (27/12/2025)
+
+### Sistema de Processamento de Extratos
+- Pre-processador para extratos Itaú XLS com detecção automática de headers.
+- Validação matemática de saldo (Saldo Anterior + Σ Transações = Saldo Final) integrada ao pipeline.
+- Arquitetura modular permite adição de novos formatos bancários facilmente.
+
+### Sistema de Deduplicação e Integridade
+- Deduplicação automática antes do salvamento (IdTransacao e IdParcela).
+- Feedback ao usuário sobre duplicatas removidas.
+- Deduplicator.py centraliza lógica de verificação.
+
+### Modularização de Processadores
+- Estrutura app/utils/processors/ permite adicionar novos formatos facilmente.
+- Processadores antigos isolados em _deprecated/ para manter código limpo.
+
+### Auto-sync de Bases
+- BaseParcelas e BasePadroes atualizadas automaticamente após cada upload.
+- Scripts migrate_parcelas.py e cleanup_orphans.py agora integrados ao fluxo principal.
+
+### Classificação Automática Multi-nível
+- Classificador hierárquico: IdParcela → Fatura Cartão → Base_Padroes → Journal Entries → Palavras-chave → Não Encontrado.
+- 93%+ das transações classificadas automaticamente em cenários reais.
+
+### Versionamento e Rollback Seguro
+- Sistema de versionamento por arquivo crítico (scripts/version_manager.py):
+   - start/finish/rollback garantem rastreabilidade e rollback seguro.
+- Bloqueio de commits em modo -dev/-test.
+- Documentação automática de mudanças em changes/.
+- Tag git v2.1.0-stable marca versão estável.
+
+### Arquitetura de Templates Centralizada (27/12/2025)
+- **Um único template por funcionalidade:** Evita duplicação e inconsistências.
+- **Templates compartilhados:** `/templates/` para uso por múltiplos blueprints.
+- **Templates específicos:** `/app/blueprints/<nome>/templates/` para um único blueprint.
+- **Componentes reutilizáveis:** `_macros/` e `_partials/` compartilhados.
+- **Exemplo:** `transacoes.html` centralizado em `/templates/`, usado por dashboard e admin.
+- **Flask template precedence:** Root `/templates/` serve ANTES de blueprints - nunca duplicar!
+
+### Boas Práticas e Lições Incorporadas
+- Preservação de nomes de colunas originais até o final do pipeline.
+- Uso de hidden inputs para passagem de mapeamentos em formulários.
+- Session storage para validação cruzada entre requests.
+- Logging detalhado para debugging e rastreabilidade.
+- **Template único por funcionalidade:** Evita bugs silenciosos de precedência.
+
+---
+
+## 🚀 Avanços e Melhorias - 27/12/2025
+
+- Detecção automática de extrato Itaú XLS (headers dinâmicos, validação de saldo)
+- Classificação automática robusta (6 níveis, 93%+ de acerto)
+- Deduplicação de transações antes do salvamento
+- Auto-sync de BaseParcelas e BasePadroes após upload
+- Estrutura de processadores modularizada
+- Rollback/versionamento seguro via scripts/version_manager.py
+- Commit/tag git para versão estável v2.1.0-stable
+
+
 ## 🎯 Visão Geral
 
 Sistema modular de gestão financeira desenvolvido em Flask com arquitetura blueprints.

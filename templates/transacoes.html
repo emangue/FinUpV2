@@ -31,10 +31,15 @@
             <h1 class="h3 mb-0 text-gray-800">Transações de {{ mes_exibicao }}</h1>
             <p class="text-muted mb-0">{{ total_transacoes }} transações encontradas</p>
         </div>
-        <a href="{{ url_for('dashboard.index', mes=mes_atual) }}" class="btn btn-secondary">
+        <button type="button" onclick="voltarDashboard(event)" class="btn btn-secondary">
             <i class="fas fa-arrow-left me-2"></i>Voltar ao Dashboard
-        </a>
+        </button>
     </div>
+
+    <!-- ============================================ -->
+    <!-- COMPONENTE COMPARTILHADO: Filtros de Transações -->
+    <!-- ============================================ -->
+    {% include '_macros/transacao_filters.html' %}
 
     <div class="card shadow mb-4">
         <div class="card-body">
@@ -53,20 +58,10 @@
                     </thead>
                     <tbody>
                         {% for trans in transacoes %}
-                        <tr>
+                        <tr onclick="abrirModalEditar({{ trans.id }})" style="cursor: pointer;" title="Clique para editar">
                             <td data-sort="{{ trans.Data|replace('/', '-') }}">{{ trans.Data }}</td>
                             <td>
-                                <div class="d-flex align-items-center">
-                                    {% set logo = trans.Estabelecimento|get_estabelecimento_logo %}
-                                    {% if logo %}
-                                        <img src="{{ logo }}" alt="" class="rounded-circle me-2" width="16" height="16" style="object-fit: cover;">
-                                    {% else %}
-                                        <div class="rounded-circle bg-light d-flex align-items-center justify-content-center me-2" style="width: 16px; height: 16px;">
-                                            <i class="fas fa-store text-muted" style="font-size: 8px;"></i>
-                                        </div>
-                                    {% endif %}
-                                    <span class="text-truncate" style="max-width: 300px;">{{ trans.Estabelecimento }}</span>
-                                </div>
+                                <span class="text-truncate">{{ trans.Estabelecimento }}</span>
                             </td>
                             <td>
                                 {% if trans.GRUPO %}
@@ -91,7 +86,7 @@
                                     {{ trans.TipoTransacao }}
                                 {% endif %}
                             </td>
-                            <td>
+                            <td onclick="event.stopPropagation();">
                                 <div class="form-check form-switch">
                                     <input class="form-check-input toggle-dashboard" type="checkbox" 
                                            id="switch_{{ trans.IdTransacao }}" 
@@ -114,9 +109,36 @@
         </div>
     </div>
 </div>
+
+<!-- ============================================ -->
+<!-- COMPONENTE COMPARTILHADO: Modal de Edição -->
+<!-- ============================================ -->
+{% include '_macros/transacao_modal_edit.html' %}
 {% endblock %}
 
 {% block scripts %}
+<script>
+/**
+ * Retorna ao dashboard preservando o mês que estava sendo visualizado antes
+ */
+function voltarDashboard(event) {
+    event.preventDefault();
+    
+    // Recuperar mês original do dashboard (se foi salvo)
+    const mesOriginal = sessionStorage.getItem('dashboardMesOriginal');
+    
+    if (mesOriginal) {
+        // Voltar para o mês que estava visualizando antes
+        window.location.href = `/dashboard/?mes=${mesOriginal}`;
+        // Limpar sessão após uso
+        sessionStorage.removeItem('dashboardMesOriginal');
+    } else {
+        // Se não tem mês salvo, voltar sem parâmetro (vai para o mês atual)
+        window.location.href = '/dashboard/';
+    }
+}
+</script>
+
 <script>
     $(document).ready(function() {
         var table = $('#dataTable').DataTable({
@@ -193,5 +215,8 @@
             });
         });
     });
+    
+    // As funções abrirModalEditar() e salvarEdicaoTransacao() estão definidas
+    // no componente compartilhado '_macros/transacao_modal_edit.html'
 </script>
 {% endblock %}

@@ -8,7 +8,32 @@ from datetime import datetime
 
 from app.blueprints.admin import admin_bp
 from app.models import BaseMarcacao, BasePadrao, BaseParcelas, JournalEntry, GrupoConfig, EstabelecimentoLogo, get_db_session
+from app.models_ignorar import IgnorarEstabelecimento, get_ignorar_estabelecimentos
 from sqlalchemy import or_, desc
+
+
+# Ação em massa: deletar ou ajustar transações selecionadas
+@admin_bp.route('/transacoes/acao_massa', methods=['POST'])
+def transacoes_acao_massa():
+    db_session = get_db_session()
+    ids = request.form.getlist('ids[]')
+    acao = request.form.get('acao')
+    if not ids:
+        flash('Nenhuma transação selecionada.', 'warning')
+        return redirect(url_for('admin.transacoes'))
+    if acao == 'deletar':
+        deletadas = db_session.query(JournalEntry).filter(JournalEntry.id.in_(ids)).delete(synchronize_session=False)
+        db_session.commit()
+        flash(f'{deletadas} transações deletadas com sucesso.', 'success')
+    elif acao == 'ajustar':
+        # Exemplo: marcar como revisadas (pode ser customizado)
+        ajustadas = db_session.query(JournalEntry).filter(JournalEntry.id.in_(ids)).update({JournalEntry.TipoGasto: 'Ajustado'}, synchronize_session=False)
+        db_session.commit()
+        flash(f'{ajustadas} transações ajustadas.', 'info')
+    else:
+        flash('Ação inválida.', 'danger')
+    db_session.close()
+    return redirect(url_for('admin.transacoes'))
 
 
 @admin_bp.route('/marcacoes')
@@ -194,7 +219,7 @@ def parcelas():
     )
 
 
-@admin_bp.route('/transacoes')
+@admin_bp.route('/transacoes', methods=['GET'])
 def transacoes():
     """Administração de todas as transações (JournalEntry)"""
     
@@ -204,6 +229,7 @@ def transacoes():
     busca = request.args.get('busca', '')
     id_parcela_filtro = request.args.get('id_parcela', '')
     grupo_filtro = request.args.get('grupo', '')
+    origem_filtro = request.args.get('origem', '')
     
     # Query base
     query = db_session.query(JournalEntry)
@@ -216,6 +242,9 @@ def transacoes():
         
     if grupo_filtro:
         query = query.filter(JournalEntry.GRUPO == grupo_filtro)
+    
+    if origem_filtro:
+        query = query.filter(JournalEntry.origem.like(f'%{origem_filtro}%'))
     
     # Paginação
     page = int(request.args.get('page', 1))
@@ -232,18 +261,34 @@ def transacoes():
     grupos_unicos = db_session.query(JournalEntry.GRUPO).distinct().order_by(JournalEntry.GRUPO).all()
     grupos_lista = [g[0] for g in grupos_unicos if g[0]]
     
+    # Origens para filtro
+    origens_unicas = db_session.query(JournalEntry.origem).distinct().order_by(JournalEntry.origem).all()
+    origens_lista = [o[0] for o in origens_unicas if o[0]]
+    
+    # Calcular soma dos valores filtrados
+    soma_filtrada = sum(t.Valor for t in transacoes_paginadas)
+    
     db_session.close()
     
+    # Usar template compartilhado com mesmas variáveis do dashboard
     return render_template(
-        'admin_transacoes.html',
+        'transacoes.html',
         transacoes=transacoes_paginadas,
+        mes_atual='admin',  # Indica que veio do admin
+        mes_exibicao='Administração Geral',
+        total_transacoes=total,
+        soma_filtrada=soma_filtrada,
+        grupos_lista=grupos_lista,
+        filtro_estabelecimento=busca,
+        filtro_categoria=grupo_filtro,
+        filtros_tipos=[],  # Admin não usa filtro de tipo
+        filtro_dashboard='todas',  # Admin mostra todas por padrão
         page=page,
         total_pages=total_pages,
-        total=total,
-        busca=busca,
+        # Variáveis específicas do admin (extras)
         id_parcela_filtro=id_parcela_filtro,
-        grupo_filtro=grupo_filtro,
-        grupos_lista=grupos_lista
+        origem_filtro=origem_filtro,
+        origens_lista=origens_lista
     )
 
 
@@ -607,3 +652,36 @@ def logos_deletar(logo_id):
         
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# Tela de administração dos estabelecimentos a ignorar
+@admin_bp.route('/ignorar_estabelecimentos', methods=['GET'])
+def ignorar_estabelecimentos():
+    estabelecimentos = get_ignorar_estabelecimentos()
+    return render_template('admin_ignorar_estabelecimentos.html', estabelecimentos=estabelecimentos)
+
+
+# Adicionar estabelecimento a ignorar
+@admin_bp.route('/ignorar_estabelecimentos/add', methods=['POST'])
+def ignorar_estabelecimentos_add():
+    from app.models import get_db_session
+    nome = request.form.get('nome','').strip()
+    tipo = request.form.get('tipo','ambos')
+    if nome:
+        session = get_db_session()
+        if not session.query(IgnorarEstabelecimento).filter_by(nome=nome).first():
+            session.add(IgnorarEstabelecimento(nome=nome, tipo=tipo))
+            session.commit()
+        session.close()
+    return redirect(url_for('admin.ignorar_estabelecimentos'))
+
+
+# Remover estabelecimento da lista de ignorados
+@admin_bp.route('/ignorar_estabelecimentos/del/<int:id>', methods=['POST'])
+def ignorar_estabelecimentos_del(id):
+    from app.models import get_db_session
+    session = get_db_session()
+    session.query(IgnorarEstabelecimento).filter_by(id=id).delete()
+    session.commit()
+    session.close()
+    return redirect(url_for('admin.ignorar_estabelecimentos'))

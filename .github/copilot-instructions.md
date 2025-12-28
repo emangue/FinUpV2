@@ -159,7 +159,89 @@ python scripts/version_manager.py finish app/models.py "Adiciona campo Categoria
 
 ---
 
-## 🔍 Comandos Úteis para o AI
+## � Regras de Templates e Componentes Compartilhados
+
+### ⚠️ REGRA CRÍTICA: Nunca Duplicar Templates
+
+**Princípio fundamental:** Um template deve existir em **UM ÚNICO LUGAR**
+
+**Templates COMPARTILHADOS** (usados por múltiplos blueprints):
+- ✅ DEVEM ficar em `/templates/` (root)
+- ✅ Exemplos: `transacoes.html`, `base.html`, `confirmar_upload.html`
+- ✅ Qualquer blueprint pode renderizar: `render_template('transacoes.html')`
+
+**Templates ESPECÍFICOS** (usados por apenas um blueprint):
+- ✅ DEVEM ficar em `/app/blueprints/<nome>/templates/`
+- ✅ Exemplo: `dashboard.html` (só usado pelo blueprint dashboard)
+- ✅ Renderizar: `render_template('dashboard.html')`
+
+**🚫 NUNCA DUPLICAR:**
+- ❌ NUNCA ter o mesmo template em `/templates/` E em `/app/blueprints/*/templates/`
+- ❌ Flask serve `/templates/` PRIMEIRO, causando bugs silenciosos
+- ❌ Mudanças "desaparecem" porque Flask ignora a versão do blueprint
+
+**✅ ESTRUTURA CORRETA:**
+```
+templates/
+  ├── base.html                      # Layout compartilhado
+  ├── transacoes.html                # ✅ Compartilhado (usado por dashboard, admin)
+  ├── confirmar_upload.html          # ✅ Compartilhado
+  ├── _macros/                       # Componentes reutilizáveis
+  │   ├── transacao_filters.html     
+  │   ├── transacao_modal_edit.html  
+  │   └── ...
+  └── _partials/                     # Seções compartilhadas
+      └── ...
+
+app/blueprints/
+  ├── admin/templates/               
+  │   └── admin_transacoes.html      # ✅ Específico do Admin
+  ├── dashboard/templates/           
+  │   └── dashboard.html             # ✅ Específico do Dashboard
+  └── upload/templates/              
+      └── validar.html               # ✅ Específico do Upload
+```
+
+**Regra de Ouro:**
+- Se o template é usado por 2+ blueprints → `/templates/` (root)
+- Se o template é usado por 1 blueprint → `/app/blueprints/<nome>/templates/`
+- **NUNCA duplicar - apenas uma versão deve existir**
+
+### Obrigações ao Modificar Templates
+
+**SEMPRE que modificar um componente compartilhado (`_macros/` ou `_partials/`):**
+1. ✅ Verificar TODOS os blueprints que usam esse componente
+2. ✅ Testar em todos os contextos de uso
+3. ✅ Documentar mudanças no cabeçalho do componente
+4. ✅ Reiniciar servidor após mudanças
+
+**SEMPRE que criar funcionalidade repetida entre blueprints:**
+1. ✅ Avaliar se deve virar componente compartilhado
+2. ✅ Extrair para `_macros/` ou `_partials/`
+3. ✅ Documentar variáveis esperadas no cabeçalho Jinja
+4. ✅ Atualizar todos os templates que podem usar o componente
+
+**Princípio DRY (Don't Repeat Yourself):**
+- ❌ NUNCA duplicar código HTML entre templates
+- ✅ SEMPRE usar `{% include %}` para reutilização
+- ✅ SEMPRE usar `{% extends %}` para herança de layout
+- ✅ Preferir componentes compartilhados a cópias
+
+### Componentes Compartilhados Existentes
+
+1. **`_macros/transacao_filters.html`**
+   - Filtros de pesquisa (estabelecimento, categoria, tipo)
+   - Soma de valores filtrados
+   - Variáveis: `mes_atual`, `filtro_*`, `grupos_lista`, `soma_filtrada`
+
+2. **`_macros/transacao_modal_edit.html`**
+   - Modal de edição de transações
+   - JavaScript incluído (abrirModalEditar, salvarEdicaoTransacao)
+   - Variáveis: `grupos_lista`
+
+---
+
+## �🔍 Comandos Úteis para o AI
 
 ```bash
 # Ver status do versionamento
@@ -234,7 +316,51 @@ git commit --no-verify -m "msg"
 
 ---
 
-## 📚 Referências Rápidas
+## � Automação Obrigatória de Restart do Servidor
+
+### Comando Padrão de Restart
+
+**Sempre usar este comando para religar o servidor:**
+
+```bash
+/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV3/venv/bin/python run.py
+```
+
+### Quando Fazer Restart Automático
+
+**🔄 OBRIGATÓRIO: Religar servidor automaticamente após:**
+- Modificação em arquivos críticos (models.py, routes.py, processors)
+- Finalização de mudanças com `version_manager.py finish`
+- Instalação de novas dependências
+- Mudanças em configurações (config.py)
+- Atualizações no schema do banco
+
+### Procedimento de Restart
+
+1. **Parar servidor atual** (se rodando):
+   ```bash
+   pkill -f "python.*run.py"
+   ```
+
+2. **Iniciar novo servidor**:
+   ```bash
+   /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV3/venv/bin/python run.py
+   ```
+
+3. **Verificar se está funcionando**:
+   - Acessar http://localhost:5000
+   - Confirmar que não há erros no terminal
+
+### Integração com Workflow de Versionamento
+
+**No `version_manager.py finish`, sempre incluir:**
+1. Finalizar mudança e commit
+2. **RESTART AUTOMÁTICO do servidor**
+3. Validar que servidor está operacional
+
+---
+
+## �📚 Referências Rápidas
 
 - **Documentação completa:** `CONTRIBUTING.md`
 - **Template de mudanças:** `changes/TEMPLATE.md`
