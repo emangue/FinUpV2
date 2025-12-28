@@ -18,6 +18,38 @@
             </div>
         </div>
 
+        <!-- Validação de Integridade (se disponível) -->
+        {% if session.get('validacao_extrato') %}
+        <div class="alert {% if session.validacao_extrato.valido %}alert-success{% else %}alert-warning{% endif %} mb-4">
+            <h6 class="alert-heading">
+                {% if session.validacao_extrato.valido %}
+                    <i class="fas fa-check-circle"></i> Validação de Integridade
+                {% else %}
+                    <i class="fas fa-exclamation-triangle"></i> Atenção: Divergência na Validação
+                {% endif %}
+            </h6>
+            <p class="mb-2"><strong>{{ session.validacao_extrato.mensagem }}</strong></p>
+            
+            <div class="row small">
+                <div class="col-md-6">
+                    <p class="mb-1">📊 <strong>Saldo Anterior:</strong> R$ {{ "%.2f"|format(session.validacao_extrato.saldo_anterior) }}</p>
+                    <p class="mb-1">💰 <strong>Soma das Transações:</strong> R$ {{ "%.2f"|format(session.validacao_extrato.soma_transacoes) }}</p>
+                </div>
+                <div class="col-md-6">
+                    <p class="mb-1">🎯 <strong>Saldo Final:</strong> R$ {{ "%.2f"|format(session.validacao_extrato.saldo_final) }}</p>
+                    <p class="mb-1">📉 <strong>Diferença:</strong> R$ {{ "%.4f"|format(session.validacao_extrato.diferenca) }}</p>
+                </div>
+            </div>
+            
+            {% if session.validacao_extrato.periodo %}
+            <hr class="my-2">
+            <p class="mb-0 small">
+                <i class="fas fa-calendar"></i> Período: {{ session.validacao_extrato.periodo.data_inicial }} até {{ session.validacao_extrato.periodo.data_final }}
+            </p>
+            {% endif %}
+        </div>
+        {% endif %}
+
         <!-- Resumo por Origem -->
         {% for origem in origens %}
         <div class="card mb-4 shadow-sm">
