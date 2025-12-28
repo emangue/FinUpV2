@@ -8,6 +8,11 @@ def deduplicate_transactions(transactions):
     """
     Deduplica transações comparando com journal_entries e base_parcelas
     
+    Estratégias de deduplicação:
+    1. IdTransacao exato (hash completo)
+    2. Base de Parcelas (para transações parceladas)
+    3. Data + Valor (para extratos com variação de nome)
+    
     Args:
         transactions (list): Lista de dicionários de transações
         
@@ -42,6 +47,16 @@ def deduplicate_transactions(transactions):
             ).all()
             parcelas_pagas = {row[0]: row[1] for row in rows}
         
+        # Busca transações existentes por Data + Valor (para deduplicação fuzzy de extratos)
+        # Cria mapa: (data, valor) -> [estabelecimentos existentes]
+        existing_data_valor = {}
+        rows = session.query(JournalEntry.Data, JournalEntry.Valor, JournalEntry.Estabelecimento).all()
+        for data, valor, estabelecimento in rows:
+            key = (data, float(valor))
+            if key not in existing_data_valor:
+                existing_data_valor[key] = []
+            existing_data_valor[key].append(estabelecimento.upper() if estabelecimento else '')
+        
         transacoes_unicas = []
         duplicados = []
         
@@ -49,6 +64,10 @@ def deduplicate_transactions(transactions):
             id_transacao = trans.get('IdTransacao')
             id_parcela = trans.get('IdParcela')
             parcela_atual = trans.get('parcela_atual')
+            data = trans.get('Data')
+            valor = trans.get('Valor')
+            estabelecimento = trans.get('Estabelecimento', '')
+            tipodocumento = trans.get('tipodocumento', '')
             
             is_duplicate = False
             reason = ""
@@ -65,6 +84,29 @@ def deduplicate_transactions(transactions):
                 if parcela_atual <= qtd_pagas:
                     is_duplicate = True
                     reason = f'Parcela {parcela_atual} já processada (Base de Parcelas indica {qtd_pagas} pagas)'
+            
+            # 3. Checa Data + Valor (para extratos com variação de nome)
+            # Aplica apenas para EXTRATOS (não para faturas)
+            elif 'Extrato' in tipodocumento and data and valor:
+                key = (data, float(valor))
+                if key in existing_data_valor:
+                    # Verifica se há estabelecimento similar
+                    estab_upper = estabelecimento.upper()
+                    # Remove números e caracteres especiais para comparação
+                    estab_clean = ''.join(c for c in estab_upper if c.isalpha() or c.isspace()).strip()
+                    
+                    for estab_existente in existing_data_valor[key]:
+                        estab_exist_clean = ''.join(c for c in estab_existente if c.isalpha() or c.isspace()).strip()
+                        
+                        # Considera duplicado se:
+                        # - Estabelecimentos são idênticos após limpeza, OU
+                        # - Um contém o outro (para variações como "Emanuel Leandro" vs "EMANUEL GUERRA LEANDRO")
+                        if estab_clean == estab_exist_clean or \
+                           (estab_clean and estab_exist_clean and 
+                            (estab_clean in estab_exist_clean or estab_exist_clean in estab_clean)):
+                            is_duplicate = True
+                            reason = f'Data + Valor duplicados com estabelecimento similar ({estab_existente[:30]}...)'
+                            break
             
             if is_duplicate:
                 # É duplicado
