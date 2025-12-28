@@ -217,12 +217,36 @@
 
 <!-- Gráficos e Análises -->
 <div class="row mb-4">
-    <!-- Distribuição por Grupo (REDUZIDO PARA ALINHAR COM TABELA) -->
+    <!-- Informações YTD (REDUZIDO PARA ALINHAR COM TABELA) -->
     <div class="col-lg-3 mb-4">
         <div class="chart-card">
-            <h5 class="chart-title">Despesas por Categoria</h5>
-            <div style="height: 200px; display: flex; align-items: center; justify-content: center; color: #6c757d;">
-                <i class="fas fa-chart-pie fa-3x opacity-25"></i>
+            <h6 class="chart-title mb-3" style="font-size: 0.9rem;">Informações YTD</h6>
+            
+            <!-- Receitas YTD -->
+            <div class="mb-2 p-2 bg-light rounded">
+                <div style="font-size: 0.7rem; color: #6c757d; font-weight: 600;">RECEITAS</div>
+                <div style="font-size: 1rem; color: #28a745; font-weight: bold;">R$ {{ ytd_valores[0]|format_currency }}</div>
+            </div>
+            
+            <!-- Cartão YTD -->
+            <div class="mb-2 p-2 bg-light rounded">
+                <div style="font-size: 0.7rem; color: #6c757d; font-weight: 600;">CARTÃO</div>
+                <div style="font-size: 1rem; color: #dc3545; font-weight: bold;">R$ {{ ytd_valores[1]|format_currency }}</div>
+            </div>
+            
+            <!-- Despesas YTD -->
+            <div class="mb-2 p-2 bg-light rounded">
+                <div style="font-size: 0.7rem; color: #6c757d; font-weight: 600;">DESPESAS</div>
+                <div style="font-size: 1rem; color: #ffc107; font-weight: bold;">R$ {{ ytd_valores[2]|format_currency }}</div>
+            </div>
+            
+            <!-- Investimento YTD -->
+            <div class="p-2 bg-light rounded">
+                <div style="font-size: 0.7rem; color: #6c757d; font-weight: 600;">INVESTIMENTO</div>
+                <div style="font-size: 1rem; color: #17a2b8; font-weight: bold;">
+                    R$ {{ ytd_valores[3]|format_currency }}
+                    <span style="font-size: 0.75rem; color: #6c757d;">({{ "%.1f"|format((ytd_valores[3] / ytd_valores[0] * 100) if ytd_valores[0] > 0 else 0) }}%)</span>
+                </div>
             </div>
         </div>
     </div>

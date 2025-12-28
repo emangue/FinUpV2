@@ -140,7 +140,60 @@ def index():
             JournalEntry.IgnorarDashboard.isnot(True)
         ).scalar() or 0
         
-        # === DISTRIBUIÇÃO POR GRUPO ===
+        # === INFORMAÇÕES YTD (Year-to-Date até o mês selecionado) ===
+        # Determinar ano do mês selecionado
+        ano_atual = mes_atual_db[:4]  # '2025' de '202512'
+        mes_numero = int(mes_atual_db[4:6])  # 12 de '202512'
+        
+        # YTD: Janeiro até mês selecionado
+        ytd_inicio = f"{ano_atual}01"
+        ytd_fim = mes_atual_db
+        
+        # 1. Receitas YTD (excluindo investimentos e cartão)
+        receitas_ytd = db.query(func.sum(JournalEntry.Valor)).filter(
+            JournalEntry.DT_Fatura >= ytd_inicio,
+            JournalEntry.DT_Fatura <= ytd_fim,
+            JournalEntry.Valor > 0,
+            ~JournalEntry.GRUPPO.ilike('%Investimento%'),
+            JournalEntry.IgnorarDashboard.isnot(True)
+        ).scalar() or 0
+        
+        # 2. Cartão de Crédito YTD
+        cartao_ytd = abs(db.query(func.sum(JournalEntry.Valor)).filter(
+            JournalEntry.DT_Fatura >= ytd_inicio,
+            JournalEntry.DT_Fatura <= ytd_fim,
+            JournalEntry.TipoTransacao == 'Cartão de Crédito',
+            JournalEntry.IgnorarDashboard.isnot(True)
+        ).scalar() or 0)
+        
+        # 3. Despesas gerais YTD (sem cartão, sem investimentos)
+        despesas_ytd = abs(db.query(func.sum(JournalEntry.Valor)).filter(
+            JournalEntry.DT_Fatura >= ytd_inicio,
+            JournalEntry.DT_Fatura <= ytd_fim,
+            JournalEntry.Valor < 0,
+            JournalEntry.TipoTransacao != 'Cartão de Crédito',
+            ~JournalEntry.GRUPPO.ilike('%Investimento%'),
+            JournalEntry.IgnorarDashboard.isnot(True)
+        ).scalar() or 0)
+        
+        # 4. Investimento líquido YTD (valores negativos = investimentos)
+        investimento_ytd_raw = db.query(func.sum(JournalEntry.Valor)).filter(
+            JournalEntry.DT_Fatura >= ytd_inicio,
+            JournalEntry.DT_Fatura <= ytd_fim,
+            JournalEntry.GRUPPO.ilike('%Investimento%'),
+            JournalEntry.IgnorarDashboard.isnot(True)
+        ).scalar() or 0
+        investimento_ytd = abs(investimento_ytd_raw)
+        
+        # Percentual de investimento em relação às receitas
+        perc_investimento = (investimento_ytd / receitas_ytd * 100) if receitas_ytd > 0 else 0
+        
+        # Dados para o gráfico de "Informações YTD"
+        ytd_labels = ['Receitas', 'Cartão de Crédito', 'Despesas Gerais', f'Investimento ({perc_investimento:.1f}%)']
+        ytd_valores = [receitas_ytd, cartao_ytd, despesas_ytd, investimento_ytd]
+        ytd_cores = ['#28a745', '#dc3545', '#ffc107', '#17a2b8']  # verde, vermelho, amarelo, azul
+        
+        # === DISTRIBUIÇÃO POR GRUPO (mantido para outras partes do dashboard) ===
         grupos_query = db.query(
             JournalEntry.GRUPO,
             func.sum(JournalEntry.Valor).label('total')
@@ -329,6 +382,9 @@ def index():
         return render_template('dashboard.html',
                              stats=stats,
                              breakdown_6_meses=breakdown_6_meses,
+                             ytd_labels=ytd_labels,
+                             ytd_valores=ytd_valores,
+                             ytd_cores=ytd_cores,
                              grupos_labels=grupos_labels,
                              grupos_valores=grupos_valores,
                              grupos_cores=grupos_cores,

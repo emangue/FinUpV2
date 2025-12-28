@@ -1,14 +1,13 @@
-# � Melhorias e Correções - Projeto Finanças V3
+# 🐛 Melhorias e Correções - Projeto Finanças V3
 
 ---
-## 🐛 Bugs Ativos (27/12/2025)
+## ✅ Bugs Corrigidos (27/12/2025)
 
-### 1. Botão "Voltar ao Dashboard" não funciona
-**Status:** 🔴 Ativo  
-**Descrição:** O botão "Voltar ao Dashboard" na tela de transações não executa a navegação. A função `voltarDashboard(event)` está definida mas não é acionada corretamente.  
-**Impacto:** Usuário precisa usar navegação manual do browser para voltar ao dashboard.  
-**Template afetado:** `/templates/transacoes.html` (linha 34)  
-**Próximos passos:** Debugar JavaScript, verificar event.preventDefault() e sessionStorage.  
+### 1. Botão "Voltar ao Dashboard" não funcionava
+**Status:** ✅ Resolvido  
+**Causa raiz:** Template usava `{% block scripts %}` mas `base.html` define `{% block extra_js %}`  
+**Solução:** Alterado para `{% block extra_js %}` em `/templates/transacoes.html`  
+**Impacto:** Navegação entre dashboard e transações agora funciona preservando contexto do mês  
 
 ---
 ## 🚀 Melhorias de Robustez e Proteção (27/12/2025)
