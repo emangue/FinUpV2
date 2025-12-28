@@ -154,7 +154,7 @@ def index():
             JournalEntry.DT_Fatura >= ytd_inicio,
             JournalEntry.DT_Fatura <= ytd_fim,
             JournalEntry.Valor > 0,
-            ~JournalEntry.GRUPPO.ilike('%Investimento%'),
+            ~JournalEntry.GRUPO.ilike('%Investimento%'),
             JournalEntry.IgnorarDashboard.isnot(True)
         ).scalar() or 0
         
@@ -172,7 +172,7 @@ def index():
             JournalEntry.DT_Fatura <= ytd_fim,
             JournalEntry.Valor < 0,
             JournalEntry.TipoTransacao != 'Cartão de Crédito',
-            ~JournalEntry.GRUPPO.ilike('%Investimento%'),
+            ~JournalEntry.GRUPO.ilike('%Investimento%'),
             JournalEntry.IgnorarDashboard.isnot(True)
         ).scalar() or 0)
         
@@ -180,7 +180,7 @@ def index():
         investimento_ytd_raw = db.query(func.sum(JournalEntry.Valor)).filter(
             JournalEntry.DT_Fatura >= ytd_inicio,
             JournalEntry.DT_Fatura <= ytd_fim,
-            JournalEntry.GRUPPO.ilike('%Investimento%'),
+            JournalEntry.GRUPO.ilike('%Investimento%'),
             JournalEntry.IgnorarDashboard.isnot(True)
         ).scalar() or 0
         investimento_ytd = abs(investimento_ytd_raw)
