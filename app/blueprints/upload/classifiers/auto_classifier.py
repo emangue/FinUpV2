@@ -400,7 +400,8 @@ def classificar_transacoes(transacoes):
                         'SUBGRUPO': parcela_existente.SUBGRUPO,
                         'TipoGasto': parcela_existente.TipoGasto,
                         'MarcacaoIA': 'IdParcela',
-                        'ValidarIA': ''
+                        'ValidarIA': '',
+                        'forma_classificacao': 'Automática-IdParcela'
                     })
                     por_tipo['IdParcela'] += 1
                     classificadas += 1
@@ -409,6 +410,7 @@ def classificar_transacoes(transacoes):
             # 1. Fatura de cartão (prioridade máxima)
             fatura = detectar_fatura_cartao(estabelecimento)
             if fatura:
+                fatura['forma_classificacao'] = 'Automática-FaturaCartão'
                 trans.update(fatura)
                 por_tipo['Fatura Cartão'] += 1
                 classificadas += 1
@@ -422,6 +424,7 @@ def classificar_transacoes(transacoes):
                     'TipoGasto': '',
                     'MarcacaoIA': 'Ignorar - Nome do Titular',
                     'ValidarIA': '',
+                    'forma_classificacao': 'Automática-IgnorarTitular',
                     'Ignorar': 'SIM'
                 })
                 por_tipo['Ignorar - Nome do Titular'] += 1
@@ -448,6 +451,7 @@ def classificar_transacoes(transacoes):
                     'TipoGasto': '',
                     'MarcacaoIA': 'Ignorar - Lista Admin',
                     'ValidarIA': '',
+                    'forma_classificacao': 'Automática-IgnorarLista',
                     'Ignorar': 'SIM'
                 })
                 por_tipo['Ignorar - Nome do Titular'] += 1
@@ -457,6 +461,7 @@ def classificar_transacoes(transacoes):
             # 3. Base_Padroes (confiança='alta')
             padrao = encontrar_por_padroes(estabelecimento, valor, padroes)
             if padrao:
+                padrao['forma_classificacao'] = 'Automática-BasePadrão'
                 trans.update(padrao)
                 por_tipo['Base_Padroes'] += 1
                 classificadas += 1
@@ -465,6 +470,7 @@ def classificar_transacoes(transacoes):
             # 4. Journal Entries (histórico)
             historico_match = encontrar_por_historico(estabelecimento, valor, historico)
             if historico_match:
+                historico_match['forma_classificacao'] = 'Automática-Histórico'
                 trans.update(historico_match)
                 por_tipo['Journal Entries'] += 1
                 classificadas += 1
@@ -473,6 +479,7 @@ def classificar_transacoes(transacoes):
             # 5. Palavras-chave (repescagem)
             regra = encontrar_por_regras(estabelecimento, marcacoes_validas)
             if regra:
+                regra['forma_classificacao'] = 'Automática-PalavrasChave'
                 trans.update(regra)
                 por_tipo['Palavras-chave'] += 1
                 classificadas += 1
@@ -483,6 +490,7 @@ def classificar_transacoes(transacoes):
                 'GRUPO': '',
                 'SUBGRUPO': '',
                 'TipoGasto': '',
+                'forma_classificacao': 'Não Classificada',
                 'MarcacaoIA': 'Não Encontrado',
                 'ValidarIA': 'VALIDAR',
                 'Ignorar': 'NÃO'

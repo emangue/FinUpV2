@@ -23,6 +23,20 @@
                 <form id="formEditarTransacao">
                     <input type="hidden" id="edit_id" name="id">
                     
+                    <!-- IDs de Controle (visíveis para debug) -->
+                    <div class="alert alert-info mb-3">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <small class="text-muted"><i class="fas fa-hashtag me-1"></i>ID Transação:</small>
+                                <strong id="display_id_transacao" class="ms-2">-</strong>
+                            </div>
+                            <div class="col-md-6">
+                                <small class="text-muted"><i class="fas fa-credit-card me-1"></i>ID Parcela:</small>
+                                <strong id="display_id_parcela" class="ms-2">-</strong>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label for="edit_data" class="form-label">
@@ -118,6 +132,10 @@ function abrirModalEditar(id) {
             document.getElementById('edit_tipo').value = data.TipoTransacao || '';
             document.getElementById('edit_ignorar').checked = data.IgnorarDashboard || false;
             
+            // Exibir IDs de controle
+            document.getElementById('display_id_transacao').textContent = data.IdTransacao || data.id || '-';
+            document.getElementById('display_id_parcela').textContent = data.IdParcela || 'Não parcelado';
+            
             // Abre o modal
             const modal = new bootstrap.Modal(document.getElementById('modalEditarTransacao'));
             modal.show();
@@ -151,16 +169,16 @@ function salvarEdicaoTransacao() {
     })
     .then(response => response.json())
     .then(result => {
-        if (result.sucesso) {
+        if (result.success) {
             alert('Transação atualizada com sucesso!');
             location.reload(); // Recarrega a página para mostrar as mudanças
         } else {
-            alert('Erro ao salvar: ' + result.erro);
+            alert('Erro ao salvar: ' + (result.error || 'Erro desconhecido'));
         }
     })
     .catch(error => {
         console.error('Erro:', error);
-        alert('Erro ao salvar alterações');
+        alert('Erro ao salvar alterações: ' + error.message);
     });
 }
 </script>

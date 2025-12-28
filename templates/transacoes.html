@@ -53,7 +53,8 @@
                             <th>Subgrupo</th>
                             <th>Valor</th>
                             <th>Tipo</th>
-                            <th>Status Dashboard</th>
+                            <th>Parcelado</th>
+                            <th>Dashboard</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -86,19 +87,20 @@
                                     {{ trans.TipoTransacao }}
                                 {% endif %}
                             </td>
-                            <td onclick="event.stopPropagation();">
-                                <div class="form-check form-switch">
+                            <td class="text-center">
+                                {% if trans.IdParcela %}
+                                    <span class="badge bg-warning text-dark">
+                                        <i class="fas fa-credit-card me-1"></i>Parcelado
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td onclick="event.stopPropagation();" class="text-center">
+                                <div class="form-check form-switch d-inline-block">
                                     <input class="form-check-input toggle-dashboard" type="checkbox" 
                                            id="switch_{{ trans.IdTransacao }}" 
                                            data-id="{{ trans.IdTransacao }}"
-                                           {% if not trans.IgnorarDashboard %}checked{% endif %}>
-                                    <label class="form-check-label" for="switch_{{ trans.IdTransacao }}">
-                                        {% if trans.IgnorarDashboard %}
-                                            <span class="badge bg-secondary"><i class="fas fa-eye-slash"></i> Ignorado</span>
-                                        {% else %}
-                                            <span class="badge bg-success"><i class="fas fa-check"></i> Considerado</span>
-                                        {% endif %}
-                                    </label>
+                                           {% if not trans.IgnorarDashboard %}checked{% endif %}
+                                           title="{% if trans.IgnorarDashboard %}Ignorado no dashboard{% else %}Considerado no dashboard{% endif %}">
                                 </div>
                             </td>
                         </tr>
@@ -170,7 +172,7 @@ function voltarDashboard(event) {
             checkbox.prop('disabled', true);
 
             $.ajax({
-                url: '/api/transacoes/toggle_dashboard/' + idTransacao,
+                url: '/dashboard/toggle_dashboard/' + idTransacao,
                 method: 'POST',
                 contentType: 'application/json',
                 data: JSON.stringify({ ignorar: ignorar }),

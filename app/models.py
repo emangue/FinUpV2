@@ -57,6 +57,7 @@ class JournalEntry(Base):
     origem = Column(String(50), nullable=False, index=True)
     banco = Column(String(50), nullable=True, index=True)  # Itaú, BTG, Mercado Pago, Genérico
     tipodocumento = Column(String(50), nullable=True)  # Extrato, Fatura Cartão de Crédito
+    forma_classificacao = Column(String(50), nullable=True, index=True)  # Automática-BasePadrao, Automática-MarcacaoIA, Semi-Automática, Manual
     MarcacaoIA = Column(String(100))
     ValidarIA = Column(String(10))
     CartaoCodigo8 = Column(String(20))
@@ -88,6 +89,7 @@ class JournalEntry(Base):
             'origem': self.origem,
             'banco': self.banco,
             'tipodocumento': self.tipodocumento,
+            'forma_classificacao': self.forma_classificacao,
             'MarcacaoIA': self.MarcacaoIA,
             'ValidarIA': self.ValidarIA,
             'CartaoCodigo8': self.CartaoCodigo8,

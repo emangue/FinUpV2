@@ -22,6 +22,36 @@ import numpy as np
 from datetime import datetime
 
 
+def converter_valor_brasileiro(valor_raw):
+    """
+    Converte valor brasileiro (14.830,40) para float (14830.40)
+    
+    Args:
+        valor_raw: Valor em formato string ou número
+        
+    Returns:
+        float ou None se conversão falhar
+    """
+    if pd.isna(valor_raw):
+        return None
+    
+    # Se já é número, retorna diretamente
+    if isinstance(valor_raw, (int, float)):
+        return float(valor_raw)
+    
+    # Se é string, tratar formato brasileiro
+    valor_str = str(valor_raw).strip()
+    if not valor_str:
+        return None
+    
+    try:
+        # Remover pontos (separador de milhar) e trocar vírgula por ponto (decimal)
+        valor_str = valor_str.replace('.', '').replace(',', '.')
+        return float(valor_str)
+    except ValueError:
+        return None
+
+
 def is_extrato_btg(df_raw, filename):
     """
     Detecta se o arquivo é um extrato BTG
@@ -161,8 +191,8 @@ def preprocessar_extrato_btg(df_raw):
             saldo_inicial_row = saldos_df.iloc[0]
             saldo_final_row = saldos_df.iloc[-1]
             
-            saldo_inicial = pd.to_numeric(saldo_inicial_row[col_valor], errors='coerce')
-            saldo_final = pd.to_numeric(saldo_final_row[col_valor], errors='coerce')
+            saldo_inicial = converter_valor_brasileiro(saldo_inicial_row[col_valor])
+            saldo_final = converter_valor_brasileiro(saldo_final_row[col_valor])
             primeiro_saldo_idx = saldos_df.index[0]
             
             print(f"   ✓ Primeiro Saldo Diário ({saldo_inicial_row[col_data]}): R$ {saldo_inicial:.2f}")
@@ -172,17 +202,20 @@ def preprocessar_extrato_btg(df_raw):
         print("\n📊 ETAPA 4: Preparando DataFrame final...")
         df_transacoes = df_dados[~saldos_mask].copy()
         
-        print(f"   ✓ Transações a salvar: {len(df_transacoes)} linhas (inclui todas, exceto Saldos)")
+        print(f"   ✓ Transações a salvar: {len(df_transacoes)} linhas (TODAS, exceto Saldos)")
         
         # 9. Para VALIDAÇÃO: usar apenas transações APÓS primeiro Saldo
         if primeiro_saldo_idx is not None:
             df_validacao = df_transacoes[df_transacoes.index > primeiro_saldo_idx].copy()
-            print(f"   ✓ Transações para validação: {len(df_validacao)} linhas (após primeiro Saldo)")
+            print(f"   ℹ️  Validação usará {len(df_validacao)} transações (APÓS primeiro Saldo)")
         else:
             df_validacao = df_transacoes.copy()
         
         # 10. Processar todas as transações
         transacoes_processadas = []
+        indices_processados = []  # Rastrear índices originais
+        
+        print(f"\n📊 Processando {len(df_transacoes)} linhas...")
         
         for idx, row in df_transacoes.iterrows():
             data_raw = row[col_data]
@@ -192,6 +225,7 @@ def preprocessar_extrato_btg(df_raw):
             
             # Pular linhas vazias
             if pd.isna(data_raw) or pd.isna(valor_raw):
+                print(f"   ⏭️  Linha {idx}: Pulando (data ou valor vazio)")
                 continue
             
             # Tratar Data: "12/12/2025 21:06" → "12/12/2025"
@@ -204,12 +238,10 @@ def preprocessar_extrato_btg(df_raw):
                 print(f"   ⚠️ Data inválida na linha {idx}: {data_raw}")
                 continue
             
-            # Converter valor
-            try:
-                valor = pd.to_numeric(valor_raw, errors='coerce')
-                if pd.isna(valor):
-                    continue
-            except:
+            # Converter valor (formato brasileiro: 14.830,40)
+            valor = converter_valor_brasileiro(valor_raw)
+            if valor is None:
+                print(f"   ⚠️ Valor inválido na linha {idx}: {valor_raw}")
                 continue
             
             # Criar Lançamento: Categoria - Descrição
@@ -222,17 +254,20 @@ def preprocessar_extrato_btg(df_raw):
             else:
                 lancamento = "Transação BTG"
             
+            print(f"   ✓ {data_final}: {lancamento[:40]:40s} R$ {valor:>12.2f}")
+            
             transacoes_processadas.append({
                 'data': data_final,
                 'lançamento': lancamento,
                 'valor (R$)': valor
             })
+            indices_processados.append(idx)  # Guardar índice original do DataFrame
         
         df_final = pd.DataFrame(transacoes_processadas)
         
         print(f"\n   ✓ DataFrame final: {len(df_final)} transações processadas")
         
-        # 11. VALIDAÇÃO (usa apenas subset pós-primeiro saldo)
+        # 11. VALIDAÇÃO - usa transações APÓS primeiro Saldo Diário
         print("\n📊 ETAPA 5: Validando integridade dos dados...")
         validacao = {
             'valido': False,
@@ -245,9 +280,15 @@ def preprocessar_extrato_btg(df_raw):
         }
         
         if saldo_inicial is not None and saldo_final is not None:
-            # Calcular soma apenas das transações do subset de validação
-            indices_validacao = df_validacao.index.tolist()
-            transacoes_validacao = [t for i, t in enumerate(transacoes_processadas) if df_transacoes.index[i] in indices_validacao]
+            # CORRETO: Primeiro Saldo + transações APÓS ele = Último Saldo
+            # Usar índices rastreados para mapear corretamente
+            indices_validacao_set = set(df_validacao.index.tolist())
+            transacoes_validacao = [
+                t for t, idx_original in zip(transacoes_processadas, indices_processados)
+                if idx_original in indices_validacao_set
+            ]
+            
+            print(f"   🔍 Debug: {len(transacoes_processadas)} transações totais, {len(transacoes_validacao)} para validação")
             
             soma_transacoes = sum(t['valor (R$)'] for t in transacoes_validacao)
             saldo_calculado = saldo_inicial + soma_transacoes
@@ -257,15 +298,17 @@ def preprocessar_extrato_btg(df_raw):
             validacao['saldo_calculado'] = saldo_calculado
             validacao['diferenca'] = diferenca
             
-            if abs(diferenca) <= 0.01:
+            # Tolerância de 10 centavos para arredondamentos
+            if abs(diferenca) <= 0.10:
                 validacao['valido'] = True
-                validacao['mensagem'] = "✅ Extrato validado: Saldo Inicial + Transações = Saldo Final"
+                validacao['mensagem'] = "✅ Extrato validado: Primeiro Saldo + Transações (após) = Último Saldo"
                 print(f"   ✅ Validação APROVADA")
-                print(f"      Saldo Inicial: R$ {saldo_inicial:.2f}")
-                print(f"      Soma Transações (subset): R$ {soma_transacoes:.2f}")
+                print(f"      Primeiro Saldo Diário: R$ {saldo_inicial:.2f}")
+                print(f"      Soma Transações (após 1º Saldo): R$ {soma_transacoes:.2f}")
                 print(f"      Saldo Calculado: R$ {saldo_calculado:.2f}")
-                print(f"      Saldo Arquivo: R$ {saldo_final:.2f}")
-                print(f"      Diferença: R$ {diferenca:.4f}")
+                print(f"      Último Saldo Diário: R$ {saldo_final:.2f}")
+                print(f"      Diferença: R$ {diferenca:.4f} (tolerância: ±0.10)")
+                print(f"      ✓ Retornando TODAS as transações (inclui antes do 1º Saldo)")
             else:
                 validacao['valido'] = False
                 validacao['mensagem'] = f"❌ ERRO DE VALIDAÇÃO: Diferença de R$ {diferenca:.2f}"

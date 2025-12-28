@@ -177,11 +177,11 @@ def index():
         ).scalar() or 0)
         
         # 4. Investimento líquido YTD (valores negativos = investimentos)
+        # IMPORTANTE: Não filtra IgnorarDashboard para mostrar TODOS os investimentos
         investimento_ytd_raw = db.query(func.sum(JournalEntry.Valor)).filter(
             JournalEntry.DT_Fatura >= ytd_inicio,
             JournalEntry.DT_Fatura <= ytd_fim,
-            JournalEntry.GRUPO.ilike('%Investimento%'),
-            JournalEntry.IgnorarDashboard.isnot(True)
+            JournalEntry.GRUPO.ilike('%Investimento%')
         ).scalar() or 0
         investimento_ytd = abs(investimento_ytd_raw)
         
@@ -546,6 +546,7 @@ def api_transacao_completa(transacao_id):
         dados = {
             'id': transacao.id,
             'IdTransacao': transacao.IdTransacao,
+            'IdParcela': transacao.IdParcela,
             'Data': transacao.Data,
             'Estabelecimento': transacao.Estabelecimento,
             'Valor': float(transacao.Valor),
@@ -596,6 +597,13 @@ def api_atualizar_transacao():
         
         if 'ignorar_dashboard' in dados:
             transacao.IgnorarDashboard = dados['ignorar_dashboard']
+        
+        # Atualiza forma_classificacao se GRUPO ou SUBGRUPO foram alterados
+        if 'grupo' in dados or 'subgrupo' in dados:
+            if transacao.forma_classificacao and transacao.forma_classificacao.startswith('Automática-'):
+                transacao.forma_classificacao = 'Semi-Automática'
+            elif not transacao.forma_classificacao or transacao.forma_classificacao == 'Não Classificada':
+                transacao.forma_classificacao = 'Manual'
         
         db.commit()
         db.close()
@@ -676,6 +684,15 @@ def editar_transacao():
         transacao.GRUPO = grupo
         transacao.SUBGRUPO = subgrupo
         transacao.TipoGasto = marcacao.TipoGasto  # Preenche automaticamente
+        
+        # Atualiza forma_classificacao baseado no estado anterior
+        if transacao.forma_classificacao and transacao.forma_classificacao.startswith('Automática-'):
+            # Foi classificada automaticamente, agora é semi-automática
+            transacao.forma_classificacao = 'Semi-Automática'
+        elif not transacao.forma_classificacao or transacao.forma_classificacao == 'Não Classificada':
+            # Não tinha classificação, agora é manual
+            transacao.forma_classificacao = 'Manual'
+        # Se já era Manual ou Semi-Automática, mantém
         
         # Registrar em AuditLog
         audit = AuditLog(

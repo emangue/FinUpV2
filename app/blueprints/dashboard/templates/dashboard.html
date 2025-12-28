@@ -949,6 +949,9 @@ function irParaTransacoes(mesLabel, tipo) {
     } else if (tipo === 'investimento') {
         // Filtrar por categoria "Investimento"
         url += '&categoria=Investimentos';
+        // IMPORTANTE: Automaticamente mostrar TODAS as transações (incluindo ignoradas)
+        // quando clicar em investimento, pois muitos investimentos têm IgnorarDashboard=True
+        url += '&dashboard_toggle=1&dashboard=todas';
     }
     // Para 'todas' não adiciona filtro de tipo
     

@@ -597,12 +597,22 @@ def validar_lote():
         for idx in indices:
             idx = int(idx)
             if 0 <= idx < len(transacoes):
+                # Determina forma de classificação
+                forma_atual = transacoes[idx].get('forma_classificacao', 'Não Classificada')
+                if forma_atual.startswith('Automática-'):
+                    # Foi automática, agora é semi-automática
+                    nova_forma = 'Semi-Automática'
+                else:
+                    # Não tinha classificação, agora é manual
+                    nova_forma = 'Manual'
+                
                 transacoes[idx]['GRUPO'] = grupo
                 transacoes[idx]['SUBGRUPO'] = subgrupo
                 transacoes[idx]['TipoGasto'] = tipo_gasto
                 transacoes[idx]['Ignorar'] = ignorar
                 transacoes[idx]['MarcacaoIA'] = 'Manual (Lote)'
                 transacoes[idx]['ValidarIA'] = ''
+                transacoes[idx]['forma_classificacao'] = nova_forma
                 count += 1
         
         session['upload.transacoes'] = transacoes
@@ -710,6 +720,9 @@ def salvar():
                 IdOperacao=trans.get('IdOperacao'),
                 IdParcela=trans.get('IdParcela'),  # [CRÍTICO] Salva IdParcela na transação
                 IgnorarDashboard=ignorar,
+                banco=trans.get('banco'),
+                tipodocumento=trans.get('tipodocumento'),
+                forma_classificacao=trans.get('forma_classificacao', 'Não Classificada'),
                 created_at=datetime.utcnow()
             )
             db_session.add(entry)

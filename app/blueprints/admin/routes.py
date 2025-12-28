@@ -225,34 +225,59 @@ def transacoes():
     
     db_session = get_db_session()
     
-    # Filtros
-    busca = request.args.get('busca', '')
+    # FILTROS UNIFICADOS (compatível com template compartilhado)
+    filtro_estabelecimento = request.args.get('estabelecimento', '')
+    filtro_categoria = request.args.get('categoria', '')
+    filtro_dashboard = request.args.get('dashboard', 'todas')
+    
+    # Filtros de tipo (checkboxes múltiplos)
+    filtros_tipos = request.args.getlist('tipo')  # ['despesa', 'cartao', 'receita']
+    
+    # Filtros específicos do admin (mantidos por compatibilidade)
     id_parcela_filtro = request.args.get('id_parcela', '')
-    grupo_filtro = request.args.get('grupo', '')
     origem_filtro = request.args.get('origem', '')
     
     # Query base
     query = db_session.query(JournalEntry)
     
-    if busca:
-        query = query.filter(JournalEntry.Estabelecimento.like(f'%{busca}%'))
+    # Aplicar filtro de estabelecimento
+    if filtro_estabelecimento:
+        query = query.filter(JournalEntry.Estabelecimento.ilike(f'%{filtro_estabelecimento}%'))
     
-    if id_parcela_filtro:
-        query = query.filter(JournalEntry.IdParcela.like(f'%{id_parcela_filtro}%'))
+    # Aplicar filtro de categoria/grupo
+    if filtro_categoria:
+        query = query.filter(JournalEntry.GRUPO == filtro_categoria)
+    
+    # Aplicar filtro de tipo de transação
+    if filtros_tipos:
+        tipo_conditions = []
+        if 'despesa' in filtros_tipos:
+            tipo_conditions.append(JournalEntry.TipoTransacao == 'Conta Corrente')
+        if 'cartao' in filtros_tipos:
+            tipo_conditions.append(JournalEntry.TipoTransacao == 'Cartão de Crédito')
+        if 'receita' in filtros_tipos:
+            tipo_conditions.append(JournalEntry.Valor > 0)  # Receitas são valores positivos
         
-    if grupo_filtro:
-        query = query.filter(JournalEntry.GRUPO == grupo_filtro)
+        if tipo_conditions:
+            from sqlalchemy import or_
+            query = query.filter(or_(*tipo_conditions))
+    
+    # Aplicar filtro de dashboard (consideradas vs todas)
+    if filtro_dashboard == 'consideradas':
+        query = query.filter(JournalEntry.IgnorarDashboard.isnot(True))
+    
+    # Filtros específicos do admin
+    if id_parcela_filtro:
+        query = query.filter(JournalEntry.IdParcela.ilike(f'%{id_parcela_filtro}%'))
     
     if origem_filtro:
-        query = query.filter(JournalEntry.origem.like(f'%{origem_filtro}%'))
+        query = query.filter(JournalEntry.origem.ilike(f'%{origem_filtro}%'))
     
     # Paginação
     page = int(request.args.get('page', 1))
     per_page = 50
     
-    # Ordenação padrão: Data desc, ID desc
-    # Como Data é string DD/MM/AAAA, a ordenação direta não funciona bem cronologicamente
-    # Idealmente converteríamos, mas para admin simples vamos ordenar por ID desc (mais recentes inseridos)
+    # Ordenação: ID desc (mais recentes primeiro)
     transacoes_paginadas = query.order_by(desc(JournalEntry.id)).limit(per_page).offset((page-1)*per_page).all()
     total = query.count()
     total_pages = (total + per_page - 1) // per_page
@@ -270,7 +295,7 @@ def transacoes():
     
     db_session.close()
     
-    # Usar template compartilhado com mesmas variáveis do dashboard
+    # Usar template compartilhado com variáveis unificadas
     return render_template(
         'transacoes.html',
         transacoes=transacoes_paginadas,
@@ -279,10 +304,10 @@ def transacoes():
         total_transacoes=total,
         soma_filtrada=soma_filtrada,
         grupos_lista=grupos_lista,
-        filtro_estabelecimento=busca,
-        filtro_categoria=grupo_filtro,
-        filtros_tipos=[],  # Admin não usa filtro de tipo
-        filtro_dashboard='todas',  # Admin mostra todas por padrão
+        filtro_estabelecimento=filtro_estabelecimento,
+        filtro_categoria=filtro_categoria,
+        filtros_tipos=filtros_tipos,
+        filtro_dashboard=filtro_dashboard,
         page=page,
         total_pages=total_pages,
         # Variáveis específicas do admin (extras)

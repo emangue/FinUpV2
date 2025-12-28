@@ -112,6 +112,7 @@ def processar_extrato_conta(df, banco='Genérico', tipodocumento='Extrato', orig
                 'origem': origem,
                 'banco': banco,
                 'tipodocumento': tipodocumento,
+                'forma_classificacao': 'Não Classificada',
                 'MarcacaoIA': None,
                 'ValidarIA': None,
                 'TipoGasto': None,
