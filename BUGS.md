@@ -69,7 +69,52 @@ Este documento lista bugs identificados que precisam ser corrigidos.
 
 ## 🔴 Alta Prioridade
 
-_(Nenhum bug nesta categoria no momento)_
+### 1. Detecção de duplicatas no extrato Mercado Pago não funcionando ⚠️
+**Data de Identificação:** 28/12/2025  
+**Status:** 🔍 **EM INVESTIGAÇÃO**
+
+**Descrição do Bug:**  
+Durante o processo de upload de extrato do Mercado Pago, transações que **já existem na base de dados** não estão sendo detectadas como duplicadas pelo sistema. Isso permite que a mesma transação seja salva múltiplas vezes no banco.
+
+**Evidência Real:**
+- **Transação:** Transferência Pix enviada Emanuel Leandro
+- **Data:** 09/10/2025
+- **Valor:** -R$ 600,00
+- **Origem:** Mercado Pago - account_statement-3a5161f1-7662-434a-ad24-2493cd2647f4.xlsx
+
+**Observação:**  
+A transação aparece tanto:
+1. Na tela de transações gerais (já salva anteriormente)
+2. Na tela de revisão de categoria "Ajustável" (nova tentativa de upload)
+
+**Impacto:**
+- ❌ Duplicação de transações no banco de dados
+- ❌ Dados financeiros incorretos (valores contados múltiplas vezes)
+- ❌ Relatórios e dashboards com totais errados
+- ❌ Impossível confiar na integridade dos dados
+
+**Causa Raiz (Hipótese):**  
+O hash de deduplicação usado em extratos do Mercado Pago pode não estar considerando todos os campos necessários, ou o formato específico deste arquivo está gerando hashes diferentes para a mesma transação.
+
+**Próximos Passos:**
+- [ ] Analisar lógica de geração de hash em `preprocessador_mercado_pago.py`
+- [ ] Comparar hash da transação duplicada vs. hash da transação original
+- [ ] Verificar quais campos estão sendo usados na chave de deduplicação
+- [ ] Testar com diferentes formatos de extrato Mercado Pago
+- [ ] Implementar validação adicional (data + valor + estabelecimento)
+- [ ] Adicionar logs detalhados durante processo de deduplicação
+
+**Arquivos Envolvidos:**
+- [app/utils/preprocessadores/preprocessador_mercado_pago.py](app/utils/preprocessadores/preprocessador_mercado_pago.py)
+- [app/utils/hasher.py](app/utils/hasher.py)
+- [app/blueprints/upload/routes.py](app/blueprints/upload/routes.py) (lógica de deduplicação)
+
+**Workaround Temporário:**  
+Verificação manual na tela de revisão antes de salvar.
+
+---
+
+**Investigação agendada para:** 29/12/2025
 
 ---
 
