@@ -5,12 +5,12 @@
 {% block extra_css %}
 <style>
     #dataTable tbody tr {
-        height: 40px;
+        min-height: 40px;
     }
     #dataTable tbody td {
-        padding: 0.4rem 0.75rem;
-        vertical-align: middle;
-        line-height: 1.2;
+        padding: 0.5rem 0.75rem;
+        vertical-align: top;
+        line-height: 1.3;
     }
     #dataTable thead th {
         padding: 0.5rem 0.75rem;
@@ -85,16 +85,16 @@
                         <tr data-indice="{{ item.indice }}">
                             <td data-sort="{{ t.get('Data', '')|replace('/', '-') }}">{{ t.get('Data', 'N/A') }}</td>
                             <td>
-                                <div class="d-flex align-items-center">
+                                <div class="d-flex align-items-start">
                                     {% set logo = t.get('Estabelecimento')|get_estabelecimento_logo %}
                                     {% if logo %}
-                                        <img src="{{ logo }}" alt="" class="rounded-circle me-2" width="16" height="16" style="object-fit: cover;">
+                                        <img src="{{ logo }}" alt="" class="rounded-circle me-2 flex-shrink-0" width="16" height="16" style="object-fit: cover; margin-top: 2px;">
                                     {% else %}
-                                        <div class="rounded-circle bg-light d-flex align-items-center justify-content-center me-2" style="width: 16px; height: 16px;">
+                                        <div class="rounded-circle bg-light d-flex align-items-center justify-content-center me-2 flex-shrink-0" style="width: 16px; height: 16px; margin-top: 2px;">
                                             <i class="fas fa-store text-muted" style="font-size: 8px;"></i>
                                         </div>
                                     {% endif %}
-                                    <span class="text-truncate" style="max-width: 200px;">{{ t.get('Estabelecimento') or 'Não informado' }}</span>
+                                    <span style="max-width: 280px; line-height: 1.3; word-wrap: break-word; white-space: normal;">{{ t.get('Estabelecimento') or 'Não informado' }}</span>
                                 </div>
                             </td>
                             <td class="{{ 'text-danger' if t.get('Valor', 0)|float < 0 else 'text-success' }} fw-bold">
