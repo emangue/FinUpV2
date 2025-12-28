@@ -1,5 +1,8 @@
 # Sistema de Gestão Financeira Automatizada
 
+**Versão Atual:** 2.2.1  
+**Última Atualização:** 27/12/2025
+
 Sistema web desenvolvido em Python/Flask para processamento automatizado de extratos e faturas bancárias, com classificação inteligente de transações e interface de validação manual.
 
 ## 📋 Visão Geral
