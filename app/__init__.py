@@ -12,7 +12,7 @@ extensões e configurações necessárias.
 from flask import Flask
 import os
 
-__version__ = "2.1.0"
+__version__ = "2.1.1"
 
 from app.config import Config
 from app.models import init_db
@@ -49,18 +49,23 @@ def create_app(config_class=Config):
     register_filters(app)
     
     # Registrar Blueprints
+    from app.blueprints.auth import auth_bp
     from app.blueprints.admin import admin_bp
     from app.blueprints.dashboard import dashboard_bp
     from app.blueprints.upload import upload_bp
     
+    app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(admin_bp, url_prefix='/admin')
     app.register_blueprint(dashboard_bp, url_prefix='/dashboard')
     app.register_blueprint(upload_bp, url_prefix='/upload')
     
-    # Rota raiz redireciona para dashboard
+    # Rota raiz redireciona para login se não autenticado, senão para dashboard
     @app.route('/')
     def index():
         from flask import redirect, url_for
-        return redirect(url_for('dashboard.index'))
+        from flask_login import current_user
+        if current_user.is_authenticated:
+            return redirect(url_for('dashboard.index'))
+        return redirect(url_for('auth.login'))
     
     return app

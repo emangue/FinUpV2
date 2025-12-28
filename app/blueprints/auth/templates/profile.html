@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block title %}Meu Perfil{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0"><i class="fas fa-user-circle"></i> Meu Perfil</h4>
+                </div>
+                <div class="card-body">
+                    <div class="text-center mb-4">
+                        <i class="fas fa-user-circle fa-5x text-primary"></i>
+                    </div>
+
+                    <table class="table">
+                        <tr>
+                            <th width="30%">Nome:</th>
+                            <td>{{ user.nome }}</td>
+                        </tr>
+                        <tr>
+                            <th>Email:</th>
+                            <td>{{ user.email }}</td>
+                        </tr>
+                        <tr>
+                            <th>Perfil:</th>
+                            <td>
+                                {% if user.role == 'admin' %}
+                                    <span class="badge bg-danger">Administrador</span>
+                                {% else %}
+                                    <span class="badge bg-primary">Usuário</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Status:</th>
+                            <td>
+                                <span class="badge bg-success">Ativo</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Membro desde:</th>
+                            <td>{{ user.created_at.strftime('%d/%m/%Y') if user.created_at else '-' }}</td>
+                        </tr>
+                    </table>
+
+                    <div class="d-grid">
+                        <a href="{{ url_for('dashboard.index') }}" class="btn btn-primary">
+                            <i class="fas fa-arrow-left"></i> Voltar ao Dashboard
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

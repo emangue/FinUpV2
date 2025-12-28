@@ -1,8 +1,8 @@
 # 🔢 Versão do Projeto
 
-**Versão Atual:** `2.1.0`  
+**Versão Atual:** `2.1.1`  
 **Status:** `stable` 🟢  
-**Data da Última Atualização:** 27/12/2025
+**Data da Última Atualização:** 28/12/2025
 
 ---
 
