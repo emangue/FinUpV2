@@ -229,6 +229,8 @@ def transacoes():
     filtro_estabelecimento = request.args.get('estabelecimento', '')
     filtro_categoria = request.args.get('categoria', '')
     filtro_dashboard = request.args.get('dashboard', 'todas')
+    filtro_data_inicio = request.args.get('data_inicio', '')
+    filtro_data_fim = request.args.get('data_fim', '')
     
     # Filtros de tipo (checkboxes múltiplos)
     filtros_tipos = request.args.getlist('tipo')  # ['despesa', 'cartao', 'receita']
@@ -239,6 +241,29 @@ def transacoes():
     
     # Query base
     query = db_session.query(JournalEntry)
+    
+    # Aplicar filtro de data
+    if filtro_data_inicio or filtro_data_fim:
+        from sqlalchemy import text
+        
+        if filtro_data_inicio:
+            data_inicio_num = filtro_data_inicio.replace('-', '')
+            query = query.filter(
+                text(f"substr(Data, 7, 4) || substr(Data, 4, 2) || substr(Data, 1, 2) >= '{data_inicio_num}'")
+            )
+        
+        if filtro_data_fim:
+            data_fim_num = filtro_data_fim.replace('-', '')
+            query = query.filter(
+                text(f"substr(Data, 7, 4) || substr(Data, 4, 2) || substr(Data, 1, 2) <= '{data_fim_num}'")
+            )
+        
+        # Imprime o SQL gerado
+        from sqlalchemy.dialects import sqlite
+        sql_str = str(query.statement.compile(dialect=sqlite.dialect(), compile_kwargs={"literal_binds": True}))
+        print(f"\n📝 SQL Gerado:")
+        print(sql_str[:500])  # Primeiros 500 caracteres
+        print(f"{'='*60}\n")
     
     # Aplicar filtro de estabelecimento
     if filtro_estabelecimento:
@@ -308,6 +333,8 @@ def transacoes():
         filtro_categoria=filtro_categoria,
         filtros_tipos=filtros_tipos,
         filtro_dashboard=filtro_dashboard,
+        filtro_data_inicio=filtro_data_inicio,
+        filtro_data_fim=filtro_data_fim,
         page=page,
         total_pages=total_pages,
         # Variáveis específicas do admin (extras)

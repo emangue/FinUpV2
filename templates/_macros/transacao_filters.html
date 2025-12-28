@@ -4,6 +4,8 @@
   
   Variáveis esperadas:
   - mes_atual: Mês atual no formato YYYY-MM
+  - filtro_data_inicio: Data de início no formato YYYY-MM-DD (opcional)
+  - filtro_data_fim: Data de fim no formato YYYY-MM-DD (opcional)
   - filtro_estabelecimento: Filtro de estabelecimento ativo
   - filtro_categoria: Filtro de categoria/grupo ativo
   - filtros_tipos: Lista de tipos ativos (['despesa', 'cartao', 'receita'])
@@ -22,6 +24,22 @@
     <div class="card-body">
         <form method="get" action="{{ request.path }}" class="row g-3">
             <input type="hidden" name="mes" value="{{ mes_atual }}">
+            
+            <div class="col-md-2">
+                <label for="data_inicio" class="form-label">
+                    <i class="fas fa-calendar-alt me-1"></i>Data Início
+                </label>
+                <input type="date" class="form-control" id="data_inicio" name="data_inicio" 
+                       value="{{ filtro_data_inicio }}">
+            </div>
+            
+            <div class="col-md-2">
+                <label for="data_fim" class="form-label">
+                    <i class="fas fa-calendar-check me-1"></i>Data Fim
+                </label>
+                <input type="date" class="form-control" id="data_fim" name="data_fim" 
+                       value="{{ filtro_data_fim }}">
+            </div>
             
             <div class="col-md-3">
                 <label for="estabelecimento" class="form-label">

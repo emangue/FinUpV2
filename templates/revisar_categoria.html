@@ -21,6 +21,26 @@
     .badge {
         font-size: 0.75rem;
     }
+    .badge-origem {
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        display: inline-block;
+        vertical-align: middle;
+    }
+    /* Coluna Ações sempre visível */
+    #dataTable thead th:last-child,
+    #dataTable tbody td:last-child {
+        position: sticky;
+        right: 0;
+        background-color: white;
+        box-shadow: -2px 0 5px rgba(0,0,0,0.1);
+        z-index: 10;
+    }
+    #dataTable thead th:last-child {
+        z-index: 11;
+    }
 </style>
 {% endblock %}
 
@@ -81,7 +101,7 @@
                                 R$ {{ "%.2f"|format(t.get('Valor', 0)|float) }}
                             </td>
                             <td>
-                                <span class="badge bg-secondary">{{ t.get('origem', 'N/A') }}</span>
+                                <span class="badge bg-secondary badge-origem" title="{{ t.get('origem', 'N/A') }}">{{ t.get('origem', 'N/A') }}</span>
                             </td>
                             <td>
                                 <select class="form-select form-select-sm select-grupo" data-indice="{{ item.indice }}" data-grupo-atual="{{ t.get('GRUPO', '') }}" style="min-width: 150px;">
