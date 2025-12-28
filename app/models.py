@@ -54,6 +54,20 @@ class User(Base, UserMixin):
     parcelas = relationship('BaseParcelas', back_populates='user', lazy='dynamic')
     padroes_personalizados = relationship('BasePadrao', back_populates='user', lazy='dynamic')
     
+    # Relacionamentos com outras contas (contas conectadas)
+    relacionamentos_iniciados = relationship(
+        'UserRelationship',
+        foreign_keys='UserRelationship.user_id',
+        back_populates='usuario_principal',
+        lazy='dynamic'
+    )
+    relacionamentos_recebidos = relationship(
+        'UserRelationship',
+        foreign_keys='UserRelationship.connected_user_id',
+        back_populates='usuario_conectado',
+        lazy='dynamic'
+    )
+    
     def set_password(self, password):
         """Define senha hasheada"""
         self.password_hash = generate_password_hash(password, method='pbkdf2:sha256')
@@ -71,6 +85,35 @@ class User(Base, UserMixin):
             'ativo': self.ativo,
             'role': self.role,
             'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+
+class UserRelationship(Base):
+    """Relacionamento entre usuários (contas conectadas para visão consolidada)"""
+    __tablename__ = 'user_relationships'
+    
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)  # Usuário principal
+    connected_user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)  # Usuário conectado
+    status = Column(String(20), default='pending')  # pending, accepted, rejected
+    view_consolidated = Column(Boolean, default=False)  # Se True, pode ver visão consolidada
+    created_at = Column(DateTime, default=datetime.utcnow)
+    accepted_at = Column(DateTime, nullable=True)
+    
+    # Relacionamentos
+    usuario_principal = relationship('User', foreign_keys=[user_id], back_populates='relacionamentos_iniciados')
+    usuario_conectado = relationship('User', foreign_keys=[connected_user_id], back_populates='relacionamentos_recebidos')
+    
+    def to_dict(self):
+        """Converte para dicionário"""
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'connected_user_id': self.connected_user_id,
+            'status': self.status,
+            'view_consolidated': self.view_consolidated,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'accepted_at': self.accepted_at.isoformat() if self.accepted_at else None
         }
 
 
@@ -192,13 +235,12 @@ class BaseParcelas(Base):
 
 
 class BasePadrao(Base):
-    """Padrões de classificação aprendidos automaticamente"""
+    """Padrões de classificação aprendidos automaticamente - Separados por usuário"""
     __tablename__ = 'base_padroes'
     
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('users.id'), nullable=True, index=True)  # NULL = padrão global
-    shared = Column(Boolean, default=False)  # Se True, usuário compartilhou seu padrão
-    padrao_estabelecimento = Column(Text, unique=True, nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)  # Obrigatório - cada usuário tem seus padrões
+    padrao_estabelecimento = Column(Text, nullable=False, index=True)  # UNIQUE com user_id
     padrao_num = Column(String(64), unique=True, nullable=False)
     contagem = Column(Integer, nullable=False)
     valor_medio = Column(Float, nullable=False)
@@ -225,7 +267,6 @@ class BasePadrao(Base):
         return {
             'id': self.id,
             'user_id': self.user_id,
-            'shared': self.shared,
             'padrao_estabelecimento': self.padrao_estabelecimento,
             'padrao_num': self.padrao_num,
             'contagem': self.contagem,

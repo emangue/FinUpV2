@@ -4,14 +4,16 @@ Pacote de preprocessadores para arquivos especiais
 Preprocessadores tratam arquivos com formatos não-padronizados antes
 de passar para o sistema de detecção automática.
 
-Versão: 2.1.0
-Data: 27/12/2025
+Versão: 3.0.0
+Data: 28/12/2025
 
 Preprocessadores disponíveis:
 - Itaú XLS: Extrato com validação de saldo
 - Itaú CSV: Fatura de cartão de crédito
 - BTG: Extrato com "Saldo Diário" e validação
 - Mercado Pago: Extrato XLSX com INITIAL/FINAL_BALANCE
+- Banco do Brasil CSV: Extrato com saldo anterior/final
+- Banco do Brasil OFX: Fatura Ourocard (cartão de crédito)
 
 Direcionador automático:
 - detect_and_preprocess(): Detecta banco e preprocessa automaticamente
@@ -22,6 +24,8 @@ from .extrato_itau_xls import is_extrato_itau_xls, preprocessar_extrato_itau_xls
 from .extrato_btg import is_extrato_btg, preprocessar_extrato_btg
 from .extrato_mercadopago import is_extrato_mercadopago, preprocessar_extrato_mercadopago, converter_valor_br
 from .fatura_itau import is_fatura_itau, preprocessar_fatura_itau
+from .extrato_bb_csv import is_extrato_bb_csv, processar_extrato_bb_csv
+from .cartao_bb_ofx import is_cartao_bb_ofx, processar_cartao_bb_ofx
 
 
 def detect_and_preprocess(df_raw, filename):
@@ -29,22 +33,25 @@ def detect_and_preprocess(df_raw, filename):
     Detecta automaticamente o banco e preprocessa arquivo
     
     Ordem de detecção:
-    1. Itaú XLS (extrato com validação de saldo)
-    2. Itaú CSV (fatura de cartão de crédito)
-    3. BTG (extrato com "Saldo Diário")
-    4. Mercado Pago (XLSX com INITIAL_BALANCE)
-    5. None (arquivo genérico - processamento normal)
+    1. Banco do Brasil CSV (extrato com saldo anterior/final)
+    2. Banco do Brasil OFX (fatura Ourocard cartão de crédito)
+    3. Itaú XLS (extrato com validação de saldo)
+    4. Itaú CSV (fatura de cartão de crédito)
+    5. BTG (extrato com "Saldo Diário")
+    6. Mercado Pago (XLSX com INITIAL_BALANCE)
+    7. None (arquivo genérico - processamento normal)
     
     Args:
-        df_raw: DataFrame bruto lido com pd.read_excel() ou pd.read_csv()
+        df_raw: DataFrame bruto lido com pd.read_excel() ou pd.read_csv(), 
+                ou caminho do arquivo para formatos especiais (OFX, CSV com encoding)
         filename: Nome do arquivo original
         
     Returns:
         dict: {
             'df': DataFrame processado ou df_raw,
             'validacao': dict com resultado da validação ou None,
-            'banco': str nome do banco ('Itaú', 'BTG', 'Mercado Pago', 'Genérico'),
-            'tipodocumento': str ('Extrato', 'Fatura Cartão de Crédito', None),
+            'banco': str nome do banco,
+            'tipodocumento': str ('Extrato Bancário', 'Fatura Cartão de Crédito'),
             'preprocessado': bool True se foi preprocessado
         }
         
@@ -53,6 +60,38 @@ def detect_and_preprocess(df_raw, filename):
     """
     print(f"\n🔍 Detectando tipo de arquivo: {filename}")
     
+    # Tentar BB CSV (Extrato) - precisa do path do arquivo
+    try:
+        # Se df_raw é string, é path do arquivo
+        file_path = df_raw if isinstance(df_raw, str) else filename
+        
+        if file_path.lower().endswith('.csv') and is_extrato_bb_csv(file_path):
+            print("   ✓ Extrato BB CSV detectado")
+            resultado = processar_extrato_bb_csv(file_path)
+            return resultado
+    except Exception as e:
+        print(f"   ⚠️ Erro ao testar BB CSV: {e}")
+    
+    # Tentar BB OFX (Cartão)
+    try:
+        file_path = df_raw if isinstance(df_raw, str) else filename
+        
+        if file_path.lower().endswith('.ofx') and is_cartao_bb_ofx(file_path):
+            print("   ✓ Cartão BB OFX detectado")
+            resultado = processar_cartao_bb_ofx(file_path)
+            return resultado
+    except Exception as e:
+        print(f"   ⚠️ Erro ao testar BB OFX: {e}")
+    
+    # Se chegou aqui e df_raw é string (path), não reconheceu
+    if isinstance(df_raw, str):
+        raise ValueError(
+            f"❌ Arquivo especial não reconhecido: {filename}\n"
+            f"   Formatos especiais suportados: BB CSV, BB OFX\n"
+            f"   Certifique-se de que o arquivo está no formato correto."
+        )
+    
+    # Continuar com detecção de DataFrames (Excel/CSV já lidos)
     # Tentar Itaú XLS (Extrato)
     try:
         if is_extrato_itau_xls(df_raw, filename):
@@ -164,6 +203,10 @@ __all__ = [
     'preprocessar_extrato_btg',
     'is_extrato_mercadopago',
     'preprocessar_extrato_mercadopago',
+    'is_extrato_bb_csv',
+    'processar_extrato_bb_csv',
+    'is_cartao_bb_ofx',
+    'processar_cartao_bb_ofx',
     'converter_valor_br',
     'detect_and_preprocess',
 ]

@@ -31,9 +31,24 @@
             <h1 class="h3 mb-0 text-gray-800">Transações de {{ mes_exibicao }}</h1>
             <p class="text-muted mb-0">{{ total_transacoes }} transações encontradas</p>
         </div>
-        <button type="button" onclick="voltarDashboard(event)" class="btn btn-secondary">
-            <i class="fas fa-arrow-left me-2"></i>Voltar ao Dashboard
-        </button>
+        <div class="d-flex gap-3 align-items-center">
+            {% if has_consolidated %}
+            <!-- Toggle de Visualização Individual/Consolidado -->
+            <div class="btn-group shadow-sm" role="group" aria-label="Modo de Visualização">
+                <a href="{{ url_for('dashboard.transacoes', mes=mes_atual, view='individual') }}" 
+                   class="btn btn-sm {% if view_mode == 'individual' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                    <i class="fas fa-user me-1"></i>Minha Conta
+                </a>
+                <a href="{{ url_for('dashboard.transacoes', mes=mes_atual, view='consolidated') }}" 
+                   class="btn btn-sm {% if view_mode == 'consolidated' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                    <i class="fas fa-users me-1"></i>Consolidado
+                </a>
+            </div>
+            {% endif %}
+            <button type="button" onclick="voltarDashboard(event)" class="btn btn-secondary">
+                <i class="fas fa-arrow-left me-2"></i>Voltar ao Dashboard
+            </button>
+        </div>
     </div>
 
     <!-- ============================================ -->
@@ -129,14 +144,18 @@ function voltarDashboard(event) {
     // Recuperar mês original do dashboard (se foi salvo)
     const mesOriginal = sessionStorage.getItem('dashboardMesOriginal');
     
+    // Recuperar modo de visualização atual
+    const urlParams = new URLSearchParams(window.location.search);
+    const viewMode = urlParams.get('view') || 'individual';
+    
     if (mesOriginal) {
-        // Voltar para o mês que estava visualizando antes
-        window.location.href = `/dashboard/?mes=${mesOriginal}`;
+        // Voltar para o mês que estava visualizando antes com o modo de visualização
+        window.location.href = `/dashboard/?mes=${mesOriginal}&view=${viewMode}`;
         // Limpar sessão após uso
         sessionStorage.removeItem('dashboardMesOriginal');
     } else {
-        // Se não tem mês salvo, voltar sem parâmetro (vai para o mês atual)
-        window.location.href = '/dashboard/';
+        // Se não tem mês salvo, voltar sem parâmetro (vai para o mês atual) mas preserva view
+        window.location.href = `/dashboard/?view=${viewMode}`;
     }
 }
 </script>

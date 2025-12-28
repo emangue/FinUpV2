@@ -61,12 +61,21 @@
                     </li>
                     {% if current_user.is_authenticated %}
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                        <a class="nav-link dropdown-toggle position-relative" href="#" role="button" data-bs-toggle="dropdown">
                             <i class="fas fa-user-circle"></i> {{ current_user.nome }}
+                            {% if pending_requests_count > 0 %}
+                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                                {{ pending_requests_count }}
+                                <span class="visually-hidden">solicitações pendentes</span>
+                            </span>
+                            {% endif %}
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end">
                             <li><a class="dropdown-item" href="{{ url_for('auth.profile') }}">
                                 <i class="fas fa-user"></i> Meu Perfil
+                                {% if pending_requests_count > 0 %}
+                                <span class="badge bg-danger ms-2">{{ pending_requests_count }}</span>
+                                {% endif %}
                             </a></li>
                             {% if current_user.role == 'admin' %}
                             <li><hr class="dropdown-divider"></li>

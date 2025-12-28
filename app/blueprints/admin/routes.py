@@ -2,6 +2,7 @@
 Admin Routes - Gestão de configurações
 """
 from flask import render_template, request, flash, jsonify, redirect, url_for
+from flask_login import login_required
 from werkzeug.utils import secure_filename
 import os
 from datetime import datetime
@@ -14,6 +15,7 @@ from sqlalchemy import or_, desc
 
 # Ação em massa: deletar ou ajustar transações selecionadas
 @admin_bp.route('/transacoes/acao_massa', methods=['POST'])
+@login_required
 def transacoes_acao_massa():
     db_session = get_db_session()
     ids = request.form.getlist('ids[]')
@@ -37,6 +39,7 @@ def transacoes_acao_massa():
 
 
 @admin_bp.route('/marcacoes')
+@login_required
 def marcacoes():
     """Administração de marcações (grupos/subgrupos)"""
     
@@ -97,6 +100,7 @@ def marcacoes():
 
 
 @admin_bp.route('/marcacoes/criar', methods=['POST'])
+@login_required
 def marcacoes_criar():
     """Cria nova marcação"""
     try:
@@ -138,6 +142,7 @@ def marcacoes_criar():
 
 
 @admin_bp.route('/padroes')
+@login_required
 def padroes():
     """Administração de padrões"""
     
@@ -180,6 +185,7 @@ def padroes():
 
 
 @admin_bp.route('/parcelas')
+@login_required
 def parcelas():
     """Administração de parcelas (contratos)"""
     
@@ -220,6 +226,7 @@ def parcelas():
 
 
 @admin_bp.route('/transacoes', methods=['GET'])
+@login_required
 def transacoes():
     """Administração de todas as transações (JournalEntry)"""
     
@@ -345,6 +352,7 @@ def transacoes():
 
 
 @admin_bp.route('/grupos')
+@login_required
 def grupos():
     """Administração de grupos (ícones e cores)"""
     db = get_db_session()
@@ -364,6 +372,7 @@ def grupos():
 
 
 @admin_bp.route('/grupos/salvar', methods=['POST'])
+@login_required
 def grupos_salvar():
     """Salva/atualiza grupo"""
     try:
@@ -407,6 +416,7 @@ def grupos_salvar():
 
 
 @admin_bp.route('/grupos/deletar/<int:grupo_id>', methods=['POST'])
+@login_required
 def grupos_deletar(grupo_id):
     """Deleta grupo"""
     try:
@@ -428,6 +438,7 @@ def grupos_deletar(grupo_id):
 
 
 @admin_bp.route('/api/grupos-cores', methods=['GET'])
+@login_required
 def api_grupos_cores_get():
     """API para obter cores dos grupos"""
     try:
@@ -500,6 +511,7 @@ def get_group_icon_default(grupo):
 
 
 @admin_bp.route('/api/grupos-cores', methods=['POST'])
+@login_required
 def api_grupos_cores_post():
     """API para atualizar cores dos grupos"""
     try:
@@ -547,6 +559,7 @@ def api_grupos_cores_post():
 
 
 @admin_bp.route('/logos')
+@login_required
 def logos():
     """Administração de logos de estabelecimentos"""
     db = get_db_session()
@@ -556,6 +569,7 @@ def logos():
 
 
 @admin_bp.route('/logos/upload', methods=['POST'])
+@login_required
 def logos_upload():
     """Upload de NOVO logo de estabelecimento"""
     try:
@@ -615,6 +629,7 @@ def logos_upload():
 
 
 @admin_bp.route('/logos/update/<int:logo_id>', methods=['POST'])
+@login_required
 def logos_update(logo_id):
     """Atualizar logo existente"""
     try:
@@ -679,6 +694,7 @@ def logos_update(logo_id):
 
 
 @admin_bp.route('/logos/deletar/<int:logo_id>', methods=['POST'])
+@login_required
 def logos_deletar(logo_id):
     """Deleta logo de estabelecimento"""
     try:
@@ -708,6 +724,7 @@ def logos_deletar(logo_id):
 
 # Tela de administração dos estabelecimentos a ignorar
 @admin_bp.route('/ignorar_estabelecimentos', methods=['GET'])
+@login_required
 def ignorar_estabelecimentos():
     estabelecimentos = get_ignorar_estabelecimentos()
     return render_template('admin_ignorar_estabelecimentos.html', estabelecimentos=estabelecimentos)
@@ -715,6 +732,7 @@ def ignorar_estabelecimentos():
 
 # Adicionar estabelecimento a ignorar
 @admin_bp.route('/ignorar_estabelecimentos/add', methods=['POST'])
+@login_required
 def ignorar_estabelecimentos_add():
     from app.models import get_db_session
     nome = request.form.get('nome','').strip()
@@ -730,6 +748,7 @@ def ignorar_estabelecimentos_add():
 
 # Remover estabelecimento da lista de ignorados
 @admin_bp.route('/ignorar_estabelecimentos/del/<int:id>', methods=['POST'])
+@login_required
 def ignorar_estabelecimentos_del(id):
     from app.models import get_db_session
     session = get_db_session()

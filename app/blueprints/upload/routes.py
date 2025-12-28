@@ -16,6 +16,7 @@ Histórico:
 - 2.1.0: Sistema de versionamento implementado
 """
 from flask import render_template, request, redirect, url_for, flash, session, jsonify
+from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 import os
 import pandas as pd
@@ -54,9 +55,65 @@ def ler_arquivo_para_dataframe(filepath, filename):
     extensao = filename.lower().split('.')[-1]
     
     try:
-        # 1. Ler arquivo bruto sem processamento
+        # 1. Tentar preprocessamento direto para CSV/OFX (precisam de filepath)
+        if extensao in ['csv', 'ofx']:
+            try:
+                # Passar filepath diretamente (BB CSV/OFX precisam ler com encoding específico)
+                resultado = detect_and_preprocess(filepath, filename)
+                
+                df = resultado['df']
+                metadados = {
+                    'banco': resultado['banco'],
+                    'tipodocumento': resultado['tipodocumento'],
+                    'validacao': resultado.get('validacao'),
+                    'preprocessado': resultado['preprocessado']
+                }
+                
+                # Armazenar validação na sessão se houver
+                if metadados['validacao']:
+                    validacao_data = {
+                        'banco': metadados['banco'],
+                        'tipodocumento': metadados['tipodocumento'],
+                        'valido': metadados['validacao']['valido'],
+                        'mensagem': metadados['validacao'].get('mensagem', 'Validação OK'),
+                    }
+                    
+                    # Campos específicos de EXTRATO (conta corrente)
+                    if 'saldo_anterior' in metadados['validacao']:
+                        validacao_data['saldo_anterior'] = metadados['validacao']['saldo_anterior']
+                    if 'soma_transacoes' in metadados['validacao']:
+                        validacao_data['soma_transacoes'] = metadados['validacao']['soma_transacoes']
+                    if 'diferenca' in metadados['validacao']:
+                        validacao_data['diferenca'] = metadados['validacao']['diferenca']
+                    
+                    # Campos específicos de FATURA (cartão de crédito)
+                    if 'total_compras' in metadados['validacao']:
+                        validacao_data['total_compras'] = metadados['validacao']['total_compras']
+                    if 'saldo_devedor' in metadados['validacao']:
+                        validacao_data['saldo_devedor'] = metadados['validacao']['saldo_devedor']
+                    if 'total_transacoes' in metadados['validacao']:
+                        validacao_data['total_transacoes'] = metadados['validacao']['total_transacoes']
+                    # Manter compatibilidade com formato antigo
+                    if 'total_debitos' in metadados['validacao']:
+                        validacao_data['total_compras'] = metadados['validacao']['total_debitos']
+                    
+                    # Campo comum: saldo_final (extrato) ou saldo devedor (fatura)
+                    if 'saldo_final' in metadados['validacao']:
+                        validacao_data['saldo_final'] = metadados['validacao']['saldo_final']
+                    
+                    session['validacao_extrato'] = validacao_data
+                
+                print(f"✅ Preprocessamento direto: {metadados['banco']} - {metadados['tipodocumento']}")
+                return df, metadados
+                
+            except ValueError as e:
+                # Arquivo não reconhecido pelos preprocessadores especiais
+                print(f"⚠️ Preprocessamento direto falhou: {e}")
+                # Continuar para leitura genérica
+        
+        # 2. Ler arquivo bruto para formatos genéricos (Excel)
         if extensao == 'csv':
-            # Tenta diferentes encodings
+            # Tenta diferentes encodings para CSV genérico
             try:
                 df_raw = pd.read_csv(filepath, encoding='utf-8')
             except:
@@ -74,7 +131,7 @@ def ler_arquivo_para_dataframe(filepath, filename):
         else:
             return None, None
         
-        # 2. Tentar detectar e preprocessar automaticamente
+        # 3. Tentar detectar e preprocessar automaticamente (DataFrame)
         try:
             resultado = detect_and_preprocess(df_raw, filename)
             
@@ -88,16 +145,41 @@ def ler_arquivo_para_dataframe(filepath, filename):
             
             # Armazenar validação na sessão se houver
             if metadados['validacao']:
-                session['validacao_extrato'] = {
+                validacao_data = {
                     'banco': metadados['banco'],
+                    'tipodocumento': metadados['tipodocumento'],
                     'valido': metadados['validacao']['valido'],
                     'mensagem': metadados['validacao']['mensagem'],
-                    'saldo_anterior': metadados['validacao'].get('saldo_anterior'),
-                    'saldo_final': metadados['validacao'].get('saldo_final_arquivo'),
-                    'soma_transacoes': metadados['validacao'].get('soma_transacoes'),
-                    'diferenca': metadados['validacao'].get('diferenca'),
-                    'periodo': metadados['validacao'].get('periodo')
                 }
+                
+                # Campos específicos de EXTRATO (conta corrente)
+                if 'saldo_anterior' in metadados['validacao']:
+                    validacao_data['saldo_anterior'] = metadados['validacao']['saldo_anterior']
+                if 'soma_transacoes' in metadados['validacao']:
+                    validacao_data['soma_transacoes'] = metadados['validacao']['soma_transacoes']
+                if 'diferenca' in metadados['validacao']:
+                    validacao_data['diferenca'] = metadados['validacao']['diferenca']
+                if 'periodo' in metadados['validacao']:
+                    validacao_data['periodo'] = metadados['validacao']['periodo']
+                
+                # Campos específicos de FATURA (cartão de crédito)
+                if 'total_compras' in metadados['validacao']:
+                    validacao_data['total_compras'] = metadados['validacao']['total_compras']
+                if 'saldo_devedor' in metadados['validacao']:
+                    validacao_data['saldo_devedor'] = metadados['validacao']['saldo_devedor']
+                if 'total_transacoes' in metadados['validacao']:
+                    validacao_data['total_transacoes'] = metadados['validacao']['total_transacoes']
+                # Manter compatibilidade com formato antigo
+                if 'total_debitos' in metadados['validacao']:
+                    validacao_data['total_compras'] = metadados['validacao']['total_debitos']
+                
+                # Campo comum: saldo_final (extrato) ou saldo devedor (fatura)
+                if 'saldo_final_arquivo' in metadados['validacao']:
+                    validacao_data['saldo_final'] = metadados['validacao']['saldo_final_arquivo']
+                elif 'saldo_final' in metadados['validacao']:
+                    validacao_data['saldo_final'] = metadados['validacao']['saldo_final']
+                
+                session['validacao_extrato'] = validacao_data
             
             return df, metadados
             
@@ -113,6 +195,7 @@ def ler_arquivo_para_dataframe(filepath, filename):
 
 
 @upload_bp.route('/', methods=['GET', 'POST'])
+@login_required
 def upload():
     """Página de Upload de Arquivos com Detecção Inteligente"""
     
@@ -211,6 +294,7 @@ def upload():
 
 
 @upload_bp.route('/confirmar')
+@login_required
 def confirmar_upload():
     """Tela de confirmação com detecção automática de tipo e colunas"""
     
@@ -224,6 +308,7 @@ def confirmar_upload():
 
 
 @upload_bp.route('/processar_confirmados', methods=['POST'])
+@login_required
 def processar_confirmados():
     """Processa arquivos após confirmação do usuário"""
     
@@ -347,6 +432,7 @@ def processar_confirmados():
 
 
 @upload_bp.route('/revisao_upload')
+@login_required
 def revisao_upload():
     """Dashboard com resumo das transações processadas"""
     
@@ -423,6 +509,7 @@ def revisao_upload():
 
 
 @upload_bp.route('/duplicados')
+@login_required
 def duplicados():
     """Visualizar duplicados temporários"""
     
@@ -432,6 +519,7 @@ def duplicados():
 
 
 @upload_bp.route('/revisar/categoria/<tipo_gasto>')
+@login_required
 def revisar_categoria(tipo_gasto):
     """Visualizar transações de uma categoria específica"""
     
@@ -510,6 +598,7 @@ def revisar_categoria(tipo_gasto):
 
 
 @upload_bp.route('/validar')
+@login_required
 def validar():
     """Página para validar transações da sessão que não foram classificadas"""
     
@@ -575,6 +664,7 @@ def validar():
 
 
 @upload_bp.route('/validar/lote', methods=['POST'])
+@login_required
 def validar_lote():
     """Aplica classificação em lote para múltiplas transações na sessão"""
     try:
@@ -625,6 +715,7 @@ def validar_lote():
 
 
 @upload_bp.route('/salvar', methods=['POST'])
+@login_required
 def salvar():
     """Salva transações selecionadas no journal_entries (ponte para dados permanentes)"""
     
@@ -696,6 +787,7 @@ def salvar():
             ignorar = ignorar_grupo or ignorar_manual
             
             entry = JournalEntry(
+                user_id=current_user.id,  # Associa transação ao usuário atual
                 IdTransacao=trans.get('IdTransacao'),
                 Data=trans.get('Data'),
                 Estabelecimento=trans.get('Estabelecimento'),
@@ -823,6 +915,7 @@ def salvar():
 
 
 @upload_bp.route('/api/adicionar_marcacao', methods=['POST'])
+@login_required
 def adicionar_marcacao():
     """API para adicionar nova combinação de grupo/subgrupo/tipogasto"""
     
@@ -870,6 +963,7 @@ def adicionar_marcacao():
 
 
 @upload_bp.route('/api/marcacoes', methods=['GET'])
+@login_required
 def listar_marcacoes():
     """API para listar todas as marcações"""
     

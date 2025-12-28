@@ -2,25 +2,74 @@
 Dashboard Routes - Visualização e análise de dados permanentes
 """
 from flask import render_template, request, redirect, url_for, jsonify
-from sqlalchemy import func, extract, desc, or_
+from flask_login import login_required, current_user
+from sqlalchemy import func, extract, desc, or_, and_
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 import calendar
 
 from app.blueprints.dashboard import dashboard_bp
-from app.models import JournalEntry, BaseMarcacao, AuditLog, GrupoConfig, get_db_session
+from app.models import JournalEntry, BaseMarcacao, AuditLog, GrupoConfig, UserRelationship, get_db_session
 from app.filters import get_group_color_helper
 
 
+def get_user_ids_for_view(current_user_id, db, view_mode='individual'):
+    """
+    Retorna lista de user_ids baseado no modo de visualização
+    
+    Args:
+        current_user_id: ID do usuário atual
+        db: Sessão do banco
+        view_mode: 'individual' ou 'consolidated'
+        
+    Returns:
+        list: IDs dos usuários a serem incluídos nas queries
+    """
+    if view_mode == 'individual':
+        return [current_user_id]
+    
+    # Modo consolidado: busca contas conectadas com view_consolidated=True
+    user_ids = [current_user_id]
+    
+    # Relacionamentos onde o usuário é o iniciador
+    relationships_initiated = db.query(UserRelationship).filter(
+        UserRelationship.user_id == current_user_id,
+        UserRelationship.status == 'accepted',
+        UserRelationship.view_consolidated == True
+    ).all()
+    
+    for rel in relationships_initiated:
+        user_ids.append(rel.connected_user_id)
+    
+    # Relacionamentos onde o usuário é o conectado
+    relationships_received = db.query(UserRelationship).filter(
+        UserRelationship.connected_user_id == current_user_id,
+        UserRelationship.status == 'accepted',
+        UserRelationship.view_consolidated == True
+    ).all()
+    
+    for rel in relationships_received:
+        user_ids.append(rel.user_id)
+    
+    return list(set(user_ids))  # Remove duplicatas
+
+
 @dashboard_bp.route('/')
+@login_required
 def index():
     """Dashboard analítico com visão geral das finanças - PÁGINA INICIAL"""
     
     db = get_db_session()
     
     try:
+        # 0. Determinar modo de visualização
+        view_mode = request.args.get('view', 'individual')  # 'individual' ou 'consolidated'
+        user_ids = get_user_ids_for_view(current_user.id, db, view_mode)
+        
         # 1. Determinar meses disponíveis (para o filtro)
-        meses_query = db.query(JournalEntry.DT_Fatura).distinct().order_by(desc(JournalEntry.DT_Fatura)).all()
+        meses_query = db.query(JournalEntry.DT_Fatura).filter(
+            JournalEntry.user_id.in_(user_ids)
+        ).distinct().order_by(desc(JournalEntry.DT_Fatura)).all()
         meses_disponiveis = []
         for m in meses_query:
             if m[0] and len(m[0]) == 6:
@@ -60,6 +109,7 @@ def index():
         
         # Total despesas mês atual (incluindo TODOS valores de Cartão de Crédito)
         total_despesas = db.query(func.sum(JournalEntry.Valor)).filter(
+            JournalEntry.user_id.in_(user_ids),
             JournalEntry.DT_Fatura == mes_atual_db,
             or_(
                 JournalEntry.Valor < 0,  # Despesas normais
@@ -70,6 +120,7 @@ def index():
         
         # Total despesas mês anterior  
         total_despesas_anterior = db.query(func.sum(JournalEntry.Valor)).filter(
+            JournalEntry.user_id.in_(user_ids),
             JournalEntry.DT_Fatura == mes_anterior_db,
             or_(
                 JournalEntry.Valor < 0,
@@ -80,6 +131,7 @@ def index():
         
         # Total receitas mês atual (EXCLUINDO Cartão de Crédito)
         total_receitas = db.query(func.sum(JournalEntry.Valor)).filter(
+            JournalEntry.user_id.in_(user_ids),
             JournalEntry.DT_Fatura == mes_atual_db,
             JournalEntry.Valor > 0,
             JournalEntry.TipoTransacao != 'Cartão de Crédito',  # Exclui cartões
@@ -88,6 +140,7 @@ def index():
         
         # Total receitas mês anterior
         total_receitas_anterior = db.query(func.sum(JournalEntry.Valor)).filter(
+            JournalEntry.user_id.in_(user_ids),
             JournalEntry.DT_Fatura == mes_anterior_db,
             JournalEntry.Valor > 0,
             JournalEntry.TipoTransacao != 'Cartão de Crédito',
@@ -100,12 +153,14 @@ def index():
         
         # Total de transações
         total_transacoes = db.query(func.count(JournalEntry.id)).filter(
+            JournalEntry.user_id.in_(user_ids),
             JournalEntry.DT_Fatura == mes_atual_db,
             JournalEntry.IgnorarDashboard.isnot(True)
         ).scalar() or 0
         
         # Transações classificadas
         transacoes_classificadas = db.query(func.count(JournalEntry.id)).filter(
+            JournalEntry.user_id.in_(user_ids),
             JournalEntry.DT_Fatura == mes_atual_db,
             JournalEntry.GRUPO.isnot(None),
             JournalEntry.IgnorarDashboard.isnot(True)
@@ -136,6 +191,7 @@ def index():
         
         # Total de estabelecimentos únicos
         total_estabelecimentos = db.query(func.count(func.distinct(JournalEntry.Estabelecimento))).filter(
+            JournalEntry.user_id.in_(user_ids),
             JournalEntry.DT_Fatura == mes_atual_db,
             JournalEntry.IgnorarDashboard.isnot(True)
         ).scalar() or 0
@@ -151,6 +207,7 @@ def index():
         
         # 1. Receitas YTD (excluindo investimentos e cartão)
         receitas_ytd = db.query(func.sum(JournalEntry.Valor)).filter(
+            JournalEntry.user_id.in_(user_ids),
             JournalEntry.DT_Fatura >= ytd_inicio,
             JournalEntry.DT_Fatura <= ytd_fim,
             JournalEntry.Valor > 0,
@@ -160,6 +217,7 @@ def index():
         
         # 2. Cartão de Crédito YTD
         cartao_ytd = abs(db.query(func.sum(JournalEntry.Valor)).filter(
+            JournalEntry.user_id.in_(user_ids),
             JournalEntry.DT_Fatura >= ytd_inicio,
             JournalEntry.DT_Fatura <= ytd_fim,
             JournalEntry.TipoTransacao == 'Cartão de Crédito',
@@ -168,6 +226,7 @@ def index():
         
         # 3. Despesas gerais YTD (sem cartão, sem investimentos)
         despesas_ytd = abs(db.query(func.sum(JournalEntry.Valor)).filter(
+            JournalEntry.user_id.in_(user_ids),
             JournalEntry.DT_Fatura >= ytd_inicio,
             JournalEntry.DT_Fatura <= ytd_fim,
             JournalEntry.Valor < 0,
@@ -179,6 +238,7 @@ def index():
         # 4. Investimento líquido YTD (valores negativos = investimentos)
         # IMPORTANTE: Não filtra IgnorarDashboard para mostrar TODOS os investimentos
         investimento_ytd_raw = db.query(func.sum(JournalEntry.Valor)).filter(
+            JournalEntry.user_id.in_(user_ids),
             JournalEntry.DT_Fatura >= ytd_inicio,
             JournalEntry.DT_Fatura <= ytd_fim,
             JournalEntry.GRUPO.ilike('%Investimento%')
@@ -198,6 +258,7 @@ def index():
             JournalEntry.GRUPO,
             func.sum(JournalEntry.Valor).label('total')
         ).filter(
+            JournalEntry.user_id.in_(user_ids),
             JournalEntry.DT_Fatura == mes_atual_db,
             JournalEntry.Valor < 0,
             JournalEntry.GRUPO.isnot(None),
@@ -214,6 +275,7 @@ def index():
         
         for grupo in grupos_labels:
             total_atual = db.query(func.sum(JournalEntry.Valor)).filter(
+                JournalEntry.user_id.in_(user_ids),
                 JournalEntry.DT_Fatura == mes_atual_db,
                 JournalEntry.GRUPO == grupo,
                 JournalEntry.Valor < 0,
@@ -221,6 +283,7 @@ def index():
             ).scalar() or 0
             
             total_anterior = db.query(func.sum(JournalEntry.Valor)).filter(
+                JournalEntry.user_id.in_(user_ids),
                 JournalEntry.DT_Fatura == mes_anterior_db,
                 JournalEntry.GRUPO == grupo,
                 JournalEntry.Valor < 0,
@@ -236,6 +299,7 @@ def index():
         
         # === TOP 10 TRANSAÇÕES ===
         top_transacoes_query = db.query(JournalEntry).filter(
+            JournalEntry.user_id.in_(user_ids),
             JournalEntry.DT_Fatura == mes_atual_db,
             JournalEntry.Valor < 0,
             JournalEntry.IgnorarDashboard.isnot(True)
@@ -276,6 +340,7 @@ def index():
             
             # Despesas incluindo TODOS cartões de crédito
             despesas_mes = abs(db.query(func.sum(JournalEntry.Valor)).filter(
+                JournalEntry.user_id.in_(user_ids),
                 JournalEntry.DT_Fatura == mes_ref,
                 or_(
                     JournalEntry.Valor < 0,
@@ -286,6 +351,7 @@ def index():
             
             # Receitas EXCLUINDO cartões de crédito
             receitas_mes = db.query(func.sum(JournalEntry.Valor)).filter(
+                JournalEntry.user_id.in_(user_ids),
                 JournalEntry.DT_Fatura == mes_ref,
                 JournalEntry.Valor > 0,
                 JournalEntry.TipoTransacao != 'Cartão de Crédito',
@@ -297,6 +363,7 @@ def index():
         
         # === ÚLTIMAS 10 TRANSAÇÕES ===
         ultimas_transacoes = db.query(JournalEntry).filter(
+            JournalEntry.user_id.in_(user_ids),
             JournalEntry.DT_Fatura == mes_atual_db,
             JournalEntry.IgnorarDashboard.isnot(True)
         ).order_by(
@@ -325,6 +392,7 @@ def index():
             
             # Despesas Gerais (despesas não-cartão)
             despesas_gerais = abs(db.query(func.sum(JournalEntry.Valor)).filter(
+                JournalEntry.user_id.in_(user_ids),
                 JournalEntry.DT_Fatura == mes_db,
                 JournalEntry.Valor < 0,
                 JournalEntry.TipoTransacao != 'Cartão de Crédito',
@@ -333,6 +401,7 @@ def index():
             
             # Cartão de Crédito
             cartao = abs(db.query(func.sum(JournalEntry.Valor)).filter(
+                JournalEntry.user_id.in_(user_ids),
                 JournalEntry.DT_Fatura == mes_db,
                 JournalEntry.TipoTransacao == 'Cartão de Crédito',
                 JournalEntry.IgnorarDashboard.isnot(True)
@@ -340,6 +409,7 @@ def index():
             
             # Receitas
             receitas = abs(db.query(func.sum(JournalEntry.Valor)).filter(
+                JournalEntry.user_id.in_(user_ids),
                 JournalEntry.DT_Fatura == mes_db,
                 JournalEntry.Valor > 0,
                 JournalEntry.IgnorarDashboard.isnot(True)
@@ -347,6 +417,7 @@ def index():
             
             # Investimentos (GRUPO contém 'Investimento' - invertido para positivo)
             investimentos_raw = db.query(func.sum(JournalEntry.Valor)).filter(
+                JournalEntry.user_id.in_(user_ids),
                 JournalEntry.DT_Fatura == mes_db,
                 JournalEntry.GRUPO.ilike('%Investimento%')
             ).scalar() or 0
@@ -379,6 +450,14 @@ def index():
             'maior_economia': maior_economia
         }
         
+        # Verificar se usuário tem relacionamentos consolidados
+        has_consolidated = db.query(UserRelationship).filter(
+            or_(
+                and_(UserRelationship.user_id == current_user.id, UserRelationship.status == 'accepted', UserRelationship.view_consolidated == True),
+                and_(UserRelationship.connected_user_id == current_user.id, UserRelationship.status == 'accepted', UserRelationship.view_consolidated == True)
+            )
+        ).first() is not None
+        
         return render_template('dashboard.html',
                              stats=stats,
                              breakdown_6_meses=breakdown_6_meses,
@@ -394,13 +473,16 @@ def index():
                              evolucao_receitas=evolucao_receitas,
                              ultimas_transacoes=ultimas_transacoes,
                              meses_disponiveis=meses_disponiveis,
-                             mes_atual=mes_atual_visual)
+                             mes_atual=mes_atual_visual,
+                             view_mode=view_mode,
+                             has_consolidated=has_consolidated)
     
     finally:
         db.close()
 
 
 @dashboard_bp.route('/transacoes')
+@login_required
 def transacoes():
     """Lista todas as transações de um mês específico com filtros"""
     
@@ -409,6 +491,9 @@ def transacoes():
         return redirect(url_for('dashboard.index'))
         
     mes_db = mes_param.replace('-', '')
+    
+    # Modo de visualização
+    view_mode = request.args.get('view', 'individual')
     
     # Filtros
     filtro_estabelecimento = request.args.get('estabelecimento', '').strip()
@@ -428,8 +513,12 @@ def transacoes():
     
     db = get_db_session()
     try:
+        # Determinar user_ids baseado no modo de visualização
+        user_ids = get_user_ids_for_view(current_user.id, db, view_mode)
+        
         # Query base
         query = db.query(JournalEntry).filter(
+            JournalEntry.user_id.in_(user_ids),
             JournalEntry.DT_Fatura == mes_db
         )
         
@@ -508,6 +597,14 @@ def transacoes():
         grupos = db.query(BaseMarcacao.GRUPO).distinct().order_by(BaseMarcacao.GRUPO).all()
         grupos_lista = [g[0] for g in grupos if g[0]]
         
+        # Verificar se tem relacionamentos consolidados
+        has_consolidated = db.query(UserRelationship).filter(
+            or_(
+                and_(UserRelationship.user_id == current_user.id, UserRelationship.status == 'accepted', UserRelationship.view_consolidated == True),
+                and_(UserRelationship.connected_user_id == current_user.id, UserRelationship.status == 'accepted', UserRelationship.view_consolidated == True)
+            )
+        ).first() is not None
+        
         return render_template('transacoes.html',
                              transacoes=transacoes,
                              mes_atual=mes_param,
@@ -520,17 +617,21 @@ def transacoes():
                              filtros_tipos=filtros_tipos,
                              filtro_dashboard=filtro_dashboard,
                              filtro_data_inicio=filtro_data_inicio,
-                             filtro_data_fim=filtro_data_fim)
+                             filtro_data_fim=filtro_data_fim,
+                             view_mode=view_mode,
+                             has_consolidated=has_consolidated)
     finally:
         db.close()
 
 
 @dashboard_bp.route('/api/transacao/<transacao_id>')
+@login_required
 def api_transacao_detalhes(transacao_id):
     """API para buscar detalhes de uma transação"""
     try:
         db = get_db_session()
         transacao = db.query(JournalEntry).filter(
+            JournalEntry.user_id == current_user.id,
             JournalEntry.id == transacao_id
         ).first()
         
@@ -558,11 +659,13 @@ def api_transacao_detalhes(transacao_id):
 
 
 @dashboard_bp.route('/api/transacao_completa/<int:transacao_id>')
+@login_required
 def api_transacao_completa(transacao_id):
     """API para buscar dados completos de uma transação para edição"""
     try:
         db = get_db_session()
         transacao = db.query(JournalEntry).filter(
+            JournalEntry.user_id == current_user.id,
             JournalEntry.id == transacao_id
         ).first()
         
@@ -589,6 +692,7 @@ def api_transacao_completa(transacao_id):
 
 
 @dashboard_bp.route('/api/atualizar_transacao', methods=['POST'])
+@login_required
 def api_atualizar_transacao():
     """API para atualizar uma transação"""
     try:
@@ -600,6 +704,7 @@ def api_atualizar_transacao():
         
         db = get_db_session()
         transacao = db.query(JournalEntry).filter(
+            JournalEntry.user_id == current_user.id,
             JournalEntry.id == transacao_id
         ).first()
         
@@ -640,6 +745,7 @@ def api_atualizar_transacao():
 
 
 @dashboard_bp.route('/api/subgrupos/<grupo>')
+@login_required
 def api_subgrupos_por_grupo(grupo):
     """API para buscar subgrupos disponíveis para um grupo específico"""
     try:
@@ -670,6 +776,7 @@ def api_subgrupos_por_grupo(grupo):
 
 
 @dashboard_bp.route('/editar_transacao', methods=['POST'])
+@login_required
 def editar_transacao():
     """Edita uma transação permanente no dashboard"""
     try:
@@ -684,7 +791,10 @@ def editar_transacao():
         db = get_db_session()
         
         # Buscar transação
-        transacao = db.query(JournalEntry).filter_by(id=id_transacao).first()
+        transacao = db.query(JournalEntry).filter_by(
+            user_id=current_user.id,
+            id=id_transacao
+        ).first()
         if not transacao:
             db.close()
             return jsonify({'success': False, 'error': 'Transação não encontrada'}), 404
@@ -749,6 +859,7 @@ def editar_transacao():
 
 
 @dashboard_bp.route('/toggle_dashboard/<string:id_transacao>', methods=['POST'])
+@login_required
 def toggle_dashboard_status(id_transacao):
     """Alterna o status de IgnorarDashboard de uma transação"""
     try:
@@ -759,7 +870,10 @@ def toggle_dashboard_status(id_transacao):
         print(f"📝 Novo status IgnorarDashboard: {ignorar}")
         
         db = get_db_session()
-        transacao = db.query(JournalEntry).filter_by(IdTransacao=id_transacao).first()
+        transacao = db.query(JournalEntry).filter_by(
+            user_id=current_user.id,
+            IdTransacao=id_transacao
+        ).first()
         
         if not transacao:
             print(f"❌ Transação {id_transacao} não encontrada")

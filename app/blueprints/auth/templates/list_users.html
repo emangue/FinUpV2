@@ -21,12 +21,14 @@
                             <th>Email</th>
                             <th>Perfil</th>
                             <th>Status</th>
+                            <th>Contas Conectadas</th>
                             <th>Criado em</th>
                             <th>Ações</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for user in users %}
+                        {% for item in users_data %}
+                        {% set user = item.user %}
                         <tr>
                             <td>{{ user.id }}</td>
                             <td>
@@ -46,6 +48,21 @@
                                     <span class="badge bg-success">Ativo</span>
                                 {% else %}
                                     <span class="badge bg-secondary">Inativo</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if item.connections %}
+                                <div class="small">
+                                    {% for conn in item.connections %}
+                                    <div>
+                                        {{ conn.status }} <strong>{{ conn.nome }}</strong>
+                                        <br><small class="text-muted">{{ conn.email }}</small>
+                                    </div>
+                                    {% if not loop.last %}<hr class="my-1">{% endif %}
+                                    {% endfor %}
+                                </div>
+                                {% else %}
+                                <span class="text-muted small">Nenhuma conexão</span>
                                 {% endif %}
                             </td>
                             <td>{{ user.created_at.strftime('%d/%m/%Y') if user.created_at else '-' }}</td>

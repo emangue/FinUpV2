@@ -27,31 +27,47 @@
                         <div class="card-body">
                             <!-- Validação de Extrato (se houver) -->
                             {% if session.get('validacao_extrato') %}
-                            <div class="alert {% if session.validacao_extrato.valido %}alert-success{% else %}alert-warning{% endif %} mb-3">
+                            <div class="alert {% if session.validacao_extrato.get('valido') %}alert-success{% else %}alert-warning{% endif %} mb-3">
                                 <h6 class="alert-heading">
-                                    {% if session.validacao_extrato.valido %}
+                                    {% if session.validacao_extrato.get('valido') %}
                                         <i class="fas fa-check-circle"></i> Validação de Integridade
                                     {% else %}
                                         <i class="fas fa-exclamation-triangle"></i> Aviso de Validação
                                     {% endif %}
                                 </h6>
-                                <p class="mb-2"><strong>{{ session.validacao_extrato.mensagem }}</strong></p>
+                                <p class="mb-2"><strong>{{ session.validacao_extrato.get('mensagem', 'Validação OK') }}</strong></p>
                                 <hr>
-                                <div class="row small">
-                                    <div class="col-md-6">
-                                        <p class="mb-1">📊 <strong>Saldo Anterior:</strong> R$ {{ "%.2f"|format(session.validacao_extrato.saldo_anterior|default(0)) }}</p>
-                                        <p class="mb-1">💰 <strong>Soma das Transações:</strong> R$ {{ "%.2f"|format(session.validacao_extrato.soma_transacoes|default(0)) }}</p>
+                                
+                                {% if session.validacao_extrato.get('tipodocumento') == 'Fatura Cartão de Crédito' %}
+                                    <!-- Validação para FATURA DE CARTÃO -->
+                                    <div class="row small">
+                                        <div class="col-md-6">
+                                            <p class="mb-1">📊 <strong>Transações (Compras):</strong> {{ session.validacao_extrato.get('total_transacoes', 0) }}</p>
+                                            <p class="mb-1">🛒 <strong>Total Compras:</strong> R$ {{ "%.2f"|format(session.validacao_extrato.get('total_compras', 0)) }}</p>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <p class="mb-1">💳 <strong>Saldo Devedor:</strong> R$ {{ "%.2f"|format(session.validacao_extrato.get('saldo_devedor', session.validacao_extrato.get('saldo_final', 0))) }}</p>
+                                            <p class="mb-1 text-muted small">💡 <em>Pagamentos serão importados do extrato</em></p>
+                                        </div>
                                     </div>
-                                    <div class="col-md-6">
-                                        <p class="mb-1">🎯 <strong>Saldo Final:</strong> R$ {{ "%.2f"|format(session.validacao_extrato.saldo_final|default(0)) }}</p>
-                                        <p class="mb-1">📉 <strong>Diferença:</strong> R$ {{ "%.4f"|format(session.validacao_extrato.diferenca|default(0)) }}</p>
+                                {% else %}
+                                    <!-- Validação para EXTRATO DE CONTA -->
+                                    <div class="row small">
+                                        <div class="col-md-6">
+                                            <p class="mb-1">📊 <strong>Saldo Anterior:</strong> R$ {{ "%.2f"|format(session.validacao_extrato.get('saldo_anterior', 0)) }}</p>
+                                            <p class="mb-1">💰 <strong>Soma das Transações:</strong> R$ {{ "%.2f"|format(session.validacao_extrato.get('soma_transacoes', 0)) }}</p>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <p class="mb-1">🎯 <strong>Saldo Final:</strong> R$ {{ "%.2f"|format(session.validacao_extrato.get('saldo_final', 0)) }}</p>
+                                            <p class="mb-1">📉 <strong>Diferença:</strong> R$ {{ "%.4f"|format(session.validacao_extrato.get('diferenca', 0)) }}</p>
+                                        </div>
                                     </div>
-                                </div>
-                                {% if session.validacao_extrato.periodo %}
-                                <hr>
-                                <p class="mb-0 small text-muted">
-                                    <i class="fas fa-calendar"></i> Período: {{ session.validacao_extrato.periodo.data_inicial }} até {{ session.validacao_extrato.periodo.data_final }}
-                                </p>
+                                    {% if session.validacao_extrato.get('periodo') %}
+                                    <hr>
+                                    <p class="mb-0 small text-muted">
+                                        <i class="fas fa-calendar"></i> Período: {{ session.validacao_extrato.get('periodo', {}).get('data_inicial', 'N/A') }} até {{ session.validacao_extrato.get('periodo', {}).get('data_final', 'N/A') }}
+                                    </p>
+                                    {% endif %}
                                 {% endif %}
                             </div>
                             {% endif %}
@@ -71,8 +87,8 @@
                                                 🏦 <strong>Extrato de Conta Corrente</strong>
                                             {% endif %}
                                             <small class="text-muted">
-                                                (Confiança: {{ (arquivo.confianca * 100)|round }}% 
-                                                - Indicadores: {{ arquivo.indicadores|join(', ') }})
+                                                (Confiança: {{ ((arquivo.confianca|default(0)) * 100)|round }}% 
+                                                - Indicadores: {{ arquivo.indicadores|default([])|join(', ') }})
                                             </small>
                                         </div>
                                     {% else %}
