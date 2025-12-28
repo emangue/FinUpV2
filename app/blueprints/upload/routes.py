@@ -240,44 +240,71 @@ def processar_confirmados():
         filename = arquivo_info['nome']
         filepath = arquivo_info['filepath']
         
+        # Pega metadados que vieram do preprocessador (se houver)
+        banco = arquivo_info.get('banco', 'Genérico')
+        tipodocumento = arquivo_info.get('tipodocumento')
+        
         # Pega confirmação do usuário (pode ter sido mudado)
         tipo_final = request.form.get(f'tipo_{idx}', arquivo_info.get('tipo_detectado'))
         
-        # Pega mapeamento (pode ter sido ajustado ou vem do formulário)
-        col_data_form = request.form.get(f'col_data_{idx}')
-        col_estab_form = request.form.get(f'col_estabelecimento_{idx}')
-        col_valor_form = request.form.get(f'col_valor_{idx}')
+        # Se tipo_final for diferente do detectado, ajusta tipodocumento
+        if tipo_final == 'fatura':
+            if tipodocumento != 'Fatura Cartão de Crédito':
+                tipodocumento = 'Fatura Cartão de Crédito'
+        elif tipo_final == 'extrato':
+            if tipodocumento != 'Extrato':
+                tipodocumento = 'Extrato'
         
-        if col_data_form and col_estab_form and col_valor_form:
-            # Usa valores do formulário (sempre enviados agora via hidden inputs)
-            mapeamento = {
-                'data': col_data_form,
-                'estabelecimento': col_estab_form,
-                'valor': col_valor_form
-            }
-        else:
-            # Fallback para mapeamento da sessão
-            mapeamento = arquivo_info.get('mapeamento', {})
+        # Lê arquivo novamente (retorna tupla ou só df dependendo se foi preprocessado)
+        resultado_leitura = ler_arquivo_para_dataframe(filepath, filename)
         
-        # Lê arquivo novamente
-        df = ler_arquivo_para_dataframe(filepath, filename)
-        
-        if df is None:
+        if resultado_leitura is None:
             flash(f'Erro ao processar {filename}', 'danger')
             os.remove(filepath)
             continue
         
+        # Desempacota resultado (pode ser tuple ou só DataFrame)
+        if isinstance(resultado_leitura, tuple):
+            df, metadados = resultado_leitura
+            # Atualiza metadados se necessário
+            if 'banco' in metadados:
+                banco = metadados['banco']
+            if 'tipodocumento' in metadados:
+                tipodocumento = metadados['tipodocumento']
+        else:
+            df = resultado_leitura
+        
+        # IMPORTANTE: DataFrame já vem padronizado com ['data', 'lançamento', 'valor (R$)']
+        # se foi preprocessado. Se não foi, precisa passar pelo fluxo antigo ainda.
+        
         # Processa com processador apropriado
         try:
+            origem_nome = f"{banco} - {filename}" if banco != 'Genérico' else filename
+            
             if tipo_final == 'fatura':
-                transacoes = processar_fatura_cartao(df, mapeamento, origem=f'Fatura - {filename}', file_name=filename)
+                # Novo fluxo: passa df padronizado + metadados
+                transacoes = processar_fatura_cartao(
+                    df,
+                    banco=banco,
+                    tipodocumento=tipodocumento,
+                    origem=origem_nome,
+                    file_name=filename
+                )
             else:  # extrato
-                transacoes = processar_extrato_conta(df, mapeamento, origem=f'Extrato - {filename}', file_name=filename)
+                # Novo fluxo: passa df padronizado + metadados
+                transacoes = processar_extrato_conta(
+                    df,
+                    banco=banco,
+                    tipodocumento=tipodocumento,
+                    origem=origem_nome,
+                    file_name=filename
+                )
             
             todas_transacoes.extend(transacoes)
             arquivos_processados.append({
                 'nome': filename,
                 'tipo': tipo_final,
+                'banco': banco,
                 'transacoes': len(transacoes)
             })
             

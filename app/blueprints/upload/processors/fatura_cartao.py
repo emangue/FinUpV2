@@ -1,18 +1,29 @@
 """
-Processador Genérico de Fatura de Cartão de Crédito
+Processador de Lógica de Negócio para Fatura de Cartão de Crédito
 
-Versão: 2.1.0
+Versão: 3.0.0
 Data: 27/12/2025
 Status: stable
 
 🔒 ARQUIVO CRÍTICO - Requer versionamento obrigatório
 
-Aceita qualquer CSV/XLSX de fatura com mapeamento de colunas.
-Processa transações de cartão, detecta parcelas e gera IDs únicos.
+ATENÇÃO: Este arquivo foi SIMPLIFICADO.
+- Transformação de dados específicos do banco → movida para preprocessors (utils/)
+- Este arquivo contém APENAS lógica de negócio:
+  * Detecção e agrupamento de parcelas
+  * Geração de IdParcela único
+  * Inversão de sinal de valores
+  * Classificação de tipo de transação
+  * Metadados de negócio (DT_Fatura, TransacaoFutura, etc)
+
+DataFrame de entrada já vem padronizado com:
+- Colunas: ['data', 'lançamento', 'valor (R$)']
+- Valores em formato float
 
 Histórico:
 - 2.0.0: Otimização de performance (bulk insert, correção N+1 query)
 - 2.1.0: Sistema de versionamento implementado
+- 3.0.0: Simplificação - preprocessamento movido para utils/
 """
 import pandas as pd
 import re
@@ -21,33 +32,30 @@ from app.utils.hasher import generate_id_transacao
 from app.utils.normalizer import normalizar_estabelecimento, detectar_parcela, arredondar_2_decimais
 
 
-def processar_fatura_cartao(df, mapeamento, origem='Fatura', file_name=''):
+def processar_fatura_cartao(df, banco='Genérico', tipodocumento='Fatura Cartão de Crédito', origem='Fatura', file_name=''):
     """
-    Processa DataFrame de fatura de cartão de crédito
+    Processa DataFrame de fatura de cartão (já preprocessado)
+    
+    IMPORTANTE: Este processador espera que o DataFrame já venha padronizado
+    pelo preprocessador do banco específico (fatura_itau.py, etc).
     
     Args:
-        df (DataFrame): DataFrame com os dados da fatura
-        mapeamento (dict): {'data': col, 'estabelecimento': col, 'valor': col}
-        origem (str): Nome da origem (ex: 'Fatura Itaú', 'Fatura Nubank')
+        df (DataFrame): DataFrame PADRONIZADO com ['data', 'lançamento', 'valor (R$)']
+        banco (str): Nome do banco ('Itaú', 'BTG', 'Nubank', etc)
+        tipodocumento (str): 'Fatura Cartão de Crédito'
+        origem (str): Nome da origem para registro
         file_name (str): Nome do arquivo para extrair mês/ano
         
     Returns:
-        list: Lista de transações processadas
+        list: Lista de transações processadas com metadados de negócio
     """
-    print(f"\n💳 Processando Fatura de Cartão: {origem}")
-    
-    # Guarda os nomes originais das colunas
-    col_data = mapeamento['data']
-    col_estabelecimento = mapeamento['estabelecimento']
-    col_valor = mapeamento['valor']
+    print(f"\n💳 Processando lógica de negócio - Fatura de Cartão: {banco}")
     
     try:
-        df_trabalho = df.copy()
         transacoes = []
-        contador_seq = 0
         hash_counter = {}  # Contador para hashes duplicados no mesmo arquivo
         
-        # Tenta extrair ano/mês do nome do arquivo (formato: algo-AAAAMM.extensão)
+        # Extrai ano/mês do nome do arquivo (formato: algo-AAAAMM.extensão)
         match = re.search(r'-(\d{4})(\d{2})', file_name)
         if match:
             ano_fatura = int(match.group(1))
@@ -56,7 +64,7 @@ def processar_fatura_cartao(df, mapeamento, origem='Fatura', file_name=''):
         else:
             # Fallback: usa data da primeira linha
             try:
-                first_date = pd.to_datetime(df_trabalho['data'].iloc[0])
+                first_date = pd.to_datetime(df['data'].iloc[0], format='%d/%m/%Y')
                 ano_fatura = first_date.year
                 mes_fatura = f"{first_date.month:02d}"
                 dt_fatura = f"{ano_fatura}{mes_fatura}"
@@ -70,58 +78,25 @@ def processar_fatura_cartao(df, mapeamento, origem='Fatura', file_name=''):
         # Detecta e agrupa parcelas
         parcelas_map = {}
         
-        for idx, row in df_trabalho.iterrows():
-            contador_seq += 1
+        for idx, row in df.iterrows():
+            data_br = row['data']
+            estabelecimento_raw = str(row['lançamento']).strip()
+            valor = float(row['valor (R$)'])
             
-            # Extrai dados usando os nomes originais das colunas
-            data_raw = row[col_data]
-            estabelecimento_raw = str(row[col_estabelecimento]).strip()
-            valor_raw = row[col_valor]
-            
-            # Ignora pagamentos/estornos comuns
-            if any(termo in estabelecimento_raw.upper() for termo in [
-                'PAGAMENTO EFETUADO', 'PAGAMENTO RECEBIDO', 'CRÉDITO FATURA'
-            ]):
+            # Ignora valores zero
+            if valor == 0:
                 continue
             
-            # Converte data para DD/MM/AAAA
+            # Extrai ano da data
             try:
-                if isinstance(data_raw, str):
-                    # Tenta vários formatos
-                    for fmt in ['%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y']:
-                        try:
-                            dt = datetime.strptime(data_raw, fmt)
-                            break
-                        except:
-                            continue
-                    else:
-                        dt = pd.to_datetime(data_raw)
-                else:
-                    dt = pd.to_datetime(data_raw)
-                
-                data_br = dt.strftime('%d/%m/%Y')
+                dt = datetime.strptime(data_br, '%d/%m/%Y')
                 ano = dt.year
             except:
-                # Se falhar, usa data atual
-                dt = datetime.now()
-                data_br = dt.strftime('%d/%m/%Y')
-                ano = dt.year
-            
-            # Converte valor
-            try:
-                if isinstance(valor_raw, str):
-                    # Remove pontos de milhar e substitui vírgula por ponto
-                    valor = float(valor_raw.replace('.', '').replace(',', '.'))
-                else:
-                    valor = float(valor_raw)
-            except:
-                print(f"⚠️  Valor inválido na linha {idx}: {valor_raw}")
-                continue
+                ano = ano_fatura
             
             # IMPORTANTE: Inverte sinal para padronizar
-            # CSV: despesas positivas, estornos negativos
-            # Banco: despesas negativas, estornos positivos
-            valor = -valor
+            # Preprocessador retorna valores positivos, mas banco precisa negativos
+            valor = -abs(valor)
             
             # Detecta parcela
             parcela_info = detectar_parcela(estabelecimento_raw, origem)
@@ -134,8 +109,6 @@ def processar_fatura_cartao(df, mapeamento, origem='Fatura', file_name=''):
                 estabelecimento_base = re.sub(r'\s*\d{1,2}/\d{1,2}\s*$', '', estabelecimento_raw).strip()
                 
                 # Cria chave para agrupar - inclui valor para diferenciar compras distintas
-                # FIX: Adiciona valor na chave para evitar misturar compras diferentes
-                # com mesmo estabelecimento e quantidade de parcelas
                 chave = f"{estabelecimento_base}_{total_parcelas}_{abs(valor):.2f}"
                 
                 if chave not in parcelas_map:
@@ -154,7 +127,7 @@ def processar_fatura_cartao(df, mapeamento, origem='Fatura', file_name=''):
                 })
             else:
                 # Não tem parcela - adiciona direto
-                # Gera ID base consistente com o banco de dados (FNV-1a)
+                # Gera ID base consistente (FNV-1a)
                 id_base = generate_id_transacao(data_br, estabelecimento_raw, valor)
                 
                 # Se o hash já existe no arquivo atual, adiciona sufixo
@@ -186,6 +159,8 @@ def processar_fatura_cartao(df, mapeamento, origem='Fatura', file_name=''):
                     'NomeTitular': None,
                     'DataPostagem': data_br,
                     'origem': origem,
+                    'banco': banco,
+                    'tipodocumento': tipodocumento,
                     'MarcacaoIA': None,
                     'ValidarIA': None,
                     'TipoGasto': None,
@@ -208,12 +183,10 @@ def processar_fatura_cartao(df, mapeamento, origem='Fatura', file_name=''):
             linhas_parcelas.sort(key=lambda x: x['parcela'])
             
             # Gera IdParcela único para todas as parcelas desta compra
-            # Baseia-se no estabelecimento + valor unitário + total de parcelas
-            # Usa hash simples sem data pois queremos agrupar todas as parcelas
             valor_primeira_parcela = linhas_parcelas[0]['valor'] if linhas_parcelas else 0
             import hashlib
             
-            # FIX: Normaliza estabelecimento para garantir mesmo hash independente de maiúsculas/minúsculas
+            # Normaliza estabelecimento para garantir mesmo hash
             estab_norm_hash = normalizar_estabelecimento(estabelecimento_base)
             chave_parcela = f"{estab_norm_hash}|{abs(valor_primeira_parcela):.2f}|{total_parcelas}"
             id_parcela = hashlib.md5(chave_parcela.encode()).hexdigest()[:16]
@@ -222,13 +195,12 @@ def processar_fatura_cartao(df, mapeamento, origem='Fatura', file_name=''):
             
             # Gera uma transação para cada parcela
             for parcela_data in linhas_parcelas:
-                contador_seq += 1
                 parcela_num = parcela_data['parcela']
                 
                 # Reconstrói nome com parcela para gerar ID correto
                 nome_com_parcela = f"{estabelecimento_base} ({parcela_num}/{total_parcelas})"
                 
-                # ID base único com parcela (consistente com banco de dados)
+                # ID base único com parcela
                 id_base = generate_id_transacao(parcela_data['data'], nome_com_parcela, parcela_data['valor'])
                 
                 # Se o hash já existe no arquivo atual, adiciona sufixo
@@ -253,7 +225,7 @@ def processar_fatura_cartao(df, mapeamento, origem='Fatura', file_name=''):
                 transacoes.append({
                     'IdTransacao': id_transacao,
                     'IdParcela': id_parcela,  # SEMPRE gerado para parcelas
-                    'parcela_atual': parcela_num,  # Adiciona número da parcela para deduplicação
+                    'parcela_atual': parcela_num,  # Para deduplicação
                     'Data': parcela_data['data'],
                     'Estabelecimento': f"{estabelecimento_base} ({parcela_num}/{total_parcelas})",
                     'Valor': arredondar_2_decimais(parcela_data['valor']),
@@ -265,6 +237,8 @@ def processar_fatura_cartao(df, mapeamento, origem='Fatura', file_name=''):
                     'NomeTitular': None,
                     'DataPostagem': parcela_data['data'],
                     'origem': origem,
+                    'banco': banco,
+                    'tipodocumento': tipodocumento,
                     'MarcacaoIA': None,
                     'ValidarIA': None,
                     'TipoGasto': None,
@@ -276,22 +250,22 @@ def processar_fatura_cartao(df, mapeamento, origem='Fatura', file_name=''):
                     'FinalCartao': None
                 })
         
-        print(f"✓ {len(transacoes)} transações extraídas da fatura")
+        print(f"✓ {len(transacoes)} transações processadas")
         if parcelas_processadas > 0:
-            print(f"  ⚡ {parcelas_processadas} transações parceladas com IdParcela gerado")
+            print(f"  ⚡ {parcelas_processadas} transações parceladas com IdParcela")
         return transacoes
         
     except Exception as e:
         import traceback
         print(f"\n{'='*60}")
-        print(f"❌ ERRO DETALHADO AO PROCESSAR FATURA")
+        print(f"❌ ERRO AO PROCESSAR FATURA")
         print(f"{'='*60}")
         print(f"📄 Arquivo: {file_name}")
-        print(f"📋 Mapeamento recebido: {mapeamento}")
-        print(f"📊 Colunas disponíveis no DataFrame: {list(df.columns)}")
-        print(f"⚠️  Tipo do erro: {type(e).__name__}")
+        print(f"🏦 Banco: {banco}")
+        print(f"📋 Tipo: {tipodocumento}")
+        print(f"⚠️  Erro: {type(e).__name__}")
         print(f"💬 Mensagem: {str(e)}")
-        print(f"\n🔍 Traceback completo:")
+        print(f"\n🔍 Traceback:")
         print(traceback.format_exc())
         print(f"{'='*60}\n")
         raise
