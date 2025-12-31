@@ -3,7 +3,12 @@
 {% block title %}Admin - Marcações{% endblock %}
 
 {% block content %}
-<h2 class="mb-4"><i class="fas fa-tags"></i> Administração de Marcações</h2>
+<h2 class="mb-4">
+    <i class="fas fa-tags"></i> Administração de Marcações
+    <button type="button" class="btn btn-success float-end" data-bs-toggle="modal" data-bs-target="#modalNovoSubgrupo">
+        <i class="fas fa-plus"></i> Novo Subgrupo
+    </button>
+</h2>
 
 <div class="card mb-3">
     <div class="card-body">
@@ -150,4 +155,98 @@
         <li><strong>✅ Essencial para dropdowns</strong>: Alimenta os formulários de validação</li>
     </ul>
 </div>
+
+<!-- Modal: Criar Novo Subgrupo -->
+<div class="modal fade" id="modalNovoSubgrupo" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="fas fa-plus"></i> Criar Novo Subgrupo</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formNovoSubgrupo">
+                    <div class="mb-3">
+                        <label class="form-label">Grupo: <span class="text-danger">*</span></label>
+                        <select id="novoGrupo" class="form-select" required>
+                            <option value="">Selecione um grupo existente</option>
+                            {% for grupo in grupos_lista %}
+                            <option value="{{ grupo }}">{{ grupo }}</option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">Escolha entre os grupos já cadastrados</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Subgrupo: <span class="text-danger">*</span></label>
+                        <input type="text" id="novoSubgrupo" class="form-control" placeholder="Ex: Uber Eats" required>
+                        <small class="text-muted">Nome do novo subgrupo</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Tipo de Gasto: <span class="text-danger">*</span></label>
+                        <select id="novoTipoGasto" class="form-select" required>
+                            <option value="">Selecione um tipo</option>
+                            {% for tipo in tipos_gasto_lista %}
+                            <option value="{{ tipo }}">{{ tipo }}</option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">Escolha entre os tipos já existentes</small>
+                    </div>
+                    
+                    <div id="msgNovoSubgrupo"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" onclick="salvarNovoSubgrupo()">
+                    <i class="fas fa-save"></i> Criar Subgrupo
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function salvarNovoSubgrupo() {
+    const grupo = document.getElementById('novoGrupo').value;
+    const subgrupo = document.getElementById('novoSubgrupo').value;
+    const tipo_gasto = document.getElementById('novoTipoGasto').value;
+    const msgDiv = document.getElementById('msgNovoSubgrupo');
+    
+    // Validação
+    if (!grupo || !subgrupo || !tipo_gasto) {
+        msgDiv.innerHTML = '<div class="alert alert-danger">Preencha todos os campos obrigatórios</div>';
+        return;
+    }
+    
+    // Enviar para o servidor
+    fetch('{{ url_for("admin.marcacoes_criar") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            grupo: grupo,
+            subgrupo: subgrupo,
+            tipo_gasto: tipo_gasto
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            msgDiv.innerHTML = '<div class="alert alert-success">Subgrupo criado com sucesso!</div>';
+            setTimeout(() => {
+                location.reload();
+            }, 1500);
+        } else {
+            msgDiv.innerHTML = `<div class="alert alert-danger">${data.message}</div>`;
+        }
+    })
+    .catch(error => {
+        msgDiv.innerHTML = '<div class="alert alert-danger">Erro ao criar subgrupo</div>';
+        console.error('Erro:', error);
+    });
+}
+</script>
 {% endblock %}
