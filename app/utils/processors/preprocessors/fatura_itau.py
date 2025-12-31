@@ -18,12 +18,13 @@ from datetime import datetime
 
 def converter_valor_br(valor_str):
     """
-    Converte valores em formato brasileiro para float
+    Converte valores em formato brasileiro OU americano para float
     
-    Exemplos:
-        "1.232,46" → 1232.46
-        "123,00" → 123.00
-        "-45,67" → -45.67
+    Detecta automaticamente:
+        Formato BR: "1.232,46" → 1232.46
+        Formato US: "1232.46" → 1232.46
+        Formato BR: "123,00" → 123.00
+        Formato US: "123.00" → 123.00
     """
     if pd.isna(valor_str) or valor_str == '':
         return 0.0
@@ -32,8 +33,14 @@ def converter_valor_br(valor_str):
         # Remove espaços
         valor_limpo = str(valor_str).strip()
         
-        # Remove pontos de milhar e substitui vírgula por ponto
-        valor_limpo = valor_limpo.replace('.', '').replace(',', '.')
+        # Detecta formato pelo último separador
+        if ',' in valor_limpo and '.' in valor_limpo:
+            # Tem ambos: formato BR (1.234,56)
+            valor_limpo = valor_limpo.replace('.', '').replace(',', '.')
+        elif ',' in valor_limpo:
+            # Só vírgula: formato BR (1234,56)
+            valor_limpo = valor_limpo.replace(',', '.')
+        # else: só ponto ou nenhum = formato US (já está correto)
         
         return float(valor_limpo)
     except:
@@ -224,21 +231,27 @@ def preprocessar_fatura_itau(df_raw):
         # Remove valores zero
         df_saida = df_saida[df_saida['valor (R$)'] != 0]
         
-        df_saida.reset_index(drop=True, inplace=True)
+        # === INVERSÃO DE SINAIS PARA FATURAS ===
+        # Faturas de cartão sempre vêm com valores positivos (compras)
+        # Inverte TODOS os valores para negativo (representam despesas/dívidas)
+        df_saida['valor (R$)'] = df_saida['valor (R$)'] * -1
+        print(f"   ⚙️ Valores invertidos: faturas sempre geram despesas negativas")
         
-        # Validação básica
         if len(df_saida) == 0:
             raise ValueError("Nenhuma transação válida encontrada no arquivo")
         
+        # Nomes padronizados para fatura de cartão (compatível com routes.py)
         validacao = {
             'validado': True,
-            'transacoes_encontradas': len(df_saida),
-            'soma_total': df_saida['valor (R$)'].sum(),
+            'total_transacoes': len(df_saida),  # Nome esperado pelo template
+            'total_compras': abs(df_saida['valor (R$)'].sum()),  # Valor absoluto para exibição
+            'saldo_devedor': abs(df_saida['valor (R$)'].sum()),  # Saldo devedor = total das compras
+            'mensagem': 'Validação OK',
             'observacao': 'Faturas de cartão não têm validação matemática automática'
         }
         
         print(f"   ✓ {len(df_saida)} transações extraídas")
-        print(f"   ✓ Soma total: R$ {validacao['soma_total']:.2f}")
+        print(f"   ✓ Soma total: R$ {validacao['total_compras']:.2f}")
         
         return df_saida, validacao
         

@@ -93,7 +93,7 @@
                     <div class="row">
                         <div class="col-md-4">
                             <div class="text-center">
-                                <h3 class="text-danger">R$ {{ "%.2f"|format(stats.total) }}</h3>
+                                <h3 class="text-danger">R$ {{ stats.total|format_currency }}</h3>
                                 <p class="text-muted mb-0">Total da Fatura</p>
                             </div>
                         </div>
@@ -111,7 +111,7 @@
                                 <a href="{{ url_for('upload.revisar_categoria', tipo_gasto=tipo) }}" class="text-decoration-none">
                                     <span class="badge bg-secondary">{{ tipo }}</span>
                                 </a>
-                                <strong class="text-danger">R$ {{ "%.2f"|format(valor) }}</strong>
+                                <strong class="text-danger">R$ {{ valor|format_currency }}</strong>
                             </div>
                             {% endfor %}
                         </div>

@@ -74,7 +74,7 @@ def ler_arquivo_para_dataframe(filepath, filename):
                     validacao_data = {
                         'banco': metadados['banco'],
                         'tipodocumento': metadados['tipodocumento'],
-                        'valido': metadados['validacao']['valido'],
+                        'valido': metadados['validacao'].get('validado', True),
                         'mensagem': metadados['validacao'].get('mensagem', 'Validação OK'),
                     }
                     
@@ -148,8 +148,8 @@ def ler_arquivo_para_dataframe(filepath, filename):
                 validacao_data = {
                     'banco': metadados['banco'],
                     'tipodocumento': metadados['tipodocumento'],
-                    'valido': metadados['validacao']['valido'],
-                    'mensagem': metadados['validacao']['mensagem'],
+                    'valido': metadados['validacao'].get('validado', True),
+                    'mensagem': metadados['validacao'].get('mensagem', 'Validação OK'),
                 }
                 
                 # Campos específicos de EXTRATO (conta corrente)
