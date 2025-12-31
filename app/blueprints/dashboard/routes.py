@@ -563,7 +563,6 @@ def transacoes():
         
         # Filtro de tipo com múltiplas seleções
         if filtros_tipos:
-            from sqlalchemy import or_, and_
             condicoes = []
             
             if 'despesa' in filtros_tipos:
