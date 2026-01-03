@@ -1,0 +1,35 @@
+================================================================================
+🔍 DATA FORMAT VALIDATION REPORT
+================================================================================
+Generated: 2026-01-03 11:54:29
+Database: app/financas.db
+
+💳 JOURNAL ENTRIES - Format Validation
+--------------------------------------------------------------------------------
+✅ Campos Obrigatórios: OK
+
+✅ Data (formato DD/MM/AAAA): OK
+
+✅ DataPostagem (formato DD/MM/AAAA): OK
+
+✅ DT_Fatura (formato AAAAMM): OK
+
+⚠️  Consistência Data/Ano/DT_Fatura: 1096 avisos (26.39%)
+  - ID 2: MesAnoRef muito diferente da Data: Data=3/2024, Ref=1/2024
+  - ID 3: MesAnoRef muito diferente da Data: Data=3/2024, Ref=1/2024
+  - ID 4: Ano inconsistente: Data=2023, Ano=2024; Ano inconsistente: Data=2023, MesAnoRef=2024; MesAnoRef muito diferente da Data: Data=4/2023, Ref=1/2024
+
+✅ Consistência Valor vs ValorPositivo: OK
+
+✅ TipoGasto: Todos os valores são válidos
+
+================================================================================
+📊 VALIDATION SUMMARY
+================================================================================
+Total Transações: 4,153
+Erros Críticos: 1,096
+Avisos: 0
+
+📊 Data Quality Score: 73.6/100
+🔶 Dados com problemas moderados - correção recomendada
+================================================================================

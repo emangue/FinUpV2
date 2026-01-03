@@ -153,24 +153,16 @@ def processar_fatura_cartao(df, banco='Genérico', tipodocumento='Fatura Cartão
                     'Valor': arredondar_2_decimais(valor),
                     'ValorPositivo': abs(arredondar_2_decimais(valor)),
                     'TipoTransacao': 'Cartão de Crédito',
-                    'TipoTransacaoAjuste': 'Cartão de Crédito',
                     'Ano': ano,
-                    'DT_Fatura': dt_fatura,
-                    'NomeTitular': None,
+                    'MesFatura': dt_fatura,
                     'DataPostagem': data_br,
-                    'origem': origem,
-                    'banco': banco,
+                    'banco_origem': banco,
                     'tipodocumento': tipodocumento,
-                    'forma_classificacao': 'Não Classificada',
-                    'MarcacaoIA': None,
-                    'ValidarIA': None,
+                    'origem_classificacao': 'Não Classificada',
+                    'arquivo_origem': file_name,
                     'TipoGasto': None,
                     'GRUPO': None,
-                    'SUBGRUPO': None,
-                    'TransacaoFutura': 'SIM' if eh_futura else 'NÃO',
-                    'TipoLancamento': 'Nacional',
-                    'CartaoCodigo8': None,
-                    'FinalCartao': None
+                    'SUBGRUPO': None
                 })
         
         # Processa parcelas agrupadas
@@ -232,24 +224,16 @@ def processar_fatura_cartao(df, banco='Genérico', tipodocumento='Fatura Cartão
                     'Valor': arredondar_2_decimais(parcela_data['valor']),
                     'ValorPositivo': abs(arredondar_2_decimais(parcela_data['valor'])),
                     'TipoTransacao': 'Cartão de Crédito',
-                    'TipoTransacaoAjuste': 'Cartão de Crédito',
                     'Ano': parcela_data['ano'],
-                    'DT_Fatura': dt_fatura,
-                    'NomeTitular': None,
+                    'MesFatura': dt_fatura,
                     'DataPostagem': parcela_data['data'],
-                    'origem': origem,
-                    'banco': banco,
+                    'banco_origem': banco,
                     'tipodocumento': tipodocumento,
-                    'forma_classificacao': 'Não Classificada',
-                    'MarcacaoIA': None,
-                    'ValidarIA': None,
+                    'origem_classificacao': 'Não Classificada',
+                    'arquivo_origem': file_name,
                     'TipoGasto': None,
                     'GRUPO': None,
-                    'SUBGRUPO': None,
-                    'TransacaoFutura': 'SIM' if eh_futura else 'NÃO',
-                    'TipoLancamento': 'Nacional',
-                    'CartaoCodigo8': None,
-                    'FinalCartao': None
+                    'SUBGRUPO': None
                 })
         
         print(f"✓ {len(transacoes)} transações processadas")

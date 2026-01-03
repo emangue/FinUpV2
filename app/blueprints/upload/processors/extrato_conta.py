@@ -104,24 +104,16 @@ def processar_extrato_conta(df, banco='Genérico', tipodocumento='Extrato', orig
                 'Valor': arredondar_2_decimais(valor),
                 'ValorPositivo': abs(arredondar_2_decimais(valor)),
                 'TipoTransacao': tipo_transacao,
-                'TipoTransacaoAjuste': tipo_transacao,
                 'Ano': ano,
-                'DT_Fatura': dt_fatura,
-                'NomeTitular': None,
+                'MesFatura': dt_fatura,
                 'DataPostagem': None,
-                'origem': origem,
-                'banco': banco,
+                'banco_origem': banco,
                 'tipodocumento': tipodocumento,
-                'forma_classificacao': 'Não Classificada',
-                'MarcacaoIA': None,
-                'ValidarIA': None,
+                'origem_classificacao': 'Não Classificada',
+                'arquivo_origem': file_name,
                 'TipoGasto': None,
                 'GRUPO': None,
-                'SUBGRUPO': None,
-                'TransacaoFutura': 'SIM' if eh_futura else 'NÃO',
-                'TipoLancamento': None,
-                'CartaoCodigo8': None,
-                'FinalCartao': None
+                'SUBGRUPO': None
             })
         
         print(f"✓ {len(transacoes)} transações processadas")

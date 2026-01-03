@@ -235,10 +235,13 @@ def analyze_users(cursor):
     return report
 
 
-def generate_report(output_format='console'):
+def generate_report(output_format='console', db_path=None):
     """Gera relatório completo de saúde do banco"""
+    if db_path is None:
+        db_path = DB_PATH
+    
     try:
-        conn = connect_db()
+        conn = connect_db(db_path)
         cursor = conn.cursor()
         
         report_lines = []
@@ -249,7 +252,7 @@ def generate_report(output_format='console'):
         report_lines.append("📊 DATABASE HEALTH CHECK REPORT")
         report_lines.append("=" * 80)
         report_lines.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        report_lines.append(f"Database: {DB_PATH}")
+        report_lines.append(f"Database: {db_path}")
         report_lines.append("")
         
         # Análise de usuários
@@ -412,7 +415,8 @@ if __name__ == '__main__':
     parser.add_argument('--db', default=DB_PATH, help=f'Database path (default: {DB_PATH})')
     
     args = parser.parse_args()
-    DB_PATH = args.db
     
-    exit_code = generate_report(output_format=args.output)
+    db_to_use = args.db if args.db != DB_PATH else DB_PATH
+    
+    exit_code = generate_report(output_format=args.output, db_path=db_to_use)
     sys.exit(exit_code)

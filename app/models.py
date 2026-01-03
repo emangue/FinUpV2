@@ -1,8 +1,8 @@
 """
 Models do banco de dados SQLAlchemy
 
-Versão: 2.1.1
-Data: 28/12/2025
+Versão: 3.0.2
+Data: 03/01/2026
 Status: stable
 
 🔒 ARQUIVO CRÍTICO - Requer versionamento obrigatório
@@ -130,25 +130,16 @@ class JournalEntry(Base):
     Valor = Column(Float, nullable=False)
     ValorPositivo = Column(Float, nullable=False)
     TipoTransacao = Column(String(50))
-    TipoTransacaoAjuste = Column(String(50))
     TipoGasto = Column(String(100))
     GRUPO = Column(String(100))
     SUBGRUPO = Column(String(100))
     Ano = Column(Integer)
-    DT_Fatura = Column(String(6))  # AAAAMM
-    NomeTitular = Column(String(200))
+    MesFatura = Column(String(6))  # AAAAMM (renomeado de DT_Fatura)
     DataPostagem = Column(String(10))  # DD/MM/AAAA
-    origem = Column(String(50), nullable=False, index=True)
-    banco = Column(String(50), nullable=True, index=True)  # Itaú, BTG, Mercado Pago, Genérico
-    tipodocumento = Column(String(50), nullable=True)  # Extrato, Fatura Cartão de Crédito
-    forma_classificacao = Column(String(50), nullable=True, index=True)  # Automática-BasePadrao, Automática-MarcacaoIA, Semi-Automática, Manual
-    MarcacaoIA = Column(String(100))
-    ValidarIA = Column(String(10))
-    CartaoCodigo8 = Column(String(20))
-    FinalCartao = Column(String(4))
-    TipoLancamento = Column(String(20))
-    TransacaoFutura = Column(String(3))
-    IdOperacao = Column(String(20))  # Mercado Pago
+    banco_origem = Column(String(50), nullable=False, index=True)  # Itaú, BTG, Mercado Pago (renomeado de origem)
+    tipodocumento = Column(String(50), nullable=False, index=True)  # Cartão, Extrato
+    origem_classificacao = Column(String(50), nullable=True, index=True)  # Automática - Base Padrões, Manual - Lote, etc
+    arquivo_origem = Column(Text)  # Nome do arquivo de upload original
     IgnorarDashboard = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     
@@ -166,25 +157,16 @@ class JournalEntry(Base):
             'Valor': self.Valor,
             'ValorPositivo': self.ValorPositivo,
             'TipoTransacao': self.TipoTransacao,
-            'TipoTransacaoAjuste': self.TipoTransacaoAjuste,
             'TipoGasto': self.TipoGasto,
             'GRUPO': self.GRUPO,
             'SUBGRUPO': self.SUBGRUPO,
             'Ano': self.Ano,
-            'DT_Fatura': self.DT_Fatura,
-            'NomeTitular': self.NomeTitular,
+            'MesFatura': self.MesFatura,
             'DataPostagem': self.DataPostagem,
-            'origem': self.origem,
-            'banco': self.banco,
+            'banco_origem': self.banco_origem,
             'tipodocumento': self.tipodocumento,
-            'forma_classificacao': self.forma_classificacao,
-            'MarcacaoIA': self.MarcacaoIA,
-            'ValidarIA': self.ValidarIA,
-            'CartaoCodigo8': self.CartaoCodigo8,
-            'FinalCartao': self.FinalCartao,
-            'TipoLancamento': self.TipoLancamento,
-            'TransacaoFutura': self.TransacaoFutura,
-            'IdOperacao': self.IdOperacao,
+            'origem_classificacao': self.origem_classificacao,
+            'arquivo_origem': self.arquivo_origem,
             'IgnorarDashboard': self.IgnorarDashboard,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }

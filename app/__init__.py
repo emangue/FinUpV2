@@ -12,7 +12,7 @@ extensões e configurações necessárias.
 from flask import Flask
 import os
 
-__version__ = "2.1.1"
+__version__ = "3.0.2"
 
 from app.config import Config
 from app.models import init_db
