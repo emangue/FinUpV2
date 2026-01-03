@@ -71,3 +71,9 @@ _csvs_historico/
 # Backup files
 *.bak
 *.backup
+
+# Local backups folder (not for git)
+backups_local/
+
+# Data samples (may contain sensitive info)
+data_samples/

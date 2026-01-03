@@ -1,384 +1,389 @@
-# Sistema de Gestão Financeira Automatizada
+# 💰 Sistema de Gestão Financeira v3.0.1
 
-**Versão Atual:** 3.0.1  
-**Última Atualização:** 28/12/2025
+<div align="center">
 
-Sistema web desenvolvido em Python/Flask para processamento automatizado de extratos e faturas bancárias, com classificação inteligente de transações e interface de validação manual.
+![Status](https://img.shields.io/badge/status-em_produção-success)
+![Python](https://img.shields.io/badge/python-3.12+-blue)
+![Flask](https://img.shields.io/badge/flask-3.0.0-lightgrey)
+![License](https://img.shields.io/badge/license-privado-red)
 
-## 🆕 Novidades da Versão 3.0.1 (28/12/2025)
+**Sistema completo de gestão financeira pessoal com processamento automático de extratos e categorização inteligente**
 
-- **✅ Preprocessador BB CSV Corrigido:** Upload de extratos Banco do Brasil agora funcional
-- **✅ Base de Padrões Personalizada:** Cada novo usuário inicia com base vazia
-- **✅ Sistema Multi-Usuário:** Isolamento completo de dados e padrões por usuário
-- **✅ Aprendizado Personalizado:** Padrões construídos desde a primeira transação
+🌐 **Produção:** https://finup.emangue.com.br
 
-## 📋 Visão Geral
-
-Este sistema substitui o workflow n8n anterior, oferecendo uma interface web para:
-- Upload de arquivos CSV/XLSX (Faturas Itaú, Extratos Itaú, Extratos Mercado Pago)
-- Processamento e extração automática de transações
-- Deduplicação contra base histórica
-- Classificação automática usando padrões aprendidos
-- Validação manual de transações não classificadas
-- Gestão de padrões de classificação
-
-## 🏗️ Arquitetura do Sistema
-
-### ⚙️ Modularização com Flask Blueprints
-
-O sistema utiliza **Application Factory Pattern** com 3 blueprints independentes:
-
-1. **Dashboard Blueprint** (`/dashboard/`)
-   - Dados permanentes do banco de dados
-   - Analytics, visualizações e edição de transações
-   - Acessa: `JournalEntry`, `BaseMarcacao`, `GrupoConfig`, `AuditLog`
-
-2. **Upload Blueprint** (`/upload/`)
-   - Dados temporários em sessão (namespace `upload.*`)
-   - Processamento de arquivos, validação e salvamento
-   - Acessa: `JournalEntry` (para salvar), `BaseMarcacao` (para dropdowns)
-
-3. **Admin Blueprint** (`/admin/`)
-   - Configurações e gerenciamento de bases
-   - CRUD de marcações, padrões, grupos e logos
-   - Acessa: `BaseMarcacao`, `BasePadrao`, `GrupoConfig`, `EstabelecimentoLogo`
-
-**Princípio de Modularidade:**
-- ✅ **Permitido:** Importar modelos compartilhados (`models.py`) - são dados centralizados
-- ✅ **Permitido:** Upload blueprint consultar `BaseMarcacao` para dropdowns de validação
-- ❌ **Proibido:** Blueprints importarem rotas ou lógica de outros blueprints
-- ❌ **Proibido:** Compartilhar dados entre blueprints via variáveis globais
-
-**⚠️ GARANTIA DE MODULARIDADE:**
-Qualquer alteração que possa comprometer a arquitetura modular será **SEMPRE** apresentada para aprovação antes da implementação, incluindo:
-- Análise de impacto na separação de responsabilidades
-- Alternativas que preservem a modularidade
-- Justificativa técnica caso a quebra seja necessária
-- Consequências de longo prazo para manutenibilidade
-
-**Exemplo: Dropdown de Grupos na Validação**
-- O blueprint `upload` acessa `BaseMarcacao.query.distinct(BaseMarcacao.GRUPO)`
-- Isso **não quebra** modularidade pois `BaseMarcacao` é um modelo compartilhado
-- A separação é mantida: dados permanentes (Dashboard) vs temporários (Upload)
-
-### Fluxo de Processamento
-
-```
-┌─────────────────┐
-│  Upload Files   │
-│  (CSV/XLSX)     │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────────────────┐
-│  Identificação Automática   │
-│  - fatura_itau*.csv         │
-│  - Extrato Conta Corrente*  │
-│  - account_statement*.xlsx  │
-└────────┬────────────────────┘
-         │
-         ▼
-┌─────────────────────────────┐
-│   Processamento Específico  │
-│   - Extração de campos      │
-│   - Detecção de parcelas    │
-│   - Geração de IdTransacao  │
-└────────┬────────────────────┘
-         │
-         ▼
-┌─────────────────────────────┐
-│   Deduplicação              │
-│   - Compara com Journal     │
-│   - Move para duplicados    │
-└────────┬────────────────────┘
-         │
-         ▼
-┌─────────────────────────────┐
-│   Classificação Automática  │
-│   1. Base Padrões           │
-│   2. Histórico (Journal)    │
-│   3. Regras Palavras-Chave  │
-└────────┬────────────────────┘
-         │
-         ▼
-┌─────────────────────────────┐
-│   Dashboard & Validação     │
-│   - Resumo financeiro       │
-│   - Validação manual        │
-│   - Seleção de bases        │
-└────────┬────────────────────┘
-         │
-         ▼
-┌─────────────────────────────┐
-│   Salvar Journal Entries    │
-│   - Salva bases selecionadas│
-│   - Apaga duplicados_temp   │
-│   - Regenera padrões        │
-│   - Registra audit log      │
-└─────────────────────────────┘
-```
-
-## 📁 Estrutura de Pastas
-
-```
-ProjetoFinancasV3/
-├── app.py                          # Servidor Flask principal
-├── config.py                       # Configurações da aplicação
-├── models.py                       # Models SQLAlchemy (DB)
-├── requirements.txt                # Dependências Python
-├── import_base_inicial.py          # Script de importação inicial
-├── README.md                       # Documentação (este arquivo)
-├── STATUSPROJETO.md               # Status do projeto
-│
-├── utils/                          # Utilitários gerais
-│   ├── __init__.py
-│   ├── hasher.py                   # Hash FNV-1a 64-bit
-│   ├── normalizer.py               # Normalização de texto
-│   └── deduplicator.py             # Deduplicação contra Journal
-│
-├── processors/                     # Processadores de arquivos
-│   ├── __init__.py
-│   ├── fatura_itau.py              # Processa CSV de faturas
-│   ├── extrato_itau.py             # Processa XLS de extratos
-│   └── mercado_pago.py             # Processa XLSX Mercado Pago
-│
-├── classifiers/                    # Sistema de classificação
-│   ├── __init__.py
-│   ├── auto_classifier.py          # Classificador automático
-│   └── pattern_generator.py        # Geração/regeneração de padrões
-│
-├── scripts/                        # Scripts utilitários
-│   ├── COMO_ADICIONAR_LOGOS.py     # Guia para adicionar logos
-│   └── check_groups.py             # Verificação de grupos
-│
-├── templates/                      # Templates HTML (Jinja2)
-│   ├── base.html                   # Template base com Chart.js
-│   ├── dashboard.html              # Dashboard analítico principal
-│   ├── upload.html                 # Upload e processamento de arquivos
-│   ├── transacoes.html             # Lista de transações com toggle
-│   ├── validar.html                # Validação manual de transações
-│   ├── duplicados.html             # Visualização de duplicados
-│   ├── admin_padroes.html          # Admin de padrões de classificação
-│   ├── admin_logos.html            # Admin de logos de estabelecimentos
-│   └── admin_grupos.html           # Admin de grupos e categorias
-│
-└── static/                         # Arquivos estáticos
-    ├── css/
-    │   └── style.css               # Estilos CSS com Bootstrap 5
-    ├── js/
-    │   └── main.js                 # JavaScript frontend
-    └── logos/                      # Logos de estabelecimentos
-        ├── README.md               # Documentação dos logos
-        └── *.{png,svg,webp,jpg}    # Arquivos de logo
-```
-
-## � PROTEÇÃO DE BASES DE DADOS
-
-### ⚠️ ATENÇÃO: VALIDAÇÃO OBRIGATÓRIA
-
-**TODAS as operações que alterem as bases de dados requerem validação manual:**
-
-- ❌ **NUNCA** execute scripts de importação sem revisar o que será alterado
-- ✅ **SEMPRE** use os scripts com confirmação interativa
-- 🎯 **PRIORIDADE**: Base `BaseMarcacoesGastos` (essencial para dropdowns)
-- ⚡ **VALIDAÇÃO**: Outras bases (`Journal Entries`, `Base_Padroes`) podem ser validadas mas só alteradas com aprovação
-
-### Scripts Disponíveis
-
-- `import_marcacoes_seguro.py` - **RECOMENDADO**: Importa apenas BaseMarcacoesGastos com confirmação
-- `import_base_inicial.py` - **CUIDADO**: Importa todas as bases (use apenas se necessário)
-
-## 🚀 Instalação e Uso
-
-### 1. Instalação
-
-```bash
-# Clone ou navegue até o diretório
-cd ProjetoFinancasV3
-
-# Crie ambiente virtual
-python3 -m venv venv
-source venv/bin/activate  # Mac/Linux
-# venv\Scripts\activate   # Windows
-
-# Instale dependências
-pip install -r requirements.txt
-```
-
-### 2. Importação Inicial (SEGURA)
-
-```bash
-# RECOMENDADO: Importa apenas BaseMarcacoesGastos com validação
-python import_marcacoes_seguro.py
-```
-
-### 3. Importação Completa (SOMENTE SE NECESSÁRIO)
-
-```bash
-# CUIDADO: Importa todas as bases - confirme antes de usar
-python import_base_inicial.py
-```
-
-Isso criará:
-- `financas.db` (banco SQLite)
-- Popula principalmente `base_marcacoes` (necessário para funcionalidade)
-- Opcionalmente `journal_entries`, `base_padroes` (com confirmação)
-
-### 4. Executar Aplicação
-
-```bash
-python app.py
-```
-
-Acesse: `http://localhost:5000`
-
-### 4. Uso Típico
-
-1. **Dashboard Analítico (Home)**
-   - Acesse `http://localhost:5000`
-   - Visualize KPIs (Total Gasto, Receita, Saldo)
-   - Gráficos de despesas por categoria e evolução mensal
-   - Filtre por mês/ano (baseado na data da fatura)
-
-2. **Upload de Arquivos**
-   - Clique em "Upload de Arquivos" no menu
-   - Arraste arquivos CSV/XLSX ou clique em "Escolher Arquivos"
-   - Clique em "Processar Arquivos"
-
-3. **Revisar Processamento**
-   - Veja resumo de transações por origem (Fatura Itaú, Extrato Itaú, Mercado Pago)
-   - Verifique valores de faturas/extratos
-   - **Selecione quais bases deseja salvar** (checkbox por origem)
-   - Clique em "Ver Duplicados" se houver
-
-4. **Validar Pendentes** (se houver)
-   - Clique em "Validar Marcações Pendentes"
-   - Classifique transação por transação
-   - Salve ao finalizar
-
-5. **Salvar na Base**
-   - Selecione as origens desejadas (ou marque "Selecionar Todas")
-   - Clique em "Salvar Selecionadas na Journal Entries"
-   - Aguarde processamento
-   - Padrões são regenerados automaticamente
-
-6. **Gerenciar Padrões e Logos** (opcional)
-   - Acesse `/admin/padroes` para regras de classificação
-   - Acesse `/admin/logos` para gerenciar logos de estabelecimentos (Criar/Editar)
-
-## 📊 Funcionalidades Principais
-
-### Dashboard Analítico Completo
-Sistema de dashboard avançado com visualizações interativas:
-- **Filtros Temporais:** Seletor de Mês/Ano para análise temporal
-- **KPIs Financeiros:** Cards com Total de Despesas, Receitas e Saldo
-- **Gráficos Interativos (Chart.js 4.4.0):**
-  - Gráfico de barras com evolução mensal dos últimos 6 meses (valores em milhares)
-  - Gráfico de pizza com insights das principais categorias de gastos
-  - Top 10 SubGrupos de gastos (em vez de estabelecimentos individuais)
-- **Modal de Detalhes:** Sistema de modais para visualizar detalhes completos de transações
-- **Formatação Brasileira:** Valores em R$ com separadores de milhares
-- **Seção de Categorias:** Área dedicada para futuras análises categóricas
-
-### Sistema de Toggle para Controle de Dashboard
-Interface avançada para gestão granular de transações:
-- **Listagem Detalhada:** Visualização completa com logos, grupos e valores formatados
-- **Toggle "Status Dashboard":** Interruptor visual para controle de inclusão nos cálculos
-  - **Ativo (Verde):** Transação considerada nos totais e gráficos do dashboard
-  - **Inativo (Cinza):** Transação mantida no histórico mas excluída dos cálculos
-  - **Casos de uso:** Investimentos, transferências internas, transações especiais
-- **Atualização em Tempo Real:** Dashboard recalcula automaticamente via AJAX
-- **Persistência:** Status salvo no banco de dados para manter estado entre sessões
-
-### Gestão de Logos
-Sistema inteligente para associar logos aos estabelecimentos:
-- **Upload de Logos:** Associe imagens a estabelecimentos normalizados.
-- **Edição vs Criação:** Interface distingue entre adicionar novo logo ou atualizar existente.
-- **Visualização:** Logos aparecem nas listagens de transações para fácil identificação.
-
-### Seleção de Bases para Salvamento
-
-O sistema permite duas formas de salvar transações:
-
-1. **Salvar Todas**: Checkbox "Selecionar Todas" marca todas as origens
-2. **Salvar Selecionadas**: Escolha individualmente quais origens salvar:
-   - ☑️ Fatura Itaú (3 arquivos - out/nov/dez 2025)
-   - ☑️ Extrato Itaú Person
-   - ☑️ Mercado Pago (3 arquivos)
-
-Apenas as transações das origens selecionadas serão salvas no `journal_entries`.
-
-### Dashboard por Origem
-
-O dashboard exibe estatísticas separadas por origem:
-
-**Para Faturas:**
-- Valor total da fatura
-- Breakdown por TipoGasto (Fixo, Ajustável, etc.)
-- Quantidade de transações
-
-**Para Extratos:**
-- Soma total de despesas
-- Soma total de receitas
-- Saldo líquido
-- Quantidade de transações
-
-## 🔒 Segurança e Boas Práticas
-
-- **Sessões:** Uso de Flask sessions para armazenar uploads temporários
-- **Validação:** WTForms para validação de formulários
-- **SQL Injection:** SQLAlchemy ORM previne ataques
-- **File Upload:** Validação de extensões e tamanho máximo
-- **Audit Log:** Rastreamento de todas as modificações
-- **Backup:** Sempre faça backup do `financas.db` antes de mudanças grandes
-
-## 📝 Logs e Debug
-
-### Habilitar modo debug
-Em `app.py`:
-```python
-app.run(debug=True)
-```
-
-### Logs de classificação
-O classificador imprime logs durante o processamento:
-```
-✓ Carregadas 150 marcações válidas da base
-Múltiplos matches para "SUPERMERCADO EXTRA": ['SUPERMERCADO', 'EXTRA']
-🔗 Transferências marcadas: 5
-```
-
-## 🔄 Funcionalidades Implementadas
-
-- [x] **Dashboard Analítico Completo:** KPIs, gráficos interativos com Chart.js 4.4.0
-- [x] **Sistema de Upload Multi-formato:** CSV (Itaú), XLS (Extrato), XLSX (Mercado Pago)  
-- [x] **Classificação Automática Inteligente:** Base de padrões + histórico + palavras-chave
-- [x] **Sistema de Toggle para Dashboard:** Controle granular de inclusão de transações
-- [x] **Gestão de Logos:** Upload e associação de imagens aos estabelecimentos
-- [x] **Deduplicação Automática:** Prevenção de duplicatas contra base histórica
-- [x] **Interface de Validação Manual:** Para transações não classificadas automaticamente
-- [x] **API REST:** Endpoints para dados de transações e detalhes
-- [x] **Audit Log Completo:** Rastreamento de todas as operações do sistema
-- [x] **Formatação Brasileira:** Valores, datas e separadores no padrão nacional
-
-## 🔄 Roadmap Futuro
-
-- [ ] Detector inteligente de transferências entre contas
-- [ ] Exportação avançada para Excel/CSV com formatação
-- [ ] Dashboard de tendências e previsões financeiras  
-- [ ] API REST completa para integrações externas
-- [ ] Sistema multi-usuário com autenticação e permissões
-- [ ] Backup automático e versionamento do banco de dados
-- [ ] Importação de formatos OFX/QIF de outros bancos
-- [ ] Notificações e alertas de gastos por categoria
-- [ ] Análise de padrões e sugestões de economia
-
-## 📄 Licença
-
-Uso pessoal - Emanuel Guerra Leandro
+</div>
 
 ---
 
-**Versão:** 2.0.0  
-**Última atualização:** 26/12/2025  
-**Status:** Produção ✅ - Sistema completo e funcional
+## ✨ Funcionalidades
+
+### 📊 Dashboard Financeiro
+- Visualização consolidada de transações
+- Filtros por período, categoria, estabelecimento
+- Soma automática de valores filtrados
+- Gráficos e estatísticas (em desenvolvimento)
+
+### 📤 Upload Inteligente
+- **Processamento automático** de múltiplos formatos:
+  - 🏦 Banco do Brasil (CSV, OFX)
+  - 🏦 Itaú (CSV, XLS)
+  - 🏦 XP Investimentos (XLSX)
+  - 💳 Mercado Pago (XLSX)
+  - 💳 Cartões de crédito (CSV, OFX)
+- **Detecção de duplicatas** (hash FNV-1a de 64 bits)
+- **Normalização automática** de estabelecimentos
+- **Validação em 3 etapas:** Upload → Validação → Confirmação
+
+### 🤖 Classificação Automática
+- Machine learning baseado em padrões históricos
+- 373 padrões pré-configurados
+- Confiança alta/média/baixa
+- Sugestões de grupo, subgrupo e tipo de gasto
+
+### 👥 Multi-usuário
+- Sistema completo de autenticação (Flask-Login + bcrypt)
+- Isolamento total de dados por usuário (100% user_id)
+- Roles: Admin e User
+- Gestão de perfis e permissões
+
+### 📦 Gestão de Parcelas
+- Controle de compras parceladas
+- Acompanhamento de contratos ativos/finalizados
+- Vinculação automática transação ↔ parcela
+
+### 🔍 Administração Avançada
+- Gerenciamento de grupos e subgrupos
+- Marcações e classificações customizadas
+- Logos personalizados para estabelecimentos
+- Padrões de classificação editáveis
+
+---
+
+## 🏗️ Arquitetura
+
+### Stack Tecnológico
+
+```
+Frontend:  Bootstrap 5.3 + Jinja2 + JavaScript
+Backend:   Flask 3.0 + SQLAlchemy 2.0 + Python 3.12
+Database:  SQLite 3.45
+Servidor:  Nginx + Gunicorn
+Deploy:    Hostinger VPS (Ubuntu 24.04)
+SSL:       Let's Encrypt (renovação automática)
+```
+
+### Estrutura de Diretórios
+
+```
+📦 ProjetoFinancasV3
+ ├── 📂 app/                  # Código principal Flask
+ │   ├── 📂 blueprints/       # Módulos (auth, admin, dashboard, upload)
+ │   └── 📂 utils/            # Utilitários compartilhados
+ ├── 📂 templates/            # Templates Jinja2
+ ├── 📂 static/               # CSS, JS, logos
+ ├── 📂 scripts/              # Scripts de manutenção
+ ├── 📂 docs/                 # Documentação completa
+ ├── 📂 deployment_scripts/   # Deploy automatizado
+ ├── 📂 tests/                # Testes automatizados
+ └── 📄 run.py                # Entry point
+```
+
+📖 **Documentação completa:** [docs/ESTRUTURA_ORGANIZADA.md](docs/ESTRUTURA_ORGANIZADA.md)
+
+---
+
+## 🚀 Quick Start
+
+### 1. Pré-requisitos
+
+```bash
+Python 3.12+
+pip (gerenciador de pacotes Python)
+venv (ambiente virtual)
+```
+
+### 2. Instalação Local
+
+```bash
+# Clonar repositório (se aplicável)
+git clone <repo_url>
+cd ProjetoFinancasV3
+
+# Criar ambiente virtual
+python3 -m venv venv
+source venv/bin/activate  # No Windows: venv\Scripts\activate
+
+# Instalar dependências
+pip install -r requirements.txt
+
+# Configurar banco de dados (primeira vez)
+python import_base_inicial.py
+```
+
+### 3. Executar Aplicação
+
+```bash
+# Desenvolvimento
+python run.py
+
+# Produção (via Gunicorn)
+gunicorn --bind 127.0.0.1:5000 --workers 2 run:app
+```
+
+Acesse: http://localhost:5000
+
+### 4. Login Padrão
+
+```
+Email: admin@exemplo.com (ou conforme seu banco)
+Senha: (configurada no banco de dados)
+```
+
+---
+
+## 📦 Deployment
+
+### Deploy para Hostinger VPS
+
+```bash
+# Deploy completo (primeira vez)
+./deployment_scripts/deploy_hostinger.sh
+
+# Deploy incremental (atualizações)
+python deployment_scripts/deploy.py --target production \
+  --vm-user root --vm-host 148.230.78.91
+
+# Verificar antes de deployar
+python deployment_scripts/deploy.py --check-only
+```
+
+### Requisitos da VM
+
+- **OS:** Ubuntu 24.04 LTS
+- **RAM:** Mínimo 2GB (recomendado 4GB+)
+- **CPU:** Mínimo 1 core (recomendado 2+)
+- **Disco:** Mínimo 5GB disponível
+
+📖 **Guia completo de deployment:** [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
+
+---
+
+## 🔐 Segurança
+
+### Camadas de Proteção
+
+✅ **Firewall (UFW):** Portas 22, 80, 443 abertas, resto bloqueado  
+✅ **Fail2ban:** Proteção contra brute force (SSH + Nginx)  
+✅ **SSL/TLS 1.3:** Certificado Let's Encrypt (renovação automática)  
+✅ **SSH Keys:** Autenticação por chave RSA 4096 bits  
+✅ **Bcrypt:** Hash de senhas com 12 rounds  
+✅ **CSRF Protection:** Flask-WTF habilitado  
+✅ **Headers de Segurança:** HSTS, X-Frame-Options, CSP  
+✅ **Isolamento de Usuários:** 100% user_id nas transações  
+
+### Conformidade
+
+- ✅ LGPD: Isolamento de dados por usuário
+- ✅ PCI DSS: Não armazena dados de cartão
+- ✅ OWASP Top 10: Protegido contra principais vulnerabilidades
+
+📖 **Análise completa de segurança:** [docs/SECURITY_AND_DEPLOYMENT.md](docs/SECURITY_AND_DEPLOYMENT.md)
+
+---
+
+## 💾 Backup e Recuperação
+
+### Backup Automático
+
+```bash
+# Configurado via cron (diariamente às 3h AM)
+0 3 * * * /opt/financial-app/backup.sh
+
+# Retenção: 30 dias
+# Compressão: gzip (77% economia)
+# Localização: /backups/financial-app/
+```
+
+### Backup Manual
+
+```bash
+# Criar backup
+python scripts/backup_database.py --output backups_local/manual_$(date +%Y%m%d).db.gz
+
+# Restaurar backup
+python scripts/backup_database.py restore backups_local/manual_20260102.db.gz
+
+# Verificar integridade
+python scripts/database_health_check.py
+```
+
+---
+
+## 📊 Status do Projeto
+
+### Versão Atual: 3.0.1 (Janeiro 2026)
+
+- ✅ **Produção:** https://finup.emangue.com.br
+- ✅ **Usuários:** 2 ativos
+- ✅ **Transações:** 4,153 importadas
+- ✅ **Padrões:** 373 classificações
+- ✅ **Uptime:** 99.9% (monitorado)
+- ✅ **Health Score:** 80/100
+
+### Próximas Funcionalidades
+
+- [ ] Dashboard com gráficos (Chart.js)
+- [ ] Exportação de relatórios (PDF, Excel)
+- [ ] API REST para integração
+- [ ] App mobile (React Native)
+- [ ] Notificações por email
+
+📖 **Roadmap completo:** [docs/STATUSPROJETO.md](docs/STATUSPROJETO.md)
+
+---
+
+## 🧪 Testes
+
+### Testes Automatizados
+
+```bash
+# Rodar todos os testes
+python tests/deployment_health_check.py
+
+# Health check do banco
+python scripts/database_health_check.py
+
+# Verificar mudanças
+python deployment_scripts/deployment_diff.py
+```
+
+### Cobertura de Testes
+
+- ✅ 12 testes de capabilities (100% passing)
+- ✅ Verificação de integridade do BD
+- ✅ Validação de estrutura de arquivos
+- ✅ Testes de deployment
+
+---
+
+## 📚 Documentação
+
+### Principais Documentos
+
+- 📖 [SECURITY_AND_DEPLOYMENT.md](docs/SECURITY_AND_DEPLOYMENT.md) - **Segurança completa**
+- 📖 [ESTRUTURA_ORGANIZADA.md](docs/ESTRUTURA_ORGANIZADA.md) - Estrutura do projeto
+- 📖 [DEPLOYMENT.md](docs/DEPLOYMENT.md) - Guia de deployment
+- 📖 [CHANGELOG.md](docs/CHANGELOG.md) - Histórico de versões
+- 📖 [VERSIONAMENTO.md](docs/VERSIONAMENTO.md) - Sistema de versionamento
+- 📖 [BUGS.md](docs/BUGS.md) - Issues conhecidos
+
+### Documentação Técnica
+
+- 📖 [ARQUITETURA_COMPONENTES.md](docs/ARQUITETURA_COMPONENTES.md) - Arquitetura detalhada
+- 📖 [MODULARIZACAO.md](docs/MODULARIZACAO.md) - Histórico de refatoração
+- 📖 [CONTRIBUTING.md](docs/CONTRIBUTING.md) - Guia de contribuição
+
+---
+
+## 🛠️ Ferramentas e Scripts
+
+### Scripts Principais
+
+```bash
+# Backup e restauração
+python scripts/backup_database.py auto|restore|list
+
+# Health check
+python scripts/database_health_check.py
+
+# Versionamento
+python scripts/version_manager.py start|finish|rollback <arquivo>
+
+# Deployment
+python deployment_scripts/deploy.py [--check-only] [--target production]
+
+# Análise
+python scripts/analisar_transacoes.py
+python scripts/buscar_similares.py
+```
+
+---
+
+## 🤝 Contribuindo
+
+### Workflow de Desenvolvimento
+
+1. **Criar branch** para nova feature
+2. **Versionar mudanças** com `version_manager.py`
+3. **Testar localmente** com `python run.py`
+4. **Rodar health check** antes de commit
+5. **Fazer commit** (hook pre-commit valida versionamento)
+6. **Deploy para staging** (se disponível)
+7. **Deploy para produção** após validação
+
+### Padrões de Código
+
+- **Python:** PEP 8 (autopep8, black)
+- **HTML/Jinja2:** Indentação 2 espaços
+- **JavaScript:** ES6+, sem jQuery
+- **CSS:** BEM methodology (recomendado)
+
+📖 **Guia completo:** [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)
+
+---
+
+## 📞 Suporte e Contato
+
+### Em caso de problemas
+
+1. **Verificar logs:**
+   ```bash
+   # Logs da aplicação
+   tail -f /opt/financial-app/logs/app.log
+   
+   # Logs do sistema
+   journalctl -u financial-app -f
+   ```
+
+2. **Health check:**
+   ```bash
+   python scripts/database_health_check.py
+   ```
+
+3. **Consultar documentação:**
+   - [docs/BUGS.md](docs/BUGS.md) - Problemas conhecidos
+   - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) - Troubleshooting
+
+### Recursos
+
+- 🌐 **Produção:** https://finup.emangue.com.br
+- 📧 **Email:** emangue@emangue.com.br
+- 📂 **Docs:** `/docs/` (este repositório)
+
+---
+
+## 📄 Licença
+
+**Projeto Privado** - Todos os direitos reservados © 2026
+
+Este é um projeto pessoal de gestão financeira. Código fonte não é público.
+
+---
+
+## 🙏 Agradecimentos
+
+- **Flask** - Framework web robusto e flexível
+- **SQLAlchemy** - ORM poderoso para Python
+- **Bootstrap** - Framework CSS responsivo
+- **Let's Encrypt** - SSL gratuito e confiável
+- **Hostinger** - Hospedagem VPS confiável
+
+---
+
+<div align="center">
+
+**Desenvolvido com ❤️ por Emanuel**
+
+*Última atualização: Janeiro 2026*
+
+</div>

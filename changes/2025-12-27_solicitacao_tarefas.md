@@ -13,7 +13,9 @@ Comando padrão para religar o servidor:
 /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV3/venv/bin/python run.py
 ```
 ## 7. Validação do extrato BTG
-As bases do Mercado Pago são os arquivos account_statement. Realizar a mesma validação feita com esses arquivos para o extrato do BTG, mantendo o texto e o padrão de validação semelhantes.
+- Verificar se o extrato_btg esta preparado para ser reconhecido como extrato.
+- Avaliar se as validações feitas para fatura do Itaú funcionam para esses arquivos ou se precisam de ajustes.
+- Se necessário, mapear o arquivo para extrair dados e validações corretamente.
 
 ## 4. Automação de religamento do servidor
 - Após cada ajuste, religar automaticamente o servidor.
