@@ -6,6 +6,8 @@
 **VM:** 148.230.78.91 (srv1045889.hstgr.cloud)  
 **SSH:** `ssh -i ~/.ssh/id_rsa_hostinger root@148.230.78.91`
 
+**⚠️ REGRA OBRIGATÓRIA:** O resultado final de QUALQUER deploy DEVE ser um site acessível via **HTTPS** (não HTTP). Se HTTPS não estiver funcionando, o deploy está **INCOMPLETO** e deve ser considerado **FALHA**.
+
 ---
 
 ## 📋 CHECKLIST OBRIGATÓRIO (Siga SEMPRE nesta ordem!)
@@ -143,17 +145,24 @@
 
 - [ ] **6.6** Verificar que retorna HTML válido (não erro 502/503/404)
 
-- [ ] **6.7** Testar login:
+- [ ] **6.7** **VERIFICAR HTTPS (OBRIGATÓRIO):**
+  ```bash
+  curl -s -I https://finup.emangue.com.br/ | grep -i "HTTP/2 200"
+  ```
+  - Se retornar erro ou HTTP (não HTTPS) → **Deploy INCOMPLETO**
+  - HTTPS é OBRIGATÓRIO, não opcional
+
+- [ ] **6.8** Testar login:
   ```bash
   curl -s https://finup.emangue.com.br/auth/login | grep -i "login"
   ```
+10** Se houver ERROS ou HTTPS não funcionar → **ROLLBACK IMEDIATO**
 
-- [ ] **6.8** Verificar logs de erro:
-  ```bash
-  ssh -i ~/.ssh/id_rsa_hostinger root@148.230.78.91 \
-    "tail -20 /opt/financial-app/logs/error.log"
-  ```
+---
 
+### FASE 7: CONFIRMAÇÃO FINAL
+
+- [ ] **7.1** Acessar **https://finup.emangue.com.br** no navegador (HTTPS obrigatório)
 - [ ] **6.9** Se houver ERROS → **ROLLBACK IMEDIATO**
 
 ---
@@ -168,13 +177,14 @@
   ✅ Deploy concluído!
   
   Por favor, acesse: https://finup.emangue.com.br
+  ⚠️  IMPORTANTE: Verifique que está usando HTTPS (cadeado no navegador)
   E confirme que tudo está funcionando.
   
-  Está tudo OK? (S/N)
+  HTTPS funcionando? Tudo OK? (S/N)
   ```
 
-- [ ] **7.5** Se usuário confirmar → ✅ **DEPLOY BEM-SUCEDIDO**
-- [ ] **7.6** Se usuário reportar problema → **ROLLBACK**
+- [ ] **7.5** Se usuário confirmar HTTPS + funcionamento → ✅ **DEPLOY BEM-SUCEDIDO**
+- [ ] **7.6** Se HTTPS não funcionar OU usuário reportar problema → **ROLLBACK**
 
 ---
 
@@ -211,6 +221,8 @@ ssh -i ~/.ssh/id_rsa_hostinger root@148.230.78.91 \
 - ❌ Deploy sem pedir autorização do usuário
 - ❌ Deploy sem fazer backup
 - ❌ Deploy sem validar depois
+- ❌ Aceitar deploy sem HTTPS funcionando
+- ❌ Usar HTTP em produção (HTTPS é obrigatório)
 - ❌ Usar IP direto (148.230.78.91) - sempre usar https://finup.emangue.com.br
 - ❌ Modificar arquivos diretamente na VM via SSH
 - ❌ Deletar backups sem confirmar
