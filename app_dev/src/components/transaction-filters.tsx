@@ -117,15 +117,22 @@ export function TransactionFilters({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value=" ">Limpar filtro</SelectItem>
-                  <SelectItem value="Casa">Casa</SelectItem>
+                  <SelectItem value="Alimentação">Alimentação</SelectItem>
+                  <SelectItem value="Assinaturas">Assinaturas</SelectItem>
                   <SelectItem value="Carro">Carro</SelectItem>
-                  <SelectItem value="Comunicação">Comunicação</SelectItem>
+                  <SelectItem value="Casa">Casa</SelectItem>
+                  <SelectItem value="Doações">Doações</SelectItem>
                   <SelectItem value="Educação">Educação</SelectItem>
-                  <SelectItem value="Lazer">Lazer</SelectItem>
+                  <SelectItem value="Entretenimento">Entretenimento</SelectItem>
+                  <SelectItem value="Limpeza">Limpeza</SelectItem>
+                  <SelectItem value="MeLi + Amazon">MeLi + Amazon</SelectItem>
                   <SelectItem value="Outros">Outros</SelectItem>
+                  <SelectItem value="Presentes">Presentes</SelectItem>
+                  <SelectItem value="Roupas">Roupas</SelectItem>
+                  <SelectItem value="Salário">Salário</SelectItem>
                   <SelectItem value="Saúde">Saúde</SelectItem>
                   <SelectItem value="Serviços">Serviços</SelectItem>
-                  <SelectItem value="Supermercado">Supermercado</SelectItem>
+                  <SelectItem value="Tecnologia">Tecnologia</SelectItem>
                   <SelectItem value="Transporte">Transporte</SelectItem>
                   <SelectItem value="Viagens">Viagens</SelectItem>
                 </SelectContent>
@@ -134,12 +141,28 @@ export function TransactionFilters({
 
             <div className="grid gap-2">
               <Label htmlFor="subgrupo">Subgrupo</Label>
-              <Input
-                id="subgrupo"
-                placeholder="Digite o subgrupo..."
+              <Select
                 value={filters.subgrupo || ''}
-                onChange={(e) => setFilters({ ...filters, subgrupo: e.target.value })}
-              />
+                onValueChange={(value) => setFilters({ ...filters, subgrupo: value || undefined })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione..." />
+                </SelectTrigger>
+                <SelectContent className="max-h-[300px]">
+                  <SelectItem value=" ">Limpar filtro</SelectItem>
+                  <SelectItem value="Casa">Casa</SelectItem>
+                  <SelectItem value="Energia">Energia</SelectItem>
+                  <SelectItem value="Internet">Internet</SelectItem>
+                  <SelectItem value="Condomínio">Condomínio</SelectItem>
+                  <SelectItem value="Supermercado">Supermercado</SelectItem>
+                  <SelectItem value="Combustível">Combustível</SelectItem>
+                  <SelectItem value="Estacionamento">Estacionamento</SelectItem>
+                  <SelectItem value="Saúde">Saúde</SelectItem>
+                  <SelectItem value="Viagens">Viagens</SelectItem>
+                  <SelectItem value="MeLi + Amazon">MeLi + Amazon</SelectItem>
+                  <SelectItem value="Outros">Outros</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
@@ -201,24 +224,64 @@ export function TransactionFilters({
           </div>
 
           {/* Período */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="mesInicio">Mês Início</Label>
-              <Input
-                id="mesInicio"
-                type="month"
+          <div className="grid gap-2">
+            <Label>Período</Label>
+            <div className="flex gap-2">
+              <Select
                 value={filters.mesInicio || ''}
-                onChange={(e) => setFilters({ ...filters, mesInicio: e.target.value })}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="mesFim">Mês Fim</Label>
-              <Input
-                id="mesFim"
-                type="month"
+                onValueChange={(value) => setFilters({ ...filters, mesInicio: value || undefined })}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Mês início" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value=" ">Limpar</SelectItem>
+                  <SelectItem value="2026-01">Janeiro 2026</SelectItem>
+                  <SelectItem value="2025-12">Dezembro 2025</SelectItem>
+                  <SelectItem value="2025-11">Novembro 2025</SelectItem>
+                  <SelectItem value="2025-10">Outubro 2025</SelectItem>
+                  <SelectItem value="2025-09">Setembro 2025</SelectItem>
+                  <SelectItem value="2025-08">Agosto 2025</SelectItem>
+                  <SelectItem value="2025-07">Julho 2025</SelectItem>
+                  <SelectItem value="2025-06">Junho 2025</SelectItem>
+                  <SelectItem value="2025-05">Maio 2025</SelectItem>
+                  <SelectItem value="2025-04">Abril 2025</SelectItem>
+                  <SelectItem value="2025-03">Março 2025</SelectItem>
+                  <SelectItem value="2025-02">Fevereiro 2025</SelectItem>
+                  <SelectItem value="2025-01">Janeiro 2025</SelectItem>
+                  <SelectItem value="2024-12">Dezembro 2024</SelectItem>
+                  <SelectItem value="2024-11">Novembro 2024</SelectItem>
+                  <SelectItem value="2024-10">Outubro 2024</SelectItem>
+                </SelectContent>
+              </Select>
+              <span className="flex items-center text-muted-foreground">até</span>
+              <Select
                 value={filters.mesFim || ''}
-                onChange={(e) => setFilters({ ...filters, mesFim: e.target.value })}
-              />
+                onValueChange={(value) => setFilters({ ...filters, mesFim: value || undefined })}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Mês fim" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value=" ">Limpar</SelectItem>
+                  <SelectItem value="2026-01">Janeiro 2026</SelectItem>
+                  <SelectItem value="2025-12">Dezembro 2025</SelectItem>
+                  <SelectItem value="2025-11">Novembro 2025</SelectItem>
+                  <SelectItem value="2025-10">Outubro 2025</SelectItem>
+                  <SelectItem value="2025-09">Setembro 2025</SelectItem>
+                  <SelectItem value="2025-08">Agosto 2025</SelectItem>
+                  <SelectItem value="2025-07">Julho 2025</SelectItem>
+                  <SelectItem value="2025-06">Junho 2025</SelectItem>
+                  <SelectItem value="2025-05">Maio 2025</SelectItem>
+                  <SelectItem value="2025-04">Abril 2025</SelectItem>
+                  <SelectItem value="2025-03">Março 2025</SelectItem>
+                  <SelectItem value="2025-02">Fevereiro 2025</SelectItem>
+                  <SelectItem value="2025-01">Janeiro 2025</SelectItem>
+                  <SelectItem value="2024-12">Dezembro 2024</SelectItem>
+                  <SelectItem value="2024-11">Novembro 2024</SelectItem>
+                  <SelectItem value="2024-10">Outubro 2024</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </div>

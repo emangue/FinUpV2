@@ -104,8 +104,12 @@ const data = {
           url: "/settings/profile",
         },
         {
-          title: "Categorias",
-          url: "/settings/categories",
+          title: "Gestão de Categorias",
+          url: "/settings",
+        },
+        {
+          title: "Disponibilidade de Arquivos",
+          url: "/settings?tab=bancos",
         },
         {
           title: "Backup",

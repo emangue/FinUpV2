@@ -6,6 +6,7 @@ import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { Calendar } from "@/components/ui/calendar"
 import {
   Dialog,
@@ -44,9 +45,15 @@ interface UploadDialogProps {
   onUploadSuccess?: () => void
 }
 
+interface BankCompatibility {
+  [bank: string]: {
+    [format: string]: string  // 'OK', 'WIP', 'TBD'
+  }
+}
+
 export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDialogProps) {
   const [date, setDate] = React.useState<Date>(new Date())
-  const [fileFormat, setFileFormat] = React.useState("pdf")
+  const [fileFormat, setFileFormat] = React.useState("csv")
   const [selectedFile, setSelectedFile] = React.useState<File | null>(null)
   const [password, setPassword] = React.useState("")
   const [bank, setBank] = React.useState("")
@@ -54,6 +61,7 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
   const [activeTab, setActiveTab] = React.useState("fatura")
   const [isUploading, setIsUploading] = React.useState(false)
   const [uploadError, setUploadError] = React.useState<string | null>(null)
+  const [compatibility, setCompatibility] = React.useState<BankCompatibility>({})
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -129,7 +137,7 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
   const resetForm = () => {
     setSelectedFile(null)
     setDate(new Date())
-    setFileFormat("pdf")
+    setFileFormat("csv")
     setPassword("")
     setBank("")
     setCreditCard("")
@@ -141,8 +149,50 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
   React.useEffect(() => {
     if (open) {
       resetForm()
+      
+      // Buscar compatibilidade da API
+      fetch('/api/compatibility')
+        .then(res => res.json())
+        .then(data => {
+          console.log('🔍 Compatibilidade carregada:', data)
+          setCompatibility(data)
+        })
+        .catch(err => console.error('❌ Erro ao buscar compatibilidade:', err))
     }
   }, [open])
+  
+  // Filtrar bancos que têm pelo menos um formato OK para o formato selecionado
+  const availableBanks = React.useMemo(() => {
+    if (!compatibility || Object.keys(compatibility).length === 0) {
+      return []
+    }
+    
+    return Object.keys(compatibility).filter(bankName => {
+      const formats = compatibility[bankName]
+      // Verificar se tem pelo menos um formato disponível (OK ou WIP)
+      return Object.values(formats).some(status => status === 'OK' || status === 'WIP')
+    })
+  }, [compatibility])
+  
+  // Verificar status de um formato específico para o banco selecionado
+  const getFormatStatus = (format: string): string => {
+    if (!bank || !compatibility) return 'TBD'
+    
+    // O banco no state está em lowercase com hífens, mas na API está com nome original
+    // Precisamos encontrar o banco correto na compatibilidade
+    const bankKey = Object.keys(compatibility).find(
+      key => key.toLowerCase().replace(/ /g, '-') === bank
+    )
+    
+    if (!bankKey || !compatibility[bankKey]) return 'TBD'
+    return compatibility[bankKey][format] || 'TBD'
+  }
+  
+  // Verificar se formato está disponível
+  const isFormatAvailable = (format: string): boolean => {
+    const status = getFormatStatus(format)
+    return status === 'OK' || status === 'WIP'
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -178,12 +228,11 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
                     <SelectValue placeholder="Selecione o banco" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="itau">Banco Itaú</SelectItem>
-                    <SelectItem value="bradesco">Banco Bradesco</SelectItem>
-                    <SelectItem value="santander">Banco Santander</SelectItem>
-                    <SelectItem value="bb">Banco do Brasil</SelectItem>
-                    <SelectItem value="btg">BTG Pactual</SelectItem>
-                    <SelectItem value="nubank">Nubank</SelectItem>
+                    {availableBanks.map(bankName => (
+                      <SelectItem key={bankName} value={bankName.toLowerCase().replace(/ /g, '-')}>
+                        {bankName}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -197,10 +246,11 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
                     <SelectValue placeholder="Selecione o banco" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="itau-principal">Banco XYZ - Principal</SelectItem>
-                    <SelectItem value="itau-secundario">Banco XYZ - Secundário</SelectItem>
-                    <SelectItem value="bradesco">Banco Bradesco</SelectItem>
-                    <SelectItem value="santander">Banco Santander</SelectItem>
+                    {availableBanks.map(bankName => (
+                      <SelectItem key={bankName} value={bankName.toLowerCase().replace(/ /g, '-')}>
+                        {bankName}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -251,20 +301,159 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
             <Label>Formato do arquivo para importação</Label>
             <RadioGroup value={fileFormat} onValueChange={setFileFormat}>
               <div className="flex items-center space-x-2">
-                <RadioGroupItem value="ofx" id="ofx" />
-                <Label htmlFor="ofx">OFX</Label>
+                <RadioGroupItem 
+                  value="csv" 
+                  id="csv" 
+                  disabled={!isFormatAvailable('CSV')}
+                />
+                <Label 
+                  htmlFor="csv" 
+                  className={cn(
+                    "flex items-center gap-2",
+                    !isFormatAvailable('CSV') && "text-muted-foreground"
+                  )}
+                >
+                  CSV
+                  {!bank ? (
+                    <span className="text-xs text-muted-foreground">(selecione um banco)</span>
+                  ) : (
+                    <Badge 
+                      variant="outline" 
+                      className={cn(
+                        "text-xs",
+                        getFormatStatus('CSV') === 'OK' && "bg-green-100 text-green-800 border-green-300",
+                        getFormatStatus('CSV') === 'WIP' && "bg-yellow-100 text-yellow-800 border-yellow-300",
+                        getFormatStatus('CSV') === 'TBD' && "bg-red-100 text-red-800 border-red-300"
+                      )}
+                    >
+                      {getFormatStatus('CSV')}
+                    </Badge>
+                  )}
+                </Label>
               </div>
               <div className="flex items-center space-x-2">
-                <RadioGroupItem value="excel" id="excel" />
-                <Label htmlFor="excel">Planilha Excel (XLS/XLSX)</Label>
+                <RadioGroupItem 
+                  value="excel" 
+                  id="excel" 
+                  disabled={!isFormatAvailable('Excel')}
+                />
+                <Label 
+                  htmlFor="excel" 
+                  className={cn(
+                    "flex items-center gap-2",
+                    !isFormatAvailable('Excel') && "text-muted-foreground"
+                  )}
+                >
+                  Planilha Excel (XLS/XLSX)
+                  {!bank ? (
+                    <span className="text-xs text-muted-foreground">(selecione um banco)</span>
+                  ) : (
+                    <Badge 
+                      variant="outline" 
+                      className={cn(
+                        "text-xs",
+                        getFormatStatus('Excel') === 'OK' && "bg-green-100 text-green-800 border-green-300",
+                        getFormatStatus('Excel') === 'WIP' && "bg-yellow-100 text-yellow-800 border-yellow-300",
+                        getFormatStatus('Excel') === 'TBD' && "bg-red-100 text-red-800 border-red-300"
+                      )}
+                    >
+                      {getFormatStatus('Excel')}
+                    </Badge>
+                  )}
+                </Label>
               </div>
               <div className="flex items-center space-x-2">
-                <RadioGroupItem value="pdf" id="pdf" />
-                <Label htmlFor="pdf">PDF (Beta)</Label>
+                <RadioGroupItem 
+                  value="pdf" 
+                  id="pdf" 
+                  disabled={!isFormatAvailable('PDF')}
+                />
+                <Label 
+                  htmlFor="pdf" 
+                  className={cn(
+                    "flex items-center gap-2",
+                    !isFormatAvailable('PDF') && "text-muted-foreground"
+                  )}
+                >
+                  PDF
+                  {!bank ? (
+                    <span className="text-xs text-muted-foreground">(selecione um banco)</span>
+                  ) : (
+                    <Badge 
+                      variant="outline" 
+                      className={cn(
+                        "text-xs",
+                        getFormatStatus('PDF') === 'OK' && "bg-green-100 text-green-800 border-green-300",
+                        getFormatStatus('PDF') === 'WIP' && "bg-yellow-100 text-yellow-800 border-yellow-300",
+                        getFormatStatus('PDF') === 'TBD' && "bg-red-100 text-red-800 border-red-300"
+                      )}
+                    >
+                      {getFormatStatus('PDF')}
+                    </Badge>
+                  )}
+                </Label>
               </div>
               <div className="flex items-center space-x-2">
-                <RadioGroupItem value="pdf_password" id="pdf_password" />
-                <Label htmlFor="pdf_password">PDF com senha</Label>
+                <RadioGroupItem 
+                  value="pdf_password" 
+                  id="pdf_password" 
+                  disabled={!isFormatAvailable('PDF')}
+                />
+                <Label 
+                  htmlFor="pdf_password" 
+                  className={cn(
+                    "flex items-center gap-2",
+                    !isFormatAvailable('PDF') && "text-muted-foreground"
+                  )}
+                >
+                  PDF com senha
+                  {!bank ? (
+                    <span className="text-xs text-muted-foreground">(selecione um banco)</span>
+                  ) : (
+                    <Badge 
+                      variant="outline" 
+                      className={cn(
+                        "text-xs",
+                        getFormatStatus('PDF') === 'OK' && "bg-green-100 text-green-800 border-green-300",
+                        getFormatStatus('PDF') === 'WIP' && "bg-yellow-100 text-yellow-800 border-yellow-300",
+                        getFormatStatus('PDF') === 'TBD' && "bg-red-100 text-red-800 border-red-300"
+                      )}
+                    >
+                      {getFormatStatus('PDF')}
+                    </Badge>
+                  )}
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem 
+                  value="ofx" 
+                  id="ofx" 
+                  disabled={!isFormatAvailable('OFX')}
+                />
+                <Label 
+                  htmlFor="ofx" 
+                  className={cn(
+                    "flex items-center gap-2",
+                    !isFormatAvailable('OFX') && "text-muted-foreground"
+                  )}
+                >
+                  OFX
+                  {!bank ? (
+                    <span className="text-xs text-muted-foreground">(selecione um banco)</span>
+                  ) : (
+                    <Badge 
+                      variant="outline" 
+                      className={cn(
+                        "text-xs",
+                        getFormatStatus('OFX') === 'OK' && "bg-green-100 text-green-800 border-green-300",
+                        getFormatStatus('OFX') === 'WIP' && "bg-yellow-100 text-yellow-800 border-yellow-300",
+                        getFormatStatus('OFX') === 'TBD' && "bg-red-100 text-red-800 border-red-300"
+                      )}
+                    >
+                      {getFormatStatus('OFX')}
+                    </Badge>
+                  )}
+                </Label>
               </div>
             </RadioGroup>
 
