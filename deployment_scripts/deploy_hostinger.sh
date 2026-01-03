@@ -102,6 +102,7 @@ echo -e "${BLUE}================================================================
 rsync -avz --progress \
     -e "ssh -i $SSH_KEY -o StrictHostKeyChecking=no" \
     --exclude 'venv/' \
+    --exclude 'app_dev/' \
     --exclude '__pycache__/' \
     --exclude '*.pyc' \
     --exclude '*.db' \
@@ -113,8 +114,12 @@ rsync -avz --progress \
     --exclude '_csvs_historico/' \
     --exclude 'financas.db.backup_*' \
     --exclude 'uploads_temp/' \
+    --exclude 'backups_local/' \
+    --exclude 'data_samples/' \
+    --exclude 'docs/' \
     --exclude '*.md' \
     --exclude '.env' \
+    --exclude 'node_modules/' \
     ./ "$SSH_USER@$SSH_HOST:$APP_DIR/"
 
 echo -e "${GREEN}✅ Files synced${NC}"
@@ -141,7 +146,7 @@ echo -e "${BLUE}================================================================
 echo -e "${BLUE}🗄️  Step 6: Copying Database${NC}"
 echo -e "${BLUE}=================================================================================${NC}"
 
-scp_copy "financas.db" "$APP_DIR/instance/financas.db"
+scp_copy "app/financas.db" "$APP_DIR/instance/financas.db"
 ssh_exec "chown $APP_USER:$APP_USER $APP_DIR/instance/financas.db"
 echo -e "${GREEN}✅ Database copied${NC}"
 
