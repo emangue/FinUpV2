@@ -19,16 +19,35 @@ SSH_USER="root"
 SSH_HOST="148.230.78.91"
 APP_DIR="/opt/financial-app"
 APP_USER="financial-app"
-DOMAIN=""  # Vazio = usar IP
+DOMAIN="finup.emangue.com.br"  # Domínio de produção
 PYTHON_VERSION="3.12"
 
 echo -e "${BLUE}=================================================================================${NC}"
-echo -e "${BLUE}🚀 Hostinger VPS Deployment Script${NC}"
+echo -e "${BLUE}🚀 DEPLOY PARA PRODUÇÃO${NC}"
 echo -e "${BLUE}=================================================================================${NC}"
 echo ""
-echo -e "VM: ${GREEN}srv1045889.hstgr.cloud (148.230.78.91)${NC}"
-echo -e "OS: ${GREEN}Ubuntu 24.04.3 LTS${NC}"
-echo -e "Python: ${GREEN}Python 3.12.3${NC}"
+echo -e "Domínio: ${GREEN}https://$DOMAIN${NC}"
+echo -e "VM: ${YELLOW}$SSH_HOST (srv1045889.hstgr.cloud)${NC}"
+echo -e "OS: Ubuntu 24.04.3 LTS"
+echo -e "Python: 3.12.3"
+echo ""
+
+# ⚠️ VERIFICAÇÃO OBRIGATÓRIA
+if [ ! -f ".github/DEPLOY_PROCESS.md" ]; then
+    echo -e "${RED}❌ ERRO: .github/DEPLOY_PROCESS.md não encontrado!${NC}"
+    echo -e "${RED}   Este arquivo contém o processo obrigatório de deploy.${NC}"
+    exit 1
+fi
+
+echo -e "${YELLOW}⚠️  ESTE DEPLOY AFETARÁ: https://$DOMAIN${NC}"
+echo -e "${YELLOW}⚠️  Certifique-se de que seguiu o processo em .github/DEPLOY_PROCESS.md${NC}"
+echo ""
+read -p "Continuar com o deploy? (S/N): " -n 1 -r
+echo ""
+if [[ ! $REPLY =~ ^[Ss]$ ]]; then
+    echo -e "${RED}❌ Deploy cancelado pelo usuário${NC}"
+    exit 1
+fi
 echo ""
 
 # Função para executar comando via SSH
@@ -235,26 +254,26 @@ echo -e "${BLUE}================================================================
 echo -e "${BLUE}🌐 Step 9: Configuring Nginx${NC}"
 echo -e "${BLUE}=================================================================================${NC}"
 
-ssh_exec << 'EOF'
+ssh_exec << EOF
 cat > /etc/nginx/sites-available/financial-app << 'NGINXEOF'
 server {
     listen 80;
-    server_name 148.230.78.91;
+    server_name $DOMAIN 148.230.78.91;
 
     client_max_body_size 10M;
 
     location / {
         proxy_pass http://127.0.0.1:5000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_redirect off;
         proxy_buffering off;
     }
 
     location /static {
-        alias /opt/financial-app/static;
+        alias /opt/financial-app/app/static;
         expires 30d;
         add_header Cache-Control "public, immutable";
     }
