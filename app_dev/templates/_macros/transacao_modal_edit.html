@@ -1,0 +1,184 @@
+{# 
+  Componente: Modal de Edição de Transação
+  Uso: {% include '_macros/transacao_modal_edit.html' %}
+  
+  Variáveis esperadas:
+  - grupos_lista: Lista de grupos disponíveis para o select
+  
+  JavaScript necessário:
+  - abrirModalEditar(id): Abre modal e carrega dados da transação
+  - salvarEdicaoTransacao(): Salva alterações via AJAX
+#}
+
+<div class="modal fade" id="modalEditarTransacao" tabindex="-1" aria-labelledby="modalEditarLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalEditarLabel">
+                    <i class="fas fa-edit"></i> Editar Transação
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formEditarTransacao">
+                    <input type="hidden" id="edit_id" name="id">
+                    
+                    <!-- IDs de Controle (visíveis para debug) -->
+                    <div class="alert alert-info mb-3">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <small class="text-muted"><i class="fas fa-hashtag me-1"></i>ID Transação:</small>
+                                <strong id="display_id_transacao" class="ms-2">-</strong>
+                            </div>
+                            <div class="col-md-6">
+                                <small class="text-muted"><i class="fas fa-credit-card me-1"></i>ID Parcela:</small>
+                                <strong id="display_id_parcela" class="ms-2">-</strong>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="edit_data" class="form-label">
+                                <i class="fas fa-calendar me-1"></i>Data
+                            </label>
+                            <input type="text" class="form-control" id="edit_data" name="data" readonly>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="edit_valor" class="form-label">
+                                <i class="fas fa-dollar-sign me-1"></i>Valor
+                            </label>
+                            <input type="number" step="0.01" class="form-control" id="edit_valor" name="valor">
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit_estabelecimento" class="form-label">
+                            <i class="fas fa-store me-1"></i>Estabelecimento
+                        </label>
+                        <input type="text" class="form-control" id="edit_estabelecimento" name="estabelecimento">
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="edit_grupo" class="form-label">
+                                <i class="fas fa-tags me-1"></i>Grupo
+                            </label>
+                            <select class="form-select" id="edit_grupo" name="grupo">
+                                <option value="">Selecione...</option>
+                                {% for grupo in grupos_lista %}
+                                    <option value="{{ grupo }}">{{ grupo }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="edit_subgrupo" class="form-label">
+                                <i class="fas fa-tag me-1"></i>SubGrupo
+                            </label>
+                            <input type="text" class="form-control" id="edit_subgrupo" name="subgrupo">
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit_tipo" class="form-label">
+                            <i class="fas fa-wallet me-1"></i>Tipo de Transação
+                        </label>
+                        <input type="text" class="form-control" id="edit_tipo" name="tipo" readonly>
+                    </div>
+                    
+                    <div class="form-check mb-3">
+                        <input type="checkbox" class="form-check-input" id="edit_ignorar" name="ignorar">
+                        <label class="form-check-label" for="edit_ignorar">
+                            <i class="fas fa-eye-slash me-1"></i>Ignorar no Dashboard
+                        </label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-1"></i>Cancelar
+                </button>
+                <button type="button" class="btn btn-primary" onclick="salvarEdicaoTransacao()">
+                    <i class="fas fa-save me-1"></i>Salvar Alterações
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+/**
+ * Abre o modal de edição e carrega dados da transação
+ * @param {number} id - ID da transação a ser editada
+ */
+function abrirModalEditar(id) {
+    fetch(`/dashboard/api/transacao_completa/${id}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.erro) {
+                alert('Erro: ' + data.erro);
+                return;
+            }
+            
+            // Preenche o formulário
+            document.getElementById('edit_id').value = data.id;
+            document.getElementById('edit_data').value = data.Data;
+            document.getElementById('edit_valor').value = data.Valor;
+            document.getElementById('edit_estabelecimento').value = data.Estabelecimento || '';
+            document.getElementById('edit_grupo').value = data.GRUPO || '';
+            document.getElementById('edit_subgrupo').value = data.SUBGRUPO || '';
+            document.getElementById('edit_tipo').value = data.TipoTransacao || '';
+            document.getElementById('edit_ignorar').checked = data.IgnorarDashboard || false;
+            
+            // Exibir IDs de controle
+            document.getElementById('display_id_transacao').textContent = data.IdTransacao || data.id || '-';
+            document.getElementById('display_id_parcela').textContent = data.IdParcela || 'Não parcelado';
+            
+            // Abre o modal
+            const modal = new bootstrap.Modal(document.getElementById('modalEditarTransacao'));
+            modal.show();
+        })
+        .catch(error => {
+            console.error('Erro ao carregar transação:', error);
+            alert('Erro ao carregar dados da transação');
+        });
+}
+
+/**
+ * Salva as alterações da transação via AJAX
+ */
+function salvarEdicaoTransacao() {
+    const formData = new FormData(document.getElementById('formEditarTransacao'));
+    const data = {
+        id: formData.get('id'),
+        valor: parseFloat(formData.get('valor')),
+        estabelecimento: formData.get('estabelecimento'),
+        grupo: formData.get('grupo'),
+        subgrupo: formData.get('subgrupo'),
+        ignorar_dashboard: document.getElementById('edit_ignorar').checked
+    };
+    
+    fetch('/dashboard/api/atualizar_transacao', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            alert('Transação atualizada com sucesso!');
+            location.reload(); // Recarrega a página para mostrar as mudanças
+        } else {
+            alert('Erro ao salvar: ' + (result.error || 'Erro desconhecido'));
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('Erro ao salvar alterações: ' + error.message);
+    });
+}
+</script>

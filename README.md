@@ -143,7 +143,33 @@ Senha: (configurada no banco de dados)
 
 ## 📦 Deployment
 
-### Deploy para Hostinger VPS
+### Novo Sistema de Deploy (Recomendado)
+
+```bash
+# 1. Validar mudanças
+./deploy.sh validate
+
+# 2. Deploy completo (com backup automático)
+./deploy.sh deploy
+
+# 3. Rollback se necessário
+./deploy.sh rollback
+```
+
+**Funcionalidades:**
+- ✅ Validações automáticas (syntax, imports, security)
+- ✅ Comparação detalhada dev vs prod
+- ✅ Backup automático antes de deploy
+- ✅ Confirmação interativa
+- ✅ Rollback em um comando
+
+📖 **Guias completos:**
+- [DEPLOY.md](DEPLOY.md) - Guia rápido
+- [docs/WORKFLOW_DEPLOY.md](docs/WORKFLOW_DEPLOY.md) - Workflow completo
+- [docs/DEPLOY_EXEMPLO.md](docs/DEPLOY_EXEMPLO.md) - Exemplos visuais
+- [scripts/README.md](scripts/README.md) - Referência de scripts
+
+### Deploy para Hostinger VPS (Legado)
 
 ```bash
 # Deploy completo (primeira vez)

@@ -26,13 +26,16 @@ env/
 ENV/
 
 # Database
-financas.db
-financas.db-journal
 *.db
 *.sqlite3
+*.db-journal
+app/financas.db
+app_dev/financas_dev.db
 
 # Flask Session
 flask_session/
+app/flask_session/
+app_dev/flask_session/
 
 # IDE
 .vscode/
@@ -55,7 +58,12 @@ Thumbs.db
 # Uploads
 uploads/
 temp_*
-uploads_temp/
+app/uploads_temp/
+app_dev/uploads_temp/
+
+# Static uploads (logos customizados, etc)
+app/static/uploads/
+app_dev/static/uploads/
 
 # Temporary scripts and data
 _temp_scripts/
@@ -77,3 +85,20 @@ backups_local/
 
 # Data samples (may contain sensitive info)
 data_samples/
+
+# App DEV recursos (commitar código, não dados)
+app_dev/financas_dev.db
+app_dev/uploads_temp/
+app_dev/static/uploads/
+app_dev/flask_session/
+app_dev/frontend/node_modules/
+app_dev/frontend/dist/
+app_dev/frontend/.vite/
+app_dev/venv/
+
+# App PROD recursos (não versionar - atualizado via deploy)
+app/financas.db
+app/uploads_temp/
+app/static/uploads/
+app/flask_session/
+app/venv/
