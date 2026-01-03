@@ -412,24 +412,63 @@ else
     exit 1
 fi
 
+# Passo 16: Validação Pós-Deploy
+echo ""
+echo -e "${BLUE}=================================================================================${NC}"
+echo -e "${BLUE}✅ Step 16: Post-Deploy Validation${NC}"
+echo -e "${BLUE}=================================================================================${NC}"
+
+# Reiniciar serviço
+ssh_exec "systemctl restart financial-app.service"
+sleep 5
+
+# Verificar status
+SERVICE_STATUS=$(ssh_exec "systemctl is-active financial-app.service")
+if [ "$SERVICE_STATUS" = "active" ]; then
+    echo -e "${GREEN}✅ Serviço está ativo${NC}"
+else
+    echo -e "${RED}❌ ERRO: Serviço não está ativo! Status: $SERVICE_STATUS${NC}"
+    ssh_exec "journalctl -u financial-app -n 50 --no-pager"
+    exit 1
+fi
+
+# Testar domínio
+echo -e "🌐 Testando https://$DOMAIN..."
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://$DOMAIN/ 2>/dev/null || echo "000")
+
+if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "302" ] || [ "$HTTP_CODE" = "301" ]; then
+    echo -e "${GREEN}✅ Aplicação respondendo via HTTPS (HTTP $HTTP_CODE)${NC}"
+else
+    # Tentar HTTP se HTTPS falhar
+    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://$DOMAIN/ 2>/dev/null || echo "000")
+    if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "302" ]; then
+        echo -e "${YELLOW}⚠️  Aplicação respondendo via HTTP (HTTP $HTTP_CODE)${NC}"
+        echo -e "${YELLOW}⚠️  Considere configurar SSL/HTTPS${NC}"
+    else
+        echo -e "${RED}❌ ERRO: Aplicação não responde (HTTP $HTTP_CODE)${NC}"
+        exit 1
+    fi
+fi
+
 # Resumo Final
 echo ""
 echo -e "${GREEN}=================================================================================${NC}"
-echo -e "${GREEN}✅ DEPLOYMENT SUCCESSFUL!${NC}"
+echo -e "${GREEN}✅ DEPLOY BEM-SUCEDIDO!${NC}"
 echo -e "${GREEN}=================================================================================${NC}"
 echo ""
-echo -e "🌐 Application URL: ${BLUE}http://148.230.78.91${NC}"
+echo -e "🌐 Aplicação: ${GREEN}https://$DOMAIN${NC}"
+echo -e "   Alternativo: ${YELLOW}http://$SSH_HOST${NC}"
 echo ""
-echo -e "📊 Useful Commands:"
-echo -e "  ${YELLOW}Check status:${NC}    ssh -i $SSH_KEY root@148.230.78.91 'systemctl status financial-app'"
-echo -e "  ${YELLOW}View logs:${NC}       ssh -i $SSH_KEY root@148.230.78.91 'journalctl -u financial-app -f'"
-echo -e "  ${YELLOW}Restart app:${NC}     ssh -i $SSH_KEY root@148.230.78.91 'systemctl restart financial-app'"
-echo -e "  ${YELLOW}View backups:${NC}    ssh -i $SSH_KEY root@148.230.78.91 'ls -lh /backups/financial-app/'"
+echo -e "📋 Comandos Úteis:"
+echo -e "  ${YELLOW}Status:${NC}     ssh -i $SSH_KEY root@$SSH_HOST 'systemctl status financial-app'"
+echo -e "  ${YELLOW}Logs:${NC}       ssh -i $SSH_KEY root@$SSH_HOST 'tail -f $APP_DIR/logs/error.log'"
+echo -e "  ${YELLOW}Restart:${NC}    ssh -i $SSH_KEY root@$SSH_HOST 'systemctl restart financial-app'"
+echo -e "  ${YELLOW}Backups:${NC}    ssh -i $SSH_KEY root@$SSH_HOST 'ls -lh /backups/financial-app/'"
 echo ""
-echo -e "🔒 Next Steps:"
-echo -e "  1. Test application: http://148.230.78.91"
-echo -e "  2. Login with your credentials"
-echo -e "  3. Verify transactions are visible"
-echo -e "  4. Optional: Configure domain + SSL (Let's Encrypt)"
+echo -e "🎯 Próximos Passos:"
+echo -e "  1. ${GREEN}Acesse: https://$DOMAIN${NC}"
+echo -e "  2. Faça login (admin@email.com / admin123)"
+echo -e "  3. Navegue pelas páginas e teste funcionalidades"
+echo -e "  4. Confirme que tudo está funcionando"
 echo ""
 echo -e "${BLUE}=================================================================================${NC}"
