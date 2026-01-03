@@ -388,6 +388,48 @@ python scripts/buscar_similares.py
 
 ---
 
+## 🔧 Configuração Git (Importante!)
+
+**Antes de trabalhar no projeto, configure o Git:**
+
+```bash
+# Opção 1: Script interativo (recomendado)
+./scripts/setup_git.sh
+
+# Opção 2: Manual
+git config user.name "Seu Nome"
+git config user.email "seu@email.com"
+git remote add origin https://github.com/usuario/ProjetoFinancasV3.git
+```
+
+### ⚠️ Importante sobre Credenciais
+
+- **macOS:** Credential helper já configurado (Keychain) ✅
+- **GitHub:** Não aceita senha da conta! Use [Token de Acesso Pessoal](https://github.com/settings/tokens)
+- **Primeiro push:** Digite token como senha → salvo automaticamente
+- **Próximos pushes:** Automático, sem pedir senha! 🎉
+
+### GitIgnore - O que está/não está no Git
+
+**✅ ESTÁ no Git (código-fonte):**
+- `app/` - Backend Flask completo
+- `app_dev/` - Backend + Frontend React completo
+- `scripts/` - Deploy, rollback, validações
+- `docs/` - Documentação
+- `templates/`, `static/` - UI
+
+**❌ NÃO está no Git (dados sensíveis):**
+- `*.db` - Bancos de dados
+- `uploads_temp/` - Arquivos enviados
+- `flask_session/` - Sessões
+- `venv/`, `node_modules/` - Dependências
+- `backups_local/` - Backups locais
+- `data_samples/` - Dados de exemplo
+
+📖 **Guia completo:** [GIT_CONFIG.md](GIT_CONFIG.md)
+
+---
+
 ## 📄 Licença
 
 **Projeto Privado** - Todos os direitos reservados © 2026
