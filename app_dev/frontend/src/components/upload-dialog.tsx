@@ -138,7 +138,7 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
 
   const resetForm = () => {
     setSelectedFile(null)
-    setDate(new Date())
+    setMesFatura(format(new Date(), 'yyyy-MM'))
     setFileFormat("csv")
     setPassword("")
     setBank("")
