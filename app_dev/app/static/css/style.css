@@ -1,0 +1,166 @@
+/* Estilos customizados */
+
+body {
+    background-color: #f8f9fa;
+    min-height: 100vh;
+}
+
+.navbar-brand {
+    font-weight: bold;
+    font-size: 1.3rem;
+}
+
+.card {
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.card-header {
+    font-weight: 600;
+}
+
+footer {
+    margin-top: auto;
+}
+
+.table td, .table th {
+    vertical-align: middle;
+}
+
+/* Cards de estatísticas */
+.card.bg-success,
+.card.bg-warning,
+.card.bg-info {
+    border: none;
+}
+
+/* Badges */
+.badge {
+    font-size: 0.85rem;
+    padding: 0.4em 0.6em;
+}
+
+/* Alertas */
+.alert {
+    border-radius: 8px;
+}
+
+/* Botões */
+.btn {
+    border-radius: 6px;
+    font-weight: 500;
+}
+
+/* Logos em círculos */
+.item-icon img.logo-img {
+    width: 40px !important;
+    height: 40px !important;
+    object-fit: cover;
+    border-radius: 50%;
+    display: block;
+}
+
+.card-big-icon img.logo-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+    display: block;
+}
+
+/* Logos na página admin - REDONDOS */
+.card-body img[src*="/static/logos/"] {
+    border-radius: 50%;
+    object-fit: cover;
+    width: 80px;
+    height: 80px;
+}
+
+.btn-lg {
+    padding: 0.75rem 1.5rem;
+}
+
+/* Forms */
+.form-control, .form-select {
+    border-radius: 6px;
+}
+
+/* Checkboxes maiores */
+.origem-checkbox {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+}
+
+/* Tabelas responsivas */
+.table-responsive {
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+/* Paginação */
+
+/* Editor de Cores */
+.grupo-cor-item {
+    background: #f8f9fa;
+    padding: 1rem;
+    border-radius: 8px;
+    border: 1px solid #dee2e6;
+}
+
+.grupo-cor-item label {
+    margin-bottom: 0.5rem;
+}
+
+.form-control-color {
+    width: 3rem;
+    height: 38px;
+    padding: 0.25rem;
+    border-radius: 6px 0 0 6px;
+}
+
+#modalEditorCores .modal-body {
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+#listaGruposCores {
+    padding: 0 0.5rem;
+}
+
+/* Editor de Cores */
+.grupo-cor-item {
+    background: #f8f9fa;
+    padding: 1rem;
+    border-radius: 8px;
+    border: 1px solid #dee2e6;
+}
+
+.grupo-cor-item label {
+    margin-bottom: 0.5rem;
+}
+
+.form-control-color {
+    width: 3rem;
+    height: 38px;
+    padding: 0.25rem;
+    border-radius: 6px 0 0 6px;
+}
+
+#modalEditorCores .modal-body {
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+#listaGruposCores {
+    padding: 0 0.5rem;
+}
+.pagination {
+    margin-top: 1rem;
+}
+
+/* Loading spinner */
+.spinner-border-sm {
+    width: 1rem;
+    height: 1rem;
+}

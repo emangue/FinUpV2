@@ -88,3 +88,48 @@ class BaseParcelas(Base):
     user_id = Column(Integer)
     created_at = Column(DateTime)
     updated_at = Column(DateTime)
+
+class Cartao(Base):
+    """Modelo de cartão de crédito"""
+    __tablename__ = "cartoes"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    nome_cartao = Column(String, nullable=False)
+    final_cartao = Column(String(4), nullable=False)
+    banco = Column(String, nullable=False)
+    user_id = Column(Integer, index=True)
+    ativo = Column(Integer, default=1)
+    created_at = Column(DateTime)
+    updated_at = Column(DateTime)
+
+class TransacaoExclusao(Base):
+    """Modelo de exclusão de transações"""
+    __tablename__ = "transacoes_exclusao"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    nome_transacao = Column(String, nullable=False)
+    banco = Column(String)
+    descricao = Column(Text)
+    user_id = Column(Integer, index=True)
+    ativo = Column(Integer, default=1)
+    created_at = Column(DateTime)
+    updated_at = Column(DateTime)
+    tipo_documento = Column(Text)
+    acao = Column(String(10))
+
+class PreviewTransacao(Base):
+    """Modelo de preview de transação para upload"""
+    __tablename__ = "preview_transacoes"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(String, nullable=False, index=True)
+    banco = Column(String, nullable=False)
+    cartao = Column(String)
+    nome_arquivo = Column(String, nullable=False)
+    mes_fatura = Column(String, nullable=False)  # Formato YYYY-MM
+    data = Column(String, nullable=False)  # Data da transação
+    lancamento = Column(String, nullable=False)  # Descrição
+    valor = Column(Float, nullable=False)
+    user_id = Column(Integer, nullable=False, index=True)
+    created_at = Column(DateTime)
+    updated_at = Column(DateTime)

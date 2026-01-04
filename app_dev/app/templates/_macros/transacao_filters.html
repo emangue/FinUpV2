@@ -1,0 +1,164 @@
+{# 
+  Componente: Filtros de Transações
+  Uso: {% include '_macros/transacao_filters.html' %}
+  
+  Variáveis esperadas:
+  - mes_atual: Mês atual no formato YYYY-MM
+  - filtro_data_inicio: Data de início no formato YYYY-MM-DD (opcional)
+  - filtro_data_fim: Data de fim no formato YYYY-MM-DD (opcional)
+  - filtro_estabelecimento: Filtro de estabelecimento ativo
+  - filtro_categoria: Filtro de categoria/grupo ativo
+  - filtros_tipos: Lista de tipos ativos (['despesa', 'cartao', 'receita'])
+  - filtro_dashboard: Status dashboard ('consideradas' ou 'todas')
+  - grupos_lista: Lista de grupos disponíveis
+  - soma_filtrada: Soma total das transações filtradas (opcional)
+#}
+
+<!-- Card de Filtros -->
+<div class="card shadow mb-3">
+    <div class="card-header bg-primary text-white">
+        <h6 class="mb-0">
+            <i class="fas fa-filter me-2"></i>Filtros de Pesquisa
+        </h6>
+    </div>
+    <div class="card-body">
+        <form method="get" action="{{ request.path }}" class="row g-3">
+            <input type="hidden" name="mes" value="{{ mes_atual }}">
+            
+            <div class="col-md-2">
+                <label for="data_inicio" class="form-label">
+                    <i class="fas fa-calendar-alt me-1"></i>Data Início
+                </label>
+                <input type="date" class="form-control" id="data_inicio" name="data_inicio" 
+                       value="{{ filtro_data_inicio }}">
+            </div>
+            
+            <div class="col-md-2">
+                <label for="data_fim" class="form-label">
+                    <i class="fas fa-calendar-check me-1"></i>Data Fim
+                </label>
+                <input type="date" class="form-control" id="data_fim" name="data_fim" 
+                       value="{{ filtro_data_fim }}">
+            </div>
+            
+            <div class="col-md-3">
+                <label for="estabelecimento" class="form-label">
+                    <i class="fas fa-store me-1"></i>Estabelecimento
+                </label>
+                <input type="text" class="form-control" id="estabelecimento" name="estabelecimento" 
+                       placeholder="Digite para buscar..." value="{{ filtro_estabelecimento }}">
+            </div>
+            
+            <div class="col-md-3">
+                <label for="categoria" class="form-label">
+                    <i class="fas fa-tags me-1"></i>Categoria (GRUPO)
+                </label>
+                <select class="form-select" id="categoria" name="categoria">
+                    <option value="">Todas as categorias</option>
+                    {% for grupo in grupos_lista %}
+                        <option value="{{ grupo }}" {% if filtro_categoria == grupo %}selected{% endif %}>
+                            {{ grupo }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="col-md-4">
+                <label class="form-label">
+                    <i class="fas fa-wallet me-1"></i>Tipo de Transação
+                </label>
+                <div class="d-flex flex-column gap-2">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="tipo" value="despesa" 
+                               id="tipo_despesa" {% if 'despesa' in filtros_tipos %}checked{% endif %}>
+                        <label class="form-check-label" for="tipo_despesa">
+                            <i class="fas fa-minus-circle text-danger me-1"></i>Despesas
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="tipo" value="cartao" 
+                               id="tipo_cartao" {% if 'cartao' in filtros_tipos %}checked{% endif %}>
+                        <label class="form-check-label" for="tipo_cartao">
+                            <i class="fas fa-credit-card text-warning me-1"></i>Cartão de Crédito
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="tipo" value="receita" 
+                               id="tipo_receita" {% if 'receita' in filtros_tipos %}checked{% endif %}>
+                        <label class="form-check-label" for="tipo_receita">
+                            <i class="fas fa-plus-circle text-success me-1"></i>Receitas
+                        </label>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-2 d-flex align-items-end gap-2">
+                <button type="submit" class="btn btn-primary flex-grow-1">
+                    <i class="fas fa-search me-2"></i>Filtrar
+                </button>
+                <a href="{{ request.path }}?mes={{ mes_atual }}" class="btn btn-outline-secondary">
+                    <i class="fas fa-times"></i>
+                </a>
+            </div>
+            
+            <!-- Filtro de Status Dashboard -->
+            <div class="col-12">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="dashboard_todas" 
+                           name="dashboard_toggle" value="1"
+                           {% if filtro_dashboard == 'todas' %}checked{% endif %}
+                           onchange="toggleDashboardFilter(this)">
+                    <input type="hidden" name="dashboard" id="dashboard_value" 
+                           value="{{ filtro_dashboard if filtro_dashboard else 'consideradas' }}">
+                    <label class="form-check-label" for="dashboard_todas">
+                        {% if filtro_dashboard == 'todas' %}
+                            <span class="badge bg-info">
+                                <i class="fas fa-eye me-1"></i>Mostrando TODAS (incluindo ignoradas)
+                            </span>
+                        {% else %}
+                            <span class="badge bg-success">
+                                <i class="fas fa-check-circle me-1"></i>Mostrando apenas CONSIDERADAS no dashboard
+                            </span>
+                        {% endif %}
+                    </label>
+                </div>
+            </div>
+        </form>
+        
+        <script>
+        function toggleDashboardFilter(checkbox) {
+            const hiddenInput = document.getElementById('dashboard_value');
+            hiddenInput.value = checkbox.checked ? 'todas' : 'consideradas';
+            checkbox.form.submit();
+        }
+        </script>
+        
+        <!-- Soma dos Valores Filtrados -->
+        {% if filtro_estabelecimento or filtro_categoria or filtros_tipos %}
+        <div class="mt-3 pt-3 border-top">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="alert alert-info mb-0">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Filtros Ativos:</strong>
+                        {% if filtro_estabelecimento %}<span class="badge bg-primary ms-1">{{ filtro_estabelecimento }}</span>{% endif %}
+                        {% if filtro_categoria %}<span class="badge bg-success ms-1">{{ filtro_categoria }}</span>{% endif %}
+                        {% if 'despesa' in filtros_tipos %}<span class="badge bg-danger ms-1">Despesas</span>{% endif %}
+                        {% if 'cartao' in filtros_tipos %}<span class="badge bg-warning ms-1">Cartão</span>{% endif %}
+                        {% if 'receita' in filtros_tipos %}<span class="badge bg-success ms-1">Receitas</span>{% endif %}
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="alert {{ 'alert-danger' if soma_filtrada < 0 else 'alert-success' }} mb-0 text-center">
+                        <strong>Soma das Transações Filtradas:</strong>
+                        <h4 class="mb-0 mt-1">
+                            <i class="fas fa-calculator me-2"></i>
+                            R$ {{ soma_filtrada|format_currency }}
+                        </h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>

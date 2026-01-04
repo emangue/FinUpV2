@@ -1,0 +1,286 @@
+"use client"
+
+import * as React from "react"
+import DashboardLayout from "@/components/dashboard-layout"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Plus, Edit } from "lucide-react"
+
+interface BankCompatibility {
+  id: number
+  bank_name: string
+  file_format: string
+  status: 'OK' | 'WIP' | 'TBD'
+}
+
+export default function BancosPage() {
+  const [bancos, setBancos] = React.useState<BankCompatibility[]>([])
+  const [loadingBanks, setLoadingBanks] = React.useState(true)
+  const [bankModalOpen, setBankModalOpen] = React.useState(false)
+  const [bankName, setBankName] = React.useState('')
+  const [bankFormats, setBankFormats] = React.useState({
+    CSV: 'TBD' as 'OK' | 'WIP' | 'TBD',
+    Excel: 'TBD' as 'OK' | 'WIP' | 'TBD',
+    PDF: 'TBD' as 'OK' | 'WIP' | 'TBD',
+    OFX: 'TBD' as 'OK' | 'WIP' | 'TBD'
+  })
+  const [editingBank, setEditingBank] = React.useState<string | null>(null)
+
+  React.useEffect(() => {
+    fetchBancos()
+  }, [])
+
+  const fetchBancos = async () => {
+    try {
+      setLoadingBanks(true)
+      const response = await fetch('/api/compatibility/manage')
+      if (response.ok) {
+        const data = await response.json()
+        setBancos(data)
+      }
+    } catch (error) {
+      console.error('Erro ao buscar bancos:', error)
+    } finally {
+      setLoadingBanks(false)
+    }
+  }
+
+  const handleAddBank = () => {
+    setBankName('')
+    setBankFormats({
+      CSV: 'TBD',
+      Excel: 'TBD',
+      PDF: 'TBD',
+      OFX: 'TBD'
+    })
+    setEditingBank(null)
+    setBankModalOpen(true)
+  }
+
+  const handleEditBank = (bankName: string) => {
+    const bankData = bancos.filter(b => b.bank_name === bankName)
+    setBankName(bankName)
+    
+    const formats: any = { CSV: 'TBD', Excel: 'TBD', PDF: 'TBD', OFX: 'TBD' }
+    bankData.forEach(b => {
+      formats[b.file_format] = b.status
+    })
+    
+    setBankFormats(formats)
+    setEditingBank(bankName)
+    setBankModalOpen(true)
+  }
+
+  const handleSaveBank = async () => {
+    if (!bankName.trim()) return
+
+    try {
+      const url = '/api/compatibility/manage'
+      const method = editingBank ? 'PUT' : 'POST'
+
+      const response = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bank_name: bankName.trim(),
+          formats: bankFormats,
+          old_bank_name: editingBank
+        })
+      })
+
+      if (response.ok) {
+        fetchBancos()
+        setBankModalOpen(false)
+      }
+    } catch (error) {
+      console.error('Erro ao salvar banco:', error)
+    }
+  }
+
+  const uniqueBanks = [...new Set(bancos.map(b => b.bank_name))]
+
+  return (
+    <DashboardLayout>
+      <div className="flex flex-1 flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold">Disponibilidade de Arquivos</h1>
+            <p className="text-muted-foreground">
+              Gerencie a compatibilidade de formatos de arquivo por banco
+            </p>
+          </div>
+        </div>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>Disponibilidade de Arquivos por Banco</CardTitle>
+              <CardDescription>
+                {uniqueBanks.length} bancos cadastrados
+              </CardDescription>
+            </div>
+            <Button onClick={handleAddBank}>
+              <Plus className="mr-2 h-4 w-4" />
+              Novo Banco
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Banco</TableHead>
+                  <TableHead className="text-center">CSV</TableHead>
+                  <TableHead className="text-center">Excel</TableHead>
+                  <TableHead className="text-center">PDF</TableHead>
+                  <TableHead className="text-center">OFX</TableHead>
+                  <TableHead className="w-[100px]">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {uniqueBanks.map((bankName) => {
+                  const bankData = bancos.filter(b => b.bank_name === bankName)
+                  const getStatus = (format: string) => 
+                    bankData.find(b => b.file_format === format)?.status || 'TBD'
+                  
+                  const StatusBadge = ({ status }: { status: string }) => (
+                    <Badge
+                      variant="outline"
+                      className={
+                        status === 'OK' ? 'bg-green-100 text-green-800 border-green-300' :
+                        status === 'WIP' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' :
+                        'bg-red-100 text-red-800 border-red-300'
+                      }
+                    >
+                      {status}
+                    </Badge>
+                  )
+
+                  return (
+                    <TableRow key={bankName}>
+                      <TableCell className="font-medium">{bankName}</TableCell>
+                      <TableCell className="text-center">
+                        <StatusBadge status={getStatus('CSV')} />
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <StatusBadge status={getStatus('Excel')} />
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <StatusBadge status={getStatus('PDF')} />
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <StatusBadge status={getStatus('OFX')} />
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleEditBank(bankName)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+
+        <Dialog open={bankModalOpen} onOpenChange={setBankModalOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>
+                {editingBank ? 'Editar' : 'Adicionar'} Banco
+              </DialogTitle>
+              <DialogDescription>
+                {editingBank ? 'Altere o nome e os status dos formatos' : 'Insira o nome do banco e defina o status de cada formato'}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="bankName">Nome do Banco</Label>
+                <Input
+                  id="bankName"
+                  value={bankName}
+                  onChange={(e) => setBankName(e.target.value)}
+                  placeholder="Ex: Banco Itaú"
+                  disabled={!!editingBank}
+                />
+              </div>
+              
+              <div className="space-y-3">
+                <Label>Status dos Formatos</Label>
+                
+                {(['CSV', 'Excel', 'PDF', 'OFX'] as const).map((format) => (
+                  <div key={format} className="flex items-center justify-between">
+                    <span className="text-sm font-medium">{format}</span>
+                    <Select
+                      value={bankFormats[format]}
+                      onValueChange={(value) => setBankFormats(prev => ({ ...prev, [format]: value as any }))}
+                    >
+                      <SelectTrigger className="w-[150px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="OK">
+                          <Badge className="bg-green-500">OK</Badge>
+                        </SelectItem>
+                        <SelectItem value="WIP">
+                          <Badge className="bg-yellow-500">WIP</Badge>
+                        </SelectItem>
+                        <SelectItem value="TBD">
+                          <Badge className="bg-red-500">TBD</Badge>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setBankModalOpen(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleSaveBank}>
+                {editingBank ? 'Salvar' : 'Adicionar'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </DashboardLayout>
+  )
+}

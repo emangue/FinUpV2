@@ -1,0 +1,324 @@
+{% extends "base.html" %}
+
+{% block title %}Revisão de Upload - Gestão Financeira{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <!-- Cabeçalho -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="fas fa-check-circle text-success"></i> Arquivos Processados</h2>
+            <div>
+                <a href="{{ url_for('upload.upload') }}" class="btn btn-outline-secondary me-2">
+                    <i class="fas fa-arrow-left"></i> Novo Upload
+                </a>
+                <a href="{{ url_for('dashboard.index') }}" class="btn btn-info">
+                    <i class="fas fa-chart-line"></i> Dashboard
+                </a>
+            </div>
+        </div>
+
+        <!-- Validação de Integridade (se disponível) -->
+        {% if session.get('validacao_extrato') %}
+        <div class="alert {% if session.validacao_extrato.get('valido') %}alert-success{% else %}alert-warning{% endif %} mb-4">
+            <h6 class="alert-heading">
+                {% if session.validacao_extrato.get('valido') %}
+                    <i class="fas fa-check-circle"></i> Validação de Integridade
+                {% else %}
+                    <i class="fas fa-exclamation-triangle"></i> Atenção: Divergência na Validação
+                {% endif %}
+            </h6>
+            <p class="mb-2"><strong>{{ session.validacao_extrato.get('mensagem', 'Validação OK') }}</strong></p>
+            
+            {% if session.validacao_extrato.get('tipodocumento') == 'Fatura Cartão de Crédito' %}
+                <!-- Validação para FATURA DE CARTÃO -->
+                <div class="row small">
+                    <div class="col-md-6">
+                        <p class="mb-1">📊 <strong>Transações (Compras):</strong> {{ session.validacao_extrato.get('total_transacoes', 0) }}</p>
+                        <p class="mb-1">🛒 <strong>Total Compras:</strong> R$ {{ "%.2f"|format(session.validacao_extrato.get('total_compras', 0)) }}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <p class="mb-1">💳 <strong>Saldo Devedor:</strong> R$ {{ "%.2f"|format(session.validacao_extrato.get('saldo_devedor', session.validacao_extrato.get('saldo_final', 0))) }}</p>
+                        <p class="mb-1 text-muted small">💡 <em>Pagamentos serão importados do extrato</em></p>
+                    </div>
+                </div>
+            {% else %}
+                <!-- Validação para EXTRATO DE CONTA -->
+                <div class="row small">
+                    <div class="col-md-6">
+                        <p class="mb-1">📊 <strong>Saldo Anterior:</strong> R$ {{ "%.2f"|format(session.validacao_extrato.get('saldo_anterior', 0)) }}</p>
+                        <p class="mb-1">💰 <strong>Soma das Transações:</strong> R$ {{ "%.2f"|format(session.validacao_extrato.get('soma_transacoes', 0)) }}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <p class="mb-1">🎯 <strong>Saldo Final:</strong> R$ {{ "%.2f"|format(session.validacao_extrato.get('saldo_final', 0)) }}</p>
+                        <p class="mb-1">📉 <strong>Diferença:</strong> R$ {{ "%.4f"|format(session.validacao_extrato.get('diferenca', 0)) }}</p>
+                    </div>
+                </div>
+            {% endif %}
+            
+            {% if session.validacao_extrato.get('periodo') %}
+            <hr class="my-2">
+            <p class="mb-0 small">
+                <i class="fas fa-calendar"></i> Período: {{ session.validacao_extrato.get('periodo', {}).get('data_inicial', 'N/A') }} até {{ session.validacao_extrato.get('periodo', {}).get('data_final', 'N/A') }}
+            </p>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Resumo por Origem -->
+        {% for origem in origens %}
+        <div class="card mb-4 shadow-sm">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div>
+                    <h5 class="mb-0">
+                        <i class="fas fa-file-alt text-primary me-2"></i>
+                        {{ origem }}
+                    </h5>
+                </div>
+                <div class="form-check form-switch">
+                    <input class="form-check-input origem-checkbox" type="checkbox" 
+                           id="origem_{{ loop.index }}" name="origens_selecionadas" 
+                           value="{{ origem }}" checked>
+                    <label class="form-check-label" for="origem_{{ loop.index }}">
+                        Incluir na base
+                    </label>
+                </div>
+            </div>
+            
+            <div class="card-body">
+                {% set stats = stats_por_origem[origem] %}
+                
+                <!-- Estatísticas por tipo -->
+                {% if stats.tipo == 'fatura' %}
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="text-center">
+                                <h3 class="text-danger">R$ {{ stats.total|format_currency }}</h3>
+                                <p class="text-muted mb-0">Total da Fatura</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="text-center">
+                                <h3 class="text-info">{{ stats.quantidade }}</h3>
+                                <p class="text-muted mb-0">Transações</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <!-- Breakdown por TipoGasto -->
+                            <h6>📊 Por Categoria:</h6>
+                            {% for tipo, valor in stats.breakdown.items() %}
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <a href="{{ url_for('upload.revisar_categoria', tipo_gasto=tipo) }}" class="text-decoration-none">
+                                    <span class="badge bg-secondary">{{ tipo }}</span>
+                                </a>
+                                <strong class="text-danger">R$ {{ valor|format_currency }}</strong>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                
+                {% else %}
+                    <!-- Extrato/Mercado Pago -->
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <h4 class="text-danger">R$ {{ "%.2f"|format(stats.despesas) }}</h4>
+                                <p class="text-muted mb-0">Despesas</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <h4 class="text-success">R$ {{ "%.2f"|format(stats.receitas) }}</h4>
+                                <p class="text-muted mb-0">Receitas</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <h4 class="{% if stats.saldo >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                    R$ {{ "%.2f"|format(stats.saldo) }}
+                                </h4>
+                                <p class="text-muted mb-0">Saldo</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <h4 class="text-info">{{ stats.quantidade }}</h4>
+                                <p class="text-muted mb-0">Transações</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Breakdown por TipoGasto para extratos -->
+                    {% if stats.breakdown %}
+                    <hr class="my-3">
+                    <div class="row">
+                        <div class="col-md-12">
+                            <h6 class="mb-3">📊 Breakdown por Categoria:</h6>
+                            <div class="row">
+                                {% for tipo, valor in stats.breakdown.items() %}
+                                <div class="col-md-6 mb-2">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <a href="{{ url_for('upload.revisar_categoria', tipo_gasto=tipo) }}" class="text-decoration-none">
+                                            <span class="badge bg-secondary">{{ tipo }}</span>
+                                        </a>
+                                        <strong class="{% if valor < 0 %}text-danger{% else %}text-success{% endif %}">
+                                            R$ {{ "%.2f"|format(valor) }}
+                                        </strong>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+
+        <!-- Resumo Geral -->
+        <div class="card bg-light mb-4">
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-3">
+                        <h5 class="text-primary">{{ total_transacoes }}</h5>
+                        <p class="mb-0">Total de Transações</p>
+                    </div>
+                    <div class="col-md-3">
+                        {% if precisam_validacao > 0 %}
+                        <h5 class="text-warning">{{ precisam_validacao }}</h5>
+                        <p class="mb-0">Precisam Validação</p>
+                        {% else %}
+                        <h5 class="text-success">0</h5>
+                        <p class="mb-0">Todas Classificadas</p>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-3">
+                        {% if duplicados_count > 0 %}
+                        <h5 class="text-danger">{{ duplicados_count }}</h5>
+                        <p class="mb-0">Duplicados Removidos</p>
+                        {% else %}
+                        <h5 class="text-success">0</h5>
+                        <p class="mb-0">Sem Duplicados</p>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-3">
+                        <h5 class="text-info">{{ origens|length }}</h5>
+                        <p class="mb-0">Origens Diferentes</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Controle de Seleção -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="selecionarTodas" checked>
+                            <label class="form-check-label" for="selecionarTodas">
+                                <strong>Selecionar Todas as Origens</strong>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-md-6 text-end">
+                        <small class="text-muted">
+                            Apenas as origens marcadas serão salvas na base de dados
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ações -->
+        <div class="row">
+            <!-- Botões de Ação -->
+            <div class="col-md-8">
+                <div class="d-grid gap-2 d-md-flex">
+                    {% if duplicados_count > 0 %}
+                    <a href="{{ url_for('upload.duplicados') }}" class="btn btn-warning me-md-2">
+                        <i class="fas fa-eye"></i> Ver Duplicados ({{ duplicados_count }})
+                    </a>
+                    {% endif %}
+                    
+                    {% if precisam_validacao > 0 %}
+                    <a href="{{ url_for('upload.validar') }}" class="btn btn-info me-md-2">
+                        <i class="fas fa-check-double"></i> Validar Pendentes ({{ precisam_validacao }})
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Botão Principal de Salvamento -->
+            <div class="col-md-4">
+                <form method="POST" action="{{ url_for('upload.salvar') }}" class="d-grid">
+                    <input type="hidden" name="origens_selecionadas" id="origens_input" value="">
+                    <button type="submit" class="btn btn-success btn-lg" id="btnSalvar">
+                        <i class="fas fa-save"></i> Salvar Selecionadas na Base
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const selecionarTodas = document.getElementById('selecionarTodas');
+    const origemCheckboxes = document.querySelectorAll('.origem-checkbox');
+    const origensInput = document.getElementById('origens_input');
+    const btnSalvar = document.getElementById('btnSalvar');
+    
+    // Função para atualizar input hidden
+    function atualizarOrigensInput() {
+        const selecionadas = Array.from(origemCheckboxes)
+            .filter(cb => cb.checked)
+            .map(cb => cb.value);
+        origensInput.value = selecionadas.join(',');
+        
+        // Atualiza texto do botão
+        if (selecionadas.length === 0) {
+            btnSalvar.innerHTML = '<i class="fas fa-save"></i> Nenhuma Origem Selecionada';
+            btnSalvar.disabled = true;
+        } else {
+            btnSalvar.innerHTML = `<i class="fas fa-save"></i> Salvar ${selecionadas.length} Origem(ns) na Base`;
+            btnSalvar.disabled = false;
+        }
+    }
+    
+    // Controle "Selecionar Todas"
+    selecionarTodas.addEventListener('change', function() {
+        origemCheckboxes.forEach(cb => {
+            cb.checked = this.checked;
+        });
+        atualizarOrigensInput();
+    });
+    
+    // Controle individual das origens
+    origemCheckboxes.forEach(cb => {
+        cb.addEventListener('change', function() {
+            // Atualiza o "Selecionar Todas" baseado no estado individual
+            const todasMarcadas = Array.from(origemCheckboxes).every(checkbox => checkbox.checked);
+            const nenhumaMarcada = Array.from(origemCheckboxes).every(checkbox => !checkbox.checked);
+            
+            if (todasMarcadas) {
+                selecionarTodas.checked = true;
+                selecionarTodas.indeterminate = false;
+            } else if (nenhumaMarcada) {
+                selecionarTodas.checked = false;
+                selecionarTodas.indeterminate = false;
+            } else {
+                selecionarTodas.checked = false;
+                selecionarTodas.indeterminate = true;
+            }
+            
+            atualizarOrigensInput();
+        });
+    });
+    
+    // Inicializa
+    atualizarOrigensInput();
+});
+</script>
+{% endblock %}

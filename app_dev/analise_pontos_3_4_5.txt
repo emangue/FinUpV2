@@ -1,0 +1,138 @@
+====================================================================================================
+PONTO 4: EXEMPLOS DE INCONSISTÊNCIA DATA/ANO/DT_FATURA
+====================================================================================================
+
+Encontrados 10 exemplos:
+
+ID       Data         Ano    DT_Fatura  Valor        Estabelecimento                          Origem              
+----------------------------------------------------------------------------------------------------
+16       16/12/2023   2024   202401     R$   -409.28 MERCADOLIVRE*2PRODUTOS                   XP                  
+23       18/10/2023   2024   202401     R$  -1099.90 FS PAULISTA II                           XP                  
+25       19/10/2023   2024   202401     R$   -247.35 ESFERA                                   XP                  
+26       19/12/2023   2024   202401     R$   -299.45 EC*SACRIGON                              XP                  
+30       20/10/2023   2024   202401     R$   -125.00 VIVARA ECO*LOJAVI                        XP                  
+32       21/12/2023   2024   202401     R$   -164.66 INDOR INST DE DOC ORTO                   XP                  
+35       23/10/2023   2024   202401     R$   -411.66 CHANEL                                   XP                  
+36       24/12/2023   2024   202401     R$    -69.90 PRODUTOS GLOBO                           XP                  
+37       24/12/2023   2024   202401     R$   -299.66 AMAZON MARKETPLACE                       XP                  
+38       25/12/2023   2024   202401     R$     -6.08 ZUL 1 CARTAO QG7UK                       XP                  
+
+====================================================================================================
+ANÁLISE DA INCONSISTÊNCIA:
+====================================================================================================
+
+ID 16:
+  Data: 16/12/2023
+    → Ano extraído da Data: 2023
+    → Mês extraído da Data: 12
+  Ano armazenado: 2024
+  DT_Fatura: 202401
+    → Ano: 2024
+    → Mês: 01
+  ❌ Ano da Data (2023) != Ano do DT_Fatura (2024)
+
+ID 23:
+  Data: 18/10/2023
+    → Ano extraído da Data: 2023
+    → Mês extraído da Data: 10
+  Ano armazenado: 2024
+  DT_Fatura: 202401
+    → Ano: 2024
+    → Mês: 01
+  ❌ Ano da Data (2023) != Ano do DT_Fatura (2024)
+  ⚠️  Diferença de 3 meses entre Data e DT_Fatura
+
+ID 25:
+  Data: 19/10/2023
+    → Ano extraído da Data: 2023
+    → Mês extraído da Data: 10
+  Ano armazenado: 2024
+  DT_Fatura: 202401
+    → Ano: 2024
+    → Mês: 01
+  ❌ Ano da Data (2023) != Ano do DT_Fatura (2024)
+  ⚠️  Diferença de 3 meses entre Data e DT_Fatura
+
+
+====================================================================================================
+PONTOS 3 e 5: ANÁLISE DETALHADA DE TIPOGASTO
+====================================================================================================
+
+1. TRANSFERÊNCIAS ENTRE CONTAS (serão desconsideradas)
+----------------------------------------------------------------------------------------------------
+Transferência Entre Contas          | XP                   | TipoGasto: (NULL)                    |   37 transações | R$   215,778.87
+Transferência Entre Contas          | MP                   | TipoGasto: (NULL)                    |   33 transações | R$   224,446.22
+Transferência Entre Contas          | Itaú Person          | TipoGasto: (NULL)                    |   28 transações | R$   214,646.22
+Transferência Entre Contas          | MP                   | TipoGasto: Débito                    |   24 transações | R$    77,740.81
+Transferência Entre Contas          | Santander            | TipoGasto: (NULL)                    |   15 transações | R$   160,466.75
+Transferência Entre Contas          | Itaú Person          | TipoGasto: Débito                    |   12 transações | R$    51,754.76
+Transferência Entre Contas          | Itaú Person          | TipoGasto: Ignorar                   |    9 transações | R$    25,133.14
+Transferência Entre Contas          | MP                   | TipoGasto: Ignorar                   |    6 transações | R$    19,000.00
+Transferência Entre Contas          | Itaú Person          | TipoGasto: nan                       |    5 transações | R$    17,680.09
+Transferência entre contas          | MP                   | TipoGasto: (NULL)                    |    4 transações | R$    33,100.00
+Transferência Entre Contas          | Aposta               | TipoGasto: Débito                    |    3 transações | R$     1,525.10
+Transferência Entre Contas          | Mercado Pago         | TipoGasto: (NULL)                    |    3 transações | R$    14,600.00
+Transferência entre contas          | Itaú Person          | TipoGasto: (NULL)                    |    3 transações | R$    17,100.00
+Transferência Entre Contas          | Ana                  | TipoGasto: (NULL)                    |    2 transações | R$       780.27
+Transferência Entre Contas          | Aposta               | TipoGasto: (NULL)                    |    2 transações | R$     1,915.77
+Transferência Entre Contas          | Itau Person          | TipoGasto: Débito                    |    2 transações | R$     5,350.00
+Transferência Entre Contas          | XP                   | TipoGasto: Débito                    |    2 transações | R$     1,696.20
+Transferência Entre Contas          | BTG                  | TipoGasto: Ignorar                   |    1 transações | R$       180.09
+Transferência Entre Contas          | Exercicios           | TipoGasto: (NULL)                    |    1 transações | R$       100.00
+Transferência Entre Contas          | Exercicios           | TipoGasto: Débito                    |    1 transações | R$       100.00
+Transferência Entre Contas          | Itau Person          | TipoGasto: (NULL)                    |    1 transações | R$     4,000.00
+Transferência Entre Contas          | MP                   | TipoGasto: nan                       |    1 transações | R$    10,500.00
+Transferência Entre Contas          | Mercado Pago         | TipoGasto: Débito                    |    1 transações | R$       500.00
+Transferência Entre Contas          | Nubank               | TipoGasto: (NULL)                    |    1 transações | R$       196.20
+Transferência Entre Contas          | Person               | TipoGasto: (NULL)                    |    1 transações | R$     6,000.00
+Transferência Entre Contas          | Santander            | TipoGasto: Débito                    |    1 transações | R$       100.00
+
+2. SALÁRIOS (receita, não gasto)
+----------------------------------------------------------------------------------------------------
+Salário                             | Salário              | TipoGasto: Salário                   |   39 transações | R$   497,586.70
+Salário                             | Salário              | TipoGasto: (NULL)                    |   14 transações | R$   250,033.68
+Salário                             | Salário              | TipoGasto: nan                       |    2 transações | R$    23,391.31
+Salário                             | Férias               | TipoGasto: Salário                   |    1 transações | R$     5,494.39
+
+3. INVESTIMENTOS (aplicação, não gasto)
+----------------------------------------------------------------------------------------------------
+Investimentos                       | MP                   | TipoGasto: Investimentos - Ajustável |  770 transações | R$   266,311.16
+Investimentos                       | MP                   | TipoGasto: (NULL)                    |  204 transações | R$   104,974.22
+Investimentos                       | Itaú Person          | TipoGasto: Investimentos - Ajustável |   63 transações | R$         4.63
+Investimentos                       | MP                   | TipoGasto: Débito                    |   55 transações | R$   101,955.91
+Investimentos                       | XP                   | TipoGasto: Investimentos - Ajustável |   32 transações | R$    95,038.76
+Investimentos                       | Flats                | TipoGasto: Investimentos - Fixo      |   29 transações | R$    94,926.65
+Investimentos                       | Casa Araraquara      | TipoGasto: Investimentos - Ajustável |   11 transações | R$    68,118.27
+Investimentos                       | Santander            | TipoGasto: Investimentos - Ajustável |    9 transações | R$    12,563.40
+Investimentos                       | Casa Nova            | TipoGasto: Ajustável - Investimentos |    3 transações | R$    21,557.03
+Investimentos                       | Flats                | TipoGasto: (NULL)                    |    3 transações | R$     7,429.90
+Investimentos                       | Casa Araraquara      | TipoGasto: (NULL)                    |    2 transações | R$    26,201.03
+Investimentos                       | Casa Araraquara      | TipoGasto: Débito                    |    2 transações | R$    14,432.43
+Investimentos                       | Conta Santander      | TipoGasto: Investimentos - Ajustável |    2 transações | R$         0.05
+Investimentos                       | Flats                | TipoGasto: Ajustável - Investimentos |    2 transações | R$    32,403.66
+Investimentos                       | MP                   | TipoGasto: Ajustável - Investimentos |    2 transações | R$    10,195.96
+Investimentos                       | Presente Casamento   | TipoGasto: Ajustável                 |    2 transações | R$     4,500.00
+Investimentos                       | Casa Araraquara      | TipoGasto: nan                       |    1 transações | R$     5,931.62
+Investimentos                       | Empréstimo Mãe       | TipoGasto: Investimentos - Ajustável |    1 transações | R$    10,000.00
+Investimentos                       | Flats                | TipoGasto: Débito                    |    1 transações | R$     2,426.06
+Investimentos                       | Itaú Person          | TipoGasto: Ajustado                  |    1 transações | R$         0.03
+Investimentos                       | Mãe                  | TipoGasto: Investimentos - Ajustável |    1 transações | R$    10,000.00
+
+4. VALORES NÃO PADRONIZADOS (ponto 5)
+----------------------------------------------------------------------------------------------------
+TipoGasto: Ajustado                       | Investimentos                  | Itaú Person          |    1 transações
+TipoGasto: Ajustável - Investimentos      | Casa                           | Casa Nova            |   26 transações
+TipoGasto: Ajustável - Investimentos      | Investimentos                  | Casa Nova            |    3 transações
+TipoGasto: Ajustável - Investimentos      | Investimentos                  | Flats                |    2 transações
+TipoGasto: Ajustável - Investimentos      | Investimentos                  | MP                   |    2 transações
+TipoGasto: Fatura                         | Fatura                         | Cartão AZUL          |    5 transações
+TipoGasto: Ignorar                        | Transferência Entre Contas     | Itaú Person          |    9 transações
+TipoGasto: Ignorar                        | Transferência Entre Contas     | MP                   |    6 transações
+TipoGasto: Ignorar                        | Transferência Entre Contas     | BTG                  |    1 transações
+
+====================================================================================================
+RESUMO DE TIPOS DE TRANSAÇÃO:
+====================================================================================================
+Cartão de Crédito              |  1891 transações | R$      295,234.22
+Despesas                       |  1337 transações | R$    1,494,925.12
+Receitas                       |   925 transações | R$    1,698,797.70

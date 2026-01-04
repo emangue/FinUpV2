@@ -1,0 +1,9 @@
+{
+  "timestamp": "20260102_202306",
+  "tag": "pre-deploy-20260102_202306",
+  "original_size": 2580480,
+  "backup_size": 575471,
+  "compression": true,
+  "db_path": "financas.db",
+  "backup_path": "backups/financas.db.backup_20260102_202306_pre-deploy-20260102_202306.gz"
+}

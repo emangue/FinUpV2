@@ -1,0 +1,311 @@
+====================================================================================================
+📊 ANÁLISE COMPLETA DE COLUNAS - journal_entries
+====================================================================================================
+Data: 03/01/2026 11:59:28
+Database: app/financas.db
+
+Total de transações: 4,153
+
+====================================================================================================
+📋 ANÁLISE DETALHADA POR COLUNA
+====================================================================================================
+
+📌 IDTRANSACAO
+   Tipo: VARCHAR(64)
+   Obrigatório: Sim
+   NULL/Vazio: 0 (0.0%)
+   Valores únicos: 4,153
+   Exemplos: 10000252268251621001, 10001925184691204737, 1001583696911998179
+
+📌 DATA
+   Tipo: VARCHAR(10)
+   Obrigatório: Sim
+   NULL/Vazio: 0 (0.0%)
+   Valores únicos: 702
+   Exemplos: 01/01/2024, 01/03/2024, 12/04/2023
+
+📌 ESTABELECIMENTO
+   Tipo: TEXT
+   Obrigatório: Sim
+   NULL/Vazio: 0 (0.0%)
+   Valores únicos: 1,691
+   Exemplos: CONTA VIVO, MERCADOLIVRE*3PRODUTOS, MERCADOPAGO
+
+📌 VALOR
+   Tipo: FLOAT
+   Obrigatório: Sim
+   NULL/Vazio: 0 (0.0%)
+   Valores únicos: 1,675
+   Exemplos: -57.0, -48.9, -193.21
+
+📌 VALORPOSITIVO
+   Tipo: FLOAT
+   Obrigatório: Sim
+   NULL/Vazio: 0 (0.0%)
+   Valores únicos: 1,578
+   Exemplos: 57.0, 48.9, 193.21
+
+📌 TIPOTRANSACAO
+   Tipo: VARCHAR(50)
+   Obrigatório: Não
+   NULL/Vazio: 0 (0.0%)
+   Valores únicos: 3
+   Exemplos: Cartão de Crédito, Despesas, Receitas
+   Distribuição:
+      - Cartão de Crédito: 1,891 (45.5%)
+      - Despesas: 1,337 (32.2%)
+      - Receitas: 925 (22.3%)
+
+📌 TIPOTRANSACAOAJUSTE
+   Tipo: VARCHAR(50)
+   Obrigatório: Não
+   NULL/Vazio: 0 (0.0%)
+   Valores únicos: 3
+   Exemplos: Cartão de Crédito, Despesas, Receitas
+   Distribuição:
+      - Cartão de Crédito: 1,891 (45.5%)
+      - Despesas: 1,400 (33.7%)
+      - Receitas: 862 (20.8%)
+
+📌 TIPOGASTO
+   Tipo: VARCHAR(100)
+   Obrigatório: Não
+   NULL/Vazio: 0 (0.0%)
+   Valores únicos: 23
+   Exemplos: Ajustável, Ajustável - Saídas, Ajustável - Tech
+   Distribuição:
+      - Investimento - Ajustável: 1,185 (28.5%)
+      - Ajustável - Carro: 408 (9.8%)
+      - Ajustável - Assinaturas: 320 (7.7%)
+      - Ajustável - Saídas: 318 (7.7%)
+      - Ajustável - Viagens: 266 (6.4%)
+
+📌 GRUPO
+   Tipo: VARCHAR(100)
+   Obrigatório: Não
+   NULL/Vazio: 7 (0.2%)
+   Valores únicos: 21
+   Exemplos: Alimentação, Tecnologia, Carro
+   Distribuição:
+      - Investimentos: 1,196 (28.8%)
+      - Alimentação: 509 (12.3%)
+      - Carro: 408 (9.8%)
+      - Assinaturas: 317 (7.6%)
+      - Viagens: 266 (6.4%)
+
+📌 SUBGRUPO
+   Tipo: VARCHAR(100)
+   Obrigatório: Não
+   NULL/Vazio: 7 (0.2%)
+   Valores únicos: 213
+   Exemplos: Saídas, Escritório, Estacionamento
+
+📌 ANO
+   Tipo: INTEGER
+   Obrigatório: Não
+   NULL/Vazio: 0 (0.0%)
+   Valores únicos: 2
+   Exemplos: 2024, 2025
+   Distribuição:
+      - 2025: 2,186 (52.6%)
+      - 2024: 1,967 (47.4%)
+
+📌 DT_FATURA
+   Tipo: VARCHAR(6)
+   Obrigatório: Não
+   NULL/Vazio: 0 (0.0%)
+   Valores únicos: 24
+   Exemplos: 202401, 202402, 202403
+   Distribuição:
+      - 202507: 228 (5.5%)
+      - 202504: 222 (5.3%)
+      - 202405: 220 (5.3%)
+      - 202410: 208 (5.0%)
+      - 202508: 207 (5.0%)
+
+📌 NOMETITULAR
+   Tipo: VARCHAR(200)
+   Obrigatório: Não
+   NULL/Vazio: 3,503 (84.3%)
+   Valores únicos: 4
+   Exemplos: EMANUEL GUERRA, 0, Emanuel Guerra Leandro
+   Distribuição:
+      - EMANUEL GUERRA: 332 (8.0%)
+      - Emanuel Guerra Leandro: 292 (7.0%)
+      - EMANUEL GUERRA LEANDRO: 22 (0.5%)
+      - 0: 4 (0.1%)
+
+📌 DATAPOSTAGEM
+   Tipo: VARCHAR(10)
+   Obrigatório: Não
+   NULL/Vazio: 3,797 (91.4%)
+   Valores únicos: 124
+   Exemplos: 25/08/2025, 23/08/2025, 22/08/2025
+
+📌 ORIGEM
+   Tipo: VARCHAR(50)
+   Obrigatório: Sim
+   NULL/Vazio: 0 (0.0%)
+   Valores únicos: 15
+   Exemplos: Azul, BTG - extrato_btg.xls, Extrato - extrato_itau.xls
+   Distribuição:
+      - MP: 1,622 (39.1%)
+      - Azul: 1,132 (27.3%)
+      - XP: 486 (11.7%)
+      - Itaú Person: 166 (4.0%)
+      - Itau Person: 132 (3.2%)
+
+📌 MARCACAOIA
+   Tipo: VARCHAR(100)
+   Obrigatório: Não
+   NULL/Vazio: 3,639 (87.6%)
+   Valores únicos: 6
+   Exemplos: Base_Padroes, Manual (Lote), IdParcela
+   Distribuição:
+      - Base_Padroes: 319 (7.7%)
+      - Manual (Lote): 92 (2.2%)
+      - IdParcela: 88 (2.1%)
+      - Palavras-chave: 7 (0.2%)
+      - Fatura Cartão: 5 (0.1%)
+
+📌 VALIDARIA
+   Tipo: VARCHAR(10)
+   Obrigatório: Não
+   NULL/Vazio: 4,153 (100.0%)
+   Valores únicos: 0
+
+📌 CARTAOCODIGO8
+   Tipo: VARCHAR(20)
+   Obrigatório: Não
+   NULL/Vazio: 4,153 (100.0%)
+   Valores únicos: 0
+
+📌 FINALCARTAO
+   Tipo: VARCHAR(4)
+   Obrigatório: Não
+   NULL/Vazio: 4,153 (100.0%)
+   Valores únicos: 0
+
+📌 TIPOLANCAMENTO
+   Tipo: VARCHAR(20)
+   Obrigatório: Não
+   NULL/Vazio: 3,797 (91.4%)
+   Valores únicos: 1
+   Exemplos: Nacional
+   Distribuição:
+      - Nacional: 356 (8.6%)
+
+📌 TRANSACAOFUTURA
+   Tipo: VARCHAR(3)
+   Obrigatório: Não
+   NULL/Vazio: 3,639 (87.6%)
+   Valores únicos: 1
+   Exemplos: NÃO
+   Distribuição:
+      - NÃO: 514 (12.4%)
+
+📌 IDOPERACAO
+   Tipo: VARCHAR(20)
+   Obrigatório: Não
+   NULL/Vazio: 4,153 (100.0%)
+   Valores únicos: 0
+
+📌 CREATED_AT
+   Tipo: DATETIME
+   Obrigatório: Não
+   NULL/Vazio: 0 (0.0%)
+   Valores únicos: 4,153
+   Exemplos: 2025-12-26 14:23:47.542889, 2025-12-26 14:23:47.544097, 2025-12-26 14:23:47.544522
+
+📌 IGNORARDASHBOARD
+   Tipo: BOOLEAN
+   Obrigatório: Não
+   NULL/Vazio: 0 (0.0%)
+   Valores únicos: 2
+   Exemplos: 0, 1
+   Distribuição:
+      - (vazio): 2,753 (66.3%)
+      - 1: 1,400 (33.7%)
+
+📌 IDPARCELA
+   Tipo: TEXT
+   Obrigatório: Não
+   NULL/Vazio: 3,775 (90.9%)
+   Valores únicos: 101
+   Exemplos: 00bb219300e9093a, 03065b8ed0a7ea4c, 0394af1b8386e59d
+
+📌 BANCO
+   Tipo: TEXT
+   Obrigatório: Não
+   NULL/Vazio: 4,024 (96.9%)
+   Valores únicos: 2
+   Exemplos: BTG, Mercado Pago
+   Distribuição:
+      - Mercado Pago: 119 (2.9%)
+      - BTG: 10 (0.2%)
+
+📌 TIPODOCUMENTO
+   Tipo: TEXT
+   Obrigatório: Não
+   NULL/Vazio: 4,024 (96.9%)
+   Valores únicos: 1
+   Exemplos: Extrato
+   Distribuição:
+      - Extrato: 129 (3.1%)
+
+📌 FORMA_CLASSIFICACAO
+   Tipo: TEXT
+   Obrigatório: Não
+   NULL/Vazio: 4,022 (96.8%)
+   Valores únicos: 4
+   Exemplos: Automática-BasePadrão, Automática-Histórico, Manual
+   Distribuição:
+      - Automática-BasePadrão: 98 (2.4%)
+      - Semi-Automática: 21 (0.5%)
+      - Manual: 10 (0.2%)
+      - Automática-Histórico: 2 (0.0%)
+
+📌 USER_ID
+   Tipo: INTEGER
+   Obrigatório: Não
+   NULL/Vazio: 0 (0.0%)
+   Valores únicos: 1
+   Exemplos: 1
+   Distribuição:
+      - 1: 4,153 (100.0%)
+
+====================================================================================================
+🔗 RELACIONAMENTO ORIGEM x BANCO
+====================================================================================================
+
+   Azul                                     | (NULL)               | 1,132
+   BTG - extrato_btg.xls                    | BTG                  | 10
+   Extrato - extrato_itau.xls               | (NULL)               | 31
+   Fatura - fatura-202508.csv               | (NULL)               | 71
+   Fatura - fatura-202509.csv               | (NULL)               | 79
+   Fatura - fatura_itau-202510.csv          | (NULL)               | 90
+   Fatura - fatura_itau-202511.csv          | (NULL)               | 48
+   Fatura - fatura_itau-202512.csv          | (NULL)               | 68
+   Itau Person                              | (NULL)               | 132
+   Itaú Person                              | (NULL)               | 166
+   MP                                       | (NULL)               | 1,622
+   Mercado Pago - mp_agosto.xlsx            | Mercado Pago         | 119
+   Nubank                                   | (NULL)               | 1
+   Santander                                | (NULL)               | 98
+   XP                                       | (NULL)               | 486
+
+====================================================================================================
+⚠️  INCONSISTÊNCIAS DETECTADAS
+====================================================================================================
+
+1. INCONSISTENT_NAMING - origem
+   Múltiplas variações de "Itaú": [('Extrato - extrato_itau.xls', 31), ('Fatura - fatura_itau-202510.csv', 90), ('Fatura - fatura_itau-202511.csv', 48), ('Fatura - fatura_itau-202512.csv', 68), ('Itau Person', 132), ('Itaú Person', 166)]
+   Registros afetados: 535
+
+2. COMPLEX_VALUES - origem
+   Origem contém informações de arquivo
+   Exemplos: ['BTG - extrato_btg.xls', 'Extrato - extrato_itau.xls', 'Fatura - fatura-202508.csv', 'Fatura - fatura-202509.csv', 'Fatura - fatura_itau-202510.csv']
+
+3. MISSING_DATA - banco
+   4024 registros sem banco mas com origem
+   Registros afetados: 4,024

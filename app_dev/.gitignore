@@ -1,41 +1,109 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# dependencies
-/node_modules
-/.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
+# Virtual Environment
+venv/
+env/
+ENV/
 
-# testing
-/coverage
+# Database
+*.db
+*.sqlite3
+*.db-journal
+app/financas.db
+app_dev/financas_dev.db
 
-# next.js
-/.next/
-/out/
+# Flask Session
+flask_session/
+app/flask_session/
+app_dev/flask_session/
 
-# production
-/build
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 
-# misc
+# OS
 .DS_Store
-*.pem
+Thumbs.db
 
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
+# Logs
+*.log
 
-# env files (can opt-in for committing if needed)
-.env*
+# Temporary files
+*.tmp
+*.temp
 
-# vercel
-.vercel
+# Uploads
+uploads/
+temp_*
+app/uploads_temp/
+app_dev/uploads_temp/
 
-# typescript
-*.tsbuildinfo
-next-env.d.ts
+# Static uploads (logos customizados, etc)
+app/static/uploads/
+app_dev/static/uploads/
+
+# Temporary scripts and data
+_temp_scripts/
+_csvs_historico/
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Backup files
+*.bak
+*.backup
+
+# Local backups folder (not for git)
+backups_local/
+
+# Data samples (may contain sensitive info)
+data_samples/
+
+# App DEV recursos (commitar código, não dados)
+app_dev/financas_dev.db
+app_dev/uploads_temp/
+app_dev/static/uploads/
+app_dev/flask_session/
+app_dev/frontend/node_modules/
+app_dev/frontend/dist/
+app_dev/frontend/.vite/
+app_dev/frontend/.next/
+app_dev/frontend/.turbo/
+app_dev/venv/
+
+# App PROD recursos (não versionar - atualizado via deploy)
+app/financas.db
+app/uploads_temp/
+app/static/uploads/
+app/flask_session/
+app/venv/
+node_modules
+.next
+.turbo

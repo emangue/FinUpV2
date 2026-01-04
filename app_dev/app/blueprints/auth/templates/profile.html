@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+
+{% block title %}Meu Perfil{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <!-- Coluna Esquerda: Informações do Perfil -->
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-user-circle"></i> Meu Perfil</h5>
+                </div>
+                <div class="card-body">
+                    <div class="text-center mb-4">
+                        <i class="fas fa-user-circle fa-5x text-primary"></i>
+                    </div>
+
+                    <table class="table">
+                        <tr>
+                            <th width="35%">Nome:</th>
+                            <td>{{ user.nome }}</td>
+                        </tr>
+                        <tr>
+                            <th>Email:</th>
+                            <td>{{ user.email }}</td>
+                        </tr>
+                        <tr>
+                            <th>Perfil:</th>
+                            <td>
+                                {% if user.role == 'admin' %}
+                                    <span class="badge bg-danger">Administrador</span>
+                                {% else %}
+                                    <span class="badge bg-primary">Usuário</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Membro desde:</th>
+                            <td>{{ user.created_at.strftime('%d/%m/%Y') if user.created_at else '-' }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Troca de Senha -->
+            <div class="card mb-4">
+                <div class="card-header bg-warning text-dark">
+                    <h6 class="mb-0"><i class="fas fa-key"></i> Alterar Senha</h6>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('auth.change_password') }}">
+                        <div class="mb-3">
+                            <label for="current_password" class="form-label">Senha Atual</label>
+                            <input type="password" class="form-control" id="current_password" 
+                                   name="current_password" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="new_password" class="form-label">Nova Senha</label>
+                            <input type="password" class="form-control" id="new_password" 
+                                   name="new_password" required minlength="6">
+                            <small class="text-muted">Mínimo 6 caracteres</small>
+                        </div>
+                        <div class="mb-3">
+                            <label for="confirm_password" class="form-label">Confirmar Nova Senha</label>
+                            <input type="password" class="form-control" id="confirm_password" 
+                                   name="confirm_password" required>
+                        </div>
+                        <button type="submit" class="btn btn-warning w-100">
+                            <i class="fas fa-lock"></i> Alterar Senha
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Coluna Direita: Contas Conectadas -->
+        <div class="col-md-6">
+            <!-- Solicitar Conexão -->
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white">
+                    <h6 class="mb-0"><i class="fas fa-link"></i> Conectar com Outra Conta</h6>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">
+                        Conecte-se com outra conta para visualizar dados separados ou consolidados
+                    </p>
+                    <form method="POST" action="{{ url_for('auth.connect_account') }}">
+                        <div class="input-group">
+                            <input type="email" class="form-control" name="email" 
+                                   placeholder="Email da conta a conectar" required>
+                            <button type="submit" class="btn btn-info">
+                                <i class="fas fa-paper-plane"></i> Solicitar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Convites Pendentes -->
+            {% if convites_pendentes %}
+            <div class="card mb-4 border-warning">
+                <div class="card-header bg-warning text-dark">
+                    <h6 class="mb-0">
+                        <i class="fas fa-bell"></i> Solicitações Pendentes 
+                        <span class="badge bg-danger">{{ convites_pendentes|length }}</span>
+                    </h6>
+                </div>
+                <div class="card-body p-0">
+                    <div class="alert alert-warning mb-0 rounded-0">
+                        <i class="fas fa-exclamation-triangle"></i> 
+                        <strong>Você tem {{ convites_pendentes|length }} solicitação(ões) de conexão aguardando sua resposta</strong>
+                    </div>
+                </div>
+                <div class="list-group list-group-flush">
+                    {% for convite in convites_pendentes %}
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div>
+                                <div class="mb-1">
+                                    <i class="fas fa-user-plus text-warning"></i>
+                                    <strong>{{ convite.usuario_principal.nome }}</strong> quer conectar com você
+                                </div>
+                                <small class="text-muted">
+                                    <i class="fas fa-envelope"></i> {{ convite.usuario_principal.email }}
+                                </small>
+                            </div>
+                        </div>
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-2">
+                            <form method="POST" action="{{ url_for('auth.accept_relationship', relationship_id=convite.id) }}" 
+                                  class="d-inline">
+                                <button type="submit" class="btn btn-success btn-sm">
+                                    <i class="fas fa-check"></i> Aceitar
+                                </button>
+                            </form>
+                            <form method="POST" action="{{ url_for('auth.reject_relationship', relationship_id=convite.id) }}" 
+                                  class="d-inline">
+                                <button type="submit" class="btn btn-danger btn-sm" 
+                                        onclick="return confirm('Tem certeza que deseja rejeitar esta solicitação?')">
+                                    <i class="fas fa-times"></i> Rejeitar
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Contas Conectadas -->
+            {% if relacionamentos %}
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h6 class="mb-0"><i class="fas fa-users"></i> Contas Conectadas ({{ relacionamentos|length }})</h6>
+                </div>
+                <div class="list-group list-group-flush">
+                    {% for rel in relacionamentos %}
+                    {% set outro_usuario = rel.usuario_conectado if rel.user_id == user.id else rel.usuario_principal %}
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div>
+                                <strong>{{ outro_usuario.nome }}</strong>
+                                <br>
+                                <small class="text-muted">{{ outro_usuario.email }}</small>
+                            </div>
+                            <form method="POST" action="{{ url_for('auth.disconnect_account', relationship_id=rel.id) }}" 
+                                  class="d-inline" onsubmit="return confirm('Deseja realmente desconectar desta conta?')">
+                                <button type="submit" class="btn btn-sm btn-danger" title="Desconectar">
+                                    <i class="fas fa-unlink"></i>
+                                </button>
+                            </form>
+                        </div>
+                        
+                        <!-- Toggle Visão Consolidada -->
+                        <div class="form-check form-switch">
+                            <form method="POST" action="{{ url_for('auth.toggle_consolidated_view', relationship_id=rel.id) }}" 
+                                  id="form-consolidated-{{ rel.id }}">
+                                <input class="form-check-input" type="checkbox" 
+                                       id="consolidated-{{ rel.id }}"
+                                       {% if rel.view_consolidated %}checked{% endif %}
+                                       onchange="document.getElementById('form-consolidated-{{ rel.id }}').submit()">
+                                <label class="form-check-label" for="consolidated-{{ rel.id }}">
+                                    <small>
+                                        <i class="fas fa-chart-pie"></i> Visão consolidada
+                                        {% if rel.view_consolidated %}
+                                            <span class="badge bg-success">Ativa</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Desativada</span>
+                                        {% endif %}
+                                    </small>
+                                </label>
+                            </form>
+                        </div>
+                        
+                        <small class="text-muted">
+                            {% if rel.view_consolidated %}
+                                <i class="fas fa-info-circle"></i> Você pode ver dados separados e consolidados
+                            {% else %}
+                                <i class="fas fa-info-circle"></i> Você vê apenas seus próprios dados
+                            {% endif %}
+                        </small>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% else %}
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i> Você ainda não tem contas conectadas
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Botão Voltar -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <a href="{{ url_for('dashboard.index') }}" class="btn btn-primary">
+                <i class="fas fa-arrow-left"></i> Voltar ao Dashboard
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

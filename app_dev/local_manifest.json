@@ -1,0 +1,746 @@
+{
+  "app/models_ignorar.py": {
+    "path": "./app/models_ignorar.py",
+    "hash": "7df985d16a43ca6dcd94bb9febf6f907",
+    "size": 537,
+    "modified": "2025-12-27T19:57:03.748098"
+  },
+  "app/config.py": {
+    "path": "./app/config.py",
+    "hash": "8523f510b1cd3c777425877de712f799",
+    "size": 811,
+    "modified": "2025-12-26T23:12:48.822122"
+  },
+  "app/models.py": {
+    "path": "./app/models.py",
+    "hash": "ee2fb65f4b7117f9df5f85ba5e93e733",
+    "size": 17485,
+    "modified": "2025-12-28T13:16:25.102584"
+  },
+  "app/__init__.py": {
+    "path": "./app/__init__.py",
+    "hash": "6c771fa9eac7099cfe4a0bca2d125a5c",
+    "size": 2236,
+    "modified": "2025-12-28T13:16:25.118037"
+  },
+  "app/extensions.py": {
+    "path": "./app/extensions.py",
+    "hash": "af73da1d5053ef2d055b6c82a3def3f0",
+    "size": 799,
+    "modified": "2025-12-28T13:16:25.117961"
+  },
+  "app/filters.py": {
+    "path": "./app/filters.py",
+    "hash": "5762b15d566c007f7fd59052b3eee22a",
+    "size": 3886,
+    "modified": "2025-12-26T18:02:46.570492"
+  },
+  "app/blueprints/auth/__init__.py": {
+    "path": "./app/blueprints/auth/__init__.py",
+    "hash": "c5ce2d5efd08b339eb5f1e72bf495021",
+    "size": 273,
+    "modified": "2025-12-28T13:16:25.111107"
+  },
+  "app/blueprints/auth/routes.py": {
+    "path": "./app/blueprints/auth/routes.py",
+    "hash": "4b6b42f38c74d09d87b34e681c911db9",
+    "size": 14898,
+    "modified": "2025-12-28T14:07:02.397448"
+  },
+  "app/blueprints/auth/templates/profile.html": {
+    "path": "./app/blueprints/auth/templates/profile.html",
+    "hash": "aba488a1dd9e0102630d79604cdd92fe",
+    "size": 11567,
+    "modified": "2025-12-28T14:07:02.407331"
+  },
+  "app/blueprints/auth/templates/register.html": {
+    "path": "./app/blueprints/auth/templates/register.html",
+    "hash": "7a16403077e77a64c8d56a99e0e20334",
+    "size": 2952,
+    "modified": "2025-12-28T13:16:25.111229"
+  },
+  "app/blueprints/auth/templates/login.html": {
+    "path": "./app/blueprints/auth/templates/login.html",
+    "hash": "a040cbf94b1550afd2c7f7a7d8bcd8f3",
+    "size": 3684,
+    "modified": "2025-12-28T13:16:25.111118"
+  },
+  "app/blueprints/auth/templates/list_users.html": {
+    "path": "./app/blueprints/auth/templates/list_users.html",
+    "hash": "e67649722292cf4fd9b58ef56cef65a3",
+    "size": 4495,
+    "modified": "2025-12-28T14:07:02.404589"
+  },
+  "app/blueprints/admin/__init__.py": {
+    "path": "./app/blueprints/admin/__init__.py",
+    "hash": "d2f1167fe907ff78718e925e688b6c4c",
+    "size": 192,
+    "modified": "2025-12-26T17:58:20.982468"
+  },
+  "app/blueprints/admin/routes.py": {
+    "path": "./app/blueprints/admin/routes.py",
+    "hash": "59acde6e6e54300d924fd52d7b5af60d",
+    "size": 26683,
+    "modified": "2025-12-28T14:07:02.407840"
+  },
+  "app/blueprints/admin/templates/admin_logos.html": {
+    "path": "./app/blueprints/admin/templates/admin_logos.html",
+    "hash": "81461e02588886a5cd074603518e676f",
+    "size": 11864,
+    "modified": "2025-12-26T17:56:09.945998"
+  },
+  "app/blueprints/admin/templates/admin_marcacoes.html": {
+    "path": "./app/blueprints/admin/templates/admin_marcacoes.html",
+    "hash": "330d1677be97d4e08b1f1f522322aff7",
+    "size": 10392,
+    "modified": "2025-12-31T19:39:42.440807"
+  },
+  "app/blueprints/admin/templates/admin_padroes.html": {
+    "path": "./app/blueprints/admin/templates/admin_padroes.html",
+    "hash": "92df7688c6e19cb29736ed1807f92beb",
+    "size": 3747,
+    "modified": "2025-12-26T18:11:16.724899"
+  },
+  "app/blueprints/admin/templates/admin_grupos.html": {
+    "path": "./app/blueprints/admin/templates/admin_grupos.html",
+    "hash": "a1c4ac0a23f4de57be79f0c5372e9617",
+    "size": 9404,
+    "modified": "2025-12-26T17:56:09.945186"
+  },
+  "app/blueprints/dashboard/__init__.py": {
+    "path": "./app/blueprints/dashboard/__init__.py",
+    "hash": "b67d1c2a9e13f09e8f0b5a7ecc27db31",
+    "size": 228,
+    "modified": "2025-12-26T17:58:20.991231"
+  },
+  "app/blueprints/dashboard/routes.py": {
+    "path": "./app/blueprints/dashboard/routes.py",
+    "hash": "a7c8c470b9bbf351ed9790e583f2ab4a",
+    "size": 36487,
+    "modified": "2025-12-31T19:32:24.027869"
+  },
+  "app/blueprints/dashboard/templates/dashboard.html": {
+    "path": "./app/blueprints/dashboard/templates/dashboard.html",
+    "hash": "3bb84cf06efe774346628417dc7fb892",
+    "size": 43344,
+    "modified": "2025-12-28T00:18:56.244873"
+  },
+  "app/blueprints/dashboard/templates/transacoes.html": {
+    "path": "./app/blueprints/dashboard/templates/transacoes.html",
+    "hash": "a0be4aeeb78143ecd70dbc94bfae3a5d",
+    "size": 9602,
+    "modified": "2025-12-27T21:35:08.783924"
+  },
+  "app/blueprints/upload/__init__.py": {
+    "path": "./app/blueprints/upload/__init__.py",
+    "hash": "7ca5a7b2c17ffb6b8d461b92f01dd2ed",
+    "size": 213,
+    "modified": "2025-12-26T17:58:20.991392"
+  },
+  "app/blueprints/upload/routes.py": {
+    "path": "./app/blueprints/upload/routes.py",
+    "hash": "48e912494f914c6302ecd693163dc002",
+    "size": 40095,
+    "modified": "2025-12-31T19:32:24.018829"
+  },
+  "app/blueprints/upload/utils/detector.py": {
+    "path": "./app/blueprints/upload/utils/detector.py",
+    "hash": "c34393c8e5fadc9c23fdac1119651e47",
+    "size": 6270,
+    "modified": "2025-12-26T20:32:44.816894"
+  },
+  "app/blueprints/upload/utils/__init__.py": {
+    "path": "./app/blueprints/upload/utils/__init__.py",
+    "hash": "c2296a984f5f381d6a1a0a4f989bc772",
+    "size": 242,
+    "modified": "2025-12-26T20:32:44.816855"
+  },
+  "app/blueprints/upload/processors/fatura_cartao.py": {
+    "path": "./app/blueprints/upload/processors/fatura_cartao.py",
+    "hash": "b0474bda028297eb258187bd8092770d",
+    "size": 11869,
+    "modified": "2025-12-27T22:58:06.553191"
+  },
+  "app/blueprints/upload/processors/__init__.py": {
+    "path": "./app/blueprints/upload/processors/__init__.py",
+    "hash": "d3adef1dd6658e763f073525f897d2c6",
+    "size": 238,
+    "modified": "2025-12-26T23:12:48.815917"
+  },
+  "app/blueprints/upload/processors/extrato_conta.py": {
+    "path": "./app/blueprints/upload/processors/extrato_conta.py",
+    "hash": "b691b7fce5f6c37de230e4980f88ae9c",
+    "size": 5302,
+    "modified": "2025-12-27T22:58:06.548049"
+  },
+  "app/blueprints/upload/processors/_deprecated/README.md": {
+    "path": "./app/blueprints/upload/processors/_deprecated/README.md",
+    "hash": "93140e5b17abd46e08cf21ede802cc0e",
+    "size": 1144,
+    "modified": "2025-12-26T23:12:48.822109"
+  },
+  "app/blueprints/upload/processors/_deprecated/fatura_itau.py": {
+    "path": "./app/blueprints/upload/processors/_deprecated/fatura_itau.py",
+    "hash": "9550c55a2449aa8e564053b5b1e8a750",
+    "size": 8029,
+    "modified": "2025-12-26T23:12:48.822227"
+  },
+  "app/blueprints/upload/processors/_deprecated/mercado_pago.py": {
+    "path": "./app/blueprints/upload/processors/_deprecated/mercado_pago.py",
+    "hash": "2b03b92365a57543e4c936c2d5bc4d62",
+    "size": 5081,
+    "modified": "2025-12-26T23:12:48.824008"
+  },
+  "app/blueprints/upload/processors/_deprecated/extrato_itau.py": {
+    "path": "./app/blueprints/upload/processors/_deprecated/extrato_itau.py",
+    "hash": "ead30203e1fb2b7f2e16b1161bdf3c4c",
+    "size": 4222,
+    "modified": "2025-12-26T23:12:48.823926"
+  },
+  "app/blueprints/upload/templates/duplicados.html": {
+    "path": "./app/blueprints/upload/templates/duplicados.html",
+    "hash": "62296adaf4aaadb0f86f54723781cc8b",
+    "size": 1825,
+    "modified": "2025-12-28T12:01:52.709890"
+  },
+  "app/blueprints/upload/templates/revisao_upload.html": {
+    "path": "./app/blueprints/upload/templates/revisao_upload.html",
+    "hash": "5fdce1075c2677d329394c187c134da9",
+    "size": 15720,
+    "modified": "2025-12-31T19:32:24.018874"
+  },
+  "app/blueprints/upload/templates/upload.html": {
+    "path": "./app/blueprints/upload/templates/upload.html",
+    "hash": "a2c51a458be0895a6200d51327c00f94",
+    "size": 2386,
+    "modified": "2025-12-28T14:07:02.407968"
+  },
+  "app/blueprints/upload/classifiers/pattern_generator.py": {
+    "path": "./app/blueprints/upload/classifiers/pattern_generator.py",
+    "hash": "7b0afefb4bb504758e1db91294b0adbc",
+    "size": 6086,
+    "modified": "2025-12-26T22:37:15.821348"
+  },
+  "app/blueprints/upload/classifiers/auto_classifier.py": {
+    "path": "./app/blueprints/upload/classifiers/auto_classifier.py",
+    "hash": "4882724295d8c68420a1ef70832cd461",
+    "size": 21104,
+    "modified": "2025-12-28T00:18:56.244755"
+  },
+  "app/blueprints/upload/classifiers/__init__.py": {
+    "path": "./app/blueprints/upload/classifiers/__init__.py",
+    "hash": "b95e1fd7662f81efaf0684a05e0ad466",
+    "size": 197,
+    "modified": "2025-12-26T17:54:33.313321"
+  },
+  "app/utils/deduplicator.py": {
+    "path": "./app/utils/deduplicator.py",
+    "hash": "8e762364a621c2dd14b7d6143cee71ff",
+    "size": 7593,
+    "modified": "2025-12-28T12:10:30.573696"
+  },
+  "app/utils/__init__.py": {
+    "path": "./app/utils/__init__.py",
+    "hash": "c725b8417316d4b123888d0b472d644a",
+    "size": 760,
+    "modified": "2025-12-26T17:54:33.309913"
+  },
+  "app/utils/normalizer.py": {
+    "path": "./app/utils/normalizer.py",
+    "hash": "e856b09b53b947de728a0bc44c35e9d0",
+    "size": 4095,
+    "modified": "2025-12-26T22:37:15.803548"
+  },
+  "app/utils/hasher.py": {
+    "path": "./app/utils/hasher.py",
+    "hash": "b20a1bcc15d0c76d57c9fa0d909cdbc0",
+    "size": 2591,
+    "modified": "2025-12-27T11:33:53.539816"
+  },
+  "app/utils/processors/preprocessors/extrato_btg.py": {
+    "path": "./app/utils/processors/preprocessors/extrato_btg.py",
+    "hash": "9d572f1f236afe7508e6760b45068f30",
+    "size": 13935,
+    "modified": "2025-12-28T00:18:56.244925"
+  },
+  "app/utils/processors/preprocessors/extrato_bb_csv.py": {
+    "path": "./app/utils/processors/preprocessors/extrato_bb_csv.py",
+    "hash": "6a7a7df363c6a0d5a39a7f11dee2c9f8",
+    "size": 9044,
+    "modified": "2025-12-28T14:07:02.404598"
+  },
+  "app/utils/processors/preprocessors/__init__.py": {
+    "path": "./app/utils/processors/preprocessors/__init__.py",
+    "hash": "002a6bd824141846fed771bd12d16b0d",
+    "size": 7935,
+    "modified": "2025-12-28T13:16:25.127089"
+  },
+  "app/utils/processors/preprocessors/extrato_mercadopago.py": {
+    "path": "./app/utils/processors/preprocessors/extrato_mercadopago.py",
+    "hash": "bd832fb6807f6ddbdd37dfe14cc8e0e0",
+    "size": 9348,
+    "modified": "2025-12-27T22:58:06.548211"
+  },
+  "app/utils/processors/preprocessors/fatura_itau.py": {
+    "path": "./app/utils/processors/preprocessors/fatura_itau.py",
+    "hash": "b9a791cf98cad831f25299f4f0cf00cd",
+    "size": 10548,
+    "modified": "2025-12-31T19:32:24.018904"
+  },
+  "app/utils/processors/preprocessors/cartao_bb_ofx.py": {
+    "path": "./app/utils/processors/preprocessors/cartao_bb_ofx.py",
+    "hash": "ddf6cf3cfdebca91837da54cdf4e680f",
+    "size": 8761,
+    "modified": "2025-12-31T19:32:24.018870"
+  },
+  "app/utils/processors/preprocessors/extrato_itau_xls.py": {
+    "path": "./app/utils/processors/preprocessors/extrato_itau_xls.py",
+    "hash": "948d797ea3b0b61ee0aed7e23ea6b38f",
+    "size": 13430,
+    "modified": "2025-12-27T17:09:44.654577"
+  },
+  "templates/revisar_categoria.html": {
+    "path": "./templates/revisar_categoria.html",
+    "hash": "0869b88d0896410cb366fecd7ef33b70",
+    "size": 14711,
+    "modified": "2025-12-28T12:30:14.007624"
+  },
+  "templates/admin_parcelas.html": {
+    "path": "./templates/admin_parcelas.html",
+    "hash": "18714d74b0823de4dd53b536fe441945",
+    "size": 4321,
+    "modified": "2025-12-26T22:17:39.677079"
+  },
+  "templates/validar.html": {
+    "path": "./templates/validar.html",
+    "hash": "7348ce89217f7a455c455b6035c6ba41",
+    "size": 30251,
+    "modified": "2025-12-26T20:32:44.816810"
+  },
+  "templates/admin_ignorar_estabelecimentos.html": {
+    "path": "./templates/admin_ignorar_estabelecimentos.html",
+    "hash": "9b053ac8aa866db6f6e139f1749ce4da",
+    "size": 1601,
+    "modified": "2025-12-27T19:57:03.758440"
+  },
+  "templates/base.html": {
+    "path": "./templates/base.html",
+    "hash": "1a8db2c5c1a449abf3131c40c32ff35c",
+    "size": 7202,
+    "modified": "2025-12-28T14:07:02.404580"
+  },
+  "templates/validar.html.backup": {
+    "path": "./templates/validar.html.backup",
+    "hash": "765cc9d2f9694bd4db488a511ed53599",
+    "size": 15227,
+    "modified": "2025-12-26T18:18:50.817981"
+  },
+  "templates/confirmar_upload.html": {
+    "path": "./templates/confirmar_upload.html",
+    "hash": "24f6f213d51e2ae70234930b294ec158",
+    "size": 14068,
+    "modified": "2025-12-31T19:32:24.018843"
+  },
+  "templates/transacoes.html": {
+    "path": "./templates/transacoes.html",
+    "hash": "63addd8ea222e16f63f3ad19795d796e",
+    "size": 10854,
+    "modified": "2025-12-28T14:07:02.407890"
+  },
+  "templates/admin_transacoes.html": {
+    "path": "./templates/admin_transacoes.html",
+    "hash": "1369ee69d29c96583d049a0582617d88",
+    "size": 5680,
+    "modified": "2025-12-27T19:57:03.735594"
+  },
+  "templates/teste_dropdown.html": {
+    "path": "./templates/teste_dropdown.html",
+    "hash": "34d9fe9b439e47d88a4641461099ce5f",
+    "size": 7850,
+    "modified": "2025-12-26T17:16:59.977181"
+  },
+  "templates/_macros/transacao_filters.html": {
+    "path": "./templates/_macros/transacao_filters.html",
+    "hash": "0903146387347ceee76ca7995e569f3a",
+    "size": 8324,
+    "modified": "2025-12-28T00:30:00.607198"
+  },
+  "templates/_macros/transacao_modal_edit.html": {
+    "path": "./templates/_macros/transacao_modal_edit.html",
+    "hash": "fbd96ebc42e63fe74397520d878ae730",
+    "size": 8419,
+    "modified": "2025-12-28T00:18:56.244901"
+  },
+  "static/css/style.css": {
+    "path": "./static/css/style.css",
+    "hash": "a6a32b3eb4e36a9617c5ddbea3064080",
+    "size": 2455,
+    "modified": "2025-12-27T16:48:00.896508"
+  },
+  "static/js/main.js": {
+    "path": "./static/js/main.js",
+    "hash": "d08640a278541cda9cb6ee353deed9b2",
+    "size": 11200,
+    "modified": "2025-12-28T11:55:48.463314"
+  },
+  "static/logos/inter.svg": {
+    "path": "./static/logos/inter.svg",
+    "hash": "ae50843f5c9fe25759cdeb29f364b388",
+    "size": 251,
+    "modified": "2025-12-26T13:37:17.989608"
+  },
+  "static/logos/nubank.svg": {
+    "path": "./static/logos/nubank.svg",
+    "hash": "a4aa36282428d991438e468f2ccc55db",
+    "size": 251,
+    "modified": "2025-12-26T13:37:17.989234"
+  },
+  "static/logos/disney.svg": {
+    "path": "./static/logos/disney.svg",
+    "hash": "36fc631f7ac629c5b7a66845feaea971",
+    "size": 251,
+    "modified": "2025-12-26T13:37:17.988887"
+  },
+  "static/logos/prime.svg": {
+    "path": "./static/logos/prime.svg",
+    "hash": "1856d879c28c3b72184e0f8c62d1b1dc",
+    "size": 251,
+    "modified": "2025-12-26T13:37:17.988539"
+  },
+  "static/logos/apple.com.webp": {
+    "path": "./static/logos/apple.com.webp",
+    "hash": "86bdd01b39eadf809a68f1f59d88eca0",
+    "size": 8984,
+    "modified": "2025-12-26T14:06:42.020322"
+  },
+  "static/logos/paodeacucar.svg": {
+    "path": "./static/logos/paodeacucar.svg",
+    "hash": "b72579f668442a2de8c19727c64a456b",
+    "size": 251,
+    "modified": "2025-12-26T13:37:17.992441"
+  },
+  "static/logos/99.png": {
+    "path": "./static/logos/99.png",
+    "hash": "134e7394086bf2ae0cb323c6df87db8d",
+    "size": 4247,
+    "modified": "2025-12-26T14:09:11.294814"
+  },
+  "static/logos/bradesco.svg": {
+    "path": "./static/logos/bradesco.svg",
+    "hash": "9739f3ea025ae1eb9a7a19720d0a698b",
+    "size": 251,
+    "modified": "2025-12-26T13:37:17.990310"
+  },
+  "static/logos/conectcar.svg": {
+    "path": "./static/logos/conectcar.svg",
+    "hash": "f646edb574b766e6586dfb1eb6f554c3",
+    "size": 251,
+    "modified": "2025-12-26T13:46:35.563946"
+  },
+  "static/logos/posto.svg": {
+    "path": "./static/logos/posto.svg",
+    "hash": "0fb30d1e6f82eef70a9f33af432259b7",
+    "size": 250,
+    "modified": "2025-12-26T13:37:17.993126"
+  },
+  "static/logos/vivo.webp": {
+    "path": "./static/logos/vivo.webp",
+    "hash": "25b189b6a3f1440366bbbc0b94bc6553",
+    "size": 14716,
+    "modified": "2025-12-26T14:06:21.993573"
+  },
+  "static/logos/mcdonalds.svg": {
+    "path": "./static/logos/mcdonalds.svg",
+    "hash": "e3b5e0ce5b690ea8c3e4480efc301b05",
+    "size": 251,
+    "modified": "2025-12-26T13:37:17.986407"
+  },
+  "static/logos/ubereats.svg": {
+    "path": "./static/logos/ubereats.svg",
+    "hash": "e311f7ebcc07a1047edb83c6a74615c6",
+    "size": 251,
+    "modified": "2025-12-26T13:37:17.984160"
+  },
+  "static/logos/magalu.svg": {
+    "path": "./static/logos/magalu.svg",
+    "hash": "220c96228aef18023da5ca5241cba94d",
+    "size": 251,
+    "modified": "2025-12-26T13:37:17.991349"
+  },
+  "static/logos/shopee.svg": {
+    "path": "./static/logos/shopee.svg",
+    "hash": "ada8bf111b10683fbc92485dd9b80ab0",
+    "size": 254,
+    "modified": "2025-12-26T13:37:17.991718"
+  },
+  "static/logos/ifood_ifd.webp": {
+    "path": "./static/logos/ifood_ifd.webp",
+    "hash": "9753500fba637051b06bce7bc077bf1f",
+    "size": 13812,
+    "modified": "2025-12-26T13:57:45.494232"
+  },
+  "static/logos/z_deli.png": {
+    "path": "./static/logos/z_deli.png",
+    "hash": "5cb1212b061f54f374889a9ad37d9027",
+    "size": 2142,
+    "modified": "2025-12-26T14:07:01.504013"
+  },
+  "static/logos/spotify.svg": {
+    "path": "./static/logos/spotify.svg",
+    "hash": "d63a0c1553798e7c597cf36159c5ff30",
+    "size": 251,
+    "modified": "2025-12-26T13:37:17.987796"
+  },
+  "static/logos/README.md": {
+    "path": "./static/logos/README.md",
+    "hash": "ebaa42559017afeffaf28d46fb039731",
+    "size": 2261,
+    "modified": "2025-12-26T13:45:18.471068"
+  },
+  "static/logos/farmacia.svg": {
+    "path": "./static/logos/farmacia.svg",
+    "hash": "383b5c0fe6af32777403a9126c925a71",
+    "size": 251,
+    "modified": "2025-12-26T13:37:17.992789"
+  },
+  "static/logos/mercadolivre.svg": {
+    "path": "./static/logos/mercadolivre.svg",
+    "hash": "0d1520a4ad0337b1f461224649257e48",
+    "size": 251,
+    "modified": "2025-12-26T13:37:17.991008"
+  },
+  "static/logos/itau.svg": {
+    "path": "./static/logos/itau.svg",
+    "hash": "8e3c6cb0b8ec5e8d7dd30205f2c2e978",
+    "size": 251,
+    "modified": "2025-12-26T13:37:17.989967"
+  },
+  "static/logos/uber.svg": {
+    "path": "./static/logos/uber.svg",
+    "hash": "b6643e588d0f67b0d293d307cde6eeec",
+    "size": 251,
+    "modified": "2025-12-26T13:37:17.981444"
+  },
+  "static/logos/burger_king.jpg": {
+    "path": "./static/logos/burger_king.jpg",
+    "hash": "26a2a7fde91644776d187e950fff77c7",
+    "size": 118805,
+    "modified": "2025-12-26T14:09:25.702748"
+  },
+  "static/logos/youtube.png": {
+    "path": "./static/logos/youtube.png",
+    "hash": "8562afe94ff448fdabf505a1db30c85e",
+    "size": 5537,
+    "modified": "2025-12-26T14:08:56.632664"
+  },
+  "static/logos/carrefour.svg": {
+    "path": "./static/logos/carrefour.svg",
+    "hash": "0d1520a4ad0337b1f461224649257e48",
+    "size": 251,
+    "modified": "2025-12-26T13:37:17.992088"
+  },
+  "static/logos/amazon.png": {
+    "path": "./static/logos/amazon.png",
+    "hash": "58c96ceeb95a794c0a0f5b324c507258",
+    "size": 3004,
+    "modified": "2025-12-26T14:10:38.393146"
+  },
+  "static/logos/rappi.svg": {
+    "path": "./static/logos/rappi.svg",
+    "hash": "90180a1f7d7c7122128a061f5f529296",
+    "size": 251,
+    "modified": "2025-12-26T13:37:17.983784"
+  },
+  "static/logos/netflix.svg": {
+    "path": "./static/logos/netflix.svg",
+    "hash": "2674db0552b00e8f0edb168e4b2629e1",
+    "size": 251,
+    "modified": "2025-12-26T13:37:17.987405"
+  },
+  "static/logos/outback.svg": {
+    "path": "./static/logos/outback.svg",
+    "hash": "262875b6608db2681010d114021aa7b2",
+    "size": 251,
+    "modified": "2025-12-26T13:37:17.985958"
+  },
+  "scripts/migrate_parcelas.py": {
+    "path": "./scripts/migrate_parcelas.py",
+    "hash": "c2de1c5f1446d6c748794893c298d5af",
+    "size": 4661,
+    "modified": "2025-12-26T22:31:05.351687"
+  },
+  "scripts/backup_database.py": {
+    "path": "./scripts/backup_database.py",
+    "hash": "f355a2375ef73f6d0b2f2da97ce4496c",
+    "size": 11491,
+    "modified": "2026-01-02T19:50:25.407676"
+  },
+  "scripts/check_groups.py": {
+    "path": "./scripts/check_groups.py",
+    "hash": "3b62c72cd7eee57941627029b73d1e41",
+    "size": 677,
+    "modified": "2025-12-26T15:30:24.078475"
+  },
+  "scripts/deployment_diff.py": {
+    "path": "./scripts/deployment_diff.py",
+    "hash": "d260f1780aac47629503853d7344d47a",
+    "size": 14842,
+    "modified": "2026-01-02T19:56:41.906445"
+  },
+  "scripts/migrate_add_classification_fields.py": {
+    "path": "./scripts/migrate_add_classification_fields.py",
+    "hash": "1e8e009371279143e66a7d302e5915b2",
+    "size": 4190,
+    "modified": "2025-12-27T22:58:06.572924"
+  },
+  "scripts/deploy.py": {
+    "path": "./scripts/deploy.py",
+    "hash": "19eb0096f1db321fe24bc1e75362d8bf",
+    "size": 12222,
+    "modified": "2026-01-02T19:56:41.906481"
+  },
+  "scripts/version_manager.py": {
+    "path": "./scripts/version_manager.py",
+    "hash": "4f65e4028d401c91ac48320dc33bbccb",
+    "size": 16327,
+    "modified": "2025-12-27T11:33:53.550258"
+  },
+  "scripts/test_bb_preprocessors.py": {
+    "path": "./scripts/test_bb_preprocessors.py",
+    "hash": "f02cb99315cf204ba7088f2bba5765c5",
+    "size": 5706,
+    "modified": "2025-12-28T13:16:25.118113"
+  },
+  "scripts/migrate_add_user_relationships.py": {
+    "path": "./scripts/migrate_add_user_relationships.py",
+    "hash": "9b523afec0b9ac4396392d5c5120f419",
+    "size": 4831,
+    "modified": "2025-12-28T13:16:25.125888"
+  },
+  "scripts/analisar_transacoes.py": {
+    "path": "./scripts/analisar_transacoes.py",
+    "hash": "799f61a097f5ae87134f5a802e1b679e",
+    "size": 1785,
+    "modified": "2025-12-26T22:37:15.821383"
+  },
+  "scripts/fix_id_transacao.py": {
+    "path": "./scripts/fix_id_transacao.py",
+    "hash": "781c8772482c920cbcf952d98a30b762",
+    "size": 2096,
+    "modified": "2025-12-26T23:02:46.458459"
+  },
+  "scripts/create_base_parcelas.py": {
+    "path": "./scripts/create_base_parcelas.py",
+    "hash": "39cda35fa6af9c9509dd6978a439345e",
+    "size": 1757,
+    "modified": "2025-12-26T22:17:39.676872"
+  },
+  "scripts/atualizar_urls.py": {
+    "path": "./scripts/atualizar_urls.py",
+    "hash": "9c86547152ab6082e3dedc9916da762e",
+    "size": 3457,
+    "modified": "2025-12-26T18:02:46.574436"
+  },
+  "scripts/migrate_to_multiuser.py": {
+    "path": "./scripts/migrate_to_multiuser.py",
+    "hash": "aeb4f8456e0978316c550ef80e9db007",
+    "size": 7882,
+    "modified": "2025-12-28T13:16:25.117954"
+  },
+  "scripts/add_idparcela_column.py": {
+    "path": "./scripts/add_idparcela_column.py",
+    "hash": "15aa899e84df60f67022cd1829190137",
+    "size": 2175,
+    "modified": "2025-12-26T20:55:03.538203"
+  },
+  "scripts/fix_id_parcela_case.py": {
+    "path": "./scripts/fix_id_parcela_case.py",
+    "hash": "9d32adbfa9ee65d66b7d287878dee751",
+    "size": 2075,
+    "modified": "2025-12-26T22:37:15.803532"
+  },
+  "scripts/populate_id_parcela.py": {
+    "path": "./scripts/populate_id_parcela.py",
+    "hash": "2b2b17b2987ac71e6b5f6048b68639c2",
+    "size": 7133,
+    "modified": "2025-12-26T22:37:15.821374"
+  },
+  "scripts/buscar_similares.py": {
+    "path": "./scripts/buscar_similares.py",
+    "hash": "74f05a2f7cbde34deebecf7fc4316d0e",
+    "size": 2395,
+    "modified": "2025-12-26T22:37:15.821392"
+  },
+  "scripts/COMO_ADICIONAR_LOGOS.py": {
+    "path": "./scripts/COMO_ADICIONAR_LOGOS.py",
+    "hash": "5e38263dc5c0ae8e6cd6a7a0d956181c",
+    "size": 1018,
+    "modified": "2025-12-26T13:45:18.481064"
+  },
+  "scripts/enforce_credit_card_parcels.py": {
+    "path": "./scripts/enforce_credit_card_parcels.py",
+    "hash": "04e42b133b7d58fcb48661d07b8081de",
+    "size": 1336,
+    "modified": "2025-12-26T22:37:15.803563"
+  },
+  "scripts/install_hooks.sh": {
+    "path": "./scripts/install_hooks.sh",
+    "hash": "a3524d0cd1a62718dd60751882ac3368",
+    "size": 494,
+    "modified": "2025-12-27T11:33:53.559764"
+  },
+  "scripts/pre-commit": {
+    "path": "./scripts/pre-commit",
+    "hash": "ef67abc212e5612abb2609dcadffdd1b",
+    "size": 3528,
+    "modified": "2025-12-27T11:33:53.556026"
+  },
+  "scripts/cleanup_orphans.py": {
+    "path": "./scripts/cleanup_orphans.py",
+    "hash": "0e5a907e0d86ba491a98d538c16b9759",
+    "size": 1145,
+    "modified": "2025-12-26T22:37:15.801363"
+  },
+  "scripts/database_health_check.py": {
+    "path": "./scripts/database_health_check.py",
+    "hash": "3f99a8af7be1ddce9e85f6e2fcc0b14d",
+    "size": 14323,
+    "modified": "2026-01-02T19:56:41.906442"
+  },
+  "scripts/migrate_padroes_to_user_scoped.py": {
+    "path": "./scripts/migrate_padroes_to_user_scoped.py",
+    "hash": "dad3c70c20796c88ae7bbd94e6024090",
+    "size": 12056,
+    "modified": "2025-12-28T13:16:25.118129"
+  },
+  "requirements.txt": {
+    "path": "./requirements.txt",
+    "hash": "bc295980afadd655895fc3cdd9a19a0d",
+    "size": 199,
+    "modified": "2025-12-28T13:16:25.111089"
+  },
+  "run.py": {
+    "path": "./run.py",
+    "hash": "ed52e7329c4f2ed54921a8291bb8fee8",
+    "size": 1241,
+    "modified": "2025-12-27T11:33:53.559765"
+  },
+  "VERSION.md": {
+    "path": "./VERSION.md",
+    "hash": "1eef297c1f61565aa362caa9f16da1c4",
+    "size": 2738,
+    "modified": "2025-12-28T14:07:02.422197"
+  },
+  "CHANGELOG.md": {
+    "path": "./CHANGELOG.md",
+    "hash": "c925fd88abb81e80e19f0ef88388be6c",
+    "size": 4662,
+    "modified": "2025-12-27T11:33:53.535666"
+  },
+  "README.md": {
+    "path": "./README.md",
+    "hash": "c14f4901ded44112c49310ff8c154192",
+    "size": 16175,
+    "modified": "2025-12-28T14:07:02.407947"
+  }
+}

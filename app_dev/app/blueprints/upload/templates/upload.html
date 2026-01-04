@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}Upload de Arquivos{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0"><i class="fas fa-cloud-upload-alt"></i> Upload de Arquivos</h4>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <h6><i class="fas fa-info-circle"></i> Tipos de arquivo aceitos:</h6>
+                    <ul class="mb-0">
+                        <li><strong>Fatura Itaú:</strong> fatura_itau-AAAAMM.csv</li>
+                        <li><strong>Extrato Itaú:</strong> Extrato Conta Corrente*.xls</li>
+                        <li><strong>Mercado Pago:</strong> account_statement*.xlsx</li>
+                        <li><strong>Banco do Brasil:</strong> Extrato*.csv, Ourocard*.ofx</li>
+                        <li><strong>BTG:</strong> Extrato*.xlsx</li>
+                    </ul>
+                </div>
+
+                <form method="POST" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="files" class="form-label">Selecione os arquivos:</label>
+                        <input class="form-control" type="file" id="files" name="files[]" multiple required accept=".csv,.xls,.xlsx,.ofx">
+                        <div class="form-text">Você pode selecionar múltiplos arquivos de uma vez</div>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="fas fa-play"></i> Processar Arquivos
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="mt-4">
+            <h5>Como usar:</h5>
+            <ol>
+                <li>Selecione um ou mais arquivos (CSV/XLS/XLSX)</li>
+                <li>Clique em "Processar Arquivos"</li>
+                <li>Revise o dashboard com as transações processadas</li>
+                <li>Valide transações pendentes (se houver)</li>
+                <li><strong>Selecione quais origens deseja salvar</strong></li>
+                <li>Salve no banco de dados</li>
+            </ol>
+        </div>
+    </div>
+</div>
+{% endblock %}
