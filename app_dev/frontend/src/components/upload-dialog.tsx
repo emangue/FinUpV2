@@ -54,7 +54,7 @@ interface BankCompatibility {
 
 export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDialogProps) {
   const router = useRouter()
-  const [date, setDate] = React.useState<Date>(new Date())
+  const [mesFatura, setMesFatura] = React.useState<string>(format(new Date(), 'yyyy-MM'))
   const [fileFormat, setFileFormat] = React.useState("csv")
   const [selectedFile, setSelectedFile] = React.useState<File | null>(null)
   const [password, setPassword] = React.useState("")
@@ -97,54 +97,32 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
     setUploadError(null)
     
     try {
-      // Criar um FormData temporário para validação de formato
+      // Enviar para API de preview
       const formData = new FormData()
       formData.append('file', selectedFile)
+      formData.append('banco', bank)
+      formData.append('cartao', creditCard || '')
+      formData.append('mesFatura', mesFatura)
+      formData.append('tipoDocumento', activeTab) // 'fatura' ou 'extrato'
+      formData.append('formato', fileFormat) // 'csv', 'xls', etc
       
-      // Primeira etapa: validar arquivo
-      const validateResponse = await fetch('/api/upload/validate', {
+      const response = await fetch('/api/upload/preview', {
         method: 'POST',
         body: formData
       })
       
-      if (!validateResponse.ok) {
-        const errorData = await validateResponse.json()
-        throw new Error(errorData.error || 'Arquivo inválido')
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Erro ao processar arquivo')
       }
+      
+      const data = await response.json()
       
       // Fechar dialog
       onOpenChange(false)
       
-      // Navegar para confirmação IA com o arquivo
-      // Criar uma sessão temporária ou passar dados via sessionStorage
-      sessionStorage.setItem('uploadFile', JSON.stringify({
-        name: selectedFile.name,
-        size: selectedFile.size,
-        type: selectedFile.type,
-        bank: bank,
-        creditCard: creditCard,
-        fileFormat: fileFormat,
-        uploadDate: new Date().toISOString(),
-        uploadType: activeTab
-      }))
-      
-      // Processar o arquivo diretamente na página de confirmação
-      const reader = new FileReader()
-      reader.onload = async (e) => {
-        if (e.target?.result) {
-          // Armazenar conteúdo do arquivo temporariamente
-          sessionStorage.setItem('uploadFileData', e.target.result as string)
-          
-          // Navegar para confirmação IA
-          router.push('/upload/confirm-ai')
-        }
-      }
-      
-      if (fileFormat === 'excel' || fileFormat === 'csv') {
-        reader.readAsDataURL(selectedFile)
-      } else {
-        reader.readAsText(selectedFile)
-      }
+      // Navegar para página de preview com o sessionId
+      router.push(`/upload/preview/${data.sessionId}`)
       
       // Chamar callback de sucesso
       if (onUploadSuccess) {
@@ -296,29 +274,14 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
           </Tabs>
 
           <div className="space-y-2">
-            <Label>Data de Efetivação *</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant={"outline"}
-                  className={cn(
-                    "w-full justify-start text-left font-normal",
-                    !date && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {date ? format(date, "dd/MM/yyyy", { locale: ptBR }) : <span>Escolha uma data</span>}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
-                <Calendar
-                  mode="single"
-                  selected={date}
-                  onSelect={(newDate) => newDate && setDate(newDate)}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
+            <Label>Mês Fatura *</Label>
+            <Input
+              type="month"
+              value={mesFatura}
+              onChange={(e) => setMesFatura(e.target.value)}
+              max={format(new Date(), 'yyyy-MM')}
+              className="w-full"
+            />
           </div>
 
           <div className="space-y-4">
