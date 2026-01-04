@@ -72,25 +72,14 @@ async def upload_preview(
         )
     
     try:
-        # Limpar preview antigo deste usuário (sessões anteriores)
-        # Mantém apenas últimas 3 sessões para não sobrecarregar o banco
-        subquery = (
-            db.query(PreviewTransacao.session_id)
-            .filter(PreviewTransacao.user_id == user_id)
-            .distinct()
-            .order_by(PreviewTransacao.created_at.desc())
-            .limit(3)
-            .subquery()
-        )
-        
+        # Limpar TODOS os registros de preview deste usuário antes de novo upload
         deleted = db.query(PreviewTransacao).filter(
-            PreviewTransacao.user_id == user_id,
-            ~PreviewTransacao.session_id.in_(subquery)
+            PreviewTransacao.user_id == user_id
         ).delete(synchronize_session=False)
         
         if deleted > 0:
             db.commit()
-            print(f"🗑️  Limpeza: {deleted} registros antigos removidos")
+            print(f"🗑️  Limpeza: {deleted} registros de preview removidos antes de novo upload")
         
         # Salvar arquivo temporariamente
         with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{file.filename}") as tmp:
