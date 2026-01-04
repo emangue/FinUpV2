@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import Database from 'better-sqlite3'
-import path from 'path'
+import { openDatabase } from '@/lib/db-config'
 
 /**
  * GET /api/upload/preview/[sessionId]
@@ -15,8 +14,9 @@ export async function GET(
     const params = await context.params
     const { sessionId } = params
 
-    const dbPath = path.join(process.cwd(), '../financas_dev.db')
-    const db = new Database(dbPath)
+    console.log('🔍 GET Preview - Session ID:', sessionId)
+    
+    const db = openDatabase()
 
     const registros = db.prepare(`
       SELECT 
@@ -33,12 +33,17 @@ export async function GET(
       WHERE session_id = ?
       ORDER BY data ASC
     `).all(sessionId)
+    
+    console.log('📊 GET Preview - Registros encontrados:', registros.length)
 
     db.close()
 
     if (registros.length === 0) {
+      console.log('⚠️ GET Preview - Nenhum registro encontrado para session:', sessionId)
       return NextResponse.json({ 
-        error: 'Sessão não encontrada ou expirada' 
+        errorCode: 'PREV_001',
+        error: '[PREV_001] Sessão não encontrada ou expirada',
+        details: { sessionId }
       }, { status: 404 })
     }
 
@@ -59,9 +64,11 @@ export async function GET(
     })
 
   } catch (error) {
-    console.error('Erro ao buscar preview:', error)
+    console.error('❌ Erro ao buscar preview:', error)
     return NextResponse.json({ 
-      error: 'Erro ao buscar dados do preview' 
+      errorCode: 'PREV_002',
+      error: 'Erro ao acessar banco de dados',
+      details: { message: error instanceof Error ? error.message : 'Unknown error' }
     }, { status: 500 })
   }
 }
@@ -79,8 +86,7 @@ export async function DELETE(
     const params = await context.params
     const { sessionId } = params
 
-    const dbPath = path.join(process.cwd(), '../financas_dev.db')
-    const db = new Database(dbPath)
+    const db = openDatabase()
 
     const result = db.prepare(`
       DELETE FROM upload_preview WHERE session_id = ?

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import Database from 'better-sqlite3'
+import { openDatabase } from '@/lib/db-config'
 import path from 'path'
 import fs from 'fs'
 
@@ -55,9 +55,8 @@ export async function POST(request: NextRequest) {
       mesFatura
     })
 
-    // Salvar na base temporária
-    const dbPath = path.join(process.cwd(), '../financas_dev.db')
-    const db = new Database(dbPath)
+    // Salvar na base temporária (usando configuração centralizada)
+    const db = openDatabase()
 
     // Criar tabela temporária se não existir
     db.exec(`
@@ -97,6 +96,9 @@ export async function POST(request: NextRequest) {
         row.valor
       )
     }
+    
+    console.log('✅ POST Preview - Session ID:', sessionId)
+    console.log('✅ POST Preview - Registros inseridos:', dadosProcessados.length)
 
     db.close()
 
@@ -122,7 +124,13 @@ export async function POST(request: NextRequest) {
  * Retorna o processador adequado baseado em banco + tipo + formato
  */
 function getProcessador(banco: string, tipo: string, formato: string) {
-  const key = `${banco.toLowerCase()}_${tipo.toLowerCase()}_${formato.toLowerCase()}`
+  // Normalizar banco: remover acentos e converter para lowercase
+  const bancoNormalizado = banco
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // Remove diacríticos (acentos)
+  
+  const key = `${bancoNormalizado}_${tipo.toLowerCase()}_${formato.toLowerCase()}`
   
   const processadores: Record<string, any> = {
     'itau_fatura_csv': processarFaturaItauCSV,
@@ -169,14 +177,33 @@ async function processarFaturaItauCSV(
 
     const [data, lancamento, valorStr] = colunas
 
-    // Validar data (formato dd/mm/yyyy ou dd/mm/yy)
-    if (!data || !/^\d{2}\/\d{2}\/\d{2,4}$/.test(data)) continue
+    // Validar data (formatos aceitos: dd/mm/yyyy, dd/mm/yy, yyyy-mm-dd)
+    const isValidDate = data && (
+      /^\d{2}\/\d{2}\/\d{2,4}$/.test(data) ||  // dd/mm/yyyy ou dd/mm/yy
+      /^\d{4}-\d{2}-\d{2}$/.test(data)          // yyyy-mm-dd (ISO)
+    )
+    
+    if (!isValidDate) continue
 
-    // Converter valor (formato brasileiro: 1.234,56)
-    const valorLimpo = valorStr
-      .replace(/[^\d,.-]/g, '')
-      .replace(/\./g, '')
-      .replace(',', '.')
+    // Converter valor (detectar formato automaticamente)
+    // Formato BR: 1.234,56 (ponto = separador milhares, vírgula = decimal)
+    // Formato US: 1,234.56 (vírgula = separador milhares, ponto = decimal)
+    let valorLimpo = valorStr.replace(/[^\d,.-]/g, '')
+    
+    // Se tem vírgula E ponto, determinar qual é decimal
+    if (valorLimpo.includes(',') && valorLimpo.includes('.')) {
+      // Se vírgula vem depois do ponto: formato BR (1.234,56)
+      if (valorLimpo.lastIndexOf(',') > valorLimpo.lastIndexOf('.')) {
+        valorLimpo = valorLimpo.replace(/\./g, '').replace(',', '.')
+      } else {
+        // Se ponto vem depois: formato US (1,234.56)
+        valorLimpo = valorLimpo.replace(/,/g, '')
+      }
+    } else if (valorLimpo.includes(',')) {
+      // Só tem vírgula: assumir formato BR
+      valorLimpo = valorLimpo.replace(',', '.')
+    }
+    // Se só tem ponto, manter como está (formato US)
     
     const valor = parseFloat(valorLimpo) || 0
 

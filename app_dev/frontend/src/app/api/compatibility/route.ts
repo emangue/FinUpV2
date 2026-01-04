@@ -1,12 +1,9 @@
 import { NextResponse } from 'next/server'
-import Database from 'better-sqlite3'
-import path from 'path'
-
-const dbPath = path.join(process.cwd(), '../financas_dev.db')
+import { openDatabase } from '@/lib/db-config'
 
 export async function GET() {
   try {
-    const db = new Database(dbPath, { readonly: true })
+    const db = openDatabase({ readonly: true })
     
     const compatibility = db.prepare(`
       SELECT bank_name, file_format, status
