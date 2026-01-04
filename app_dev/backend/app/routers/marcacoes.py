@@ -7,16 +7,16 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from ..database import get_db
-from ..models import BaseMarcacao, User
+from ..models import BaseMarcacao
 from ..schemas import MarcacaoResponse, MarcacaoCreate, MarcacaoUpdate
-from .auth import get_current_user
+from ..dependencies import get_current_user_id
 
 router = APIRouter(prefix="/api/v1/marcacoes", tags=["marcacoes"])
 
 @router.get("/", response_model=List[MarcacaoResponse])
 def list_marcacoes(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    user_id: int = Depends(get_current_user_id)
 ):
     """Lista todas as marcações (categorias)"""
     marcacoes = db.query(BaseMarcacao).order_by(
@@ -28,7 +28,7 @@ def list_marcacoes(
 def get_marcacao(
     marcacao_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    user_id: int = Depends(get_current_user_id)
 ):
     """Busca uma marcação por ID"""
     marcacao = db.query(BaseMarcacao).filter(BaseMarcacao.id == marcacao_id).first()
@@ -40,7 +40,7 @@ def get_marcacao(
 def create_marcacao(
     marcacao: MarcacaoCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    user_id: int = Depends(get_current_user_id)
 ):
     """Cria nova marcação"""
     # Verifica duplicata
@@ -69,7 +69,7 @@ def update_marcacao(
     marcacao_id: int,
     marcacao: MarcacaoUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    user_id: int = Depends(get_current_user_id)
 ):
     """Atualiza marcação existente"""
     db_marcacao = db.query(BaseMarcacao).filter(BaseMarcacao.id == marcacao_id).first()
@@ -90,7 +90,7 @@ def update_marcacao(
 def delete_marcacao(
     marcacao_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    user_id: int = Depends(get_current_user_id)
 ):
     """Deleta marcação"""
     db_marcacao = db.query(BaseMarcacao).filter(BaseMarcacao.id == marcacao_id).first()

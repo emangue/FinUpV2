@@ -22,7 +22,7 @@ class JournalEntry(Base):
     __tablename__ = "journal_entries"
     
     id = Column(Integer, primary_key=True, index=True)
-    IdTransacao = Column(String, unique=True, index=True)
+    user_id = Column(Integer, index=True)
     Data = Column(String)  # Formato DD/MM/YYYY
     Estabelecimento = Column(String)
     Valor = Column(Float)
@@ -31,22 +31,18 @@ class JournalEntry(Base):
     TipoGasto = Column(String)
     GRUPO = Column(String)
     SUBGRUPO = Column(String)
-    Ano = Column(String)
-    MesFatura = Column(String)  # Formato YYYYMM
-    DT_Fatura = Column(String)  # Formato YYYYMM
-    DataPostagem = Column(String)
+    IdTransacao = Column(String, unique=True, index=True)
     IdParcela = Column(String)
+    MesFatura = Column(String)  # Formato YYYYMM
+    Ano = Column(Integer)
+    arquivo_origem = Column(String)
     banco_origem = Column(String)
     tipodocumento = Column(String)
-    arquivo_origem = Column(String)
     origem_classificacao = Column(String)
-    ValidarIA = Column(String)
-    MarcacaoIA = Column(String)
-    CategoriaGeral = Column(String)
     IgnorarDashboard = Column(Integer, default=0)
-    user_id = Column(Integer, index=True)
     created_at = Column(DateTime)
-    updated_at = Column(DateTime)
+    NomeCartao = Column(String)
+    CategoriaGeral = Column(String)
 
 class BaseMarcacao(Base):
     """Modelo de categoria/marcação"""
@@ -56,8 +52,6 @@ class BaseMarcacao(Base):
     GRUPO = Column(String, nullable=False)
     SUBGRUPO = Column(String, nullable=False)
     TipoGasto = Column(String, nullable=False)
-    created_at = Column(DateTime)
-    updated_at = Column(DateTime)
 
 class BankFormatCompatibility(Base):
     """Modelo de compatibilidade de bancos"""
@@ -67,7 +61,6 @@ class BankFormatCompatibility(Base):
     bank_name = Column(String, nullable=False)
     file_format = Column(String, nullable=False)  # CSV, XLS, XLSX, OFX
     status = Column(String, nullable=False)  # OK, WIP, TBD
-    notes = Column(Text)
     created_at = Column(DateTime)
     updated_at = Column(DateTime)
 

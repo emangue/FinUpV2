@@ -1,57 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server';
-import Database from 'better-sqlite3';
-import path from 'path';
 
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const year = searchParams.get('year') || '2025';
     const month = searchParams.get('month') || 'all';
-
-    const dbPath = path.join(process.cwd(), '../financas_dev.db');
-    const db = new Database(dbPath);
-
-    let whereClause = '';
-    if (month !== 'all') {
-      whereClause = `WHERE MesFatura = '${year}${month.padStart(2, '0')}'`;
-    } else {
-      whereClause = `WHERE MesFatura LIKE '${year}%'`;
+    
+    const backendUrl = `http://localhost:8000/api/v1/dashboard/metrics?year=${year}&month=${month}`;
+    
+    const response = await fetch(backendUrl);
+    
+    if (!response.ok) {
+      throw new Error(`Backend returned ${response.status}`);
     }
-
-    // Total Despesas
-    const totalDespesas = db.prepare(`
-      SELECT COALESCE(SUM(ValorPositivo), 0) as total 
-      FROM journal_entries 
-      ${whereClause} AND TipoTransacao IN ('Despesas', 'Cartão de Crédito') AND IgnorarDashboard = 0
-    `).get() as { total: number };
-
-    // Total Receitas
-    const totalReceitas = db.prepare(`
-      SELECT COALESCE(SUM(ValorPositivo), 0) as total 
-      FROM journal_entries 
-      ${whereClause} AND TipoTransacao = 'Receitas' AND IgnorarDashboard = 0
-    `).get() as { total: number };
-
-    // Saldo Atual (Receitas - Despesas)
-    const saldoAtual = totalReceitas.total - totalDespesas.total;
-
-    // Total de Transações
-    const totalTransacoes = db.prepare(`
-      SELECT COUNT(*) as total 
-      FROM journal_entries
-      ${whereClause} AND IgnorarDashboard = 0
-    `).get() as { total: number };
-
-    db.close();
-
+    
+    const data = await response.json();
+    
+    // Transformar para o formato esperado pelo frontend
     return NextResponse.json({
-      totalDespesas: totalDespesas.total,
-      totalReceitas: totalReceitas.total,
-      saldoAtual: saldoAtual,
-      totalTransacoes: totalTransacoes.total
+      totalDespesas: data.total_despesas,
+      totalReceitas: data.total_receitas,
+      saldoAtual: data.saldo,
+      totalTransacoes: data.total_transacoes
     });
-  } catch (error) {
-    console.error('Error fetching metrics:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    
+  } catch (error: any) {
+    console.error('Error in metrics API:', error);
+    return NextResponse.json(
+      { error: error.message || 'Erro ao buscar métricas' },
+      { status: 500 }
+    );
   }
 }

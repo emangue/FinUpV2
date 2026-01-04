@@ -1,66 +1,45 @@
 import { NextResponse } from 'next/server'
-import Database from 'better-sqlite3'
-import path from 'path'
 
-const dbPath = path.join(process.cwd(), '../financas_dev.db')
-
-// GET - Listar todas as categorias
+// GET - Listar todas as categorias (marcações)
 export async function GET() {
   try {
-    const db = new Database(dbPath, { readonly: true })
+    // Redireciona para endpoint de marcações que já existe no backend
+    const response = await fetch('http://localhost:8000/api/v1/marcacoes/')
     
-    const categories = db.prepare(`
-      SELECT id, nome, tipo, ativo
-      FROM categories
-      ORDER BY tipo, nome
-    `).all()
+    if (!response.ok) {
+      throw new Error(`Backend returned ${response.status}`)
+    }
     
-    db.close()
+    const data = await response.json()
+    return NextResponse.json(data)
     
-    return NextResponse.json(categories)
-  } catch (error) {
+  } catch (error: any) {
     console.error('Erro ao buscar categorias:', error)
     return NextResponse.json({ error: 'Erro ao buscar categorias' }, { status: 500 })
   }
 }
 
-// POST - Criar nova categoria
+// POST - Criar nova categoria (marcação)
 export async function POST(request: Request) {
   try {
-    const { nome, tipo, ativo } = await request.json()
+    const body = await request.json()
     
-    if (!nome || !tipo) {
-      return NextResponse.json({ error: 'Nome e tipo são obrigatórios' }, { status: 400 })
+    const response = await fetch('http://localhost:8000/api/v1/marcacoes/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+    
+    const data = await response.json()
+    
+    if (!response.ok) {
+      return NextResponse.json(data, { status: response.status })
     }
     
-    const db = new Database(dbPath)
+    return NextResponse.json(data, { status: 201 })
     
-    // Criar tabela se não existir
-    db.prepare(`
-      CREATE TABLE IF NOT EXISTS categories (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        nome TEXT NOT NULL,
-        tipo TEXT NOT NULL CHECK(tipo IN ('GRUPO', 'SUBGRUPO', 'TIPOGASTO')),
-        ativo INTEGER DEFAULT 1,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(nome, tipo)
-      )
-    `).run()
-    
-    const result = db.prepare(`
-      INSERT INTO categories (nome, tipo, ativo)
-      VALUES (?, ?, ?)
-    `).run(nome, tipo, ativo ?? 1)
-    
-    db.close()
-    
-    return NextResponse.json({ success: true, id: result.lastInsertRowid })
   } catch (error: any) {
     console.error('Erro ao criar categoria:', error)
-    if (error.message?.includes('UNIQUE')) {
-      return NextResponse.json({ error: 'Categoria já existe' }, { status: 409 })
-    }
     return NextResponse.json({ error: 'Erro ao criar categoria' }, { status: 500 })
   }
 }

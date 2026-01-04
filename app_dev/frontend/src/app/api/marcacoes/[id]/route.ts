@@ -1,8 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import Database from 'better-sqlite3'
-import path from 'path'
-
-const dbPath = path.join(process.cwd(), '../financas_dev.db')
 
 export async function PUT(
   request: NextRequest,
@@ -10,38 +6,24 @@ export async function PUT(
 ) {
   try {
     const { id } = await context.params
-    const { GRUPO, SUBGRUPO, TipoGasto } = await request.json()
+    const body = await request.json()
     
-    if (!GRUPO || !SUBGRUPO || !TipoGasto) {
-      return NextResponse.json(
-        { error: 'GRUPO, SUBGRUPO e TipoGasto são obrigatórios' },
-        { status: 400 }
-      )
-    }
+    const response = await fetch(`http://localhost:8000/api/v1/marcacoes/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
     
-    const db = new Database(dbPath)
+    const data = await response.json()
     
-    const result = db.prepare(`
-      UPDATE base_marcacoes 
-      SET GRUPO = ?, SUBGRUPO = ?, TipoGasto = ?
-      WHERE id = ?
-    `).run(GRUPO, SUBGRUPO, TipoGasto, id)
-    
-    db.close()
-    
-    if (result.changes === 0) {
-      return NextResponse.json({ error: 'Marcação não encontrada' }, { status: 404 })
+    if (!response.ok) {
+      return NextResponse.json(data, { status: response.status })
     }
     
     console.log('✅ Marcação atualizada:', id)
+    return NextResponse.json(data)
     
-    return NextResponse.json({ 
-      id,
-      GRUPO,
-      SUBGRUPO,
-      TipoGasto
-    })
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Erro ao atualizar marcação:', error)
     return NextResponse.json({ error: 'Erro ao atualizar marcação' }, { status: 500 })
   }
@@ -54,22 +36,19 @@ export async function DELETE(
   try {
     const { id } = await context.params
     
-    const db = new Database(dbPath)
+    const response = await fetch(`http://localhost:8000/api/v1/marcacoes/${id}`, {
+      method: 'DELETE'
+    })
     
-    const result = db.prepare(`
-      DELETE FROM base_marcacoes WHERE id = ?
-    `).run(id)
-    
-    db.close()
-    
-    if (result.changes === 0) {
-      return NextResponse.json({ error: 'Marcação não encontrada' }, { status: 404 })
+    if (!response.ok && response.status !== 204) {
+      const data = await response.json()
+      return NextResponse.json(data, { status: response.status })
     }
     
     console.log('✅ Marcação deletada:', id)
+    return NextResponse.json({ success: true }, { status: 204 })
     
-    return NextResponse.json({ success: true })
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Erro ao deletar marcação:', error)
     return NextResponse.json({ error: 'Erro ao deletar marcação' }, { status: 500 })
   }

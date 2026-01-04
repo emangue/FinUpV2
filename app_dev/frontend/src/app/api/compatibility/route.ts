@@ -1,19 +1,15 @@
 import { NextResponse } from 'next/server'
-import { openDatabase } from '@/lib/db-config'
 
 export async function GET() {
   try {
-    const db = openDatabase({ readonly: true })
+    const response = await fetch('http://localhost:8000/api/v1/compatibility/')
     
-    const compatibility = db.prepare(`
-      SELECT bank_name, file_format, status
-      FROM bank_format_compatibility
-      ORDER BY bank_name, file_format
-    `).all()
+    if (!response.ok) {
+      throw new Error(`Backend returned ${response.status}`)
+    }
     
+    const compatibility = await response.json()
     console.log('📊 Compatibilidade carregada:', compatibility.length, 'registros')
-    
-    db.close()
     
     // Organizar por banco
     const byBank: Record<string, Record<string, string>> = {}
@@ -26,9 +22,9 @@ export async function GET() {
     }
     
     console.log('✅ Retornando:', Object.keys(byBank).length, 'bancos')
-    
     return NextResponse.json(byBank)
-  } catch (error) {
+    
+  } catch (error: any) {
     console.error('❌ Erro ao buscar compatibilidade:', error)
     return NextResponse.json({ error: 'Erro ao buscar compatibilidade' }, { status: 500 })
   }

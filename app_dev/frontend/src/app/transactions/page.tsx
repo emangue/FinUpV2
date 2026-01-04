@@ -86,37 +86,85 @@ export default function TransactionsPage() {
   const [editModalOpen, setEditModalOpen] = React.useState(false)
   const [selectedTransaction, setSelectedTransaction] = React.useState<Transaction | null>(null)
 
+  const fetchFilteredTotal = async (type: string, filters: FilterValues = {}) => {
+    try {
+      const params = new URLSearchParams()
+
+      // Aplicar os mesmos filtros da listagem
+      if (type !== 'all') {
+        if (type === 'Receita') {
+          params.set('tipo_transacao', 'Receitas')
+        } else if (type === 'Despesa') {
+          params.set('tipo_transacao', 'Despesas')
+        } else if (type === 'Investimentos') {
+          params.set('grupo', 'Investimentos')
+        } else if (type === 'Transferência Entre Contas') {
+          params.set('tipo_gasto', 'Transferência Entre Contas')
+        }
+      }
+
+      // Adicionar filtros
+      if (filters.estabelecimento) params.append('estabelecimento', filters.estabelecimento)
+      if (filters.grupo) params.append('grupo', filters.grupo)
+      if (filters.subgrupo) params.append('subgrupo', filters.subgrupo)
+      if (filters.tipoGasto) params.append('tipo_gasto', filters.tipoGasto)
+      if (filters.banco) params.append('search', filters.banco)
+
+      const response = await fetch(`/api/transactions/filtered-total?${params.toString()}`)
+      if (response.ok) {
+        const data = await response.json()
+        setSomaTotal(data.total_filtrado || 0)
+      }
+    } catch (error) {
+      console.error('Erro ao buscar total filtrado:', error)
+    }
+  }
+
   const fetchTransactions = async (type: string, page: number = 1, filters: FilterValues = {}) => {
     try {
       setLoading(true)
       const params = new URLSearchParams({
-        type,
         page: page.toString(),
         limit: pagination.limit.toString(),
       })
 
       // Adicionar categoria geral baseada no activeTab
-      if (type !== 'all' && type !== 'receitas' && type !== 'despesas') {
-        params.set('type', 'all')
-        params.append('categoriaGeral', type)
+      if (type !== 'all') {
+        if (type === 'Receita') {
+          params.set('tipo_transacao', 'Receitas')
+        } else if (type === 'Despesa') {
+          params.set('tipo_transacao', 'Despesas')
+        } else if (type === 'Investimentos') {
+          params.set('grupo', 'Investimentos')
+        } else if (type === 'Transferência Entre Contas') {
+          params.set('tipo_gasto', 'Transferência Entre Contas')
+        }
       }
 
       // Adicionar filtros à query
       if (filters.estabelecimento) params.append('estabelecimento', filters.estabelecimento)
       if (filters.grupo) params.append('grupo', filters.grupo)
       if (filters.subgrupo) params.append('subgrupo', filters.subgrupo)
-      if (filters.tipoGasto) params.append('tipoGasto', filters.tipoGasto)
-      if (filters.banco) params.append('banco', filters.banco)
-      if (filters.mesInicio) params.append('mesInicio', filters.mesInicio)
-      if (filters.mesFim) params.append('mesFim', filters.mesFim)
+      if (filters.tipoGasto) params.append('tipo_gasto', filters.tipoGasto)
+      if (filters.banco) params.append('search', filters.banco) // Use search para banco
+      if (filters.mesInicio || filters.mesFim) {
+        // Se tiver filtros de mês, pode precisar de lógica adicional
+      }
 
-      const response = await fetch(`/api/transactions?${params.toString()}`)
+      const response = await fetch(`/api/transactions/list?${params.toString()}`)
       
       if (response.ok) {
         const data = await response.json()
-        setTransactions(data.transactions)
-        setPagination(data.pagination)
-        setSomaTotal(data.somaTotal || 0)
+        setTransactions(data.transactions || [])
+        setPagination({
+          page: data.pagination?.page || 1,
+          limit: data.pagination?.limit || 10,
+          total: data.pagination?.total || 0,
+          totalPages: data.pagination?.total_pages || 0
+        })
+        // Não calcular soma aqui, será calculada pela nova API
+        // const soma = (data.transactions || []).reduce((acc: number, t: Transaction) => acc + t.Valor, 0)
+        // setSomaTotal(soma)
       }
     } catch (error) {
       console.error('Erro ao buscar transações:', error)
@@ -127,6 +175,7 @@ export default function TransactionsPage() {
 
   React.useEffect(() => {
     fetchTransactions(activeTab, 1, appliedFilters)
+    fetchFilteredTotal(activeTab, appliedFilters)
   }, [activeTab])
 
   const handleTabChange = (value: string) => {
@@ -140,6 +189,7 @@ export default function TransactionsPage() {
   const handleApplyFilters = (filters: FilterValues) => {
     setAppliedFilters(filters)
     fetchTransactions(activeTab, 1, filters)
+    fetchFilteredTotal(activeTab, filters)
   }
 
   const handleTransactionClick = (transaction: Transaction) => {
@@ -158,7 +208,7 @@ export default function TransactionsPage() {
     ))
 
     try {
-      const response = await fetch(`/api/transactions/${encodeURIComponent(transaction.IdTransacao)}`, {
+      const response = await fetch(`/api/transactions/update/${encodeURIComponent(transaction.IdTransacao)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ IgnorarDashboard: novoValor })
@@ -167,6 +217,9 @@ export default function TransactionsPage() {
       if (!response.ok) {
         throw new Error(`Falha no PATCH: ${response.status}`)
       }
+      
+      // Recarregar totais após mudança
+      fetchFilteredTotal(activeTab, appliedFilters)
     } catch (error) {
       console.error('Erro ao atualizar IgnorarDashboard:', error)
       // Reverte se falhar

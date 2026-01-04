@@ -18,10 +18,11 @@ from app.models import PreviewTransacao
 from app.dependencies import get_current_user_id
 
 # Importa processadores específicos
-codigos_apoio_path = Path(__file__).parents[4] / 'codigos_apoio'
-sys.path.insert(0, str(codigos_apoio_path))
-
-from fatura_itau import preprocessar_fatura_itau
+# TODO: Reimplementar processadores específicos
+# codigos_apoio_path = Path(__file__).parents[4] / 'codigos_apoio'
+# sys.path.insert(0, str(codigos_apoio_path))
+# from fatura_itau import preprocessar_fatura_itau
+# from universal_processor import universal_processor
 
 router = APIRouter(prefix="/api/v1/upload", tags=["upload"])
 
@@ -153,6 +154,177 @@ async def upload_preview(
             detail={
                 "errorCode": "UPL_006",
                 "error": "Erro ao processar arquivo",
+                "details": str(e)
+            }
+        )
+
+
+@router.get("/preview/{session_id}")
+async def get_preview_data(
+    session_id: str,
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id)
+):
+    """
+    Lista os dados de preview de uma sessão específica
+    """
+    try:
+        
+        # Buscar dados da sessão específica
+        preview_data = db.query(PreviewTransacao).filter(
+            PreviewTransacao.session_id == session_id,
+            PreviewTransacao.user_id == user_id
+        ).all()
+        
+        if not preview_data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"errorCode": "UPL_007", "error": "Sessão de preview não encontrada"}
+            )
+        
+        # Converter para formato JSON
+        dados_formatados = []
+        for item in preview_data:
+            dados_formatados.append({
+                "id": item.id,
+                "data": item.data,
+                "lancamento": item.lancamento,
+                "valor": item.valor,
+                "banco": item.banco,
+                "cartao": item.cartao,
+                "mes_fatura": item.mes_fatura,
+                "nome_arquivo": item.nome_arquivo,
+                "created_at": item.created_at.isoformat() if item.created_at else None
+            })
+        
+        return {
+            "success": True,
+            "sessionId": session_id,
+            "totalRegistros": len(dados_formatados),
+            "dados": dados_formatados
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "errorCode": "UPL_008",
+                "error": "Erro ao buscar dados de preview",
+                "details": str(e)
+            }
+        )
+
+
+@router.post("/confirm/{session_id}")
+async def confirm_upload(
+    session_id: str,
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id)
+):
+    """
+    Confirma upload e salva dados de preview na tabela principal
+    """
+    try:
+        
+        # Buscar dados da sessão
+        preview_data = db.query(PreviewTransacao).filter(
+            PreviewTransacao.session_id == session_id,
+            PreviewTransacao.user_id == user_id
+        ).all()
+        
+        if not preview_data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"errorCode": "UPL_009", "error": "Sessão de preview não encontrada"}
+            )
+        
+        # Importar modelo JournalEntry
+        from ..models import JournalEntry
+        from datetime import datetime
+        
+        transacoes_criadas = 0
+        
+        for item in preview_data:
+            # Criar transação simples - apenas campos básicos
+            nova_transacao = JournalEntry(
+                user_id=user_id,
+                Data=item.data,
+                Estabelecimento=item.lancamento,
+                Valor=item.valor,
+                MesFatura=item.mes_fatura,
+                arquivo_origem=item.nome_arquivo,
+                banco_origem=item.banco,
+                created_at=datetime.now()
+                # Todos os outros campos ficam NULL
+            )
+            
+            db.add(nova_transacao)
+            transacoes_criadas += 1
+        
+        # Salvar todas as transações
+        db.commit()
+        
+        # Limpar dados de preview após confirmação
+        db.query(PreviewTransacao).filter(
+            PreviewTransacao.session_id == session_id
+        ).delete(synchronize_session=False)
+        db.commit()
+        
+        print(f"✅ Upload confirmado: {transacoes_criadas} criadas, {transacoes_duplicadas} duplicadas")
+        
+        return {
+            "success": True,
+            "sessionId": session_id,
+            "transacoesCriadas": transacoes_criadas,
+            "total": transacoes_criadas
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "errorCode": "UPL_010",
+                "error": "Erro ao confirmar upload",
+                "details": str(e)
+            }
+        )
+
+
+@router.delete("/preview/{session_id}")
+async def delete_preview(
+    session_id: str,
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id)
+):
+    """
+    Remove dados de preview de uma sessão específica
+    """
+    try:
+        
+        # Deletar apenas da sessão específica deste usuário
+        deleted_count = db.query(PreviewTransacao).filter(
+            PreviewTransacao.session_id == session_id,
+            PreviewTransacao.user_id == user_id
+        ).delete(synchronize_session=False)
+        
+        db.commit()
+        
+        return {
+            "success": True,
+            "deletedCount": deleted_count,
+            "sessionId": session_id
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "errorCode": "UPL_011",
+                "error": "Erro ao deletar preview",
                 "details": str(e)
             }
         )

@@ -12,7 +12,7 @@ from datetime import datetime
 from ..database import get_db
 from ..models import JournalEntry, User
 from ..schemas import DashboardMetrics, CategoryStats
-from .auth import get_current_user
+from ..dependencies import get_current_user_id
 
 router = APIRouter(prefix="/api/v1/dashboard", tags=["dashboard"])
 
@@ -20,7 +20,7 @@ router = APIRouter(prefix="/api/v1/dashboard", tags=["dashboard"])
 def get_dashboard_metrics(
     year: int = Query(2025),
     month: Optional[str] = Query("all"),
-    current_user: User = Depends(get_current_user),
+    user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
     """
@@ -32,7 +32,7 @@ def get_dashboard_metrics(
     """
     # Query base
     query = db.query(JournalEntry).filter(
-        JournalEntry.user_id == current_user.id,
+        JournalEntry.user_id == user_id,
         JournalEntry.IgnorarDashboard == 0
     )
     
@@ -105,7 +105,7 @@ def get_dashboard_metrics(
 def get_categories_stats(
     year: int = Query(2025),
     month: Optional[str] = Query("all"),
-    current_user: User = Depends(get_current_user),
+    user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
     """
@@ -115,7 +115,7 @@ def get_categories_stats(
     """
     # Query base
     query = db.query(JournalEntry).filter(
-        JournalEntry.user_id == current_user.id,
+        JournalEntry.user_id == user_id,
         JournalEntry.IgnorarDashboard == 0,
         JournalEntry.TipoGasto.isnot(None),
         JournalEntry.TipoTransacao.in_(["Despesas", "Cartão de Crédito"])
@@ -135,7 +135,7 @@ def get_categories_stats(
         func.sum(func.abs(JournalEntry.Valor)).label("total"),
         func.count(JournalEntry.id).label("quantidade")
     ).filter(
-        JournalEntry.user_id == current_user.id,
+        JournalEntry.user_id == user_id,
         JournalEntry.IgnorarDashboard == 0,
         JournalEntry.TipoGasto.isnot(None),
         JournalEntry.TipoTransacao.in_(["Despesas", "Cartão de Crédito"]),
@@ -166,7 +166,7 @@ def get_categories_stats(
 
 @router.get("/chart/receitas-despesas")
 def get_receitas_despesas_chart(
-    current_user: User = Depends(get_current_user),
+    user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
     """
@@ -176,7 +176,7 @@ def get_receitas_despesas_chart(
     """
     # Busca últimos 6 meses de transações
     query = db.query(JournalEntry).filter(
-        JournalEntry.user_id == current_user.id,
+        JournalEntry.user_id == user_id,
         JournalEntry.IgnorarDashboard == 0
     ).order_by(JournalEntry.MesFatura.desc())
     

@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 
 from .config import settings
 from .database import engine, Base
-from .routers import auth, dashboard, marcacoes, compatibility, cartoes, exclusoes, users, upload, upload_classifier
+from .routers import auth, dashboard, marcacoes, compatibility, cartoes, exclusoes, users, upload, upload_classifier, transactions
 
 # Cria app FastAPI
 app = FastAPI(
@@ -34,6 +34,7 @@ app.include_router(marcacoes.router)
 app.include_router(compatibility.router)
 app.include_router(cartoes.router)
 app.include_router(exclusoes.router)
+app.include_router(transactions.router)
 app.include_router(users.router)
 app.include_router(upload.router)
 app.include_router(upload_classifier.router)

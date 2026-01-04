@@ -7,16 +7,16 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from ..database import get_db
-from ..models import BankFormatCompatibility, User
+from ..models import BankFormatCompatibility
 from ..schemas import BankCompatibilityResponse
-from .auth import get_current_user
+from ..dependencies import get_current_user_id
 
 router = APIRouter(prefix="/api/v1/compatibility", tags=["compatibility"])
 
 @router.get("/", response_model=List[BankCompatibilityResponse])
 def list_compatibility(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    user_id: int = Depends(get_current_user_id)
 ):
     """Lista compatibilidade de bancos e formatos"""
     compat = db.query(BankFormatCompatibility).order_by(
@@ -29,7 +29,7 @@ def list_compatibility(
 def get_bank_compatibility(
     bank_name: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    user_id: int = Depends(get_current_user_id)
 ):
     """Retorna compatibilidade de um banco específico"""
     compat = db.query(BankFormatCompatibility).filter(

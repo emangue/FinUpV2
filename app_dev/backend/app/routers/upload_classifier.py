@@ -9,11 +9,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 # Adiciona codigos_apoio ao path (parents[4] = ProjetoFinancasV3)
-codigos_apoio_path = Path(__file__).resolve().parents[4] / 'codigos_apoio'
-sys.path.insert(0, str(codigos_apoio_path))
-
-from universal_processor import process_batch as universal_process_batch
-from cascade_classifier import CascadeClassifier
+# TODO: Reimplementar processador universal
+# codigos_apoio_path = Path(__file__).parents[4] / 'codigos_apoio'
+# sys.path.insert(0, str(codigos_apoio_path))
+# from universal_processor import process_batch as universal_process_batch
+# from cascade_classifier import CascadeClassifier
 
 from app.database import get_db
 from app.models import User, PreviewTransacao
