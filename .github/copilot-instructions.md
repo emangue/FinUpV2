@@ -316,47 +316,84 @@ git commit --no-verify -m "msg"
 
 ---
 
-## � Automação Obrigatória de Restart do Servidor
+## 🚀 Iniciar/Parar Servidores (PROCESSO OTIMIZADO)
 
-### Comando Padrão de Restart
+### ⚡ COMANDO ÚNICO - Quando usuário pedir "ligar servidores"
 
-**Sempre usar este comando para religar o servidor:**
+**SEMPRE usar este comando único:**
 
 ```bash
-/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV3/venv/bin/python run.py
+cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4 && chmod +x quick_start.sh && ./quick_start.sh
 ```
 
-### Quando Fazer Restart Automático
+**O que faz automaticamente:**
+- ✅ Limpa portas 8000 e 3000
+- ✅ Inicia Backend FastAPI (porta 8000) com venv
+- ✅ Inicia Frontend Next.js (porta 3000)
+- ✅ Roda em background com logs
+- ✅ Salva PIDs para controle
 
-**🔄 OBRIGATÓRIO: Religar servidor automaticamente após:**
-- Modificação em arquivos críticos (models.py, routes.py, processors)
+**Parar servidores:**
+
+```bash
+cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4 && chmod +x quick_stop.sh && ./quick_stop.sh
+```
+
+### URLs de Acesso
+
+- **Frontend:** http://localhost:3000
+- **Backend:** http://localhost:8000
+- **API Docs:** http://localhost:8000/docs
+- **Health:** http://localhost:8000/api/health
+
+**Login padrão:** admin@email.com / admin123
+
+### 🔄 Restart Automático Após Modificações
+
+**OBRIGATÓRIO: Reiniciar servidores automaticamente após:**
+- Modificação em arquivos críticos (models.py, routes.py, schemas)
 - Finalização de mudanças com `version_manager.py finish`
 - Instalação de novas dependências
 - Mudanças em configurações (config.py)
 - Atualizações no schema do banco
 
-### Procedimento de Restart
+**Comando completo de restart:**
 
-1. **Parar servidor atual** (se rodando):
-   ```bash
-   pkill -f "python.*run.py"
-   ```
+```bash
+cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4 && ./quick_stop.sh && ./quick_start.sh
+```
 
-2. **Iniciar novo servidor**:
-   ```bash
-   /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV3/venv/bin/python run.py
-   ```
+### 📋 Monitoramento de Logs
 
-3. **Verificar se está funcionando**:
-   - Acessar http://localhost:5000
-   - Confirmar que não há erros no terminal
+```bash
+# Backend
+tail -f /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4/backend.log
+
+# Frontend
+tail -f /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4/frontend.log
+```
+
+### 🚨 Troubleshooting Rápido
+
+**Portas ocupadas:**
+```bash
+lsof -ti:8000 | xargs kill -9 2>/dev/null
+lsof -ti:3000 | xargs kill -9 2>/dev/null
+```
+
+**Banco não inicializado:**
+```bash
+cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4/app_dev
+source venv/bin/activate
+python init_db.py
+```
 
 ### Integração com Workflow de Versionamento
 
 **No `version_manager.py finish`, sempre incluir:**
 1. Finalizar mudança e commit
-2. **RESTART AUTOMÁTICO do servidor**
-3. Validar que servidor está operacional
+2. **RESTART AUTOMÁTICO:** `./quick_stop.sh && ./quick_start.sh`
+3. Validar que servidores estão operacionais (verificar logs)
 
 ---
 
