@@ -14,6 +14,7 @@ from .domains.users.router import router as users_router
 from .domains.categories.router import router as categories_router
 from .domains.cards.router import router as cards_router
 from .domains.upload.router import router as upload_router
+from .domains.dashboard.router import router as dashboard_router
 
 # Cria app FastAPI
 app = FastAPI(
@@ -39,6 +40,7 @@ app.include_router(users_router, prefix="/api/v1", tags=["Users"])
 app.include_router(categories_router, prefix="/api/v1", tags=["Categories"])
 app.include_router(cards_router, prefix="/api/v1", tags=["Cards"])
 app.include_router(upload_router, prefix="/api/v1", tags=["Upload"])
+app.include_router(dashboard_router, prefix="/api/v1", tags=["Dashboard"])
 
 @app.get("/")
 def root():

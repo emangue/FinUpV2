@@ -74,13 +74,30 @@ const DashboardPage = () => {
       setLoadingMetrics(true);
       setMetricsError(null);
       
-      // TODO: Criar endpoint /api/v1/dashboard/metrics no backend
-      // Por enquanto, usando dados mockados
-      console.log('[Dashboard] Usando dados mockados para metrics (endpoint não implementado)');
+      // Usar ano/mês atual se month='all'
+      const now = new Date();
+      const queryYear = year;
+      const queryMonth = month === 'all' ? now.getMonth() + 1 : month;
       
-      await new Promise(resolve => setTimeout(resolve, 500)); // Simular delay de rede
+      const params = new URLSearchParams({ 
+        year: queryYear,
+        month: queryMonth.toString()
+      });
+      const response = await fetch(`/api/dashboard/metrics?${params}`);
       
-      setMetrics(mockMetrics);
+      if (!response.ok) {
+        throw new Error(`Erro ao buscar métricas: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      
+      // Mapear resposta do backend para o formato do frontend
+      setMetrics({
+        totalDespesas: data.total_despesas,
+        totalReceitas: data.total_receitas,
+        saldoAtual: data.saldo_periodo,
+        totalTransacoes: data.num_transacoes
+      });
       
     } catch (error) {
       console.error('Error fetching metrics:', error);
@@ -95,23 +112,27 @@ const DashboardPage = () => {
       setLoadingChart(true);
       setChartError(null);
       
-      // TODO: Criar endpoint /api/v1/dashboard/chart-data no backend
-      // Por enquanto, usando dados mockados
-      console.log('[Dashboard] Usando dados mockados para chart-data (endpoint não implementado)');
+      // Para chart-data, sempre buscar o ano todo (ignora month)
+      const params = new URLSearchParams({ 
+        year: year,
+        month: '1' // Pode ser qualquer mês, backend ignora e retorna o ano todo
+      });
+      const response = await fetch(`/api/dashboard/chart-data?${params}`);
       
-      await new Promise(resolve => setTimeout(resolve, 500)); // Simular delay de rede
+      if (!response.ok) {
+        throw new Error(`Erro ao buscar dados do gráfico: ${response.statusText}`);
+      }
       
-      // Dados mockados para o gráfico
-      const mockChartData = [
-        { mes: 'Jan', receitas: 12450, despesas: 8547 },
-        { mes: 'Fev', receitas: 11200, despesas: 9100 },
-        { mes: 'Mar', receitas: 13800, despesas: 10200 },
-        { mes: 'Abr', receitas: 12100, despesas: 8900 },
-        { mes: 'Mai', receitas: 14500, despesas: 11300 },
-        { mes: 'Jun', receitas: 13200, despesas: 9800 }
-      ];
+      const data = await response.json();
       
-      setChartData(mockChartData);
+      // Backend já retorna no formato correto: { date: "Jan", receitas: X, despesas: Y }
+      const formattedData = data.data.map((item: any) => ({
+        mes: item.date,  // Já vem como "Jan", "Fev", etc
+        receitas: item.receitas,
+        despesas: item.despesas
+      }));
+      
+      setChartData(formattedData);
       
     } catch (error) {
       console.error('Error fetching chart data:', error);
@@ -126,13 +147,31 @@ const DashboardPage = () => {
       setLoadingCategories(true);
       setCategoriesError(null);
       
-      // TODO: Criar endpoint /api/v1/dashboard/categories no backend
-      // Por enquanto, usando dados mockados
-      console.log('[Dashboard] Usando dados mockados para categories (endpoint não implementado)');
+      // Usar ano/mês atual se month='all'
+      const now = new Date();
+      const queryYear = year;
+      const queryMonth = month === 'all' ? now.getMonth() + 1 : month;
       
-      await new Promise(resolve => setTimeout(resolve, 500)); // Simular delay de rede
+      const params = new URLSearchParams({ 
+        year: queryYear,
+        month: queryMonth.toString()
+      });
+      const response = await fetch(`/api/dashboard/categories?${params}`);
       
-      setCategoryData(mockCategoryData);
+      if (!response.ok) {
+        throw new Error(`Erro ao buscar dados de categorias: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      
+      // Mapear resposta do backend para o formato do frontend
+      const formattedData = data.map((item: any) => ({
+        categoria: item.categoria,
+        valor: item.total,
+        percentual: item.percentual
+      }));
+      
+      setCategoryData(formattedData);
       
     } catch (error) {
       console.error('Error fetching category data:', error);
