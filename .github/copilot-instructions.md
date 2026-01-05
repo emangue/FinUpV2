@@ -1,4 +1,144 @@
-# 🤖 Instruções GitHub Copilot - Sistema de Versionamento
+# 🤖 Instruções GitHub Copilot - Sistema Modular de Finanças v4
+
+## ⚠️ REGRAS CRÍTICAS - SEMPRE SEGUIR
+
+### 🗄️ BANCO DE DADOS ÚNICO - REGRA INVIOLÁVEL
+
+**Path absoluto único para TODO o sistema:**
+```
+/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4/app_dev/backend/database/financas_dev.db
+```
+
+**Arquivos de configuração:**
+1. **Backend:** `app_dev/backend/app/core/config.py` → `DATABASE_PATH`
+2. **Frontend:** `app_dev/frontend/src/lib/db-config.ts` → `DB_ABSOLUTE_PATH`
+
+**🚫 NUNCA:**
+- Criar outro banco de dados
+- Usar paths relativos diferentes
+- Modificar apenas um dos arquivos
+- Criar cópias do banco
+
+**✅ SEMPRE:**
+- Usar path absoluto completo
+- Se mudar, mudar nos 2 arquivos simultaneamente
+- Testar backend E frontend após mudanças
+- Ver `DATABASE_CONFIG.md` para detalhes
+
+---
+
+## 🏗️ ARQUITETURA MODULAR - BACKEND
+
+### Estrutura de Domínios (DDD - Domain-Driven Design)
+
+```
+app_dev/backend/app/
+├── core/                      # ✅ Configurações globais (NUNCA lógica de negócio)
+│   ├── config.py              # Settings (DATABASE_PATH aqui)
+│   ├── database.py            # SQLAlchemy setup
+│   └── __init__.py
+│
+├── domains/                   # ✅ Domínios de negócio ISOLADOS
+│   ├── transactions/          # Domínio de transações
+│   │   ├── models.py          # JournalEntry model
+│   │   ├── schemas.py         # Pydantic schemas
+│   │   ├── repository.py      # TODAS as queries SQL
+│   │   ├── service.py         # TODA lógica de negócio
+│   │   ├── router.py          # Endpoints FastAPI
+│   │   └── __init__.py
+│   │
+│   ├── users/                 # Domínio de usuários
+│   ├── categories/            # Domínio de categorias
+│   ├── cards/                 # Domínio de cartões
+│   └── upload/                # Domínio de upload
+│
+├── shared/                    # ✅ Compartilhado entre domínios
+│   ├── dependencies.py        # get_current_user_id, etc
+│   └── __init__.py
+│
+└── main.py                    # FastAPI app setup
+```
+
+### Princípios de Isolamento de Domínios
+
+**1. CADA DOMÍNIO É AUTOCONTIDO:**
+```python
+# ✅ CORRETO - Domínio transactions isolado
+from app.domains.transactions.models import JournalEntry
+from app.domains.transactions.service import TransactionService
+
+# ❌ ERRADO - Não importar de outros domínios
+from app.domains.users.models import User  # NÃO fazer isso em transactions
+```
+
+**2. CAMADAS OBRIGATÓRIAS (Repository → Service → Router):**
+
+**Repository (Queries SQL isoladas):**
+```python
+# domains/transactions/repository.py
+class TransactionRepository:
+    def __init__(self, db: Session):
+        self.db = db
+    
+    def get_by_id(self, id: str, user_id: int):
+        return self.db.query(JournalEntry).filter(...).first()
+    
+    # TODAS as queries SQL aqui
+```
+
+**Service (Lógica de negócio isolada):**
+```python
+# domains/transactions/service.py
+class TransactionService:
+    def __init__(self, db: Session):
+        self.repository = TransactionRepository(db)
+    
+    def update_transaction(self, id: str, user_id: int, data):
+        # Validações de negócio
+        # Cálculos
+        # Chamadas ao repository
+```
+
+**Router (Apenas validação HTTP):**
+```python
+# domains/transactions/router.py
+@router.patch("/{id}")
+def update(id: str, data: UpdateSchema, db: Session = Depends(get_db)):
+    service = TransactionService(db)
+    return service.update_transaction(id, 1, data)
+```
+
+**3. REGRAS DE IMPORTAÇÃO:**
+
+```python
+# ✅ CORRETO
+from app.core.database import Base, get_db
+from app.shared.dependencies import get_current_user_id
+from .models import JournalEntry  # Mesmo domínio
+from .repository import TransactionRepository  # Mesmo domínio
+
+# ❌ ERRADO
+from app.models import JournalEntry  # Modelo monolítico antigo
+from ..users.models import User  # Import cruzado entre domínios
+from app.domains.categories import *  # Import * é proibido
+```
+
+### Quando Modificar um Domínio
+
+**Cenário:** Adicionar campo `categoria` em transações
+
+**✅ Passos corretos:**
+1. Modificar `domains/transactions/models.py` (adicionar coluna)
+2. Atualizar `domains/transactions/schemas.py` (adicionar campo nos schemas)
+3. Modificar `domains/transactions/repository.py` (queries se necessário)
+4. Atualizar `domains/transactions/service.py` (validações/cálculos)
+5. Testar `domains/transactions/router.py`
+6. **PARAR:** Não precisa tocar em users, categories, cards, upload!
+
+**Arquivos afetados:** ~5 arquivos (todos no mesmo domínio)
+**Antes da modularização:** ~15 arquivos espalhados
+
+---
 
 ## ⚠️ REGRAS OBRIGATÓRIAS - SEMPRE SEGUIR
 
@@ -144,6 +284,246 @@ python scripts/version_manager.py finish app/models.py "Adiciona campo Categoria
 ### MAJOR (X.0.0)
 - Breaking changes no schema do banco
 - Mudanças incompatíveis na API
+- Refatorações massivas de domínios
+
+### MINOR (x.Y.0)
+- Novas funcionalidades em domínios
+- Novos campos no banco (não-breaking)
+- Novos domínios/módulos
+
+### PATCH (x.y.Z)
+- Bug fixes em domínios específicos
+- Melhorias de performance
+- Correções de typos
+
+---
+
+## 🚫 PROIBIÇÕES ABSOLUTAS
+
+### 1. Imports Cruzados entre Domínios
+```python
+# ❌ PROIBIDO
+# Em domains/transactions/service.py
+from app.domains.users.models import User  # NÃO!
+
+# ✅ CORRETO
+# Use shared/ para funcionalidades compartilhadas
+from app.shared.dependencies import get_current_user_id
+```
+
+### 2. Lógica de Negócio no Router
+```python
+# ❌ PROIBIDO
+@router.post("/")
+def create(data: Schema, db: Session = Depends(get_db)):
+    # Cálculos complexos aqui
+    valor_positivo = abs(data.valor)  # NÃO!
+    # Validações aqui
+    if not data.grupo:  # NÃO!
+        raise HTTPException(...)
+    
+    transaction = Model(**data.dict())
+    db.add(transaction)
+    db.commit()
+    return transaction
+
+# ✅ CORRETO
+@router.post("/")
+def create(data: Schema, db: Session = Depends(get_db)):
+    service = TransactionService(db)
+    return service.create(data)  # Lógica no service
+```
+
+### 3. Queries SQL no Service
+```python
+# ❌ PROIBIDO
+class TransactionService:
+    def get_transaction(self, id: str):
+        # Query SQL aqui
+        return self.db.query(Model).filter(...).first()  # NÃO!
+
+# ✅ CORRETO
+class TransactionService:
+    def __init__(self, db: Session):
+        self.repository = TransactionRepository(db)
+    
+    def get_transaction(self, id: str):
+        return self.repository.get_by_id(id)  # Query no repository
+```
+
+### 4. Modificar Modelos de Outros Domínios
+```python
+# ❌ PROIBIDO
+# Em domains/transactions/models.py
+from app.domains.categories.models import BaseMarcacao  # NÃO!
+
+class JournalEntry(Base):
+    categoria = relationship(BaseMarcacao)  # NÃO criar relationships cruzadas!
+```
+
+### 5. Usar Paths Relativos para Database
+```python
+# ❌ PROIBIDO
+DATABASE_PATH = "../database/financas.db"
+DATABASE_PATH = "./financas.db"
+DB_PATH = Path(__file__).parent / "database" / "financas.db"
+
+# ✅ CORRETO - Path absoluto único
+DATABASE_PATH = Path("/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4/app_dev/backend/database/financas_dev.db")
+```
+
+---
+
+## ✅ PADRÕES OBRIGATÓRIOS
+
+### 1. Criar Novo Domínio
+
+```bash
+mkdir -p app_dev/backend/app/domains/novo_dominio
+```
+
+**Arquivos obrigatórios:**
+1. `models.py` - Modelo SQLAlchemy
+2. `schemas.py` - Pydantic schemas (Create, Update, Response)
+3. `repository.py` - Queries SQL isoladas
+4. `service.py` - Lógica de negócio
+5. `router.py` - Endpoints FastAPI
+6. `__init__.py` - Exports
+
+**Template de `__init__.py`:**
+```python
+from .models import NovoModel
+from .schemas import NovoCreate, NovoUpdate, NovoResponse
+from .service import NovoService
+from .repository import NovoRepository
+from .router import router
+
+__all__ = [
+    "NovoModel",
+    "NovoCreate",
+    "NovoUpdate",
+    "NovoResponse",
+    "NovoService",
+    "NovoRepository",
+    "router",
+]
+```
+
+**Registrar em `main.py`:**
+```python
+from app.domains.novo_dominio.router import router as novo_router
+app.include_router(novo_router, prefix="/api/v1")
+```
+
+### 2. Adicionar Nova Funcionalidade a Domínio Existente
+
+**Exemplo:** Adicionar endpoint de estatísticas em transactions
+
+1. **Repository** - Adicionar query:
+```python
+# domains/transactions/repository.py
+def get_statistics(self, user_id: int, filters):
+    return self.db.query(
+        func.count(JournalEntry.id),
+        func.sum(JournalEntry.Valor)
+    ).filter(JournalEntry.user_id == user_id).first()
+```
+
+2. **Service** - Adicionar lógica:
+```python
+# domains/transactions/service.py
+def get_statistics(self, user_id: int, filters):
+    count, total = self.repository.get_statistics(user_id, filters)
+    return {
+        "count": count or 0,
+        "total": float(total or 0),
+        "average": total / count if count else 0
+    }
+```
+
+3. **Router** - Adicionar endpoint:
+```python
+# domains/transactions/router.py
+@router.get("/statistics")
+def get_stats(user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    service = TransactionService(db)
+    return service.get_statistics(user_id, {})
+```
+
+**Arquivos modificados:** 3 (todos no mesmo domínio)
+**Impacto:** Zero em outros domínios
+
+---
+
+## 🔍 Checklist de Modificação
+
+Antes de fazer qualquer mudança, perguntar:
+
+- [ ] ✅ Estou modificando apenas um domínio?
+- [ ] ✅ Queries SQL estão no repository?
+- [ ] ✅ Lógica de negócio está no service?
+- [ ] ✅ Router só valida e chama service?
+- [ ] ✅ Não estou importando de outros domínios?
+- [ ] ✅ Database path é o absoluto único?
+- [ ] ✅ Testei o domínio isoladamente?
+
+---
+
+## 🔧 FRONTEND - Configuração Centralizada
+
+### URLs de API (api.config.ts)
+
+**Path:** `app_dev/frontend/src/core/config/api.config.ts`
+
+```typescript
+// ✅ ÚNICO lugar onde URLs são definidas
+export const API_CONFIG = {
+  BACKEND_URL: 'http://localhost:8000',
+  API_PREFIX: '/api/v1',
+}
+
+export const API_ENDPOINTS = {
+  TRANSACTIONS: {
+    LIST: `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/transactions/list`,
+    // ...
+  }
+}
+```
+
+**🚫 NUNCA:**
+- Hardcoded URLs em componentes
+- `fetch('http://localhost:8000/...')` direto
+- URLs diferentes em arquivos diferentes
+
+**✅ SEMPRE:**
+- Importar de `@/core/config/api.config`
+- Usar `API_ENDPOINTS.TRANSACTIONS.LIST`
+- Mudar URL = 1 arquivo apenas
+
+### Proxy Genérico
+
+**Path:** `app_dev/frontend/src/app/api/[...proxy]/route.ts`
+
+**Benefício:** Substitui 20+ rotas individuais por 1 arquivo
+
+```typescript
+// ✅ ANTES: 1 arquivo
+// app/api/[...proxy]/route.ts
+
+// ❌ DEPOIS: 20+ arquivos (não fazer)
+// app/api/transactions/route.ts
+// app/api/dashboard/route.ts
+// app/api/upload/route.ts
+// ...
+```
+
+---
+
+## 🎯 Regras de Versionamento Semântico
+
+### MAJOR (X.0.0)
+- Breaking changes no schema do banco
+- Mudanças incompatíveis na API
 - Refatorações massivas
 
 ### MINOR (x.Y.0)
@@ -152,10 +532,83 @@ python scripts/version_manager.py finish app/models.py "Adiciona campo Categoria
 - Novos blueprints/rotas
 
 ### PATCH (x.y.Z)
-- Bug fixes
+- Bug fixes em domínios específicos
 - Melhorias de performance
 - Correções de typos
-- Ajustes de UI
+
+---
+
+## 🚀 Iniciar/Parar Servidores (PROCESSO OTIMIZADO)
+
+### ⚡ COMANDO ÚNICO - Quando usuário pedir "ligar servidores"
+
+**SEMPRE usar este comando único:**
+
+```bash
+cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4 && chmod +x quick_start.sh && ./quick_start.sh
+```
+
+**O que faz automaticamente:**
+- ✅ Limpa portas 8000 e 3000
+- ✅ Inicia Backend FastAPI (porta 8000) com venv
+- ✅ Inicia Frontend Next.js (porta 3000)
+- ✅ Roda em background com logs
+- ✅ Salva PIDs para controle
+
+**Parar servidores:**
+
+```bash
+cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4 && chmod +x quick_stop.sh && ./quick_stop.sh
+```
+
+### URLs de Acesso
+
+- **Frontend:** http://localhost:3000
+- **Backend:** http://localhost:8000
+- **API Docs:** http://localhost:8000/docs
+- **Health:** http://localhost:8000/api/health
+
+**Login padrão:** admin@email.com / admin123
+
+### 🔄 Restart Automático Após Modificações
+
+**OBRIGATÓRIO: Reiniciar servidores automaticamente após:**
+- Modificação em domínios (models.py, routes.py, schemas)
+- Finalização de mudanças com `version_manager.py finish`
+- Instalação de novas dependências
+- Mudanças em configurações (config.py)
+- Atualizações no schema do banco
+
+**Comando completo de restart:**
+
+```bash
+cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4 && ./quick_stop.sh && ./quick_start.sh
+```
+
+### 📋 Monitoramento de Logs
+
+```bash
+# Backend
+tail -f /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4/backend.log
+
+# Frontend
+tail -f /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4/frontend.log
+```
+
+### 🚨 Troubleshooting Rápido
+
+**Portas ocupadas:**
+```bash
+lsof -ti:8000 | xargs kill -9 2>/dev/null
+lsof -ti:3000 | xargs kill -9 2>/dev/null
+```
+
+**Banco não inicializado:**
+```bash
+cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4/app_dev
+source venv/bin/activate
+python init_db.py
+```
 
 ---
 
