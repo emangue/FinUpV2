@@ -1,0 +1,73 @@
+"""
+Domínio Transactions - Schemas
+Pydantic schemas para validação e serialização
+"""
+from pydantic import BaseModel, Field
+from typing import Optional
+from datetime import datetime
+
+class TransactionBase(BaseModel):
+    """Schema base de transação"""
+    Data: str
+    Estabelecimento: str
+    Valor: float
+    TipoTransacao: str
+    GRUPO: Optional[str] = None
+    SUBGRUPO: Optional[str] = None
+    TipoGasto: Optional[str] = None
+    NomeCartao: Optional[str] = None
+
+class TransactionCreate(TransactionBase):
+    """Schema para criar transação"""
+    user_id: int
+    IdTransacao: str
+    arquivo_origem: Optional[str] = None
+    banco_origem: Optional[str] = None
+    tipodocumento: Optional[str] = None
+
+class TransactionUpdate(BaseModel):
+    """Schema para atualizar transação"""
+    GRUPO: Optional[str] = None
+    SUBGRUPO: Optional[str] = None
+    TipoGasto: Optional[str] = None
+    Estabelecimento: Optional[str] = None
+    Valor: Optional[float] = None
+    IgnorarDashboard: Optional[int] = None
+
+class TransactionResponse(TransactionBase):
+    """Schema de resposta de transação"""
+    id: int
+    IdTransacao: str
+    user_id: int
+    ValorPositivo: Optional[float] = None
+    IdParcela: Optional[str] = None
+    MesFatura: Optional[str] = None
+    Ano: Optional[int] = None
+    arquivo_origem: Optional[str] = None
+    banco_origem: Optional[str] = None
+    tipodocumento: Optional[str] = None
+    origem_classificacao: Optional[str] = None
+    IgnorarDashboard: int = 0
+    CategoriaGeral: Optional[str] = None
+    created_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
+
+class TransactionListResponse(BaseModel):
+    """Schema de resposta de lista de transações"""
+    transactions: list[TransactionResponse]
+    total: int
+    page: int
+    limit: int
+
+class TransactionFilters(BaseModel):
+    """Schema de filtros de transação"""
+    year: Optional[int] = None
+    month: Optional[int] = None
+    estabelecimento: Optional[str] = None
+    grupo: Optional[str] = None
+    subgrupo: Optional[str] = None
+    tipo: Optional[str] = None
+    cartao: Optional[str] = None
+    search: Optional[str] = None

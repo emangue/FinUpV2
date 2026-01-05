@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { Button } from "@/components/ui/button"
-import { UploadDialog } from "@/components/upload-dialog"
+import { UploadDialog } from "@/features/upload"
 import { Upload, FileText, PlusCircle, CheckCircle, XCircle, Clock, FileX } from "lucide-react"
 import {
   Dialog,

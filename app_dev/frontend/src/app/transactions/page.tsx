@@ -41,8 +41,8 @@ import {
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
-import { TransactionFilters, FilterValues } from "@/components/transaction-filters"
-import { EditTransactionModal } from "@/components/edit-transaction-modal"
+import { TransactionFilters, FilterValues } from "@/features/transactions/components/transaction-filters"
+import { EditTransactionModal } from "@/features/transactions"
 
 interface Transaction {
   IdTransacao: string

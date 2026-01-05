@@ -519,7 +519,267 @@ export const API_ENDPOINTS = {
 
 ---
 
-## 🎯 Regras de Versionamento Semântico
+## � FRONTEND - Arquitetura Feature-Based
+
+### Estrutura de Features (Isolamento por Domínio)
+
+```
+app_dev/frontend/src/
+├── core/                          # ✅ Configurações e utilitários globais
+│   ├── config/
+│   │   └── api.config.ts          # URLs centralizadas
+│   └── types/
+│       └── shared.types.ts        # Types compartilhados
+│
+├── features/                      # ✅ Domínios de negócio ISOLADOS
+│   ├── transactions/              # Feature de transações
+│   │   ├── components/            # Componentes específicos
+│   │   │   ├── edit-transaction-modal.tsx
+│   │   │   ├── transaction-filters.tsx
+│   │   │   ├── add-group-modal.tsx
+│   │   │   └── index.ts           # Export barrel
+│   │   ├── hooks/                 # Hooks customizados
+│   │   ├── services/              # Lógica de API
+│   │   ├── types/                 # Types específicos
+│   │   └── index.ts               # Export principal
+│   │
+│   ├── dashboard/                 # Feature de dashboard
+│   │   ├── components/
+│   │   │   ├── budget-vs-actual.tsx
+│   │   │   ├── category-expenses.tsx
+│   │   │   ├── chart-area-interactive.tsx
+│   │   │   └── index.ts
+│   │   └── index.ts
+│   │
+│   ├── upload/                    # Feature de upload
+│   │   ├── components/
+│   │   │   ├── upload-dialog.tsx
+│   │   │   └── index.ts
+│   │   └── index.ts
+│   │
+│   └── settings/                  # Feature de configurações
+│       └── components/
+│           └── index.ts
+│
+└── components/                    # ✅ Componentes COMPARTILHADOS apenas
+    ├── dashboard-layout.tsx       # Layout global
+    ├── app-sidebar.tsx            # Sidebar global
+    ├── nav-main.tsx               # Navegação global
+    └── ui/                        # Componentes UI base
+        ├── button.tsx
+        ├── card.tsx
+        └── ...
+```
+
+### Princípios de Isolamento de Features
+
+**1. CADA FEATURE É AUTOCONTIDA:**
+```typescript
+// ✅ CORRETO - Feature transactions isolada
+import { EditTransactionModal, TransactionFilters } from '@/features/transactions'
+
+// ❌ ERRADO - Não importar de outras features
+import { UploadDialog } from '@/features/upload'  // NÃO fazer em transactions
+```
+
+**2. ESTRUTURA OBRIGATÓRIA (components → hooks → services):**
+
+**Components (UI isolada):**
+```typescript
+// features/transactions/components/edit-transaction-modal.tsx
+export function EditTransactionModal({ id, onClose }: Props) {
+  const { updateTransaction } = useTransactionService()  // Hook local
+  // ...
+}
+```
+
+**Hooks (Estado e lógica):**
+```typescript
+// features/transactions/hooks/use-transaction-service.ts
+export function useTransactionService() {
+  const updateTransaction = async (id: string, data) => {
+    // Chama service
+  }
+  return { updateTransaction }
+}
+```
+
+**Services (API calls):**
+```typescript
+// features/transactions/services/transaction-api.ts
+import { API_ENDPOINTS } from '@/core/config/api.config'
+
+export async function updateTransaction(id: string, data) {
+  const response = await fetch(API_ENDPOINTS.TRANSACTIONS.UPDATE(id), {
+    method: 'PATCH',
+    body: JSON.stringify(data)
+  })
+  return response.json()
+}
+```
+
+**3. REGRAS DE IMPORTAÇÃO:**
+
+```typescript
+// ✅ CORRETO
+import { API_CONFIG } from '@/core/config/api.config'
+import { Button } from '@/components/ui/button'  // UI compartilhado
+import { EditTransactionModal } from '@/features/transactions'  // Mesma feature
+
+// ❌ ERRADO
+import { EditTransactionModal } from '@/features/transactions/components/edit-transaction-modal'  // Path direto, usar index
+import { UploadDialog } from '@/features/upload'  // Import cruzado entre features
+```
+
+### Quando Modificar uma Feature
+
+**Cenário:** Adicionar filtro de "Categoria" em transações
+
+**✅ Passos corretos:**
+1. Modificar `features/transactions/components/transaction-filters.tsx` (adicionar campo)
+2. Atualizar `features/transactions/types/` (adicionar tipo se necessário)
+3. Modificar `features/transactions/services/` (adicionar parâmetro na API)
+4. Testar `features/transactions/` isoladamente
+5. **PARAR:** Não precisa tocar em dashboard, upload, settings!
+
+**Arquivos afetados:** ~3 arquivos (todos na mesma feature)
+**Antes da modularização:** ~10 arquivos espalhados
+
+---
+
+## 🚫 PROIBIÇÕES FRONTEND
+
+### 1. Imports Cruzados entre Features
+```typescript
+// ❌ PROIBIDO
+// Em features/transactions/components/list.tsx
+import { UploadDialog } from '@/features/upload/components/upload-dialog'  // NÃO!
+
+// ✅ CORRETO
+// Criar componente compartilhado se usado por múltiplas features
+import { SharedDialog } from '@/components/shared-dialog'
+```
+
+### 2. Componentes Compartilhados em Features
+```typescript
+// ❌ PROIBIDO
+// features/transactions/components/button-primary.tsx
+// Se usado por 2+ features, NÃO deve estar em nenhuma feature específica
+
+// ✅ CORRETO
+// components/ui/button-primary.tsx (compartilhado)
+```
+
+### 3. Lógica de API nos Componentes
+```typescript
+// ❌ PROIBIDO
+export function TransactionsList() {
+  const [data, setData] = useState([])
+  
+  useEffect(() => {
+    fetch('http://localhost:8000/api/v1/transactions/list')  // NÃO!
+      .then(res => res.json())
+      .then(setData)
+  }, [])
+}
+
+// ✅ CORRETO
+export function TransactionsList() {
+  const { transactions, loading } = useTransactions()  // Hook com service
+}
+```
+
+### 4. URLs Hardcoded
+```typescript
+// ❌ PROIBIDO
+const response = await fetch('http://localhost:8000/api/v1/transactions')
+
+// ✅ CORRETO
+import { API_ENDPOINTS } from '@/core/config/api.config'
+const response = await fetch(API_ENDPOINTS.TRANSACTIONS.LIST)
+```
+
+---
+
+## ✅ PADRÕES FRONTEND OBRIGATÓRIOS
+
+### 1. Criar Nova Feature
+
+```bash
+mkdir -p src/features/nova_feature/{components,hooks,services,types}
+```
+
+**Arquivos obrigatórios:**
+1. `components/index.ts` - Export barrel de componentes
+2. `index.ts` - Export principal da feature
+
+**Template de `components/index.ts`:**
+```typescript
+export { NovoComponente } from './novo-componente'
+export { OutroComponente } from './outro-componente'
+export type { NovoComponenteProps } from './novo-componente'
+```
+
+**Template de `index.ts` (raiz da feature):**
+```typescript
+// Components
+export * from './components'
+
+// Hooks (quando houver)
+// export * from './hooks'
+
+// Services (quando houver)
+// export * from './services'
+
+// Types (quando houver)
+// export * from './types'
+```
+
+### 2. Adicionar Componente a Feature Existente
+
+**Exemplo:** Adicionar modal de exclusão em transactions
+
+1. **Criar componente:**
+```typescript
+// features/transactions/components/delete-transaction-modal.tsx
+export function DeleteTransactionModal({ id, onClose }: Props) {
+  // ...
+}
+```
+
+2. **Adicionar ao index:**
+```typescript
+// features/transactions/components/index.ts
+export { DeleteTransactionModal } from './delete-transaction-modal'
+```
+
+3. **Usar na página:**
+```typescript
+// app/transactions/page.tsx
+import { DeleteTransactionModal } from '@/features/transactions'
+```
+
+**Arquivos modificados:** 2-3 (todos na mesma feature)
+**Impacto:** Zero em outras features
+
+---
+
+## 🔍 Checklist de Modificação Frontend
+
+Antes de fazer qualquer mudança, perguntar:
+
+- [ ] ✅ Estou modificando apenas uma feature?
+- [ ] ✅ Componente é específico desta feature (não compartilhado)?
+- [ ] ✅ Calls de API estão em services/?
+- [ ] ✅ Lógica de estado está em hooks/?
+- [ ] ✅ Componentes só fazem UI?
+- [ ] ✅ Não estou importando de outras features?
+- [ ] ✅ URLs vêm de api.config.ts?
+- [ ] ✅ Testei a feature isoladamente?
+
+---
+
+## �🎯 Regras de Versionamento Semântico
 
 ### MAJOR (X.0.0)
 - Breaking changes no schema do banco

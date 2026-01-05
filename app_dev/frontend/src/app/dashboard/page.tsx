@@ -1,12 +1,14 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import ChartAreaInteractive from '@/components/chart-area-interactive';
-import DateFilters from '@/components/date-filters';
-import CompactMetrics from '@/components/compact-metrics';
-import CategoryExpenses from '@/components/category-expenses';
-import BudgetVsActual from '@/components/budget-vs-actual';
-import CreditCardExpenses from '@/components/credit-card-expenses';
+import {
+  ChartAreaInteractive,
+  DateFilters,
+  CompactMetrics,
+  CategoryExpenses,
+  BudgetVsActual,
+  CreditCardExpenses
+} from '@/features/dashboard';
 import DashboardLayout from '@/components/dashboard-layout';
 
 interface Metrics {

@@ -1,13 +1,22 @@
 """
-FastAPI Main Application
+FastAPI Main Application - Arquitetura Modular em Domínios
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .config import settings
-from .database import engine, Base
-from .routers import auth, dashboard, marcacoes, compatibility, cartoes, exclusoes, users, upload, upload_classifier, transactions
+from .core.config import settings
+from .core.database import engine, Base
+
+# Domínios isolados (nova arquitetura)
+from .domains.transactions.router import router as transactions_router
+from .domains.users.router import router as users_router
+from .domains.categories.router import router as categories_router
+from .domains.cards.router import router as cards_router
+from .domains.upload.router import router as upload_router
+
+# Routers antigos (manter temporariamente para compatibilidade)
+from .routers import auth, dashboard, compatibility, exclusoes, upload_classifier
 
 # Cria app FastAPI
 app = FastAPI(
@@ -27,16 +36,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Routers
+# Routers Modularizados (nova arquitetura em domínios)
+app.include_router(transactions_router, prefix="/api/v1")
+app.include_router(users_router, prefix="/api/v1")
+app.include_router(categories_router, prefix="/api/v1")
+app.include_router(cards_router, prefix="/api/v1")
+app.include_router(upload_router, prefix="/api/v1")
+
+# Routers antigos (manter por enquanto para compatibilidade)
 app.include_router(auth.router)
 app.include_router(dashboard.router)
-app.include_router(marcacoes.router)
 app.include_router(compatibility.router)
-app.include_router(cartoes.router)
 app.include_router(exclusoes.router)
-app.include_router(transactions.router)
-app.include_router(users.router)
-app.include_router(upload.router)
 app.include_router(upload_classifier.router)
 
 @app.get("/")

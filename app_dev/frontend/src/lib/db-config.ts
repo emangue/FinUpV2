@@ -24,28 +24,29 @@ import fs from 'fs'
 import Database from 'better-sqlite3'
 
 /**
- * Path relativo do banco de dados
- * SEMPRE usar este valor em todas as APIs
+ * Path ABSOLUTO do banco de dados
+ * ⚠️ CRÍTICO: Este é o MESMO banco usado pelo backend FastAPI
+ * NUNCA mudar este path sem coordenar com backend/app/config.py
  * 
- * De /app_dev/frontend → ../financas_dev.db → /app_dev/financas_dev.db
+ * ÚNICO BANCO USADO POR TODA A APLICAÇÃO:
+ * - Backend FastAPI: /app_dev/backend/database/financas_dev.db
+ * - Frontend Next.js: /app_dev/backend/database/financas_dev.db
  */
-const DB_RELATIVE_PATH = '../financas_dev.db'
+const DB_ABSOLUTE_PATH = '/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4/app_dev/backend/database/financas_dev.db'
 
 /**
  * Retorna o caminho absoluto do banco de dados
  * Inclui validação de existência
  */
 export function getDbPath(): string {
-  const cwd = process.cwd()
-  const relativePath = path.join(cwd, DB_RELATIVE_PATH)
-  const absolutePath = path.resolve(relativePath)
+  const absolutePath = DB_ABSOLUTE_PATH
   
   if (!fs.existsSync(absolutePath)) {
     throw new Error(
       `❌ BANCO NÃO ENCONTRADO\n` +
       `Path esperado: ${absolutePath}\n` +
-      `CWD: ${cwd}\n` +
-      `Relativo: ${DB_RELATIVE_PATH}`
+      `⚠️ Verifique se o backend está rodando e criou o banco\n` +
+      `Este é o ÚNICO banco usado por backend e frontend`
     )
   }
   
@@ -63,11 +64,10 @@ export function openDatabase(options?: Database.Options) {
   
   console.log('🗄️ Abrindo banco:', {
     cwd: process.cwd(),
-    relativo: DB_RELATIVE_PATH,
+    relativo: DB_RELATIVE_PATH, (ÚNICO para toda aplicação):', {
     absoluto: dbPath,
-    exists: fs.existsSync(dbPath)
-  })
-  
+    exists: fs.existsSync(dbPath),
+    compartilhadoCom: 'Backend FastAPI em /app_dev/backend/database/financas_dev.db'
   return new Database(dbPath, options)
 }
 
@@ -101,13 +101,11 @@ export function getDbInfo() {
   const cwd = process.cwd()
   const relativePath = path.join(cwd, DB_RELATIVE_PATH)
   const absolutePath = path.resolve(relativePath)
+  const absolutePath = DB_ABSOLUTE_PATH
   const exists = fs.existsSync(absolutePath)
   
   return {
-    cwd,
-    relativo: DB_RELATIVE_PATH,
     absoluto: absolutePath,
     exists,
-    tamanho: exists ? fs.statSync(absolutePath).size : 0
-  }
-}
+    tamanho: exists ? fs.statSync(absolutePath).size : 0,
+    compartilhado: 'Backend + Frontend usam o MESMO arquivo'
