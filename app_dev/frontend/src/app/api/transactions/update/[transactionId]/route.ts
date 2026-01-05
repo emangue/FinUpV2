@@ -4,11 +4,12 @@ const BACKEND_URL = 'http://localhost:8000';
 
 export async function PATCH(
   request: NextRequest, 
-  { params }: { params: { transactionId: string } }
+  { params }: { params: Promise<{ transactionId: string }> }
 ) {
   try {
+    const { transactionId } = await params
     const body = await request.json();
-    const response = await fetch(`${BACKEND_URL}/api/v1/transactions/${params.transactionId}`, {
+    const response = await fetch(`${BACKEND_URL}/api/v1/transactions/${transactionId}`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',

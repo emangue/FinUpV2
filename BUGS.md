@@ -30,26 +30,29 @@
 
 ## 🟡 Bugs Médios
 
-### 2. Transações de Transferência Não Aparecem nos Filtros
-**Descrição:** Quando o usuário filtra por tipo de transação, as transferências não aparecem em nenhuma aba (Receitas ou Despesas).
+### 2. Transações de Transferência Não Aparecem na Aba Superior
+**Descrição:** A aba "Transferências" no topo da página não exibe nenhuma transação quando clicada, mas se o usuário usar os filtros detalhados e selecionar tipo "Transferência", as transações aparecem corretamente.
 
 **Localização:**
 - Frontend: [app_dev/frontend/src/app/transactions/page.tsx](app_dev/frontend/src/app/transactions/page.tsx#L340-L365)
 - Backend: Query de filtros em `transactions.py`
 
 **Comportamento Esperado:**
-- Transferências deveriam aparecer em uma aba separada ou em "Todas"
-- Deveria haver uma indicação visual de que existem transferências
+- Clicar na aba "Transferências" deve exibir todas as transações com `TipoTransacao = "Transferência"`
+- O total deve refletir apenas as transferências
+- A contagem de transações deve aparecer
 
 **Comportamento Atual:**
-- Transferências somem quando filtros são aplicados
-- Não há contagem ou visibilidade de transferências
+- **Clicar na aba "Transferências"**: Nenhuma transação aparece (página vazia)
+- **Usar filtro detalhado com tipo "Transferência"**: Funciona corretamente e mostra as transações
+- Inconsistência entre aba superior e filtros detalhados
 
 **Próximos Passos:**
-- [ ] Adicionar aba "Transferências" separada
-- [ ] Ou criar badge indicando quantidade de transferências ocultas
-- [ ] Verificar se campo `TipoTransacao` tem valor "Transferência" no banco
-- [ ] Ajustar lógica de filtros para incluir transferências quando apropriado
+- [ ] Verificar lógica da aba "Transferências" vs filtros detalhados
+- [ ] Comparar parâmetros enviados ao backend em ambos os casos
+- [ ] Validar se o valor de `tipo_transacao` está sendo enviado corretamente
+- [ ] Verificar se campo `TipoTransacao` no banco usa "Transferência" ou "Transferencias"
+- [ ] Ajustar mapeamento entre aba clicada e valor do filtro enviado ao backend
 
 ---
 
@@ -120,12 +123,12 @@ if deleted > 0:
 2. Clicar em qualquer switch na coluna "Dashboard"
 3. Observar que nada acontece
 
-### Bug 2 - Transferências Sumidas
+### Bug 2 - Transferências Não Aparecem na Aba
 1. Acessar http://localhost:3000/transactions
-2. Verificar quantidade total de transações na aba "Todas"
-3. Clicar nas abas "Receitas" ou "Despesas"
-4. Somar as transações - total não bate com "Todas"
-5. Diferença são as transferências que não aparecem
+2. Verificar que existem transferências na aba "Todas"
+3. Clicar na aba "Transferências" no topo
+4. Observar que nenhuma transação aparece (página vazia)
+5. **Workaround**: Usar o filtro detalhado e selecionar tipo "Transferência" - funciona corretamente
 
 ### Bug 3 - Preview Não Limpa
 1. Fazer upload de um arquivo CSV de fatura
