@@ -20,37 +20,42 @@ import { API_CONFIG } from '@/core/config/api.config';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { proxy: string[] } }
+  { params }: { params: Promise<{ proxy: string[] }> }
 ) {
-  return handleProxy(request, params.proxy, 'GET');
+  const resolvedParams = await params;
+  return handleProxy(request, resolvedParams.proxy, 'GET');
 }
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { proxy: string[] } }
+  { params }: { params: Promise<{ proxy: string[] }> }
 ) {
-  return handleProxy(request, params.proxy, 'POST');
+  const resolvedParams = await params;
+  return handleProxy(request, resolvedParams.proxy, 'POST');
 }
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { proxy: string[] } }
+  { params }: { params: Promise<{ proxy: string[] }> }
 ) {
-  return handleProxy(request, params.proxy, 'PUT');
+  const resolvedParams = await params;
+  return handleProxy(request, resolvedParams.proxy, 'PUT');
 }
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { proxy: string[] } }
+  { params }: { params: Promise<{ proxy: string[] }> }
 ) {
-  return handleProxy(request, params.proxy, 'PATCH');
+  const resolvedParams = await params;
+  return handleProxy(request, resolvedParams.proxy, 'PATCH');
 }
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { proxy: string[] } }
+  { params }: { params: Promise<{ proxy: string[] }> }
 ) {
-  return handleProxy(request, params.proxy, 'DELETE');
+  const resolvedParams = await params;
+  return handleProxy(request, resolvedParams.proxy, 'DELETE');
 }
 
 async function handleProxy(

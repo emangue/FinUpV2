@@ -74,18 +74,13 @@ const DashboardPage = () => {
       setLoadingMetrics(true);
       setMetricsError(null);
       
-      const response = await fetch(`/api/dashboard/metrics?year=${year}&month=${month}`);
-      if (!response.ok) {
-        throw new Error(`API Error: ${response.status}`);
-      }
+      // TODO: Criar endpoint /api/v1/dashboard/metrics no backend
+      // Por enquanto, usando dados mockados
+      console.log('[Dashboard] Usando dados mockados para metrics (endpoint não implementado)');
       
-      const data = await response.json();
-      setMetrics({
-        totalDespesas: data.totalDespesas,
-        totalReceitas: data.totalReceitas,
-        saldoAtual: data.saldoAtual,
-        totalTransacoes: data.totalTransacoes
-      });
+      await new Promise(resolve => setTimeout(resolve, 500)); // Simular delay de rede
+      
+      setMetrics(mockMetrics);
       
     } catch (error) {
       console.error('Error fetching metrics:', error);
@@ -100,21 +95,23 @@ const DashboardPage = () => {
       setLoadingChart(true);
       setChartError(null);
       
-      const response = await fetch(`/api/dashboard/chart-data?year=${year}&month=${month}`);
-      if (!response.ok) {
-        throw new Error(`API Error: ${response.status}`);
-      }
+      // TODO: Criar endpoint /api/v1/dashboard/chart-data no backend
+      // Por enquanto, usando dados mockados
+      console.log('[Dashboard] Usando dados mockados para chart-data (endpoint não implementado)');
       
-      const data = await response.json();
+      await new Promise(resolve => setTimeout(resolve, 500)); // Simular delay de rede
       
-      // Transformar para o formato esperado pelo componente
-      const formattedData = data.map((item: any) => ({
-        mes: item.mes,
-        receitas: item.receitas,
-        despesas: item.despesas
-      }));
+      // Dados mockados para o gráfico
+      const mockChartData = [
+        { mes: 'Jan', receitas: 12450, despesas: 8547 },
+        { mes: 'Fev', receitas: 11200, despesas: 9100 },
+        { mes: 'Mar', receitas: 13800, despesas: 10200 },
+        { mes: 'Abr', receitas: 12100, despesas: 8900 },
+        { mes: 'Mai', receitas: 14500, despesas: 11300 },
+        { mes: 'Jun', receitas: 13200, despesas: 9800 }
+      ];
       
-      setChartData(formattedData);
+      setChartData(mockChartData);
       
     } catch (error) {
       console.error('Error fetching chart data:', error);
@@ -129,21 +126,13 @@ const DashboardPage = () => {
       setLoadingCategories(true);
       setCategoriesError(null);
       
-      const response = await fetch(`/api/dashboard/categories?year=${year}&month=${month}`);
-      if (!response.ok) {
-        throw new Error(`API Error: ${response.status}`);
-      }
+      // TODO: Criar endpoint /api/v1/dashboard/categories no backend
+      // Por enquanto, usando dados mockados
+      console.log('[Dashboard] Usando dados mockados para categories (endpoint não implementado)');
       
-      const data = await response.json();
+      await new Promise(resolve => setTimeout(resolve, 500)); // Simular delay de rede
       
-      // Transformar para o formato esperado
-      const formattedData = data.map((item: any) => ({
-        categoria: item.tipo_gasto,
-        valor: item.total,
-        percentual: item.percentual
-      }));
-      
-      setCategoryData(formattedData);
+      setCategoryData(mockCategoryData);
       
     } catch (error) {
       console.error('Error fetching category data:', error);
