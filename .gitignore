@@ -31,6 +31,10 @@ ENV/
 *.db-journal
 app/financas.db
 app_dev/financas_dev.db
+app_dev/financas.db
+
+# Database oficial (ÚNICO permitido - não ignorar)
+!app_dev/backend/database/financas_dev.db
 
 # Flask Session
 flask_session/

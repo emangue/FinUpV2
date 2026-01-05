@@ -14,16 +14,103 @@
 2. **Frontend:** `app_dev/frontend/src/lib/db-config.ts` → `DB_ABSOLUTE_PATH`
 
 **🚫 NUNCA:**
-- Criar outro banco de dados
+- Criar outro banco de dados em QUALQUER local:
+  * ❌ `app_dev/financas.db`
+  * ❌ `app_dev/financas_dev.db`
+  * ❌ `app_dev/backend/financas.db`
+  * ❌ Qualquer variação de path
 - Usar paths relativos diferentes
 - Modificar apenas um dos arquivos
 - Criar cópias do banco
+- Fazer backup manual (usar scripts de backup)
 
 **✅ SEMPRE:**
-- Usar path absoluto completo
+- Usar path absoluto completo: `app_dev/backend/database/financas_dev.db`
 - Se mudar, mudar nos 2 arquivos simultaneamente
 - Testar backend E frontend após mudanças
 - Ver `DATABASE_CONFIG.md` para detalhes
+- Verificar `.gitignore` para ignorar duplicados
+
+**🔍 VERIFICAÇÃO PERIÓDICA:**
+```bash
+# DEVE retornar APENAS 1 arquivo
+find app_dev -name "*.db" -type f | grep -v node_modules
+# Resultado esperado: app_dev/backend/database/financas_dev.db
+```
+
+---
+
+## 🧹 LIMPEZA E ORGANIZAÇÃO - LIÇÕES APRENDIDAS
+
+### ⚠️ ARQUIVOS QUE NÃO DEVEM EXISTIR
+
+**Após refatoração modular, estes arquivos/pastas foram REMOVIDOS e NÃO devem ser recriados:**
+
+#### Backend - Rotas Antigas (REMOVIDAS):
+```
+❌ app_dev/backend/app/routers/          # Substituído por domains/*/router.py
+   ├── auth.py
+   ├── cartoes.py
+   ├── compatibility.py
+   ├── dashboard.py
+   ├── exclusoes.py
+   ├── marcacoes.py
+   ├── transactions.py
+   ├── upload.py
+   ├── upload_classifier.py
+   └── users.py
+
+❌ app_dev/backend/app/models/           # Substituído por domains/*/models.py
+❌ app_dev/backend/app/schemas/          # Substituído por domains/*/schemas.py
+```
+
+#### Backend - Configurações Duplicadas (REMOVIDAS):
+```
+❌ app_dev/backend/app/config.py         # Usar app/core/config.py
+❌ app_dev/backend/app/database.py       # Usar app/core/database.py
+❌ app_dev/backend/app/dependencies.py   # Usar app/shared/dependencies.py
+```
+
+#### Frontend - Rotas API Antigas (REMOVIDAS):
+```
+❌ app_dev/frontend/src/app/api/cartoes/
+❌ app_dev/frontend/src/app/api/categories/
+❌ app_dev/frontend/src/app/api/compatibility/
+❌ app_dev/frontend/src/app/api/dashboard/
+❌ app_dev/frontend/src/app/api/exclusoes/
+❌ app_dev/frontend/src/app/api/grupos/
+❌ app_dev/frontend/src/app/api/health/
+❌ app_dev/frontend/src/app/api/marcacoes/
+❌ app_dev/frontend/src/app/api/transactions/
+❌ app_dev/frontend/src/app/api/upload/
+❌ app_dev/frontend/src/app/api/users/
+
+✅ ÚNICO permitido: app_dev/frontend/src/app/api/[...proxy]/
+```
+
+#### Databases Duplicados (REMOVIDOS):
+```
+❌ app_dev/financas.db
+❌ app_dev/financas_dev.db
+❌ app_dev/backend/financas.db
+❌ *.db.backup_* (backups manuais na pasta database/)
+
+✅ ÚNICO oficial: app_dev/backend/database/financas_dev.db
+```
+
+### 🚨 SE VOCÊ CRIAR ALGUM DESSES ARQUIVOS:
+
+**PARE IMEDIATAMENTE e pergunte:**
+1. Por que estou criando isso?
+2. Já existe equivalente na nova arquitetura?
+3. Devo usar domínio isolado ou proxy genérico?
+4. Estou duplicando funcionalidade?
+
+**LEMBRE-SE:**
+- Backend: Use `domains/*/router.py` (NUNCA `app/routers/`)
+- Frontend: Use proxy `[...proxy]` (NUNCA rotas individuais)
+- Config: Use `app/core/` e `app/shared/` (NUNCA duplicar na raiz)
+- Database: Use APENAS o path oficial (NUNCA criar outros)
 
 ---
 
@@ -798,7 +885,68 @@ Antes de fazer qualquer mudança, perguntar:
 
 ---
 
-## 🚀 Iniciar/Parar Servidores (PROCESSO OTIMIZADO)
+## � CORREÇÕES OBRIGATÓRIAS APÓS REMOVER ARQUIVOS ANTIGOS
+
+### Se você remover arquivos da arquitetura antiga, SEMPRE verificar:
+
+**1. Imports em `app/main.py`:**
+```python
+# ❌ ERRADO (routers antigos)
+from .routers import auth, dashboard, compatibility
+
+# ✅ CORRETO (apenas domínios)
+from .domains.transactions.router import router as transactions_router
+from .domains.users.router import router as users_router
+# ...
+```
+
+**2. Imports em `run.py`:**
+```python
+# ❌ ERRADO
+from app.config import settings
+
+# ✅ CORRETO
+from app.core.config import settings
+```
+
+**3. Imports em scripts (`backend/scripts/*.py`):**
+```python
+# ❌ ERRADO
+from app.database import engine, Base
+
+# ✅ CORRETO
+from app.core.database import engine, Base
+```
+
+**4. Verificar ausência de rotas antigas em `main.py`:**
+```python
+# ❌ REMOVER estas linhas se existirem:
+app.include_router(auth.router)
+app.include_router(dashboard.router)
+app.include_router(compatibility.router)
+# ...
+
+# ✅ MANTER apenas domínios:
+app.include_router(transactions_router, prefix="/api/v1", tags=["Transactions"])
+app.include_router(users_router, prefix="/api/v1", tags=["Users"])
+# ...
+```
+
+**5. Testar após qualquer remoção:**
+```bash
+# Reiniciar servidores
+./quick_stop.sh && ./quick_start.sh
+
+# Verificar backend
+curl http://localhost:8000/api/health
+
+# Verificar logs
+tail -30 backend.log | grep -i error
+```
+
+---
+
+## �🚀 Iniciar/Parar Servidores (PROCESSO OTIMIZADO)
 
 ### ⚡ COMANDO ÚNICO - Quando usuário pedir "ligar servidores"
 
