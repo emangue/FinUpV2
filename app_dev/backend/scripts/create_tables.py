@@ -7,7 +7,7 @@ import os
 # Adicionar o diretório pai ao path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.database import engine, Base
+from app.core.database import engine, Base
 from app.models import Cartao, TransacaoExclusao
 
 def create_tables():

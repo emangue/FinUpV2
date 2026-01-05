@@ -8,21 +8,18 @@ from fastapi.responses import JSONResponse
 from .core.config import settings
 from .core.database import engine, Base
 
-# Domínios isolados (nova arquitetura)
+# Domínios isolados (arquitetura DDD)
 from .domains.transactions.router import router as transactions_router
 from .domains.users.router import router as users_router
 from .domains.categories.router import router as categories_router
 from .domains.cards.router import router as cards_router
 from .domains.upload.router import router as upload_router
 
-# Routers antigos (manter temporariamente para compatibilidade)
-from .routers import auth, dashboard, compatibility, exclusoes, upload_classifier
-
 # Cria app FastAPI
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    description="API REST para Sistema de Finanças Pessoais",
+    description="API REST para Sistema de Finanças Pessoais - Arquitetura Modular",
     docs_url="/docs",  # Swagger UI
     redoc_url="/redoc"  # ReDoc
 )
@@ -36,19 +33,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Routers Modularizados (nova arquitetura em domínios)
-app.include_router(transactions_router, prefix="/api/v1")
-app.include_router(users_router, prefix="/api/v1")
-app.include_router(categories_router, prefix="/api/v1")
-app.include_router(cards_router, prefix="/api/v1")
-app.include_router(upload_router, prefix="/api/v1")
-
-# Routers antigos (manter por enquanto para compatibilidade)
-app.include_router(auth.router)
-app.include_router(dashboard.router)
-app.include_router(compatibility.router)
-app.include_router(exclusoes.router)
-app.include_router(upload_classifier.router)
+# Routers Modularizados (arquitetura DDD - Domain-Driven Design)
+app.include_router(transactions_router, prefix="/api/v1", tags=["Transactions"])
+app.include_router(users_router, prefix="/api/v1", tags=["Users"])
+app.include_router(categories_router, prefix="/api/v1", tags=["Categories"])
+app.include_router(cards_router, prefix="/api/v1", tags=["Cards"])
+app.include_router(upload_router, prefix="/api/v1", tags=["Upload"])
 
 @app.get("/")
 def root():

@@ -50,10 +50,15 @@ Thumbs.db
 
 # Logs
 *.log
+backend.log
+frontend.log
 
 # Temporary files
 *.tmp
 *.temp
+*.pid
+backend.pid
+frontend.pid
 
 # Uploads
 uploads/
