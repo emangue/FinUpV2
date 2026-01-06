@@ -70,10 +70,10 @@ export default function CartoesPage() {
   const fetchCartoes = async () => {
     try {
       setLoadingCartoes(true)
-      const response = await fetch('/api/cartoes')
+      const response = await fetch('/api/cards')
       if (response.ok) {
         const data = await response.json()
-        setCartoes(data)
+        setCartoes(data.cards || [])
       }
     } catch (error) {
       console.error('Erro ao buscar cartões:', error)

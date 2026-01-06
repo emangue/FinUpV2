@@ -78,7 +78,7 @@ export default function ExclusoesPage() {
       const response = await fetch('/api/exclusoes')
       if (response.ok) {
         const data = await response.json()
-        setExclusoes(data)
+        setExclusoes(data.exclusoes || [])
       }
     } catch (error) {
       console.error('Erro ao buscar exclusões:', error)

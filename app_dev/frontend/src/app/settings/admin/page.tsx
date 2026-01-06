@@ -70,7 +70,7 @@ export default function AdminPage() {
       const response = await fetch('/api/users')
       if (response.ok) {
         const data = await response.json()
-        setUsuarios(data)
+        setUsuarios(data.users || [])
       }
     } catch (error) {
       console.error('Erro ao buscar usuários:', error)
