@@ -5,6 +5,7 @@ Integra hasher.py e normalizer.py
 """
 
 import logging
+import re
 from dataclasses import dataclass
 from typing import Optional
 
@@ -64,16 +65,27 @@ class TransactionMarker:
             MarkedTransaction com IDs marcados
         """
         try:
-            # 1. Normalizar estabelecimento e detectar parcela
+            # 1. Normalizar estabelecimento
             estab_normalizado = normalizar_estabelecimento(raw.lancamento)
+            
+            # 2. Detectar parcela (retorna {'parcela': int, 'total': int} ou None)
             info_parcela = detectar_parcela(raw.lancamento, raw.tipo_documento)
             
-            estabelecimento_base = info_parcela['estabelecimento_base']
-            tem_parcela = info_parcela['tem_parcela']
-            parcela_atual = info_parcela['parcela_atual']
-            total_parcelas = info_parcela['total_parcelas']
+            if info_parcela:
+                # Tem parcela - remover XX/YY do final do estabelecimento
+                tem_parcela = True
+                parcela_atual = info_parcela['parcela']
+                total_parcelas = info_parcela['total']
+                # Remover padrão XX/YY do final
+                estabelecimento_base = re.sub(r'\s*\(?(\d{1,2})/(\d{1,2})\)?\s*$', '', raw.lancamento).strip()
+            else:
+                # Sem parcela
+                tem_parcela = False
+                parcela_atual = None
+                total_parcelas = None
+                estabelecimento_base = raw.lancamento
             
-            # 2. Valor positivo
+            # 3. Valor positivo
             valor_positivo = abs(raw.valor)
             valor_arredondado = arredondar_2_decimais(valor_positivo)
             
