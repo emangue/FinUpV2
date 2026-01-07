@@ -14,13 +14,52 @@ from app.shared.utils import (
     fnv1a_64_hash,
     generate_id_simples,
     normalizar_estabelecimento,
-    detectar_parcela,
     arredondar_2_decimais
 )
 
 from .raw.base import RawTransaction
 
 logger = logging.getLogger(__name__)
+
+
+def extrair_parcela_do_estabelecimento(estabelecimento: str) -> Optional[dict]:
+    """
+    Extrai informação de parcela do estabelecimento
+    Suporta formatos: "LOJA (3/12)" ou "LOJA 3/12"
+    
+    Args:
+        estabelecimento: String com possível indicação de parcela
+        
+    Returns:
+        dict: {'estabelecimento_base': str, 'parcela': int, 'total': int} ou None
+    """
+    # Tenta formato com parênteses: "LOJA (3/12)"
+    match = re.search(r'^(.+?)\s*\((\d{1,2})/(\d{1,2})\)\s*$', estabelecimento)
+    if match:
+        parcela = int(match.group(2))
+        total = int(match.group(3))
+        # Validação básica
+        if 1 <= parcela <= total <= 99:
+            return {
+                'estabelecimento_base': match.group(1).strip(),
+                'parcela': parcela,
+                'total': total
+            }
+    
+    # Tenta formato sem parênteses: "LOJA 3/12"
+    match = re.search(r'^(.+?)\s+(\d{1,2})/(\d{1,2})\s*$', estabelecimento)
+    if match:
+        parcela = int(match.group(2))
+        total = int(match.group(3))
+        # Validação básica
+        if 1 <= parcela <= total <= 99:
+            return {
+                'estabelecimento_base': match.group(1).strip(),
+                'parcela': parcela,
+                'total': total
+            }
+    
+    return None
 
 
 @dataclass
@@ -65,27 +104,21 @@ class TransactionMarker:
             MarkedTransaction com IDs marcados
         """
         try:
-            # 1. Normalizar estabelecimento
-            estab_normalizado = normalizar_estabelecimento(raw.lancamento)
-            
-            # 2. Detectar parcela (retorna {'parcela': int, 'total': int} ou None)
-            info_parcela = detectar_parcela(raw.lancamento, raw.tipo_documento)
+            # 1. Detectar parcela e extrair estabelecimento base
+            info_parcela = extrair_parcela_do_estabelecimento(raw.lancamento)
             
             if info_parcela:
-                # Tem parcela - remover XX/YY do final do estabelecimento
-                tem_parcela = True
+                # Tem parcela
+                estabelecimento_base = info_parcela['estabelecimento_base']
                 parcela_atual = info_parcela['parcela']
                 total_parcelas = info_parcela['total']
-                # Remover padrão XX/YY do final
-                estabelecimento_base = re.sub(r'\s*\(?(\d{1,2})/(\d{1,2})\)?\s*$', '', raw.lancamento).strip()
             else:
                 # Sem parcela
-                tem_parcela = False
+                estabelecimento_base = raw.lancamento
                 parcela_atual = None
                 total_parcelas = None
-                estabelecimento_base = raw.lancamento
             
-            # 3. Valor positivo
+            # 2. Valor positivo
             valor_positivo = abs(raw.valor)
             valor_arredondado = arredondar_2_decimais(valor_positivo)
             
@@ -99,13 +132,14 @@ class TransactionMarker:
             # 4. Handle collision (adicionar sufixo se necessário)
             id_transacao = self._handle_collision(id_transacao)
             
-            # 5. Gerar IdParcela se tem parcela
+            # 5. Gerar IdParcela se tem parcela (usando mesma lógica de populate_id_parcela.py)
             id_parcela = None
-            if tem_parcela and total_parcelas:
-                # IdParcela = MD5(estabelecimento_base + valor + total)
-                from hashlib import md5
-                parcela_str = f"{estabelecimento_base}_{valor_arredondado}_{total_parcelas}"
-                id_parcela = md5(parcela_str.encode()).hexdigest()[:16]
+            if info_parcela and total_parcelas:
+                # IdParcela = MD5(estabelecimento_base|valor|total) - 16 chars
+                import hashlib
+                chave = f"{estabelecimento_base}|{valor_arredondado:.2f}|{total_parcelas}"
+                id_parcela = hashlib.md5(chave.encode()).hexdigest()[:16]
+                logger.debug(f"IdParcela: {id_parcela} para {estabelecimento_base} {parcela_atual}/{total_parcelas}")
             
             # 6. Criar MarkedTransaction
             marked = MarkedTransaction(
