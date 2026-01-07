@@ -214,8 +214,8 @@ class UploadService:
         """
         Fase 1: Processa arquivo bruto usando processadores específicos
         """
-        # Buscar processador adequado
-        processor = get_processor(banco.lower(), tipo_documento.lower())
+        # Buscar processador adequado (normalização feita dentro de get_processor)
+        processor = get_processor(banco, tipo_documento)
         
         if not processor:
             logger.warning(f"⚠️ Processador não encontrado para {banco}/{tipo_documento}")
