@@ -2,13 +2,10 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { CalendarIcon, Upload, X } from "lucide-react"
-import { format } from "date-fns"
-import { ptBR } from "date-fns/locale"
+import { Upload, X, Plus } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Calendar } from "@/components/ui/calendar"
 import {
   Dialog,
   DialogContent,
@@ -19,11 +16,6 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import {
   Select,
@@ -52,9 +44,19 @@ interface BankCompatibility {
   }
 }
 
+interface Card {
+  id: number
+  nome_cartao: string
+  final_cartao: string
+  banco: string
+  ativo: number
+}
+
 export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDialogProps) {
   const router = useRouter()
-  const [mesFatura, setMesFatura] = React.useState<string>(format(new Date(), 'yyyy-MM'))
+  const currentDate = new Date()
+  const [selectedYear, setSelectedYear] = React.useState<string>(currentDate.getFullYear().toString())
+  const [selectedMonth, setSelectedMonth] = React.useState<string>(String(currentDate.getMonth() + 1).padStart(2, '0'))
   const [fileFormat, setFileFormat] = React.useState("csv")
   const [selectedFile, setSelectedFile] = React.useState<File | null>(null)
   const [password, setPassword] = React.useState("")
@@ -64,6 +66,11 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
   const [isUploading, setIsUploading] = React.useState(false)
   const [uploadError, setUploadError] = React.useState<string | null>(null)
   const [compatibility, setCompatibility] = React.useState<BankCompatibility>({})
+  const [cards, setCards] = React.useState<Card[]>([])
+  const [isAddingCard, setIsAddingCard] = React.useState(false)
+  const [newCardName, setNewCardName] = React.useState("")
+  const [newCardFinal, setNewCardFinal] = React.useState("")
+  const [isSavingCard, setIsSavingCard] = React.useState(false)
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -102,7 +109,7 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
       formData.append('file', selectedFile)
       formData.append('banco', bank)
       formData.append('cartao', creditCard || '')
-      formData.append('mesFatura', mesFatura)
+      formData.append('mesFatura', `${selectedYear}-${selectedMonth}`)
       formData.append('tipoDocumento', activeTab) // 'fatura' ou 'extrato'
       formData.append('formato', fileFormat) // 'csv', 'xls', etc
       
@@ -138,13 +145,98 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
 
   const resetForm = () => {
     setSelectedFile(null)
-    setMesFatura(format(new Date(), 'yyyy-MM'))
+    const now = new Date()
+    setSelectedYear(now.getFullYear().toString())
+    setSelectedMonth(String(now.getMonth() + 1).padStart(2, '0'))
     setFileFormat("csv")
     setPassword("")
     setBank("")
     setCreditCard("")
     setActiveTab("fatura")
     setIsUploading(false)
+    setUploadError(null)
+    setIsAddingCard(false)
+    setNewCardName("")
+    setNewCardFinal("")
+  }
+  
+  const handleAddCard = () => {
+    if (!bank) {
+      setUploadError("Selecione um banco primeiro para adicionar um cartão")
+      return
+    }
+    setIsAddingCard(true)
+    setUploadError(null)
+  }
+  
+  const handleSaveNewCard = async () => {
+    if (!bank) {
+      setUploadError("Selecione um banco primeiro")
+      return
+    }
+    
+    if (!newCardName.trim()) {
+      setUploadError("Digite o nome do cartão")
+      return
+    }
+    
+    if (newCardFinal.length !== 4 || !/^\d+$/.test(newCardFinal)) {
+      setUploadError("Final do cartão deve ter exatamente 4 dígitos")
+      return
+    }
+    
+    setIsSavingCard(true)
+    setUploadError(null)
+    
+    try {
+      // Encontrar nome real do banco
+      const bankKey = Object.keys(compatibility).find(
+        key => key.toLowerCase().replace(/ /g, '-') === bank
+      )
+      
+      if (!bankKey) {
+        throw new Error("Banco não encontrado")
+      }
+      
+      const response = await fetch('/api/cards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nome_cartao: newCardName.trim(),
+          final_cartao: newCardFinal.trim(),
+          banco: bankKey
+        })
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || errorData.error || 'Erro ao salvar cartão')
+      }
+      
+      const newCard = await response.json()
+      
+      // Atualizar lista de cartões
+      setCards(prev => [...prev, newCard])
+      
+      // Selecionar automaticamente o novo cartão
+      setCreditCard(newCard.id.toString())
+      
+      // Resetar form de adicionar cartão
+      setIsAddingCard(false)
+      setNewCardName("")
+      setNewCardFinal("")
+      
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : 'Erro ao salvar cartão')
+    } finally {
+      setIsSavingCard(false)
+    }
+  }
+  
+  const handleCancelAddCard = () => {
+    setIsAddingCard(false)
+    setNewCardName("")
+    setNewCardFinal("")
     setUploadError(null)
   }
 
@@ -157,9 +249,30 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
         .then(res => res.json())
         .then(data => {
           console.log('🔍 Compatibilidade carregada:', data)
-          setCompatibility(data)
+          
+          // Transformar array de banks em objeto {[bank]: {[format]: status}}
+          const compatibilityMap: BankCompatibility = {}
+          if (data.banks && Array.isArray(data.banks)) {
+            data.banks.forEach((item: any) => {
+              if (!compatibilityMap[item.bank_name]) {
+                compatibilityMap[item.bank_name] = {}
+              }
+              compatibilityMap[item.bank_name][item.file_format] = item.status
+            })
+          }
+          console.log('📊 Compatibilidade processada:', compatibilityMap)
+          setCompatibility(compatibilityMap)
         })
         .catch(err => console.error('❌ Erro ao buscar compatibilidade:', err))
+      
+      // Buscar cartões cadastrados
+      fetch('/api/cards')
+        .then(res => res.json())
+        .then(data => {
+          console.log('💳 Cartões carregados:', data)
+          setCards(data.cards || [])
+        })
+        .catch(err => console.error('❌ Erro ao buscar cartões:', err))
     }
   }, [open])
   
@@ -169,12 +282,44 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
       return []
     }
     
-    return Object.keys(compatibility).filter(bankName => {
-      const formats = compatibility[bankName]
-      // Verificar se tem pelo menos um formato disponível (OK ou WIP)
-      return Object.values(formats).some(status => status === 'OK' || status === 'WIP')
-    })
+    // Retornar TODOS os bancos cadastrados (não filtrar por status)
+    return Object.keys(compatibility).sort()
   }, [compatibility])
+  
+  // Filtrar cartões pelo banco selecionado
+  const availableCards = React.useMemo(() => {
+    if (!bank || cards.length === 0) {
+      return cards.filter(card => card.ativo === 1)
+    }
+    
+    // Encontrar o nome real do banco no objeto compatibility
+    const bankKey = Object.keys(compatibility).find(
+      key => key.toLowerCase().replace(/ /g, '-') === bank
+    )
+    
+    if (!bankKey) {
+      return cards.filter(card => card.ativo === 1)
+    }
+    
+    // Filtrar cartões que pertencem ao banco selecionado
+    return cards.filter(card => 
+      card.ativo === 1 && 
+      card.banco.toLowerCase().includes(bankKey.toLowerCase()) ||
+      bankKey.toLowerCase().includes(card.banco.toLowerCase())
+    )
+  }, [bank, cards, compatibility])
+  
+  // Limpar cartão selecionado quando banco mudar
+  React.useEffect(() => {
+    if (bank && creditCard) {
+      const cardStillValid = availableCards.some(
+        card => card.id.toString() === creditCard
+      )
+      if (!cardStillValid) {
+        setCreditCard("")
+      }
+    }
+  }, [bank, availableCards, creditCard])
   
   // Verificar status de um formato específico para o banco selecionado
   const getFormatStatus = (format: string): string => {
@@ -259,30 +404,138 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
 
               <div className="space-y-2">
                 <Label htmlFor="credit-card">Cartão de Crédito *</Label>
-                <Select value={creditCard} onValueChange={setCreditCard}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o cartão" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="mastercard-4321">Mastercard 4321</SelectItem>
-                    <SelectItem value="visa-1234">Visa 1234</SelectItem>
-                    <SelectItem value="american-express">American Express</SelectItem>
-                  </SelectContent>
-                </Select>
+                
+                {!isAddingCard ? (
+                  <>
+                    <div className="flex gap-2">
+                      <Select value={creditCard} onValueChange={setCreditCard}>
+                        <SelectTrigger className="flex-1">
+                          <SelectValue placeholder="Selecione o cartão" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableCards.length === 0 ? (
+                            <SelectItem value="none" disabled>
+                              {!bank 
+                                ? "Selecione um banco primeiro"
+                                : "Nenhum cartão deste banco cadastrado"
+                              }
+                            </SelectItem>
+                          ) : (
+                            availableCards.map(card => (
+                              <SelectItem key={card.id} value={card.id.toString()}>
+                                {card.nome_cartao} •••• {card.final_cartao} ({card.banco})
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={handleAddCard}
+                        disabled={!bank || isAddingCard}
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    {availableCards.length === 0 && bank && (
+                      <p className="text-xs text-muted-foreground">
+                        Clique no + para adicionar um cartão deste banco
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <div className="space-y-3 border rounded-lg p-3 bg-muted/30">
+                    <div className="space-y-2">
+                      <Label htmlFor="new-card-name" className="text-xs">Nome do Cartão</Label>
+                      <Input
+                        id="new-card-name"
+                        value={newCardName}
+                        onChange={(e) => setNewCardName(e.target.value)}
+                        placeholder="Ex: Mastercard Black"
+                        className="h-9"
+                        disabled={isSavingCard}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="new-card-final" className="text-xs">Final do Cartão (4 dígitos)</Label>
+                      <Input
+                        id="new-card-final"
+                        value={newCardFinal}
+                        onChange={(e) => setNewCardFinal(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                        placeholder="1234"
+                        maxLength={4}
+                        className="h-9"
+                        disabled={isSavingCard}
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={handleSaveNewCard}
+                        disabled={isSavingCard}
+                        className="flex-1"
+                      >
+                        {isSavingCard ? "Salvando..." : "Salvar"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleCancelAddCard}
+                        disabled={isSavingCard}
+                      >
+                        Cancelar
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label>Período da Fatura *</Label>
+                <div className="flex items-center gap-3">
+                  <Select value={selectedYear} onValueChange={setSelectedYear}>
+                    <SelectTrigger className="w-28">
+                      <SelectValue placeholder="Ano" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 6 }, (_, i) => {
+                        const year = new Date().getFullYear() - i
+                        return (
+                          <SelectItem key={year} value={year.toString()}>
+                            {year}
+                          </SelectItem>
+                        )
+                      })}
+                    </SelectContent>
+                  </Select>
+
+                  <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                    <SelectTrigger className="flex-1">
+                      <SelectValue placeholder="Mês" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="01">Janeiro</SelectItem>
+                      <SelectItem value="02">Fevereiro</SelectItem>
+                      <SelectItem value="03">Março</SelectItem>
+                      <SelectItem value="04">Abril</SelectItem>
+                      <SelectItem value="05">Maio</SelectItem>
+                      <SelectItem value="06">Junho</SelectItem>
+                      <SelectItem value="07">Julho</SelectItem>
+                      <SelectItem value="08">Agosto</SelectItem>
+                      <SelectItem value="09">Setembro</SelectItem>
+                      <SelectItem value="10">Outubro</SelectItem>
+                      <SelectItem value="11">Novembro</SelectItem>
+                      <SelectItem value="12">Dezembro</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </TabsContent>
           </Tabs>
-
-          <div className="space-y-2">
-            <Label>Mês Fatura *</Label>
-            <Input
-              type="month"
-              value={mesFatura}
-              onChange={(e) => setMesFatura(e.target.value)}
-              max={format(new Date(), 'yyyy-MM')}
-              className="w-full"
-            />
-          </div>
 
           <div className="space-y-4">
             <Label>Formato do arquivo para importação</Label>
