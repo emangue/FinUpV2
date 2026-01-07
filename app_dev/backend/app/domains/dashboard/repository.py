@@ -14,12 +14,22 @@ class DashboardRepository:
     def __init__(self, db: Session):
         self.db = db
     
-    def _build_date_filter(self, year: int, month: int):
-        """Constrói filtro para data no formato DD/MM/YYYY"""
+    def _build_date_filter(self, year: int, month: Optional[int] = None):
+        """Constrói filtro para data no formato DD/MM/YYYY
+        
+        Args:
+            year: Ano a filtrar
+            month: Mês específico (1-12) ou None para ano inteiro
+        """
+        year_str = str(year)
+        
+        # Se month=None, filtrar ano inteiro
+        if month is None:
+            return JournalEntry.Data.like(f'%/{year_str}')
+        
         # Filtros para cobrir todos os formatos possíveis de data
         # Ex: 01/01/2025, 1/1/2025, 31/12/2025
         month_str = f"{month:02d}"  # Garante 2 dígitos
-        year_str = str(year)
         
         # Padrões possíveis: DD/MM/YYYY ou D/M/YYYY
         patterns = [
@@ -29,37 +39,42 @@ class DashboardRepository:
         
         return or_(*patterns)
     
-    def get_metrics(self, user_id: int, year: int, month: int) -> Dict:
-        """Calcula métricas principais"""
-        # Filtro base
+    def get_metrics(self, user_id: int, year: int, month: Optional[int] = None) -> Dict:
+        """Calcula métricas principais
+        
+        Args:
+            user_id: ID do usuário
+            year: Ano a filtrar
+            month: Mês específico (1-12) ou None para ano inteiro
+        """
+        # Filtro base - SEMPRE filtrar por IgnorarDashboard = 0
         date_filter = self._build_date_filter(year, month)
         base_query = self.db.query(JournalEntry).filter(
             JournalEntry.user_id == user_id,
-            date_filter
+            date_filter,
+            JournalEntry.IgnorarDashboard == 0  # Apenas transações que aparecem no dashboard
         )
         
-        # Total de despesas (tipo DEBITO com valor negativo)
+        # Total de despesas (CategoriaGeral = 'Despesa')
         total_despesas = base_query.filter(
-            JournalEntry.TipoTransacao == 'DEBITO',
-            JournalEntry.Valor < 0
-        ).with_entities(func.sum(JournalEntry.Valor)).scalar() or 0.0
+            JournalEntry.CategoriaGeral == 'Despesa'
+        ).with_entities(func.sum(func.abs(JournalEntry.Valor))).scalar() or 0.0
         
-        # Total de receitas (tipo CREDITO com valor positivo)
+        # Total de receitas (CategoriaGeral = 'Receita')
         total_receitas = base_query.filter(
-            JournalEntry.TipoTransacao == 'CREDITO',
-            JournalEntry.Valor > 0
-        ).with_entities(func.sum(JournalEntry.Valor)).scalar() or 0.0
+            JournalEntry.CategoriaGeral == 'Receita'
+        ).with_entities(func.sum(func.abs(JournalEntry.Valor))).scalar() or 0.0
         
-        # Total de cartões (tipo CARTAO_CREDITO)
+        # Total de cartões (TipoTransacao = 'Cartão de Crédito')
         total_cartoes = base_query.filter(
-            JournalEntry.TipoTransacao == 'CARTAO_CREDITO'
+            JournalEntry.TipoTransacao == 'Cartão de Crédito'
         ).with_entities(func.sum(func.abs(JournalEntry.Valor))).scalar() or 0.0
         
         # Número de transações
         num_transacoes = base_query.count()
         
-        # Saldo do período
-        saldo_periodo = total_receitas + total_despesas  # despesas já é negativo
+        # Saldo do período (Receitas - Despesas)
+        saldo_periodo = total_receitas - total_despesas
         
         return {
             "total_despesas": abs(total_despesas),
@@ -71,24 +86,25 @@ class DashboardRepository:
     
     def get_chart_data(self, user_id: int, year: int, month: int) -> List[Dict]:
         """Retorna dados para gráfico de área (receitas vs despesas por mês do ano)"""
-        # Query agrupada por mês do ano
+        # Query agrupada por mês do ano - FILTRAR IgnorarDashboard = 0
         results = self.db.query(
             func.substr(JournalEntry.Data, 4, 2).label('month'),  # Extrai MM de DD/MM/YYYY
             func.sum(
                 case(
-                    (JournalEntry.TipoTransacao == 'CREDITO', JournalEntry.Valor),
+                    (JournalEntry.CategoriaGeral == 'Receita', func.abs(JournalEntry.Valor)),
                     else_=0
                 )
             ).label('receitas'),
             func.sum(
                 case(
-                    (JournalEntry.TipoTransacao != 'CREDITO', func.abs(JournalEntry.Valor)),
+                    (JournalEntry.CategoriaGeral == 'Despesa', func.abs(JournalEntry.Valor)),
                     else_=0
                 )
             ).label('despesas')
         ).filter(
             JournalEntry.user_id == user_id,
-            JournalEntry.Data.like(f'%/{year}')  # Filtra pelo ano
+            JournalEntry.Data.like(f'%/{year}'),  # Filtra pelo ano
+            JournalEntry.IgnorarDashboard == 0  # Apenas transações que aparecem no dashboard
         ).group_by(
             func.substr(JournalEntry.Data, 4, 2)
         ).order_by(
@@ -108,17 +124,24 @@ class DashboardRepository:
             for row in results
         ]
     
-    def get_category_expenses(self, user_id: int, year: int, month: int) -> List[Dict]:
-        """Retorna despesas agrupadas por categoria"""
+    def get_category_expenses(self, user_id: int, year: int, month: Optional[int] = None) -> List[Dict]:
+        """Retorna despesas agrupadas por categoria
+        
+        Args:
+            user_id: ID do usuário
+            year: Ano a filtrar
+            month: Mês específico (1-12) ou None para ano inteiro
+        """
         date_filter = self._build_date_filter(year, month)
         
-        # Total geral de despesas (para calcular percentual)
+        # Total geral de despesas (para calcular percentual) - FILTRAR IgnorarDashboard = 0
         total_despesas = self.db.query(
             func.sum(func.abs(JournalEntry.Valor))
         ).filter(
             JournalEntry.user_id == user_id,
             date_filter,
-            JournalEntry.TipoTransacao != 'CREDITO'
+            JournalEntry.CategoriaGeral == 'Despesa',
+            JournalEntry.IgnorarDashboard == 0
         ).scalar() or 1.0  # Evita divisão por zero
         
         # Despesas por categoria
@@ -128,7 +151,8 @@ class DashboardRepository:
         ).filter(
             JournalEntry.user_id == user_id,
             date_filter,
-            JournalEntry.TipoTransacao != 'CREDITO',
+            JournalEntry.CategoriaGeral == 'Despesa',
+            JournalEntry.IgnorarDashboard == 0,
             JournalEntry.GRUPO.isnot(None)
         ).group_by(
             JournalEntry.GRUPO

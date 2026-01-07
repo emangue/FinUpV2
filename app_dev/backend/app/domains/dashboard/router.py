@@ -17,7 +17,7 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 @router.get("/metrics", response_model=DashboardMetrics)
 def get_metrics(
     year: int = Query(default=None, description="Ano (default: atual)"),
-    month: int = Query(default=None, description="Mês (default: atual)"),
+    month: int = Query(default=None, description="Mês (default: None = ano todo)"),
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
@@ -28,11 +28,13 @@ def get_metrics(
     - Total de cartões
     - Saldo do período
     - Número de transações
+    
+    Se month=None, retorna soma do ano inteiro.
     """
-    # Usar mês/ano atual se não informado
+    # Usar ano atual se não informado
     now = datetime.now()
     year = year or now.year
-    month = month or now.month
+    # month pode ser None (ano todo) ou número específico
     
     service = DashboardService(db)
     return service.get_metrics(user_id, year, month)
@@ -61,7 +63,7 @@ def get_chart_data(
 @router.get("/categories", response_model=list[CategoryExpense])
 def get_category_expenses(
     year: int = Query(default=None, description="Ano (default: atual)"),
-    month: int = Query(default=None, description="Mês (default: atual)"),
+    month: int = Query(default=None, description="Mês (default: None = ano todo)"),
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
@@ -70,11 +72,13 @@ def get_category_expenses(
     - Nome da categoria
     - Total gasto
     - Percentual do total
+    
+    Se month=None, retorna soma do ano inteiro.
     """
-    # Usar mês/ano atual se não informado
+    # Usar ano atual se não informado
     now = datetime.now()
     year = year or now.year
-    month = month or now.month
+    # month pode ser None (ano todo) ou número específico
     
     service = DashboardService(db)
     return service.get_category_expenses(user_id, year, month)

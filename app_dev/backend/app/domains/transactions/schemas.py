@@ -69,5 +69,7 @@ class TransactionFilters(BaseModel):
     grupo: Optional[str] = None
     subgrupo: Optional[str] = None
     tipo: Optional[str] = None
+    categoria_geral: Optional[str] = None
+    tipo_gasto: Optional[str] = None
     cartao: Optional[str] = None
     search: Optional[str] = None

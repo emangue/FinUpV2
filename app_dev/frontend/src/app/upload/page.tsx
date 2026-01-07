@@ -23,15 +23,27 @@ import DashboardLayout from "@/components/dashboard-layout"
 
 interface UploadHistory {
   id: number
-  fileName: string
-  bank: string
-  creditCard?: string
-  uploadDate: string
-  fileSize: number
-  status: 'processed' | 'processing' | 'error'
-  transactionsCount: number
-  type: 'fatura' | 'extrato'
-  error?: string
+  session_id: string
+  banco: string
+  tipo_documento: string
+  nome_arquivo: string
+  nome_cartao?: string
+  final_cartao?: string
+  mes_fatura?: string
+  status: 'processing' | 'success' | 'error' | 'cancelled'
+  total_registros: number
+  transacoes_importadas: number
+  transacoes_duplicadas: number
+  classification_stats?: {
+    base_parcelas: number
+    base_padroes: number
+    journal_entries: number
+    marcas_gerais: number
+    nao_classificado: number
+  }
+  data_upload: string
+  data_confirmacao?: string
+  error_message?: string
 }
 
 export default function UploadPage() {
@@ -46,10 +58,11 @@ export default function UploadPage() {
       const response = await fetch('/api/upload/history')
       if (response.ok) {
         const data = await response.json()
-        setUploadHistory(data)
+        setUploadHistory(data.uploads || [])
       }
     } catch (error) {
       console.error('Erro ao buscar histórico:', error)
+      setUploadHistory([])
     } finally {
       setLoading(false)
     }
@@ -80,12 +93,14 @@ export default function UploadPage() {
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'processed':
+      case 'success':
         return <CheckCircle className="h-4 w-4 text-green-600" />
       case 'processing':
         return <Clock className="h-4 w-4 text-yellow-600" />
       case 'error':
         return <XCircle className="h-4 w-4 text-red-600" />
+      case 'cancelled':
+        return <FileX className="h-4 w-4 text-gray-600" />
       default:
         return <FileX className="h-4 w-4 text-gray-600" />
     }
@@ -93,14 +108,16 @@ export default function UploadPage() {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'processed':
-        return <Badge variant="secondary" className="bg-green-100 text-green-800">Processado</Badge>
+      case 'success':
+        return <Badge variant="secondary" className="bg-green-100 text-green-800">Sucesso</Badge>
       case 'processing':
         return <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">Processando</Badge>
       case 'error':
         return <Badge variant="destructive">Erro</Badge>
+      case 'cancelled':
+        return <Badge variant="secondary" className="bg-gray-100 text-gray-800">Cancelado</Badge>
       default:
-        return <Badge variant="outline">Desconhecido</Badge>
+        return <Badge variant="secondary">Desconhecido</Badge>
     }
   }
 
@@ -250,23 +267,26 @@ export default function UploadPage() {
                   <div className="flex items-center space-x-4">
                     {getStatusIcon(upload.status)}
                     <div>
-                      <p className="font-medium">{upload.fileName}</p>
+                      <p className="font-medium">{upload.nome_arquivo}</p>
                       <p className="text-sm text-muted-foreground">
-                        {upload.bank} {upload.creditCard ? `• ${upload.creditCard}` : ''} • {upload.type === 'fatura' ? 'Fatura' : 'Extrato'}
+                        {upload.banco} {upload.nome_cartao ? `• ${upload.nome_cartao}` : ''} • {upload.tipo_documento === 'fatura' ? 'Fatura' : 'Extrato'}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {formatDate(upload.uploadDate)} • {formatFileSize(upload.fileSize)}
+                        {formatDate(upload.data_upload)}
                       </p>
-                      {upload.error && (
-                        <p className="text-xs text-red-600 mt-1">{upload.error}</p>
+                      {upload.error_message && (
+                        <p className="text-xs text-red-600 mt-1">{upload.error_message}</p>
                       )}
                     </div>
                   </div>
                   <div className="flex items-center space-x-3">
-                    {upload.status === 'processed' && (
-                      <span className="text-sm text-muted-foreground">
-                        {upload.transactionsCount} transações
-                      </span>
+                    {upload.status === 'success' && (
+                      <div className="text-sm text-muted-foreground text-right">
+                        <p className="font-medium text-green-600">{upload.transacoes_importadas} importadas</p>
+                        {upload.transacoes_duplicadas > 0 && (
+                          <p className="text-xs text-amber-600">{upload.transacoes_duplicadas} duplicadas</p>
+                        )}
+                      </div>
                     )}
                     {getStatusBadge(upload.status)}
                   </div>

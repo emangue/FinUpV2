@@ -93,13 +93,13 @@ export default function TransactionsPage() {
       // Aplicar os mesmos filtros da listagem
       if (type !== 'all') {
         if (type === 'Receita') {
-          params.set('tipo_transacao', 'Receitas')
+          params.set('categoria_geral', 'Receita')
         } else if (type === 'Despesa') {
-          params.set('tipo_transacao', 'Despesas')
+          params.set('categoria_geral', 'Despesa')
         } else if (type === 'Investimentos') {
-          params.set('grupo', 'Investimentos')
+          params.set('categoria_geral', 'Investimentos')
         } else if (type === 'Transferência Entre Contas') {
-          params.set('tipo_gasto', 'Transferência Entre Contas')
+          params.set('categoria_geral', 'Transferência Entre Contas')
         }
       }
 
@@ -113,7 +113,7 @@ export default function TransactionsPage() {
       const response = await fetch(`/api/transactions/filtered-total?${params.toString()}`)
       if (response.ok) {
         const data = await response.json()
-        setSomaTotal(data.total_filtrado || 0)
+        setSomaTotal(data.total || 0)
       }
     } catch (error) {
       console.error('Erro ao buscar total filtrado:', error)
@@ -131,13 +131,13 @@ export default function TransactionsPage() {
       // Adicionar categoria geral baseada no activeTab
       if (type !== 'all') {
         if (type === 'Receita') {
-          params.set('tipo_transacao', 'Receitas')
+          params.set('categoria_geral', 'Receita')
         } else if (type === 'Despesa') {
-          params.set('tipo_transacao', 'Despesas')
+          params.set('categoria_geral', 'Despesa')
         } else if (type === 'Investimentos') {
-          params.set('grupo', 'Investimentos')
+          params.set('categoria_geral', 'Investimentos')
         } else if (type === 'Transferência Entre Contas') {
-          params.set('tipo_gasto', 'Transferência Entre Contas')
+          params.set('categoria_geral', 'Transferência Entre Contas')
         }
       }
 
@@ -156,15 +156,19 @@ export default function TransactionsPage() {
       if (response.ok) {
         const data = await response.json()
         setTransactions(data.transactions || [])
+        
+        // API retorna total, page, limit diretamente (não dentro de pagination)
+        const total = data.total || 0
+        const page = data.page || 1
+        const limit = data.limit || 10
+        const totalPages = Math.ceil(total / limit)
+        
         setPagination({
-          page: data.pagination?.page || 1,
-          limit: data.pagination?.limit || 10,
-          total: data.pagination?.total || 0,
-          totalPages: data.pagination?.total_pages || 0
+          page,
+          limit,
+          total,
+          totalPages
         })
-        // Não calcular soma aqui, será calculada pela nova API
-        // const soma = (data.transactions || []).reduce((acc: number, t: Transaction) => acc + t.Valor, 0)
-        // setSomaTotal(soma)
       }
     } catch (error) {
       console.error('Erro ao buscar transações:', error)
@@ -218,8 +222,9 @@ export default function TransactionsPage() {
         throw new Error(`Falha no PATCH: ${response.status}`)
       }
       
-      // Recarregar totais após mudança
+      // Apenas atualiza o total sem recarregar a lista inteira
       fetchFilteredTotal(activeTab, appliedFilters)
+      
     } catch (error) {
       console.error('Erro ao atualizar IgnorarDashboard:', error)
       // Reverte se falhar

@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Teste Settings API</title>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        .success { color: green; }
+        .error { color: red; }
+        pre { background: #f5f5f5; padding: 10px; overflow: auto; max-height: 400px; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Teste da API de Configurações</h1>
+    
+    <div id="status">Carregando...</div>
+    <div id="results"></div>
+
+    <script>
+        async function testarAPI() {
+            const statusDiv = document.getElementById('status');
+            const resultsDiv = document.getElementById('results');
+            
+            try {
+                statusDiv.innerHTML = '<p class="success">📡 Fazendo requisição para /api/categories...</p>';
+                
+                const response = await fetch('http://localhost:3000/api/categories');
+                
+                statusDiv.innerHTML += `<p class="success">✅ Status: ${response.status}</p>`;
+                
+                const data = await response.json();
+                
+                statusDiv.innerHTML += `<p class="success">✅ Total de categorias: ${data.total || data.categories?.length || 0}</p>`;
+                statusDiv.innerHTML += `<p class="success">✅ Keys na resposta: ${Object.keys(data).join(', ')}</p>`;
+                
+                if (data.categories && Array.isArray(data.categories)) {
+                    statusDiv.innerHTML += `<p class="success">✅ Array de categorias: ${data.categories.length} itens</p>`;
+                    
+                    resultsDiv.innerHTML = '<h2>📋 Primeiras 10 categorias:</h2>';
+                    resultsDiv.innerHTML += '<pre>' + JSON.stringify(data.categories.slice(0, 10), null, 2) + '</pre>';
+                } else {
+                    statusDiv.innerHTML += `<p class="error">❌ data.categories não é um array!</p>`;
+                    resultsDiv.innerHTML = '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+                }
+                
+            } catch (error) {
+                statusDiv.innerHTML += `<p class="error">❌ Erro: ${error.message}</p>`;
+                console.error('Erro completo:', error);
+            }
+        }
+        
+        testarAPI();
+    </script>
+</body>
+</html>

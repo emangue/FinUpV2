@@ -3,9 +3,11 @@ Domínio Upload - Repository
 Camada de acesso a dados - TODAS as queries SQL isoladas aqui
 """
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, desc
 from typing import Optional, List
+from datetime import datetime
 from .models import PreviewTransacao
+from .history_models import UploadHistory
 
 class UploadRepository:
     """
@@ -75,3 +77,46 @@ class UploadRepository:
             PreviewTransacao.user_id == user_id
         ).scalar()
         return count > 0
+    
+    # ========== MÉTODOS DE UPLOAD_HISTORY ==========
+    
+    def create_upload_history(self, history: UploadHistory) -> UploadHistory:
+        """Cria registro de histórico"""
+        self.db.add(history)
+        self.db.commit()
+        self.db.refresh(history)
+        return history
+    
+    def update_upload_history(self, history_id: int, **kwargs) -> Optional[UploadHistory]:
+        """Atualiza registro de histórico"""
+        history = self.db.query(UploadHistory).filter(UploadHistory.id == history_id).first()
+        if history:
+            for key, value in kwargs.items():
+                setattr(history, key, value)
+            self.db.commit()
+            self.db.refresh(history)
+        return history
+    
+    def get_upload_history_by_session(self, session_id: str, user_id: int) -> Optional[UploadHistory]:
+        """Busca histórico por session_id"""
+        return self.db.query(UploadHistory).filter(
+            UploadHistory.session_id == session_id,
+            UploadHistory.user_id == user_id
+        ).first()
+    
+    def list_upload_history(
+        self,
+        user_id: int,
+        limit: int = 50,
+        offset: int = 0
+    ) -> List[UploadHistory]:
+        """Lista históricos de um usuário (ordem decrescente)"""
+        return self.db.query(UploadHistory).filter(
+            UploadHistory.user_id == user_id
+        ).order_by(desc(UploadHistory.data_upload)).limit(limit).offset(offset).all()
+    
+    def count_upload_history(self, user_id: int) -> int:
+        """Conta total de históricos de um usuário"""
+        return self.db.query(func.count(UploadHistory.id)).filter(
+            UploadHistory.user_id == user_id
+        ).scalar()

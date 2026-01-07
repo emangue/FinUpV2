@@ -29,6 +29,8 @@ def list_transactions(
     grupo: Optional[str] = None,
     subgrupo: Optional[str] = None,
     tipo: Optional[str] = None,
+    categoria_geral: Optional[str] = None,
+    tipo_gasto: Optional[str] = None,
     cartao: Optional[str] = None,
     search: Optional[str] = None,
     user_id: int = Depends(get_current_user_id),
@@ -46,6 +48,8 @@ def list_transactions(
         grupo=grupo,
         subgrupo=subgrupo,
         tipo=tipo,
+        categoria_geral=categoria_geral,
+        tipo_gasto=tipo_gasto,
         cartao=cartao,
         search=search
     )
@@ -57,6 +61,8 @@ def get_filtered_total(
     year: Optional[int] = None,
     month: Optional[int] = None,
     tipo: Optional[str] = None,
+    categoria_geral: Optional[str] = None,
+    tipo_gasto: Optional[str] = None,
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
@@ -65,7 +71,7 @@ def get_filtered_total(
     """
     service = TransactionService(db)
     
-    filters = TransactionFilters(year=year, month=month, tipo=tipo)
+    filters = TransactionFilters(year=year, month=month, tipo=tipo, categoria_geral=categoria_geral, tipo_gasto=tipo_gasto)
     
     return service.get_filtered_total(user_id, filters)
 

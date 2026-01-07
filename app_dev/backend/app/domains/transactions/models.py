@@ -2,7 +2,8 @@
 Domínio Transactions - Model
 Contém apenas o modelo JournalEntry isolado
 """
-from sqlalchemy import Column, Integer, String, Float, DateTime
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey
+from sqlalchemy.orm import relationship
 from app.core.database import Base
 
 class JournalEntry(Base):
@@ -39,6 +40,14 @@ class JournalEntry(Base):
     banco_origem = Column(String)
     tipodocumento = Column(String)
     origem_classificacao = Column(String)
+    upload_history_id = Column(Integer, ForeignKey("upload_history.id"), nullable=True, index=True)
+    
+    # Estabelecimento normalizado
+    EstabelecimentoBase = Column(String)
+    
+    # Parcelas
+    parcela_atual = Column(Integer)
+    TotalParcelas = Column(Integer)
     
     # Dados temporais
     MesFatura = Column(String)  # Formato YYYYMM
@@ -50,3 +59,6 @@ class JournalEntry(Base):
     
     # Flags
     IgnorarDashboard = Column(Integer, default=0)
+    
+    # Relationships
+    upload_history = relationship("UploadHistory", back_populates="transactions")

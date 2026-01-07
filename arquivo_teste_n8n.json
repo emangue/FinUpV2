@@ -1,0 +1,1224 @@
+{
+  "name": "PDF Financeiro para Google Sheets - Testes",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "name": "Agendar Busca",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        -3792,
+        208
+      ],
+      "id": "75c456cf-fd2c-4030-b0e7-9c1889e43437"
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/drive/v3/files",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "'1eKP0dTD7afog1EQH6WFBTEbS3RDJaEz1' in parents and mimeType='application/pdf'"
+            },
+            {
+              "name": "fields",
+              "value": "files(id,name,mimeType,modifiedTime)"
+            },
+            {
+              "name": "orderBy",
+              "value": "modifiedTime desc"
+            },
+            {
+              "name": "pageSize",
+              "value": "100"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -3536,
+        208
+      ],
+      "id": "be38daf8-a237-44e3-8ab9-facf78850b67",
+      "name": "Buscar PDFs",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "rhRMEyRxyZX8wUFB",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Processar resposta da API\nconst response = $input.item.json;\nconst files = response.files || [];\nreturn files.map(file => ({\n  json: {\n    id: file.id,\n    name: file.name,\n    mimeType: file.mimeType,\n    modifiedTime: file.modifiedTime\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3312,
+        208
+      ],
+      "id": "2d318f28-1037-4afc-8dee-75e871502cd8",
+      "name": "Processar Lista"
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{$json.id}}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "name": "Baixar PDF",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -3088,
+        208
+      ],
+      "id": "99ea5b6e-3fb4-4881-8caa-6c30df29bb31",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "rhRMEyRxyZX8wUFB",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "options": {}
+      },
+      "name": "Extrair Texto",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        -2864,
+        208
+      ],
+      "id": "456e51cc-270c-4687-a7b2-90f7d09c3bb1"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.text }}",
+                    "rightValue": "=Consultas, informações e serviços transacionais, acesse itau.com.br",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    },
+                    "id": "3d4c8d8b-9836-40bc-b1ba-8ea6f32fdee2"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Extrato Itaú"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.text }}",
+                    "rightValue": "=Itaú Cartões",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    },
+                    "id": "8887bed2-670a-4345-b1ad-624b8510bae9"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Fatura Itaú"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "49d9dff7-cc3e-44f0-a01a-096955c21cca",
+                    "leftValue": "={{ $json.text }}",
+                    "rightValue": "Mercado Pago",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Extrato Mercado Pago"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        -2640,
+        208
+      ],
+      "id": "7a0efa83-7b82-40d3-ab75-73e2ffddd210",
+      "name": "Identificar Tipo"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Processamento de extrato com detecção de nome e transações futuras\n// ATUALIZADO: Data em DD/MM/AAAA + origem \"Itaú Person\"\n\n// Utilitário: ISO (YYYY-MM-DD) -> DD/MM/AAAA\nfunction toDDMMYYYY(iso) {\n  const [yyyy, mm, dd] = String(iso || '').split('-');\n  return dd && mm && yyyy ? `${dd}/${mm}/${yyyy}` : iso;\n}\n\n// Processar TODOS os itens de entrada\nconst allTransacoes = [];\n\nfor (const item of $input.all()) {\n  const text = String(item.json.text || '');\n\n  // === EXTRAIR NOME DO TITULAR ===\n  let nomeTitular = null;\n  // Padrão 1: Nome antes de CPF (EMANUEL GUERRA LEANDRO 112.593.476-05)\n  const regexNome1 = /([A-Z][A-Z\\s]+?)\\s+\\d{3}\\.\\d{3}\\.\\d{3}-\\d{2}/;\n  const matchNome1 = text.match(regexNome1);\n  if (matchNome1) {\n    nomeTitular = matchNome1[1].trim();\n  }\n\n  // === EXTRAIR TRANSAÇÕES ===\n  const regex = /((\\d{2})\\/(\\d{2})\\/(\\d{4}))\\s+([A-Za-z0-9\\s*.\\/-]+?)\\s+(-?\\d{1,3}(?:\\.\\d{3})*(?:,\\d{2})|-?\\d+(?:[.,]\\d{2}))$/gm;\n\n  function gerarIdSimples(data, estab, valor) {\n    const str = `${data}${estab}${valor}`.replace(/[^a-zA-Z0-9]/g, '');\n    let hash = 0;\n    for (let i = 0; i < str.length; i++) {\n      hash = ((hash << 5) - hash) + str.charCodeAt(i);\n      hash = hash & hash;\n    }\n    return Math.abs(hash).toString(36).toUpperCase();\n  }\n\n  // Data atual para comparação\n  const dataAtual = new Date();\n  dataAtual.setHours(0, 0, 0, 0);\n\n  let m;\n  while ((m = regex.exec(text)) !== null) {\n    const [, , dia, mes, ano, estab, valorStr] = m;\n\n    if (estab.toUpperCase().includes('SALDO DO DIA')) continue;\n\n    const valor = parseFloat(valorStr.replace(/\\./g, '').replace(',', '.'));\n    const dataISO = `${ano}-${mes}-${dia}`;\n\n    // Verificar se é transação futura\n    const dataTransacao = new Date(parseInt(ano), parseInt(mes) - 1, parseInt(dia));\n    const ehFutura = dataTransacao > dataAtual;\n\n    // === DEFINIR TIPO DE TRANSAÇÃO ===\n    let TipoTransacao;\n    if (valor > 0) {\n      TipoTransacao = 'Receitas';\n    } else if (valor < 0) {\n      TipoTransacao = 'Despesas';\n    } else {\n      TipoTransacao = '(Espaços em branco)'; // Valor zero\n    }\n\n    // === NOVAS VARIÁVEIS ===\n    const TipoTransacaoAjuste = TipoTransacao; // Igual ao TipoTransacao\n    const Ano = parseInt(ano, 10);\n    const DT_Fatura = `${ano}${mes}`; // AAAAMM\n    const ValorPositivo = Math.abs(valor); // Valor sempre positivo\n\n    allTransacoes.push({\n      IdTransacao: gerarIdSimples(dataISO, estab, valor),\n      Data: toDDMMYYYY(dataISO),\n      Estabelecimento: estab.trim(),\n      Valor: valor,\n      TipoTransacao: TipoTransacao,\n      TipoTransacaoAjuste: TipoTransacaoAjuste,\n      Ano: Ano,\n      DT_Fatura: DT_Fatura,\n      ValorPositivo: ValorPositivo,\n      TransacaoFutura: ehFutura ? 'SIM' : 'NÃO',\n      NomeTitular: nomeTitular,\n      DataPostagem: null, // Extrato não tem data de postagem\n      origem: 'Itaú Person'  // ← AJUSTADO de \"Extrato\" para \"Itaú Person\"\n    });\n  }\n}\n\n// Retornar TODAS as transações de TODOS os arquivos\nreturn allTransacoes.map(x => ({ json: x }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2400,
+        272
+      ],
+      "id": "6e584c4b-55ff-464d-bfb2-f4873168c2e2",
+      "name": "Processar Extrato"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ================================\n// Processar Fatura Itaú - VERSÃO COM DETECÇÃO DE MODO\n// ================================\n\nfunction toDDMMYYYY(iso) {\n  const [yyyy, mm, dd] = String(iso || '').split('-');\n  return dd && mm && yyyy ? `${dd}/${mm}/${yyyy}` : iso;\n}\n\nfunction gerarIdSimples(data, estab, valor, posicao) {\n  const str = `${data}|${estab}|${valor}|${posicao}`.replace(/[^a-zA-Z0-9]/g, '');\n  let hash = 0;\n  for (let i = 0; i < str.length; i++) {\n    hash = ((hash << 5) - hash) + str.charCodeAt(i);\n    hash = hash & hash;\n  }\n  return Math.abs(hash).toString(36).toUpperCase();\n}\n\nconst allTransacoes = [];\n\nfor (const item of $input.all()) {\n  const texto = String(item.json.text || '');\n\n  // === EXTRAIR METADADOS ===\n  let nomeTitular = null;\n\n  const regex1 = /Titular\\s+([A-ZÀ-Ü][A-ZÀ-Ü\\s]{5,60}?)\\s+Cart[aã]o/i;\n  const match1 = texto.match(regex1);\n  if (match1) {\n    nomeTitular = match1[1].replace(/\\s+/g, ' ').trim();\n  }\n\n  if (!nomeTitular) {\n    const regex2 = /Titular\\s+([A-ZÀ-Ü][A-ZÀ-Ü\\s]{5,60}?)\\s+\\d{4}/i;\n    const match2 = texto.match(regex2);\n    if (match2) {\n      nomeTitular = match2[1].replace(/\\s+/g, ' ').trim();\n    }\n  }\n\n  if (!nomeTitular) {\n    const regex3 = /([A-Z][A-ZÀ-Ü\\s]{10,60}?)\\s+\\d{3}\\.\\d{3}\\.\\d{3}-\\d{2}/;\n    const match3 = texto.match(regex3);\n    if (match3) {\n      const possibleName = match3[1].replace(/\\s+/g, ' ').trim();\n      const invalidWords = /^(RESUMO|FATURA|CARTAO|LIMITE|TOTAL|PAGAMENTO|TITULAR)/i;\n      if (!invalidWords.test(possibleName)) {\n        nomeTitular = possibleName;\n      }\n    }\n  }\n\n  if (!nomeTitular) {\n    const regex4 = /Cart[aã]o[\\s\\r\\n]+Resumo[\\s\\S]{0,200}?([A-Z][A-ZÀ-Ü\\s]{10,60}?)(?:\\s+\\d{4})/i;\n    const match4 = texto.match(regex4);\n    if (match4) {\n      nomeTitular = match4[1].replace(/\\s+/g, ' ').trim();\n    }\n  }\n\n  if (nomeTitular && (nomeTitular.length < 5 || /^\\d/.test(nomeTitular))) {\n    nomeTitular = null;\n  }\n\n  let anoFatura = null;\n  let dtFatura = null;\n  let dataPostagem = null;\n\n  const mPost = texto.match(/Postagem:\\s*(\\d{2})\\/(\\d{2})\\/(\\d{4})/i);\n  if (mPost) {\n    const [, dd, mm, yyyy] = mPost;\n    dataPostagem = `${yyyy}-${mm}-${dd}`;\n    anoFatura = parseInt(yyyy, 10);\n    dtFatura = `${yyyy}${mm}`;\n  }\n\n  if (!anoFatura) {\n    const mEmi = texto.match(/Emissão:\\s*(\\d{2})\\/(\\d{2})\\/(\\d{4})/i);\n    if (mEmi) {\n      anoFatura = parseInt(mEmi[3], 10);\n      dtFatura = `${mEmi[3]}${mEmi[2]}`;\n    } else {\n      anoFatura = new Date().getFullYear();\n    }\n  }\n\n  let CartaoCodigo8 = null;\n  const mCard = texto.match(/Cartão\\s+([0-9Xx.\\-\\s]+)/i);\n  if (mCard) {\n    const digits = mCard[1].replace(/\\D/g, '');\n    if (digits.length >= 8) {\n      CartaoCodigo8 = `${digits.slice(0, 4)}-${digits.slice(-4)}`;\n    }\n  }\n\n  // === DETECTAR SEÇÕES E FINAIS DE CARTÃO ===\n  const secoes = [];\n  const finaisCartao = [];\n  \n  const regexSecaoInternacional = /Lançamentos\\s+internacionais/gi;\n  const regexSecaoNacional = /Lançamentos:\\s+compras\\s+e\\s+saques/gi;\n  const regexFinalCartao = /\\(final\\s+(\\d{4})\\)/gi;\n  \n  let match;\n  \n  while ((match = regexSecaoInternacional.exec(texto)) !== null) {\n    secoes.push({ tipo: 'Internacional', posicao: match.index, fim: null });\n  }\n  \n  while ((match = regexSecaoNacional.exec(texto)) !== null) {\n    secoes.push({ tipo: 'Nacional', posicao: match.index, fim: null });\n  }\n  \n  secoes.sort((a, b) => a.posicao - b.posicao);\n  \n  for (let i = 0; i < secoes.length; i++) {\n    if (i < secoes.length - 1) {\n      secoes[i].fim = secoes[i + 1].posicao;\n    } else {\n      secoes[i].fim = texto.length;\n    }\n  }\n  \n  while ((match = regexFinalCartao.exec(texto)) !== null) {\n    finaisCartao.push({ final: match[1], posicao: match.index });\n  }\n\n  // === EXTRAIR TRANSAÇÕES ===\n  const transacoes = [];\n  const regexTrans = /(\\d{2}\\/\\d{2})\\s+([^\\n\\r]+?)\\s+(-\\s*)?\\s*(\\d{1,3}(?:\\.\\d{3})*,\\d{2})/gmi;\n  \n  let m;\n  \n  while ((m = regexTrans.exec(texto)) !== null) {\n    const [matchCompleto, ddmm, estabBruto, sinalNegativo, valorStr] = m;\n    \n    const valorSemSinal = parseFloat(valorStr.replace(/\\./g, '').replace(',', '.'));\n    const valorLido = sinalNegativo ? -valorSemSinal : valorSemSinal;\n    const Valor = -valorLido;\n    \n    const dd = ddmm.slice(0, 2);\n    const mm = ddmm.slice(3, 5);\n    const dataISO = `${anoFatura}-${mm}-${dd}`;\n    \n    const estabNormalizado = estabBruto.replace(/\\s*-\\s*$/, '').trim();\n    const posicaoTransacao = m.index;\n    \n    let tipoLancamento = 'Nacional';\n    for (const secao of secoes) {\n      if (posicaoTransacao >= secao.posicao && posicaoTransacao < secao.fim) {\n        tipoLancamento = secao.tipo;\n        break;\n      }\n    }\n    \n    const matchParcela = estabNormalizado.match(/^(.+?)\\s*(\\d{2})\\/(\\d{2})\\s*$/);\n    let parcelaAtual = null;\n    let parcelaTotal = null;\n    let estabelecimentoBase = estabNormalizado;\n    \n    if (matchParcela) {\n      estabelecimentoBase = matchParcela[1].trim();\n      parcelaAtual = parseInt(matchParcela[2], 10);\n      parcelaTotal = parseInt(matchParcela[3], 10);\n      \n      if (parcelaAtual > parcelaTotal || parcelaTotal < 2 || parcelaAtual < 1) {\n        parcelaAtual = null;\n        parcelaTotal = null;\n        estabelecimentoBase = estabNormalizado;\n      }\n    }\n    \n    const ehInternacional = /\\b(USD|EUR|GBP|ARS|CLP|UYU|PYG)\\b/i.test(matchCompleto);\n    \n    transacoes.push({\n      ddmm,\n      dataISO,\n      estabelecimento: estabNormalizado,\n      estabelecimentoBase,\n      valor: Valor,\n      valorPositivo: Math.abs(Valor),\n      valorLido: valorLido,\n      ehInternacional,\n      tipoLancamento,\n      finalCartao: null, // Será preenchido depois\n      parcelaAtual,\n      parcelaTotal,\n      posicao: posicaoTransacao,\n      ehFutura: false,\n      debug_temParcela: parcelaAtual !== null,\n      debug_parcelaInfo: parcelaAtual !== null ? `${parcelaAtual}/${parcelaTotal}` : 'SEM PARCELA',\n      debug_menorParcela: null,\n      debug_motivo: null,\n      debug_chaveAgrupamento: null\n    });\n  }\n\n  // === DETECTAR MODO DO DOCUMENTO ===\n  let MODO = 'CABEÇALHOS_PRIMEIRO'; // Default\n  \n  if (transacoes.length > 0 && finaisCartao.length > 0) {\n    const primeiraTransacao = transacoes[0];\n    const primeiroFinal = finaisCartao[0];\n    \n    if (primeiraTransacao.posicao < primeiroFinal.posicao) {\n      MODO = 'TRANSACOES_PRIMEIRO';\n    }\n  }\n\n  // === ATRIBUIR FINAL DO CARTÃO BASEADO NO MODO ===\n  for (const trans of transacoes) {\n    let finalCartao = null;\n    \n    if (MODO === 'TRANSACOES_PRIMEIRO') {\n      // Buscar o PRÓXIMO (final XXXX) que vem DEPOIS da transação\n      for (let i = 0; i < finaisCartao.length; i++) {\n        if (finaisCartao[i].posicao > trans.posicao) {\n          finalCartao = finaisCartao[i].final;\n          break;\n        }\n      }\n    } else {\n      // MODO === 'CABEÇALHOS_PRIMEIRO'\n      // Buscar o ÚLTIMO (final XXXX) que vem ANTES da transação\n      for (let i = finaisCartao.length - 1; i >= 0; i--) {\n        if (finaisCartao[i].posicao < trans.posicao) {\n          finalCartao = finaisCartao[i].final;\n          break;\n        }\n      }\n    }\n    \n    trans.finalCartao = finalCartao;\n  }\n\n  // === MARCAR TRANSAÇÕES FUTURAS ===\n  const menorParcela = new Map();\n  \n  for (const trans of transacoes) {\n    if (trans.parcelaAtual !== null && trans.parcelaTotal !== null) {\n      const valorParcela = trans.valorPositivo;\n      const chave = `${trans.estabelecimentoBase}|${valorParcela.toFixed(2)}|${trans.parcelaTotal}`;\n      trans.debug_chaveAgrupamento = chave;\n      \n      const atual = menorParcela.get(chave);\n      if (atual === undefined || trans.parcelaAtual < atual) {\n        menorParcela.set(chave, trans.parcelaAtual);\n      }\n    }\n  }\n  \n  for (const trans of transacoes) {\n    if (trans.parcelaAtual !== null) {\n      const chave = trans.debug_chaveAgrupamento;\n      const menor = menorParcela.get(chave);\n      trans.ehFutura = trans.parcelaAtual > menor;\n      trans.debug_menorParcela = menor;\n      \n      if (trans.parcelaAtual === menor) {\n        trans.debug_motivo = `Parcela ${trans.parcelaAtual} é a MENOR (grupo: ${chave})`;\n      } else if (trans.parcelaAtual > menor) {\n        trans.debug_motivo = `Parcela ${trans.parcelaAtual} > ${menor} (menor do grupo) → FUTURA`;\n      } else {\n        trans.debug_motivo = `Parcela ${trans.parcelaAtual} < ${menor} → ERRO LÓGICO!`;\n      }\n    } else {\n      trans.debug_motivo = 'Sem parcela → considerada ATUAL';\n      trans.debug_chaveAgrupamento = 'N/A';\n    }\n  }\n\n  // === CAPTURAR REPASSE DE IOF ===\n  const regexRepasseIOF = /Repasse\\s+de\\s+IOF\\s+em\\s+R\\$\\s+(\\d{1,3}(?:\\.\\d{3})*,\\d{2})/gi;\n  \n  while ((match = regexRepasseIOF.exec(texto)) !== null) {\n    const valorIOFStr = match[1];\n    const valorIOF = parseFloat(valorIOFStr.replace(/\\./g, '').replace(',', '.'));\n    const posicaoIOF = match.index;\n    \n    let finalCartaoIOF = null;\n    \n    if (MODO === 'TRANSACOES_PRIMEIRO') {\n      for (let i = 0; i < finaisCartao.length; i++) {\n        if (finaisCartao[i].posicao > posicaoIOF) {\n          finalCartaoIOF = finaisCartao[i].final;\n          break;\n        }\n      }\n    } else {\n      for (let i = finaisCartao.length - 1; i >= 0; i--) {\n        if (finaisCartao[i].posicao < posicaoIOF) {\n          finalCartaoIOF = finaisCartao[i].final;\n          break;\n        }\n      }\n    }\n    \n    let dataIOF = dataPostagem;\n    if (!dataIOF && transacoes.length > 0) {\n      dataIOF = transacoes[0].dataISO;\n    }\n    if (!dataIOF) {\n      dataIOF = `${anoFatura}-${dtFatura.slice(4, 6)}-01`;\n    }\n    \n    allTransacoes.push({\n      IdTransacao: gerarIdSimples(dataIOF, 'Repasse de IOF', -valorIOF, posicaoIOF),\n      Data: toDDMMYYYY(dataIOF),\n      Estabelecimento: 'Repasse de IOF',\n      Valor: -valorIOF,\n      TipoTransacao: 'Cartão de Crédito',\n      TipoTransacaoAjuste: 'Cartão de Crédito',\n      Ano: anoFatura,\n      DT_Fatura: dtFatura,\n      ValorPositivo: valorIOF,\n      CartaoCodigo8,\n      FinalCartao: finalCartaoIOF,\n      TipoLancamento: 'Internacional',\n      NomeTitular: nomeTitular,\n      DataPostagem: dataPostagem,\n      TransacaoFutura: 'NÃO',\n      origem: 'Fatura Itaú - Repasse IOF',\n      DEBUG_ValorLido: valorIOF,\n      DEBUG_EstabelecimentoBase: 'Repasse de IOF',\n      DEBUG_TemParcela: 'N/A',\n      DEBUG_ParcelaInfo: 'Repasse IOF',\n      DEBUG_MenorParcela: 'N/A',\n      DEBUG_ChaveAgrupamento: 'N/A',\n      DEBUG_Motivo: 'Repasse de IOF capturado da fatura'\n    });\n  }\n\n  // === CRIAR REGISTROS FINAIS ===\n  for (const trans of transacoes) {\n    allTransacoes.push({\n      IdTransacao: gerarIdSimples(trans.dataISO, trans.estabelecimento, trans.valor, trans.posicao),\n      Data: toDDMMYYYY(trans.dataISO),\n      Estabelecimento: trans.estabelecimento,\n      Valor: trans.valor,\n      TipoTransacao: 'Cartão de Crédito',\n      TipoTransacaoAjuste: 'Cartão de Crédito',\n      Ano: anoFatura,\n      DT_Fatura: dtFatura,\n      ValorPositivo: trans.valorPositivo,\n      CartaoCodigo8,\n      FinalCartao: trans.finalCartao,\n      TipoLancamento: trans.tipoLancamento,\n      NomeTitular: nomeTitular,\n      DataPostagem: dataPostagem,\n      TransacaoFutura: trans.ehFutura ? 'SIM' : 'NÃO',\n      origem: 'Fatura Itaú',\n      DEBUG_ValorLido: trans.valorLido,\n      DEBUG_EstabelecimentoBase: trans.estabelecimentoBase,\n      DEBUG_TemParcela: trans.debug_temParcela ? 'SIM' : 'NÃO',\n      DEBUG_ParcelaInfo: trans.debug_parcelaInfo,\n      DEBUG_MenorParcela: trans.debug_menorParcela !== null ? trans.debug_menorParcela : 'N/A',\n      DEBUG_ChaveAgrupamento: trans.debug_chaveAgrupamento,\n      DEBUG_Motivo: trans.debug_motivo\n    });\n  }\n}\n\nreturn allTransacoes.map(x => ({ json: x }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2400,
+        448
+      ],
+      "id": "c9ce255b-4a45-4520-9a59-ec1956d6748d",
+      "name": "Processar Fatura"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.ValidarIA }}",
+                    "rightValue": "VALIDAR",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "c7b5731a-41b2-4fb6-b57d-f95c65657007"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Precisa IA"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        -1504,
+        208
+      ],
+      "id": "cc23427c-1153-454b-ad05-406bb1ad683b",
+      "name": "Filtro IA"
+    },
+    {
+      "parameters": {},
+      "name": "Unir Resultados",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [
+        -784,
+        208
+      ],
+      "id": "d61adab5-f625-49cc-b2b1-f87d48e5605f"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1NLENsVCXII142cLlsOgcRn3iQtk8hLjH1bYCzN49MDU",
+          "mode": "list",
+          "cachedResultName": "App_Emangue_SA"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 852658418,
+          "mode": "list",
+          "cachedResultName": "TesteJournalEntries",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1NLENsVCXII142cLlsOgcRn3iQtk8hLjH1bYCzN49MDU/edit#gid=852658418"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "MarcacaoIA": "={{ $json.MarcacaoIA }}",
+            "ValidarIA": "={{ $json.ValidarIA }}",
+            "TipoGasto": "={{ $json.TipoGasto }}",
+            "SUBGRUPO": "={{ $json.SUBGRUPO }}",
+            "GRUPO": "={{ $json.GRUPO }}",
+            "Estabelecimento": "={{ $json.Estabelecimento }}",
+            "Data": "={{ $json.Data }}",
+            "IdTransacao": "={{ $json.IdTransacao }}",
+            "Valor": "={{ $json.Valor }}",
+            "ano": "={{ $json.Ano }}",
+            "TipoTransacaoAjuste": "={{ $json.TipoTransacaoAjuste }}",
+            "TipoTransacao": "={{ $json.TipoTransacao }}",
+            "DT_FATURA": "={{ $json.DT_Fatura }}",
+            "ValorPositivo": "={{ $json.ValorPositivo }}",
+            "nome_TC": "={{ $json.origem }}",
+            "Portador": "={{ $json.NomeTitular }}"
+          },
+          "matchingColumns": [
+            "IdTransacao"
+          ],
+          "schema": [
+            {
+              "id": "IdTransacao",
+              "displayName": "IdTransacao",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ano",
+              "displayName": "ano",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "TipoTransacaoAjuste",
+              "displayName": "TipoTransacaoAjuste",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "TipoTransacao",
+              "displayName": "TipoTransacao",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "nome_TC",
+              "displayName": "nome_TC",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "DT_FATURA",
+              "displayName": "DT_FATURA",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Data",
+              "displayName": "Data",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Estabelecimento",
+              "displayName": "Estabelecimento",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Portador",
+              "displayName": "Portador",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Valor",
+              "displayName": "Valor",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Saldo",
+              "displayName": "Saldo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "GRUPO",
+              "displayName": "GRUPO",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "SUBGRUPO",
+              "displayName": "SUBGRUPO",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ValorPositivo",
+              "displayName": "ValorPositivo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "TipoGasto",
+              "displayName": "TipoGasto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ValidarIA",
+              "displayName": "ValidarIA",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "MarcacaoIA",
+              "displayName": "MarcacaoIA",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "MarcaCorretaGrupo",
+              "displayName": "MarcaCorretaGrupo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "MarcaCorretaSubGrupo",
+              "displayName": "MarcaCorretaSubGrupo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "MarcaCorretaTipoGasto",
+              "displayName": "MarcaCorretaTipoGasto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "MarcaCorretaGrupo",
+              "displayName": "MarcaCorretaGrupo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "MarcaCorretaSubGrupo",
+              "displayName": "MarcaCorretaSubGrupo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "MarcaCorretaTipoGasto",
+              "displayName": "MarcaCorretaTipoGasto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "TrueGrupo",
+              "displayName": "TrueGrupo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        -320,
+        208
+      ],
+      "id": "a4dfef5b-b40c-4f7e-a1fb-684c43809fc3",
+      "name": "Salvar Planilha",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "G4IN0HjggqlytkZ3",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// === BASE_Padroes — geração com chaves string + numérica (FNV-1a 64) ===\n// MELHORIAS:\n// 1. Segmentação por faixa de valor para estabelecimentos multi-contexto\n// 2. Confiança baseada em consistência de classificação, não apenas valor\n// 3. Validação contextual de parcelas (Fatura vs Extrato)\n\n// ---------- Normalização ----------\nfunction normalizarEstab(s) {\n  return (s || \"\")\n    .replace(/\\s*(\\d{1,2})\\/(\\d{1,2})\\s*$/, \"\")\n    .toUpperCase()\n    .normalize(\"NFD\").replace(/[\\u0300-\\u036f]/g, \"\")\n    .replace(/[^A-Z0-9\\s*\\/\\-\\.]/g, \" \")\n    .replace(/\\*/g, \"\")\n    .replace(/\\s+/g, \" \")\n    .trim();\n}\n\nfunction normalizarChavePadrao(p) {\n  const s = String(p || \"\").trim();\n  if (!s) return \"\";\n  const parts = s.split(\"|\");\n  if (parts.length === 1) return normalizarEstab(parts[0]);\n  const estab = normalizarEstab(parts[0]);\n  const valorTotCent = String(parts[1]).replace(/[^\\d]/g, \"\");\n  const tot = String(parts[2] || \"\").replace(/[^\\d]/g, \"\").padStart(2, \"0\");\n  return `${estab}|${valorTotCent}|${tot}`;\n}\n\n// ---------- Hash FNV-1a 64 (decimal sem sinal) ----------\nconst FNV_OFFSET_64 = 0xcbf29ce484222325n;\nconst FNV_PRIME_64  = 0x100000001b3n;\nconst MASK64        = (1n << 64n) - 1n;\nfunction fnv1a64_toDec(str) {\n  let h = FNV_OFFSET_64;\n  for (let i = 0; i < str.length; i++) {\n    h ^= BigInt(str.charCodeAt(i));\n    h = (h * FNV_PRIME_64) & MASK64;\n  }\n  return h.toString(10);\n}\n\n// ---------- Padrão / parcelas ----------\nconst arred2 = n => Math.round((Number(n) + Number.EPSILON) * 100) / 100;\n\nfunction detectarParcelaNoFinal(estab, origem) {\n  const m = (estab || \"\").match(/\\s*(\\d{1,2})\\/(\\d{1,2})\\s*$/);\n  if (!m) return null;\n  const p = +m[1], t = +m[2];\n  if (!(p >= 1 && t >= 2 && p <= t && t <= 99)) return null;\n  \n  // VALIDAÇÃO CONTEXTUAL:\n  // Extratos: XX/YY com YY <= 12 e XX <= 31 é data, não parcela\n  // Faturas: XX/YY sempre é parcela\n  const ehExtrato = String(origem || '').toLowerCase().includes('extrato');\n  if (ehExtrato && t <= 12 && p <= 31) return null;\n  \n  return { parcela: p, total: t };\n}\n\nfunction montarPadrao(estabOriginal, valor, parcelaInfo) {\n  const estab = normalizarEstab(estabOriginal);\n  if (parcelaInfo) {\n    const tot = parcelaInfo.total;\n    const vParc = Math.abs(Number(valor) || 0);\n    const vTot  = arred2(vParc * tot);\n    const vCent = Math.round(vTot * 100);\n    return `${estab}|${vCent}|${String(tot).padStart(2,\"0\")}`;\n  }\n  return estab;\n}\n\n// ---------- Determinar faixa de valor ----------\nfunction getFaixaValor(valor) {\n  const v = Math.abs(Number(valor) || 0);\n  if (v === 0) return \"ZERO\";\n  if (v < 50) return \"0-50\";\n  if (v < 100) return \"50-100\";\n  if (v < 200) return \"100-200\";\n  if (v < 500) return \"200-500\";\n  if (v < 1000) return \"500-1K\";\n  if (v < 2000) return \"1K-2K\";\n  if (v < 5000) return \"2K-5K\";\n  return \"5K+\";\n}\n\n// ---------- Estatísticas por padrão COM FAIXA DE VALOR ----------\nfunction estatisticasDoPadrao(arr) {\n  const keyCls = x => `${x.GRUPO || \"\"}__${x.SUBGRUPO || \"\"}__${x.TipoGasto || \"\"}`;\n  const cont = Object.create(null);\n  const contDetalhado = Object.create(null);\n  const valores = [];\n  const exemplos = [];\n  \n  const porFaixa = Object.create(null);\n  \n  for (const it of arr) {\n    const k = keyCls(it);\n    cont[k] = (cont[k] || 0) + 1;\n    \n    if (!contDetalhado[k]) contDetalhado[k] = [];\n    contDetalhado[k].push({\n      valor: Math.abs(Number(it.Valor)),\n      data: it.Data || it.data || \"\",\n      estab: it.Estabelecimento\n    });\n    \n    if (it.Valor != null) valores.push(Math.abs(Number(it.Valor)));\n    if (exemplos.length < 5 && it.Estabelecimento) exemplos.push(it.Estabelecimento);\n    \n    const faixa = getFaixaValor(it.Valor);\n    if (!porFaixa[faixa]) porFaixa[faixa] = Object.create(null);\n    const kFaixa = keyCls(it);\n    porFaixa[faixa][kFaixa] = (porFaixa[faixa][kFaixa] || 0) + 1;\n  }\n  \n  let max = 0, maxKey = \"\";\n  const entries = Object.entries(cont).sort((a, b) => {\n    if (b[1] !== a[1]) return b[1] - a[1];\n    const datesA = contDetalhado[a[0]].map(x => x.data).filter(Boolean).sort().reverse();\n    const datesB = contDetalhado[b[0]].map(x => x.data).filter(Boolean).sort().reverse();\n    if (datesA[0] && datesB[0]) return datesB[0] > datesA[0] ? 1 : -1;\n    return 0;\n  });\n  \n  if (entries.length > 0) {\n    maxKey = entries[0][0];\n    max = entries[0][1];\n  }\n  \n  const [grupo = \"\", subgrupo = \"\", tipo = \"\"] = maxKey.split(\"__\");\n  const quantidade = arr.length;\n  \n  const classificacoesUnicas = new Set(arr.map(x => keyCls(x)));\n  const todasIguais = classificacoesUnicas.size === 1 && grupo && subgrupo && tipo;\n  const percentual = todasIguais ? 100 : (quantidade ? Math.round((max / quantidade) * 100) : 0);\n\n  const soma = valores.reduce((a,b)=>a+b,0);\n  const valorMedio = valores.length ? arred2(soma/valores.length) : 0;\n  const valorMax   = valores.length ? Math.max(...valores.map(v => arred2(v))) : 0;\n  const valorMin   = valores.length ? Math.min(...valores.map(v => arred2(v))) : 0;\n  \n  const desvioPadrao = valores.length > 1 ? \n    Math.sqrt(valores.reduce((sum, v) => sum + Math.pow(v - valorMedio, 2), 0) / valores.length) : 0;\n  \n  const coefVariacao = valorMedio > 0 ? (desvioPadrao / valorMedio) : 0;\n  \n  const classificacoesPorFaixa = new Map();\n  for (const [faixa, classes] of Object.entries(porFaixa)) {\n    for (const cls of Object.keys(classes)) {\n      if (!classificacoesPorFaixa.has(cls)) classificacoesPorFaixa.set(cls, []);\n      classificacoesPorFaixa.get(cls).push(faixa);\n    }\n  }\n  \n  const temMultiplosContextos = classificacoesPorFaixa.size > 1 && Object.keys(porFaixa).length > 1;\n\n  return { \n    quantidade, \n    percentual, \n    grupo, \n    subgrupo, \n    tipo, \n    valorMedio, \n    valorMax,\n    valorMin,\n    desvioPadrao: arred2(desvioPadrao),\n    coefVariacao: arred2(coefVariacao),\n    temMultiplosContextos,\n    porFaixa,\n    exemplos \n  };\n}\n\n// ---------- Gerar padrões segmentados por faixa ----------\nfunction gerarPadroesSegmentados(padraoStr, arr, stats) {\n  const padroes = [];\n  \n  const criterio1 = stats.temMultiplosContextos;\n  const criterio2 = stats.coefVariacao > 0.3 && stats.percentual < 85;\n  const criterio3 = arr.length >= 4;\n  \n  const deveSegmentar = (criterio1 || criterio2) && criterio3;\n  \n  if (deveSegmentar && arr.length >= 3) {\n    const porFaixa = Object.create(null);\n    \n    for (const it of arr) {\n      const faixa = getFaixaValor(it.Valor);\n      if (!porFaixa[faixa]) porFaixa[faixa] = [];\n      porFaixa[faixa].push(it);\n    }\n    \n    for (const [faixa, items] of Object.entries(porFaixa)) {\n      const faixaUnica = Object.keys(porFaixa).length === 1;\n      if (items.length < 2 && !faixaUnica) continue;\n      \n      const statsFaixa = estatisticasDoPadrao(items);\n      const padraoComFaixa = `${padraoStr}|FAIXA:${faixa}`;\n      \n      const isParcelado = /\\|\\d+\\|\\d{2}$/.test(padraoStr);\n      const valorReferencia = isParcelado ? statsFaixa.valorMax : statsFaixa.valorMedio;\n      \n      let confiancaFaixa = \"baixa\";\n      if (statsFaixa.percentual === 100) {\n        confiancaFaixa = \"alta\";\n      } else if (statsFaixa.percentual >= 95) {\n        confiancaFaixa = \"alta\";\n      } else if (statsFaixa.percentual >= 80) {\n        confiancaFaixa = \"media\";\n      }\n      \n      padroes.push({\n        json: {\n          padrao_estabelecimento: padraoComFaixa,\n          padrao_num: fnv1a64_toDec(padraoComFaixa),\n          contagem: statsFaixa.quantidade,\n          valor_medio: arred2(valorReferencia),\n          valor_min: statsFaixa.valorMin,\n          valor_max: statsFaixa.valorMax,\n          desvio_padrao: statsFaixa.desvioPadrao,\n          coef_variacao: statsFaixa.coefVariacao,\n          percentual_consistencia: statsFaixa.percentual,\n          confianca: confiancaFaixa,\n          grupo_sugerido: statsFaixa.grupo || \"\",\n          subgrupo_sugerido: statsFaixa.subgrupo || \"\",\n          tipo_gasto_sugerido: statsFaixa.tipo || \"\",\n          faixa_valor: faixa,\n          segmentado: true,\n          exemplos: [...new Set(statsFaixa.exemplos)].slice(0,5).join(\"; \"),\n          data_criacao: new Date().toISOString(),\n          status: \"ativo\",\n        },\n      });\n    }\n    \n    return padroes;\n  }\n  \n  const isParcelado = /\\|\\d+\\|\\d{2}$/.test(padraoStr);\n  const valorReferencia = isParcelado ? stats.valorMax : stats.valorMedio;\n  \n  let confianca = \"baixa\";\n  if (stats.percentual === 100) {\n    confianca = \"alta\";\n  } else if (stats.percentual >= 95) {\n    confianca = \"alta\";\n  } else if (stats.percentual >= 80 && stats.coefVariacao < 0.5) {\n    confianca = \"media\";\n  }\n  \n  return [{\n    json: {\n      padrao_estabelecimento: padraoStr,\n      padrao_num: fnv1a64_toDec(padraoStr),\n      contagem: stats.quantidade,\n      valor_medio: arred2(valorReferencia),\n      valor_min: stats.valorMin,\n      valor_max: stats.valorMax,\n      desvio_padrao: stats.desvioPadrao,\n      coef_variacao: stats.coefVariacao,\n      percentual_consistencia: stats.percentual,\n      confianca,\n      grupo_sugerido: stats.grupo || \"\",\n      subgrupo_sugerido: stats.subgrupo || \"\",\n      tipo_gasto_sugerido: stats.tipo || \"\",\n      faixa_valor: null,\n      segmentado: false,\n      exemplos: [...new Set(stats.exemplos)].slice(0,5).join(\"; \"),\n      data_criacao: new Date().toISOString(),\n      status: \"ativo\",\n    },\n  }];\n}\n\n// ---------- Pipeline ----------\nconst historico = $items().map(i => i.json);\nconst buckets = new Map();\n\nfor (const t of historico) {\n  const estab = String(t.Estabelecimento ?? t.estabelecimento ?? \"\");\n  const valor = (t.Valor ?? t.valor ?? 0);\n  const origem = t.origem || t.TipoTransacao || '';\n  const parcelaInfo = detectarParcelaNoFinal(estab, origem);\n  const padraoStr = normalizarChavePadrao(montarPadrao(estab, valor, parcelaInfo));\n  if (!padraoStr) continue;\n  \n  const registro = {\n    padraoStr,\n    GRUPO: t.GRUPO ?? t.Grupo ?? \"\",\n    SUBGRUPO: t.SUBGRUPO ?? t.Subgrupo ?? \"\",\n    TipoGasto: t.TipoGasto ?? t.Tipo ?? \"\",\n    Valor: valor,\n    Estabelecimento: estab,\n  };\n  \n  if (!buckets.has(padraoStr)) buckets.set(padraoStr, []);\n  buckets.get(padraoStr).push(registro);\n}\n\nconst saida = [];\nfor (const [padraoStr, arr] of buckets.entries()) {\n  const stats = estatisticasDoPadrao(arr);\n  const padroes = gerarPadroesSegmentados(padraoStr, arr, stats);\n  saida.push(...padroes);\n}\n\nreturn saida;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2496,
+        -304
+      ],
+      "id": "1f782fd9-ae1b-41ba-ba18-1d6cedae7084",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "content": "## ⚠️ Carregar Histórico e Gerar Base Padrões\n",
+        "height": 539,
+        "width": 893,
+        "color": 4
+      },
+      "id": "ba428810-7939-4b90-8f2f-ef3ddd69c546",
+      "name": "Sticky Note7",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -2816,
+        -464
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a27efa4b-f895-46bd-a72c-dc837c33b78d",
+              "leftValue": "={{ $json.contagem }}",
+              "rightValue": 2,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            },
+            {
+              "id": "fae351f8-1ab4-4902-b924-68204f20bbe2",
+              "leftValue": "={{ $json.percentual_consistencia }}",
+              "rightValue": 95,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        -2320,
+        -304
+      ],
+      "id": "c0a8fb85-a15f-4e68-aabc-e0c49f4840b1",
+      "name": "Filter"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1NLENsVCXII142cLlsOgcRn3iQtk8hLjH1bYCzN49MDU",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1993709312,
+          "mode": "list",
+          "cachedResultName": "Journal Entries",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1NLENsVCXII142cLlsOgcRn3iQtk8hLjH1bYCzN49MDU/edit#gid=1993709312"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -2720,
+        -304
+      ],
+      "id": "979c888f-3f2b-43ea-995e-d26d33bd13d2",
+      "name": "Carregar Histórico",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "G4IN0HjggqlytkZ3",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1NLENsVCXII142cLlsOgcRn3iQtk8hLjH1bYCzN49MDU",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 422794398,
+          "mode": "list",
+          "cachedResultName": "Base_Padroes",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1NLENsVCXII142cLlsOgcRn3iQtk8hLjH1bYCzN49MDU/edit#gid=422794398"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "padrao_estabelecimento": "={{ $json.padrao_estabelecimento }}",
+            "exemplos": "={{ $json.exemplos }}",
+            "contagem": "={{ $json.contagem }}",
+            "valor_medio": "={{ $json.valor_medio }}",
+            "confianca": "={{ $json.confianca }}",
+            "percentual_consistencia": "={{ $json.percentual_consistencia }}",
+            "data_criacao": "={{ $json.data_criacao }}",
+            "grupo_sugerido": "={{ $json.grupo_sugerido }}",
+            "subgrupo_sugerido": "={{ $json.subgrupo_sugerido }}",
+            "tipo_gasto_sugerido": "={{ $json.tipo_gasto_sugerido }}",
+            "padrao_num": "={{ $json.padrao_num }}",
+            "status": "={{ $json.status }}"
+          },
+          "matchingColumns": [
+            "padrao_estabelecimento"
+          ],
+          "schema": [
+            {
+              "id": "padrao_estabelecimento",
+              "displayName": "padrao_estabelecimento",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "padrao_num",
+              "displayName": "padrao_num",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "contagem",
+              "displayName": "contagem",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "valor_medio",
+              "displayName": "valor_medio",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "percentual_consistencia",
+              "displayName": "percentual_consistencia",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "confianca",
+              "displayName": "confianca",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "grupo_sugerido",
+              "displayName": "grupo_sugerido",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "subgrupo_sugerido",
+              "displayName": "subgrupo_sugerido",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "tipo_gasto_sugerido",
+              "displayName": "tipo_gasto_sugerido",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "exemplos",
+              "displayName": "exemplos",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "data_criacao",
+              "displayName": "data_criacao",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -2128,
+        -304
+      ],
+      "id": "fb83e93a-8666-4f2e-a7c9-ee93ebdeec14",
+      "name": "Carregar Padrões",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "G4IN0HjggqlytkZ3",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1NLENsVCXII142cLlsOgcRn3iQtk8hLjH1bYCzN49MDU",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1871986648,
+          "mode": "list",
+          "cachedResultName": "BaseMarcacoesGastos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1NLENsVCXII142cLlsOgcRn3iQtk8hLjH1bYCzN49MDU/edit#gid=1871986648"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -2128,
+        -112
+      ],
+      "id": "a405b6de-0ac5-4a5a-864d-8ff4615ca8ae",
+      "name": "Carregar Base Marcações",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "G4IN0HjggqlytkZ3",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// === CLASSIFICADOR POR MARCAÇÕES COM VALIDAÇÃO ===\n// Sistema de regras baseado em palavras-chave que valida contra BaseMarcacoesGastos\n\n// ========== CARREGAR BASE DE MARCAÇÕES VÁLIDAS ==========\nconst baseMarcacoesValidas = $('Carregar Base Marcações').all().map(item => ({\n  GRUPO: String(item.json.GRUPO || '').trim(),\n  SUBGRUPO: String(item.json.SUBGRUPO || '').trim(),\n  TipoGasto: String(item.json.TipoGasto || '').trim()\n}));\n\n// Criar Set para lookup rápido (formato: \"GRUPO|SUBGRUPO|TipoGasto\")\nconst marcacoesValidasSet = new Set(\n  baseMarcacoesValidas\n    .filter(m => m.GRUPO) // Remove linhas vazias\n    .map(m => `${m.GRUPO}|${m.SUBGRUPO}|${m.TipoGasto}`)\n);\n\nconsole.log(`✓ Carregadas ${marcacoesValidasSet.size} marcações válidas da base`);\n\n// ========== NORMALIZAÇÃO ==========\nfunction normalizar(texto) {\n  return String(texto || '')\n    .toUpperCase()\n    .normalize('NFD').replace(/[\\u0300-\\u036f]/g, '') // Remove acentos\n    .replace(/[^A-Z0-9\\s]/g, ' ') // Remove caracteres especiais\n    .replace(/\\s+/g, ' ')\n    .trim();\n}\n\n// ========== VALIDAR SE MARCAÇÃO EXISTE NA BASE ==========\nfunction marcacaoValida(grupo, subgrupo, tipoGasto) {\n  const chave = `${grupo}|${subgrupo}|${tipoGasto}`;\n  return marcacoesValidasSet.has(chave);\n}\n\n// ========== REGRAS DE MATCHING ==========\n// Cada regra tem: palavras-chave, GRUPO, SUBGRUPO, TipoGasto, prioridade\n// ORDENADO POR PRIORIDADE DECRESCENTE\nconst REGRAS = [\n  // === SERVIÇOS ESPECÍFICOS (Prioridade MÁXIMA = 10) ===\n  {\n    palavras: ['CABELEIREIRO', 'SALAO', 'BARBEARIA', 'BARBEIRO'],\n    GRUPO: 'Serviços',\n    SUBGRUPO: 'Cabeleireiro',\n    TipoGasto: 'Fixo',\n    prioridade: 10\n  },\n  {\n    palavras: ['DIARISTA', 'FAXINA', 'LIMPEZA CASA'],\n    GRUPO: 'Limpeza',\n    SUBGRUPO: 'Casa',\n    TipoGasto: 'Fixo',\n    prioridade: 10\n  },\n\n  // === ROUPAS (Prioridade ALTA = 10) ===\n  {\n    palavras: ['NETSHOES'],\n    GRUPO: 'Roupas',\n    SUBGRUPO: 'Roupas',\n    TipoGasto: 'Ajustável - Roupas',\n    prioridade: 10\n  },\n\n  // === ENERGIA E UTILIDADES (Prioridade ALTA = 9) ===\n  {\n    palavras: ['ELETROPAULO', 'ENEL', 'CPFL', 'CEMIG', 'COELBA', 'CELESC', 'ELEKTRO', \n               'LUZ', 'ENERGIA ELETRICA'],\n    GRUPO: 'Casa',\n    SUBGRUPO: 'Energia',\n    TipoGasto: 'Fixo',\n    prioridade: 9\n  },\n  {\n    palavras: ['SABESP', 'SANEPAR', 'CAESB', 'CEDAE', 'COPASA', 'AGUA', 'SANEAMENTO'],\n    GRUPO: 'Casa',\n    SUBGRUPO: 'Água',\n    TipoGasto: 'Fixo',\n    prioridade: 9\n  },\n  {\n    palavras: ['CONDOMINIO'],\n    GRUPO: 'Casa',\n    SUBGRUPO: 'Condomínio',\n    TipoGasto: 'Fixo',\n    prioridade: 9\n  },\n  {\n    palavras: ['CLARO', 'VIVO', 'TIM', 'OI', 'TELEFONE', 'CELULAR', 'TELEFONIA'],\n    GRUPO: 'Casa',\n    SUBGRUPO: 'Celular',\n    TipoGasto: 'Fixo',\n    prioridade: 9\n  },\n  {\n    palavras: ['NET', 'CLARO NET', 'VIVO FIBRA', 'OI FIBRA', 'INTERNET', 'BANDA LARGA', \n               'FIBRA OTICA'],\n    GRUPO: 'Casa',\n    SUBGRUPO: 'Internet',\n    TipoGasto: 'Fixo',\n    prioridade: 9\n  },\n  {\n    palavras: ['GAS', 'COMGAS', 'ULTRAGAZ', 'LIQUIGAS', 'SUPERGASBRASS'],\n    GRUPO: 'Casa',\n    SUBGRUPO: 'Gás',\n    TipoGasto: 'Fixo',\n    prioridade: 9\n  },\n\n  // === ALIMENTAÇÃO - SAÍDAS (Prioridade ALTA = 9) ===\n  {\n    palavras: ['PIZZ', 'PIZZA', 'PIZZARIA', 'RESTAUR', 'ADEGA', 'BAR', 'PUB', 'LANCHE',\n               'HAMBURGER', 'BURGUER', 'CHURRASCARIA', 'BOTECO', 'CAFETERIA', 'FESTA',\n               'DOCERIA', 'CONFEITARIA', 'PADARIA'],\n    GRUPO: 'Alimentação',\n    SUBGRUPO: 'Saídas',\n    TipoGasto: 'Ajustável - Saídas',\n    prioridade: 9\n  },\n\n  // === CARRO - IPVA/LICENCIAMENTO (Prioridade ALTA = 9) ===\n  {\n    palavras: ['IPVA', 'LICENCIAMENTO'],\n    GRUPO: 'Carro',\n    SUBGRUPO: 'IPVA + Licenciamento',\n    TipoGasto: 'Ajustável - Carro',\n    prioridade: 9\n  },\n\n  // === VIAGENS (Prioridade ALTA = 9) ===\n  {\n    palavras: ['LATAM', 'GOL', 'AZUL', 'AVIANCA', 'CIA AEREA', 'PASSAGEM AEREA', \n               'VOO', 'AEROPORTO'],\n    GRUPO: 'Viagens',\n    SUBGRUPO: 'Outros',\n    TipoGasto: 'Ajustável - Viagens',\n    prioridade: 9\n  },\n  {\n    palavras: ['HOTEL', 'POUSADA', 'AIRBNB', 'BOOKING', 'HOSPEDAGEM', 'RESORT', \n               'HOSTEL', 'ALBERGUE'],\n    GRUPO: 'Viagens',\n    SUBGRUPO: 'Outros',\n    TipoGasto: 'Ajustável - Viagens',\n    prioridade: 9\n  },\n\n  // === SAÚDE (Prioridade ALTA = 8) ===\n  {\n    palavras: ['FARMACIA', 'DROGARIA', 'DROGA', 'DROGASIL', 'PACHECO', 'PANVEL', \n               'ULTRAFARMA', 'PAGUE MENOS'],\n    GRUPO: 'Saúde',\n    SUBGRUPO: 'Farmácia',\n    TipoGasto: 'Fixo',\n    prioridade: 8\n  },\n  {\n    palavras: ['DENTISTA', 'ODONTO', 'ORTODONTIA'],\n    GRUPO: 'Saúde',\n    SUBGRUPO: 'Dentista',\n    TipoGasto: 'Fixo',\n    prioridade: 8\n  },\n  {\n    palavras: ['TERAPIA', 'PSICOLOGO', 'PSIQUIATRA', 'TERAPEUTA'],\n    GRUPO: 'Saúde',\n    SUBGRUPO: 'Terapia',\n    TipoGasto: 'Fixo',\n    prioridade: 8\n  },\n\n  // === ALIMENTAÇÃO - DELIVERY (Prioridade ALTA = 8) ===\n  {\n    palavras: ['IFOOD', 'UBER EATS', 'RAPPI', 'DELIVERY', 'ENTREGA'],\n    GRUPO: 'Alimentação',\n    SUBGRUPO: 'Pedidos para casa',\n    TipoGasto: 'Ajustável - Delivery',\n    prioridade: 8\n  },\n\n  // === ALIMENTAÇÃO - SUPERMERCADO (Prioridade ALTA = 8) ===\n  {\n    palavras: ['SUPERMERCADO', 'MERCADO', 'EXTRA', 'CARREFOUR', 'PAO DE ACUCAR', \n               'PAODEACUCAR', 'WALMART', 'ATACADAO', 'ASSAI', 'MAKRO'],\n    GRUPO: 'Alimentação',\n    SUBGRUPO: 'Supermercado',\n    TipoGasto: 'Ajustável - Supermercado',\n    prioridade: 8\n  },\n\n  // === CARRO (Prioridade ALTA = 8) ===\n  {\n    palavras: ['POSTO', 'GASOLINA', 'ALCOOL', 'ETANOL', 'COMBUSTIVEL', 'SHELL', \n               'IPIRANGA', 'BR PETROBRAS', 'ALE', 'ABASTECIMENTO'],\n    GRUPO: 'Carro',\n    SUBGRUPO: 'Abastecimento',\n    TipoGasto: 'Ajustável - Carro',\n    prioridade: 8\n  },\n  {\n    palavras: ['DRYWASH', 'LAVA RAPIDO', 'LAVAGEM', 'LAVA JATO', 'CAR WASH', \n               'ESTETICA AUTOMOTIVA'],\n    GRUPO: 'Carro',\n    SUBGRUPO: 'Limpeza',\n    TipoGasto: 'Ajustável - Carro',\n    prioridade: 8\n  },\n  {\n    palavras: ['SEM PARAR', 'CONNECTCAR', 'CONNETCAR', 'PEDAGIO'],\n    GRUPO: 'Carro',\n    SUBGRUPO: 'Sem Parar',\n    TipoGasto: 'Ajustável - Carro',\n    prioridade: 8\n  },\n  {\n    palavras: ['SEGURO CARRO', 'SEGURO AUTO', 'PORTO SEGURO AUTO'],\n    GRUPO: 'Carro',\n    SUBGRUPO: 'Seguro',\n    TipoGasto: 'Ajustável - Carro',\n    prioridade: 8\n  },\n\n  // === TRANSPORTE (Prioridade ALTA = 8) ===\n  {\n    palavras: ['UBER', 'CABIFY', 'TAXI'],\n    GRUPO: 'Transporte',\n    SUBGRUPO: 'Uber',\n    TipoGasto: 'Ajustável - Uber',\n    prioridade: 8\n  },\n\n  // === ASSINATURAS (Prioridade ALTA = 8) ===\n  {\n    palavras: ['NETFLIX', 'HBO', 'PARAMOUNT', 'GLOBOPLAY', 'STREAMING'],\n    GRUPO: 'Assinaturas',\n    SUBGRUPO: 'Outros',\n    TipoGasto: 'Ajustável - Assinaturas',\n    prioridade: 8\n  },\n  {\n    palavras: ['DISNEY PLUS'], // CORRIGIDO: + escapado para regex\n    GRUPO: 'Assinaturas',\n    SUBGRUPO: 'Outros',\n    TipoGasto: 'Ajustável - Assinaturas',\n    prioridade: 8\n  },\n  {\n    palavras: ['SPOTIFY'],\n    GRUPO: 'Assinaturas',\n    SUBGRUPO: 'Spotify',\n    TipoGasto: 'Ajustável - Assinaturas',\n    prioridade: 8\n  },\n  {\n    palavras: ['YOUTUBE PREMIUM', 'YOUTUBE'],\n    GRUPO: 'Assinaturas',\n    SUBGRUPO: 'Youtube',\n    TipoGasto: 'Ajustável - Assinaturas',\n    prioridade: 8\n  },\n  {\n    palavras: ['AMAZON PRIME', 'PRIME VIDEO'],\n    GRUPO: 'Assinaturas',\n    SUBGRUPO: 'Amazon Prime',\n    TipoGasto: 'Ajustável - Assinaturas',\n    prioridade: 8\n  },\n  {\n    palavras: ['ICLOUD', 'APPLE CLOUD'],\n    GRUPO: 'Assinaturas',\n    SUBGRUPO: 'ICloud',\n    TipoGasto: 'Ajustável - Assinaturas',\n    prioridade: 8\n  },\n  {\n    palavras: ['PREMIERE'],\n    GRUPO: 'Assinaturas',\n    SUBGRUPO: 'Premiere',\n    TipoGasto: 'Ajustável - Assinaturas',\n    prioridade: 8\n  },\n  {\n    palavras: ['AUDIBLE'],\n    GRUPO: 'Assinaturas',\n    SUBGRUPO: 'Audible',\n    TipoGasto: 'Ajustável - Assinaturas',\n    prioridade: 8\n  },\n\n  // === EDUCAÇÃO (Prioridade ALTA = 8) ===\n  {\n    palavras: ['ESCOLA', 'FACULDADE', 'UNIVERSIDADE', 'CURSO', 'COLEGIO', 'ENSINO',\n               'MENSALIDADE', 'CERVANTES', 'PREPLY'],\n    GRUPO: 'Educação',\n    SUBGRUPO: 'Cervantes',\n    TipoGasto: 'Fixo',\n    prioridade: 8\n  },\n\n  // === VIAGENS - AGÊNCIAS (Prioridade MÉDIA-ALTA = 8) ===\n  {\n    palavras: ['DECOLAR', 'MAXMILHAS', 'TURISMO', 'AGENCIA', 'CVC'],\n    GRUPO: 'Viagens',\n    SUBGRUPO: 'Outros',\n    TipoGasto: 'Ajustável - Viagens',\n    prioridade: 8\n  },\n\n  // === ROUPAS - GENÉRICO (Prioridade MÉDIA-ALTA = 8) ===\n  {\n    palavras: ['TECIDO', 'TECIDOS', 'CONFEC', 'MALHARIA', 'MODA', 'VESTUARIO', \n               'ROUPA', 'CALCADO', 'SAPATO', 'BOUTIQUE'],\n    GRUPO: 'Roupas',\n    SUBGRUPO: 'Roupas',\n    TipoGasto: 'Ajustável - Roupas',\n    prioridade: 8\n  },\n\n  // === TRANSPORTE PÚBLICO (Prioridade MÉDIA = 7) ===\n  {\n    palavras: ['BILHETE UNICO', 'METRO', 'ONIBUS', 'CPTM', 'TRANSPORTE PUBLICO'],\n    GRUPO: 'Transporte',\n    SUBGRUPO: 'Bilhete Único',\n    TipoGasto: 'Ajustável',\n    prioridade: 7\n  },\n\n  // === CARRO - ESTACIONAMENTO (Prioridade MÉDIA = 7) ===\n  {\n    palavras: ['ESTACIONAMENTO', 'PARKING', 'VAGA', 'ZONA AZUL'],\n    GRUPO: 'Carro',\n    SUBGRUPO: 'Estacionamento',\n    TipoGasto: 'Ajustável - Carro',\n    prioridade: 7\n  },\n\n  // === SAÚDE - ESPORTES (Prioridade MÉDIA = 7) ===\n  {\n    palavras: ['ACADEMIA', 'CROSSFIT', 'FUNCIONAL', 'GYMPASS'],\n    GRUPO: 'Saúde',\n    SUBGRUPO: 'Crossfit',\n    TipoGasto: 'Ajustável - Esportes',\n    prioridade: 7\n  },\n  {\n    palavras: ['PADEL'],\n    GRUPO: 'Saúde',\n    SUBGRUPO: 'Padel',\n    TipoGasto: 'Ajustável - Esportes',\n    prioridade: 7\n  },\n\n  // === TECNOLOGIA (Prioridade MÉDIA = 7) ===\n  {\n    palavras: ['APPLE', 'MICROSOFT', 'GOOGLE PLAY', 'APP STORE', 'SOFTWARE'],\n    GRUPO: 'Tecnologia',\n    SUBGRUPO: 'Outros',\n    TipoGasto: 'Ajustável - Tech',\n    prioridade: 7\n  },\n\n  // === E-COMMERCE (Prioridade MÉDIA = 7) ===\n  {\n    palavras: ['MERCADO LIVRE', 'MERCADOLIVRE', 'MELI', 'ML'],\n    GRUPO: 'MeLi + Amazon',\n    SUBGRUPO: 'MeLi + Amazon',\n    TipoGasto: 'Ajustável',\n    prioridade: 7\n  },\n  {\n    palavras: ['AMAZON', 'AMZN'],\n    GRUPO: 'MeLi + Amazon',\n    SUBGRUPO: 'MeLi + Amazon',\n    TipoGasto: 'Ajustável',\n    prioridade: 7\n  },\n\n  // === ALIMENTAÇÃO - CAFÉ/ALMOÇO (Prioridade MÉDIA = 7) ===\n  {\n    palavras: ['CAFE DA MANHA', 'PADARIA', 'CONFEITARIA'],\n    GRUPO: 'Alimentação',\n    SUBGRUPO: 'Café da Manhã',\n    TipoGasto: 'Ajustável',\n    prioridade: 7\n  },\n  {\n    palavras: ['ALMOCO', 'REFEICAO', 'MARMITA'],\n    GRUPO: 'Alimentação',\n    SUBGRUPO: 'Almoço',\n    TipoGasto: 'Ajustável',\n    prioridade: 7\n  },\n\n  // === SERVIÇOS (Prioridade MÉDIA = 7) ===\n  {\n    palavras: ['LAVANDERIA', 'LAVAR ROUPA', 'LAVAGEM ROUPA'],\n    GRUPO: 'Serviços',\n    SUBGRUPO: 'Lavanderia',\n    TipoGasto: 'Ajustável',\n    prioridade: 7\n  },\n\n  // === ENTRETENIMENTO (Prioridade MÉDIA-BAIXA = 6) ===\n  {\n    palavras: ['CINEMA', 'CINEMARK', 'INGRESSO', 'FILME'],\n    GRUPO: 'Entretenimento',\n    SUBGRUPO: 'Cinema',\n    TipoGasto: 'Ajustável',\n    prioridade: 6\n  },\n  {\n    palavras: ['SHOW', 'CONCERTO', 'APRESENTACAO'],\n    GRUPO: 'Entretenimento',\n    SUBGRUPO: 'Shows',\n    TipoGasto: 'Ajustável',\n    prioridade: 6\n  },\n  {\n    palavras: ['CORRIDA', 'MARATONA', 'PROVA'],\n    GRUPO: 'Entretenimento',\n    SUBGRUPO: 'Corrida',\n    TipoGasto: 'Ajustável',\n    prioridade: 6\n  },\n\n  // === TRANSPORTE - 99 (Prioridade BAIXA = 5) ===\n  {\n    palavras: ['99'],\n    GRUPO: 'Transporte',\n    SUBGRUPO: 'Uber',\n    TipoGasto: 'Ajustável - Uber',\n    prioridade: 5\n  },\n\n  // === PIX/TRANSFERÊNCIAS (Prioridade BAIXA = 3) ===\n  {\n    palavras: ['PIX', 'TED', 'DOC', 'TRANSFERENCIA'],\n    GRUPO: 'Transferência Entre Contas',\n    SUBGRUPO: 'Nubank',\n    TipoGasto: 'Débito',\n    prioridade: 3\n  }\n];\n\n// ========== DETECTAR FATURA DE CARTÃO ==========\nfunction detectarFaturaCartao(estabelecimento) {\n  const estabNorm = normalizar(estabelecimento);\n  \n  const regexFatura1 = /\\bINT\\s+([A-Z]+(?:\\s+[A-Z]+)?)\\s+VISA\\b/;\n  const regexFatura2 = /\\bVISA\\s+([A-Z]+(?:\\s+[A-Z]+)?)\\s+INT\\b/;\n  \n  let match = estabNorm.match(regexFatura1);\n  if (!match) match = estabNorm.match(regexFatura2);\n  \n  if (match) {\n    const nomeCartao = match[1].trim();\n    return {\n      GRUPO: 'Fatura',\n      SUBGRUPO: `Cartão ${nomeCartao}`,\n      TipoGasto: 'Fatura',\n      prioridade: 100,\n      palavraEncontrada: 'INT VISA (Fatura)',\n      isFatura: true\n    };\n  }\n  \n  return null;\n}\n\n// ========== FUNÇÃO DE MATCHING ==========\nfunction encontrarMarcacao(estabelecimento) {\n  const estabNorm = normalizar(estabelecimento);\n  \n  // 1. VERIFICAR SE É FATURA DE CARTÃO\n  const fatura = detectarFaturaCartao(estabelecimento);\n  if (fatura) {\n    return fatura;\n  }\n  \n  // 2. Array para guardar matches com suas prioridades\n  const matches = [];\n  \n  for (const regra of REGRAS) {\n    for (const palavra of regra.palavras) {\n      const palavraNorm = normalizar(palavra);\n      \n      let matched = false;\n      \n      // MATCHING MAIS RESTRITIVO PARA PALAVRAS CURTAS\n      if (palavraNorm.length <= 4) {\n        // Para palavras curtas, usar matching exato com boundaries\n        const regex = new RegExp(`\\\\b${palavraNorm}\\\\b`);\n        matched = regex.test(estabNorm);\n      } else {\n        // Para palavras longas, matching normal\n        const regex = new RegExp(`\\\\b${palavraNorm}\\\\b`);\n        matched = regex.test(estabNorm);\n      }\n      \n      if (matched) {\n        if (marcacaoValida(regra.GRUPO, regra.SUBGRUPO, regra.TipoGasto)) {\n          matches.push({\n            GRUPO: regra.GRUPO,\n            SUBGRUPO: regra.SUBGRUPO,\n            TipoGasto: regra.TipoGasto,\n            prioridade: regra.prioridade,\n            palavraEncontrada: palavra,\n            regraAplicada: regra.palavras[0] // Para debug\n          });\n        }\n        break; // Para de verificar outras palavras desta regra\n      }\n    }\n  }\n  \n  // 3. DEBUG: Mostrar múltiplos matches se houver\n  if (matches.length > 1) {\n    console.log(`Múltiplos matches para \"${estabelecimento}\":`, \n                matches.map(m => `${m.regraAplicada} (prio:${m.prioridade})`));\n  }\n  \n  // 4. Se encontrou matches, retorna o de maior prioridade\n  if (matches.length > 0) {\n    matches.sort((a, b) => b.prioridade - a.prioridade);\n    return matches[0];\n  }\n  \n  // 5. Fallback\n  return {\n    GRUPO: 'Outros',\n    SUBGRUPO: 'Outros',\n    TipoGasto: 'Ajustável',\n    prioridade: 0,\n    palavraEncontrada: null\n  };\n}\n\n// ========== PROCESSAMENTO PRINCIPAL ==========\nconst transacoes = $input.all();\nconst resultado = [];\nlet marcadas = 0;\nlet naoEncontradas = 0;\nlet ignoradas = 0;\n\nfor (const item of transacoes) {\n  const estabelecimento = item.json.Estabelecimento || '';\n  \n  if (normalizar(estabelecimento).includes('EMANUEL')) {\n    resultado.push({\n      json: {\n        ...item.json,\n        GRUPO: '',\n        SUBGRUPO: '',\n        TipoGasto: '',\n        MarcacaoIA: 'Ignorar',\n        ValidarIA: '',\n        palavra_chave_usada: null\n      }\n    });\n    ignoradas++;\n    continue;\n  }\n  \n  const marcacao = encontrarMarcacao(estabelecimento);\n  \n  const isMarcado = marcacao.palavraEncontrada !== null;\n  if (isMarcado) marcadas++;\n  else naoEncontradas++;\n  \n  resultado.push({\n    json: {\n      ...item.json,\n      GRUPO: marcacao.GRUPO,\n      SUBGRUPO: marcacao.SUBGRUPO,\n      TipoGasto: marcacao.TipoGasto,\n      MarcacaoIA: isMarcado ? 'Base_Marcacoes' : 'Não Encontrado',\n      ValidarIA: isMarcado ? '' : 'VALIDAR',\n      palavra_chave_usada: marcacao.palavraEncontrada\n    }\n  });\n}\n\nconsole.log(`\\n=== RESULTADO DO PROCESSAMENTO ===`);\nconsole.log(`✓ Marcadas com sucesso: ${marcadas}`);\nconsole.log(`⚠ Não encontradas (precisam validação): ${naoEncontradas}`);\nconsole.log(`ℹ Ignoradas: ${ignoradas}`);\nconsole.log(`📊 Total processado: ${transacoes.length}`);\n\nreturn resultado;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1136,
+        80
+      ],
+      "id": "c028dfdd-5750-4f7f-a9ea-3b14d7efce24",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "jsCode": "// === ENTRADAS ===\nconst transacoes = $input.all().map(item => item.json);\nconst padroes = $('Carregar Padrões').all().map(item => item.json);\nconst historico = $('Carregar Histórico').all().map(item => item.json);\n\n// === LISTA DE ESTABELECIMENTOS GENÉRICOS ===\nconst GENERICOS = [\n  'PAGAMENTO DE CONTAS',\n  'PAGAMENTO BOLETO',\n  'PAGAMENTO FATURA',\n  'SALDO',\n  'AJUSTE',\n  'TARIFA',\n  'IOF'\n];\n\nfunction ehGenerico(estabelecimento) {\n  const estabUpper = (estabelecimento || '').toUpperCase();\n  return GENERICOS.some(gen => estabUpper.includes(gen));\n}\n\n// === DETECTAR FATURA DE CARTÃO ===\nfunction detectarFaturaCartao(estabelecimento) {\n  const estabNorm = (estabelecimento || '')\n    .toUpperCase()\n    .normalize('NFD').replace(/[\\u0300-\\u036f]/g, '')\n    .replace(/\\s+/g, ' ')\n    .trim();\n  \n  // Padrão: INT [NOME_CARTAO] VISA ou VISA [NOME_CARTAO] INT\n  // Exemplos: \"INT AZUL VISA\", \"INT NUBANK VISA\", \"VISA ITAU INT\"\n  const regexFatura1 = /\\bINT\\s+([A-Z]+(?:\\s+[A-Z]+)?)\\s+VISA\\b/;\n  const regexFatura2 = /\\bVISA\\s+([A-Z]+(?:\\s+[A-Z]+)?)\\s+INT\\b/;\n  \n  let match = estabNorm.match(regexFatura1);\n  if (!match) match = estabNorm.match(regexFatura2);\n  \n  if (match) {\n    const nomeCartao = match[1].trim();\n    return {\n      GRUPO: 'Fatura',\n      SUBGRUPO: `Cartão ${nomeCartao}`,\n      TipoGasto: 'Fatura',\n      isFatura: true\n    };\n  }\n  \n  return null;\n}\n\n// === PIPELINE ===\nconst saida = transacoes.map(t => {\n  const { Estabelecimento, Valor, NomeTitular } = t || {};\n\n  // === VERIFICAÇÃO 0: FATURA DE CARTÃO (PRIORIDADE MÁXIMA) ===\n  const fatura = detectarFaturaCartao(Estabelecimento);\n  if (fatura) {\n    return {\n      ...t,\n      GRUPO: fatura.GRUPO,\n      SUBGRUPO: fatura.SUBGRUPO,\n      TipoGasto: fatura.TipoGasto,\n      MarcacaoIA: 'Fatura Cartão',\n      ValidarIA: ''\n    };\n  }\n\n  // === VERIFICAÇÃO 1: IGNORAR PELO PRIMEIRO NOME DO TITULAR ===\n  if (NomeTitular && Estabelecimento) {\n    const primeiroNomeTitular = NomeTitular\n      .trim()\n      .split(/\\s+/)[0]\n      .toUpperCase()\n      .normalize('NFD')\n      .replace(/[\\u0300-\\u036f]/g, '');\n    \n    const estabNorm = Estabelecimento\n      .toUpperCase()\n      .normalize('NFD')\n      .replace(/[\\u0300-\\u036f]/g, '');\n    \n    // ⬇️ VARIÁVEIS DE DEBUG ADICIONADAS\n    const debugInfo = {\n      nomeTitular: NomeTitular,\n      primeiroNomeTitular: primeiroNomeTitular,\n      estabelecimento: Estabelecimento,\n      estabelecimentoNormalizado: estabNorm,\n      nomeEncontradoNoEstabelecimento: estabNorm.includes(primeiroNomeTitular),\n      tamanhoNome: primeiroNomeTitular.length,\n      atendeCriterio: primeiroNomeTitular.length >= 4 && estabNorm.includes(primeiroNomeTitular)\n    };\n    \n    console.log('DEBUG NOME TITULAR:', debugInfo);\n    \n    if (primeiroNomeTitular.length >= 4 && estabNorm.includes(primeiroNomeTitular)) {\n      return { \n        ...t, \n        GRUPO: '',\n        SUBGRUPO: '',\n        TipoGasto: '',\n        MarcacaoIA: 'Ignorar - Nome do Titular', \n        ValidarIA: '',\n        // ⬇️ ADICIONANDO INFO DE DEBUG NO RESULTADO\n        DebugNomeTitular: JSON.stringify(debugInfo)\n      };\n    }\n  }\n\n  // === VERIFICAÇÃO 2: ESTABELECIMENTOS GENÉRICOS ===\n  if (ehGenerico(Estabelecimento)) {\n    return {\n      ...t,\n      GRUPO: 'Outros',\n      SUBGRUPO: 'Outros',\n      TipoGasto: 'Ajustável',\n      MarcacaoIA: 'Estabelecimento Genérico',\n      ValidarIA: 'VALIDAR'  \n    };\n  }\n\n  // === PROCESSAMENTO NORMAL ===\n  \n  const STOP = new Set([\n    'BOLETO','PAGAMENTO','PAG','PIX','TED','MOBILE','TIT','INT',\n    'OUTROS','BANCOS','PARA','AUTORIZACAO','TRANSACAO','LANCTO',\n    'DEBITO','CREDITO','AJUSTE','COMPRA'\n  ]);\n\n  function normalizar(txt) {\n    return (txt || '')\n      .toUpperCase()\n      .normalize('NFD').replace(/[\\u0300-\\u036f]/g, '')\n      .replace(/[^A-Z0-9\\s]/g, ' ')\n      .replace(/\\s+/g, ' ')\n      .trim();\n  }\n\n  function tokensValidos(txt) {\n    return normalizar(txt)\n      .split(' ')\n      .filter(w => w.length > 3 && !STOP.has(w));\n  }\n\n  function intersecaoCount(a, b) {\n    const sa = new Set(a);\n    let c = 0;\n    for (const t of b) if (sa.has(t)) c++;\n    return c;\n  }\n\n  function toNumberFlexible(s) {\n    if (s == null) return NaN;\n    const raw = String(s).trim().replace(',', '.').toUpperCase();\n    const k = raw.match(/^(\\d+(?:\\.\\d+)?)\\s*K$/i);\n    if (k) return Number(k[1]) * 1000;\n    const n = Number(raw);\n    return Number.isFinite(n) ? n : NaN;\n  }\n\n  const arred2 = n => Math.round((Number(n) + Number.EPSILON) * 100) / 100;\n\n  function normalizarEstab(s) {\n    return (s || \"\")\n      .replace(/\\s*(\\d{1,2})\\/(\\d{1,2})\\s*$/, \"\")\n      .toUpperCase()\n      .normalize(\"NFD\").replace(/[\\u0300-\\u036f]/g, \"\")\n      .replace(/[^A-Z0-9\\s*\\/\\-\\.]/g, \" \")\n      .replace(/\\*/g, \"\")\n      .replace(/\\s+/g, \" \")\n      .trim();\n  }\n\n  function detectarParcelaNoFinal(estab, origem) {\n    const m = (estab || \"\").match(/\\s*(\\d{1,2})\\/(\\d{1,2})\\s*$/);\n    if (!m) return null;\n    const p = +m[1], t = +m[2];\n    if (!(p >= 1 && t >= 2 && p <= t && t <= 99)) return null;\n    const ehExtrato = String(origem || '').toLowerCase().includes('extrato');\n    if (ehExtrato && t <= 12 && p <= 31) return null;\n    return { parcela: p, total: t };\n  }\n\n  function montarPadrao(estabOriginal, valor, parcelaInfo) {\n    const estab = normalizarEstab(estabOriginal);\n    if (parcelaInfo) {\n      const tot = parcelaInfo.total;\n      const vParc = Math.abs(Number(valor) || 0);\n      const vTot  = arred2(vParc * tot);\n      const vCent = Math.round(vTot * 100);\n      return `${estab}|${vCent}|${String(tot).padStart(2,\"0\")}`;\n    }\n    return estab;\n  }\n\n  function normalizarChavePadrao(p) {\n    const s = String(p || \"\").trim();\n    if (!s) return \"\";\n    const parts = s.split(\"|\");\n    if (parts.length === 1) return normalizarEstab(parts[0]);\n    const estab = normalizarEstab(parts[0]);\n    const valorTotCent = String(parts[1]).replace(/[^\\d]/g, \"\");\n    const tot = String(parts[2] || \"\").replace(/[^\\d]/g, \"\").padStart(2, \"0\");\n    return `${estab}|${valorTotCent}|${tot}`;\n  }\n\n  function parsePadraoComSufixo(raw) {\n    const s = String(raw || '').trim();\n    const rxFaixa = /(?:^|\\|)FAIXA:\\s*([0-9.,Kk]+)\\s*-\\s*([0-9.,Kk]+)/i;\n    const mFaixa = s.match(rxFaixa);\n    if (mFaixa) {\n      const textoBase = s.replace(rxFaixa, '').replace(/\\|+$/,'').trim();\n      const min = toNumberFlexible(mFaixa[1]);\n      const max = toNumberFlexible(mFaixa[2]);\n      return {\n        textoBase,\n        faixa: (Number.isFinite(min) && Number.isFinite(max)) ? { min, max } : null,\n        hintsNumericos: []\n      };\n    }\n    const partes = s.split('|').map(x => x.trim()).filter(Boolean);\n    const textoBase = partes[0] || s;\n    const hintsNumericos = partes\n      .slice(1)\n      .map(x => x.replace(/[^\\d.]/g,''))\n      .filter(x => x.length >= 3)\n      .map(x => Number(x))\n      .filter(n => Number.isFinite(n));\n    return { textoBase, faixa: null, hintsNumericos };\n  }\n\n  function ajustarHintAoValorTransacao(hint, valorTransacao) {\n    const v = Math.abs(toNumberFlexible(valorTransacao));\n    if (!Number.isFinite(v) || !Number.isFinite(hint)) return NaN;\n    const divisores = [1, 10, 100, 1000];\n    let melhor = NaN, erro = Infinity;\n    for (const d of divisores) {\n      const cand = hint / d;\n      const e = Math.abs(cand - v);\n      if (e < erro) { erro = e; melhor = cand; }\n    }\n    return melhor;\n  }\n\n  function candidatosBasePadroes(padraoNormalizado, estabelecimentoOriginal) {\n    const estabNorm = padraoNormalizado;\n    const tokensEstab = tokensValidos(estabelecimentoOriginal);\n    const cand = padroes\n      .map(p => {\n        const meta = parsePadraoComSufixo(p.padrao_estabelecimento);\n        const padraoNorm = normalizarChavePadrao(meta.textoBase);\n        const tokensPadrao = tokensValidos(meta.textoBase);\n        return { p, padraoNorm, tokensPadrao, faixa: meta.faixa, hintsNumericos: meta.hintsNumericos };\n      })\n      .filter(x => x.padraoNorm);\n    const exato = cand\n      .filter(x => x.padraoNorm === estabNorm)\n      .map(x => ({ p: x.p, score: x.padraoNorm.length + (x.tokensPadrao.length * 5), faixa: x.faixa, hintsNumericos: x.hintsNumericos }));\n    if (exato.length) return exato;\n    const rxWhole = (norm) => new RegExp(`\\\\b${norm}\\\\b`);\n    const contains = cand\n      .map(x => {\n        if (x.tokensPadrao.length < 2) {\n          if (!rxWhole(x.padraoNorm).test(estabNorm)) return null;\n          return { p: x.p, score: x.padraoNorm.length + 3, faixa: x.faixa, hintsNumericos: x.hintsNumericos };\n        }\n        return estabNorm.includes(x.padraoNorm)\n          ? { p: x.p, score: x.padraoNorm.length + (x.tokensPadrao.length * 5), faixa: x.faixa, hintsNumericos: x.hintsNumericos }\n          : null;\n      })\n      .filter(Boolean)\n      .sort((a, b) => b.score - a.score)\n      .slice(0, 10);\n    if (contains.length) return contains;\n    const inter = cand\n      .map(x => {\n        const inter = intersecaoCount(x.tokensPadrao, tokensEstab);\n        const limiar = (Math.min(x.tokensPadrao.length, tokensEstab.length) === 1) ? 1 : 2;\n        if (inter >= limiar) {\n          const score = inter * 10 + x.tokensPadrao.length;\n          return { p: x.p, score, faixa: x.faixa, hintsNumericos: x.hintsNumericos };\n        }\n        return null;\n      })\n      .filter(Boolean)\n      .sort((a, b) => b.score - a.score)\n      .slice(0, 10);\n    return inter;\n  }\n\n  function selecionarPorValor(candidatos, valorTransacao) {\n    const v = Math.abs(toNumberFlexible(valorTransacao));\n    const comFaixa = candidatos.filter(c => c.faixa && Number.isFinite(v) && v >= c.faixa.min && v <= c.faixa.max);\n    const base1 = comFaixa.length ? comFaixa : candidatos;\n    const anotados = base1.map(c => {\n      let dist = Infinity;\n      if (!comFaixa.length && c.hintsNumericos && c.hintsNumericos.length && Number.isFinite(v)) {\n        const melhores = c.hintsNumericos\n          .map(h => ajustarHintAoValorTransacao(h, v))\n          .filter(n => Number.isFinite(n));\n        if (melhores.length) {\n          dist = Math.min(...melhores.map(n => Math.abs(n - v)));\n        }\n      }\n      if (!Number.isFinite(dist)) {\n        const vm = toNumberFlexible(c.p.valor_medio);\n        if (Number.isFinite(vm) && Number.isFinite(v)) {\n          dist = Math.abs(v - vm);\n        }\n      }\n      return { c, dist, scoreTextual: (typeof c.score === 'number' ? c.score : 0) };\n    });\n    anotados.sort((a, b) => (a.dist - b.dist) || (b.scoreTextual - a.scoreTextual));\n    return (anotados[0] && anotados[0].c && anotados[0].c.p) ? anotados[0].c.p : null;\n  }\n\n  function matchHistorico(estabelecimento, valor) {\n    const tokensEstab = tokensValidos(estabelecimento);\n    const vTrans = Math.abs(toNumberFlexible(valor));\n    const candidatos = historico\n      .map(h => {\n        const tokensHist = tokensValidos(h.Estabelecimento || '');\n        const inter = intersecaoCount(tokensHist, tokensEstab);\n        const vHist = Math.abs(toNumberFlexible(h.Valor));\n        const valorOk =\n          !Number.isFinite(vTrans) || !Number.isFinite(vHist) ||\n          Math.abs(vHist - vTrans) <= 5 ||\n          Math.abs(vHist - vTrans) / Math.max(vHist, vTrans) <= 0.20;\n        const completo = Boolean(h.GRUPO && h.SUBGRUPO && h.TipoGasto);\n        return { h, inter, valorOk, completo, tokensHistLen: tokensHist.length };\n      })\n      .filter(x =>\n        x.completo &&\n        x.valorOk &&\n        x.inter >= ((Math.min(tokensEstab.length, x.tokensHistLen) === 1) ? 1 : 2)\n      )\n      .sort((a, b) => new Date(b.h.Data || 0) - new Date(a.h.Data || 0));\n    return candidatos.length ? candidatos[0].h : null;\n  }\n\n  // === CONTINUAR PROCESSAMENTO ===\n  const origem = t.origem || t.TipoTransacao || '';\n  const parcelaInfo = detectarParcelaNoFinal(Estabelecimento, origem);\n  const padraoMontado = montarPadrao(Estabelecimento, Valor, parcelaInfo);\n  const padraoNormalizado = normalizarChavePadrao(padraoMontado);\n\n  const cands = candidatosBasePadroes(padraoNormalizado, Estabelecimento).filter(c => {\n    const p = c?.p || {};\n    const conf = String(p.confianca || '').toLowerCase().trim();\n    const grupoOk = String(p.grupo_sugerido || '').trim().length > 0;\n    const subOk   = String(p.subgrupo_sugerido || '').trim().length > 0;\n    const tipoOk  = String(p.tipo_gasto_sugerido || '').trim().length > 0;\n    return conf === 'alta' && grupoOk && subOk && tipoOk;\n  });\n\n  if (cands.length) {\n    const escolhido = selecionarPorValor(cands, Valor);\n    if (escolhido) {\n      return {\n        ...t,\n        GRUPO: escolhido.grupo_sugerido || '',\n        SUBGRUPO: escolhido.subgrupo_sugerido || '',\n        TipoGasto: escolhido.tipo_gasto_sugerido || '',\n        MarcacaoIA: 'Base_Padroes',\n        ValidarIA: ''\n      };\n    }\n  }\n\n  // === HISTÓRICO: FILTRAR PIX ===\n  const h = matchHistorico(Estabelecimento, Valor);\n  if (h) {\n    const ehPix = /\\bPIX\\b/i.test(Estabelecimento);\n    \n    if (ehPix) {\n      return {\n        ...t,\n        GRUPO: '',\n        SUBGRUPO: '',\n        TipoGasto: '',\n        MarcacaoIA: 'Não Encontrado',\n        ValidarIA: 'VALIDAR'\n      };\n    }\n    \n    return {\n      ...t,\n      GRUPO: h.GRUPO || '',\n      SUBGRUPO: h.SUBGRUPO || '',\n      TipoGasto: h.TipoGasto || '',\n      MarcacaoIA: 'Journal Entries',\n      ValidarIA: ''\n    };\n  }\n\n  return {\n    ...t,\n    GRUPO: '',\n    SUBGRUPO: '',\n    TipoGasto: '',\n    MarcacaoIA: 'Não Encontrado',\n    ValidarIA: 'VALIDAR'\n  };\n});\n\nreturn saida.map(x => ({ json: x }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1696,
+        208
+      ],
+      "id": "4a7bd235-7f3d-4d8a-b69b-87afcdb13aa5",
+      "name": "Classificador Otimizado"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ======================================\n// DEDUPLICAÇÃO E FILTRO DE TRANSAÇÕES\n// ======================================\n// 1. Remove transações futuras\n// 2. Remove duplicatas mantendo apenas a primeira ocorrência de cada IdTransacao\n// 3. Prioridade: Extrato > Fatura\n\nconst transacoes = $input.all().map(item => item.json);\n\n// === FILTRAR TRANSAÇÕES FUTURAS ===\nconst transacoesAtuais = transacoes.filter(t => {\n  // Manter se TransacaoFutura = 'NÃO' ou não existe\n  return !t.TransacaoFutura || t.TransacaoFutura === 'NÃO';\n});\n\nconst transacoesFuturas = transacoes.length - transacoesAtuais.length;\n\n// === ORDENAR PARA PRIORIZAR EXTRATO ===\ntransacoesAtuais.sort((a, b) => {\n  if (a.origem === 'Extrato' && b.origem === 'Fatura') return -1;\n  if (a.origem === 'Fatura' && b.origem === 'Extrato') return 1;\n  return 0;\n});\n\n// === DEDUPLICAR ===\nconst idsVistos = new Set();\nconst transacoesUnicas = [];\nlet duplicatasRemovidas = 0;\n\nfor (const t of transacoesAtuais) {\n  const id = t.IdTransacao;\n  \n  if (!idsVistos.has(id)) {\n    // Primeira vez vendo esse ID\n    idsVistos.add(id);\n    transacoesUnicas.push({\n      ...t,\n      Deduplicated: false\n    });\n  } else {\n    // ID já existe - é duplicata\n    duplicatasRemovidas++;\n  }\n}\n\n// === LOG DE ESTATÍSTICAS ===\nconsole.log('=== DEDUPLICAÇÃO E FILTRO ===');\nconsole.log(`Total entrada: ${transacoes.length}`);\nconsole.log(`Futuras removidas: ${transacoesFuturas}`);\nconsole.log(`Após filtro de futuras: ${transacoesAtuais.length}`);\nconsole.log(`Duplicatas removidas: ${duplicatasRemovidas}`);\nconsole.log(`Únicas finais: ${transacoesUnicas.length}`);\n\nreturn transacoesUnicas.map(x => ({ json: x }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1904,
+        208
+      ],
+      "id": "86a8d039-8a81-4e37-a93b-080b212e5f1f",
+      "name": "Tirar Duplicidade"
+    },
+    {
+      "parameters": {
+        "jsCode": "// === Processar Extrato Mercado Pago (com HASH como IdTransacao) ===\n// Mantém NomeTitular (cabeçalho) e Data em DD/MM/AAAA.\n// IdTransacao = FNV-1a 64 de \"Data|EstabelecimentoNormalizado|Valor\".\n// ID da operação vai no campo \"IdOperacao\" (somente referência).\n// AJUSTADO: origem = \"MP\"\n\nconst out = [];\n\n// ---------- Hash FNV-1a 64 (decimal sem sinal) ----------\nconst FNV_OFFSET_64 = 0xcbf29ce484222325n;\nconst FNV_PRIME_64  = 0x100000001b3n;\nconst MASK64        = (1n << 64n) - 1n;\nfunction fnv1a64_toDec(str) {\n  let h = FNV_OFFSET_64;\n  for (let i = 0; i < str.length; i++) {\n    h ^= BigInt(str.charCodeAt(i));\n    h = (h * FNV_PRIME_64) & MASK64;\n  }\n  return h.toString(10);\n}\n\nconst normEstab = s => String(s || '')\n  .toUpperCase()\n  .normalize('NFD').replace(/[\\u0300-\\u036f]/g, '')\n  .replace(/[^\\w\\s\\-\\/\\.]/g, ' ')\n  .replace(/\\s+/g, ' ')\n  .trim();\n\nconst toDDMMYYYY = (yyyy, mm, dd) => `${dd.padStart(2,'0')}/${mm.padStart(2,'0')}/${yyyy}`;\n\nfor (const item of $input.all()) {\n  const raw = String(item.json.text || '');\n\n  // ----- Nome do titular no cabeçalho -----\n  let NomeTitular = null;\n  const mTit = raw.match(/EXTRATO DE CONTA\\s+([\\s\\S]*?)\\s+CPF\\/CNPJ/i);\n  if (mTit) {\n    NomeTitular = mTit[1].toString().replace(/\\s+/g, ' ').trim();\n  }\n\n  // Preparar linhas\n  const linhas = raw.replace(/\\r/g,'').split('\\n').map(l => l.trim()).filter(Boolean);\n\n  let i = 0;\n  while (i < linhas.length) {\n    // Data típica do MP: dd-mm-aaaa em linha própria\n    const mData = linhas[i].match(/^(\\d{2})-(\\d{2})-(\\d{4})$/);\n    if (!mData) { i++; continue; }\n\n    const [, dd, mm, yyyy] = mData;\n    const Data = toDDMMYYYY(yyyy, mm, dd);\n\n    // Agregar bloco de descrição até linha com R$\n    const bloco = [];\n    let j = i + 1;\n    while (j < linhas.length && !/^\\d{2}-\\d{2}-\\d{4}$/.test(linhas[j])) {\n      bloco.push(linhas[j]);\n      if (linhas[j].includes('R$')) break;\n      j++;\n    }\n    const blocoStr = bloco.join(' ').replace(/\\s+/g,' ').trim();\n\n    // ID da operação = sequência numérica antes do primeiro R$\n    const mId = blocoStr.match(/(\\d{6,})\\s+R\\$\\s*-?\\d/);\n    const IdOperacao = mId ? mId[1] : null;\n\n    // Valor = primeiro R$ do bloco (antes do saldo)\n    const mValor = blocoStr.match(/R\\$\\s*(-?\\d{1,3}(?:\\.\\d{3})*,\\d{2})/);\n    const valorStr = mValor ? mValor[1] : null;\n    const Valor = valorStr != null ? parseFloat(valorStr.replace(/\\./g,'').replace(',','.')) : null;\n\n    // Descrição/Estabelecimento (sem ID/valores)\n    let Estabelecimento = blocoStr\n      .replace(/\\b\\d{6,}\\b.*$/,'') // tira \"ID ...\"\n      .replace(/R\\$.*$/,'')        // tira valores/saldo\n      .replace(/\\s+/g,' ')\n      .trim();\n\n    if (Valor !== null && Estabelecimento) {\n      const TipoTransacao = Valor > 0 ? 'Receitas' : 'Despesas';\n      const TipoTransacaoAjuste = TipoTransacao;\n      const Ano = parseInt(yyyy, 10);\n      const DT_Fatura = `${yyyy}${mm}`;\n      const ValorPositivo = Math.abs(Valor);\n\n      // --------- HASH como IdTransacao ---------\n      const estabNorm = normEstab(Estabelecimento);\n      const chave = `${Data}|${estabNorm}|${Valor.toFixed(2)}`;\n      const IdTransacao = fnv1a64_toDec(chave);\n\n      out.push({\n        IdTransacao,              // <- HASH estável\n        IdOperacao,               // <- informativo\n        Data,                     // DD/MM/AAAA\n        Estabelecimento,\n        Valor,\n        TipoTransacao,\n        TipoTransacaoAjuste,\n        Ano,\n        DT_Fatura,\n        ValorPositivo,\n        TransacaoFutura: 'NÃO',\n        NomeTitular,\n        origem: 'MP'  // ← AJUSTADO de \"Extrato Mercado Pago\" para \"MP\"\n      });\n    }\n\n    i = j + 1;\n  }\n}\n\n// Se nada extraído, devolve input p/ não quebrar a cadeia\nif (out.length === 0) {\n  return $input.all();\n}\nreturn out.map(x => ({ json: x }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2400,
+        80
+      ],
+      "id": "9a6d6257-fb06-4287-be47-10728895ce6a",
+      "name": "Processar Extrato Mercado Pago"
+    },
+    {
+      "parameters": {
+        "jsCode": "// =====================================================\n// TRANSFERÊNCIA ENTRE CONTAS (DATA EXATA) c/ DATA EFETIVA\n// =====================================================\n// Usa data do texto (ex.: \"PIX TRANSF EMANUEL30/08\") quando existir,\n// senão usa o campo Data. Compara por dia EXATO.\n// Mantém overwrite das marcações e debug fields.\n\nconst transacoes = $input.all().map(i => i.json);\n\n// ---------- utils ----------\nfunction getPrimeiroNome(nomeCompleto) {\n  if (!nomeCompleto) return null;\n  return nomeCompleto.trim().split(/\\s+/)[0].toUpperCase();\n}\nfunction normalizarOrigem(origem) {\n  const o = String(origem || '').toLowerCase();\n  if (o.includes('mercado pago') || /\\bmp\\b/.test(o)) return 'MP';\n  if (o.includes('itaú') || o.includes('itau')) return 'Itaú Person';\n  return (origem || '').trim() || 'Entre contas';\n}\nfunction norm(s) {\n  return String(s || '')\n    .toUpperCase()\n    .normalize('NFD').replace(/[\\u0300-\\u036f]/g, '')\n    .replace(/[^A-Z0-9/ ]/g, ' ')\n    .replace(/\\s+/g, ' ')\n    .trim();\n}\nfunction pareceTransfer(estab) {\n  const e = norm(estab);\n  return /TRANSFER|PIX|TED|RECEB|ENVIAD/.test(e);\n}\nfunction lado(estab, valor) {\n  const e = norm(estab);\n  if (/RECEB/.test(e)) return 'in';\n  if (/ENVIAD|ENVIO|SAIDA/.test(e)) return 'out';\n  return valor >= 0 ? 'in' : 'out';\n}\nfunction mesmoTitular(a, b) {\n  const na = norm(a.NomeTitular);\n  const nb = norm(b.NomeTitular);\n  return na && nb && na === nb;\n}\nfunction sobrenomeBateNoTexto(a, b) {\n  const na = norm(a.NomeTitular || '');\n  const nb = norm(b.NomeTitular || '');\n  const ea = norm(a.Estabelecimento || '');\n  const eb = norm(b.Estabelecimento || '');\n  const ultimo = s => (s.split(' ').filter(Boolean).pop() || '');\n  const ua = ultimo(na), ub = ultimo(nb);\n  return (ua && eb.includes(ua)) || (ub && ea.includes(ub));\n}\n\n// extrai \"dd/mm\" do texto do estabelecimento (ex.: ...EMANUEL30/08)\nfunction extractDDMMFromText(estab) {\n  const m = String(estab || '').match(/(\\d{2})\\/(\\d{2})(?!\\d)/);\n  if (!m) return null;\n  return { dd: m[1], mm: m[2] };\n}\n// monta DD/MM/AAAA usando o ano do campo Data\nfunction effectiveDate(item) {\n  const dataStr = String(item.Data || '').trim(); // esperado DD/MM/AAAA\n  const mData = dataStr.match(/^(\\d{2})\\/(\\d{2})\\/(\\d{4})$/);\n  let yyyy = null, dd = null, mm = null;\n  if (mData) { dd = mData[1]; mm = mData[2]; yyyy = mData[3]; }\n\n  const dm = extractDDMMFromText(item.Estabelecimento);\n  if (dm && yyyy) {\n    // se o texto traz dd/mm, usa-o com o ano da Data\n    return `${dm.dd}/${dm.mm}/${yyyy}`;\n  }\n  return dataStr; // fallback: Data original\n}\n\n// ===== agrupar por titular =====\nconst porTitular = new Map();\nfor (const t of transacoes) {\n  const primeiro = getPrimeiroNome(t.NomeTitular);\n  if (!primeiro) continue;\n  if (!porTitular.has(primeiro)) porTitular.set(primeiro, []);\n  porTitular.get(primeiro).push(t);\n}\n\nlet paresMarcados = 0;\n\nfor (const [primeiro, lista] of porTitular.entries()) {\n  // marca candidatos + define data efetiva e bucket\n  const candidatos = [];\n  for (const t of lista) {\n    const cand = (typeof t.Valor === 'number') && pareceTransfer(t.Estabelecimento);\n    t.XferCand = !!cand;\n    t.XferSide = lado(t.Estabelecimento, t.Valor);\n\n    const eff = effectiveDate(t);\n    t.XferEffDate = eff || String(t.Data || '').trim();\n    t.XferEffDateSource = (extractDDMMFromText(t.Estabelecimento) ? 'Estabelecimento' : 'Data');\n\n    if (cand) {\n      t.XferBucketKey = `${Math.abs(t.Valor).toFixed(2)}|${t.XferEffDate}`;\n      candidatos.push(t);\n    } else {\n      t.XferBucketKey = null;\n    }\n  }\n\n  // bucket por valor absoluto + data EFETIVA exata\n  const buckets = new Map();\n  for (const t of candidatos) {\n    const k = t.XferBucketKey;\n    if (!k) continue;\n    if (!buckets.has(k)) buckets.set(k, []);\n    buckets.get(k).push(t);\n  }\n\n  const usados = new Set();\n  let seq = 0;\n\n  for (const [k, arr] of buckets.entries()) {\n    // ordenar por valor (negativos antes) só para leitura\n    arr.sort((a, b) => (a.Valor - b.Valor));\n\n    for (let i = 0; i < arr.length; i++) {\n      const a = arr[i];\n      if (usados.has(a.IdTransacao)) continue;\n\n      for (let j = i + 1; j < arr.length; j++) {\n        const b = arr[j];\n        if (usados.has(b.IdTransacao)) continue;\n\n        // mesma data efetiva (exata) e valores com sinais opostos\n        if (a.XferEffDate !== b.XferEffDate) continue;\n        if (a.Valor * b.Valor >= 0) continue;\n\n        // lados complementares e titular consistente\n        const ladosOk = (a.XferSide !== b.XferSide);\n        const titularOk = mesmoTitular(a, b) || sobrenomeBateNoTexto(a, b);\n        if (!ladosOk || !titularOk) continue;\n\n        // === match! marcar os dois (overwrite) ===\n        const pairId = `XFER_${k}_${(++seq).toString().padStart(4,'0')}`;\n        const marcar = t => {\n          const ori = normalizarOrigem(t.origem);\n          t.TipoTransacao = 'Transferência entre contas';\n          t.TipoTransacaoAjuste = 'Transferência entre contas';\n          t.GRUPO = 'Transferências';\n          t.SUBGRUPO = ori;                // MP / Itaú Person\n          t.TipoGasto = 'Ignorar';\n          t.MarcacaoIA = 'Ignorar - Transferência entre contas';\n          t.ValidarIA = 'NÃO';\n          t.TransferPairId = pairId;\n          t.XferMatch = 'OK';\n        };\n        marcar(a); marcar(b);\n        usados.add(a.IdTransacao);\n        usados.add(b.IdTransacao);\n        paresMarcados++;\n        break;\n      }\n    }\n  }\n}\n\nconsole.log(`🔗 Transferências (data efetiva exata) marcadas: ${paresMarcados}`);\n\n// devolve todos (marcados e não marcados)\nreturn transacoes.map(t => ({ json: t }));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -544,
+        208
+      ],
+      "id": "e58a6ceb-85a0-46ef-95c3-2afa742cf900",
+      "name": "Transferencia Entre Contas"
+    },
+    {
+      "parameters": {
+        "numberInputs": 4
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -2112,
+        176
+      ],
+      "id": "5e13fd40-a1ee-4a9d-bc17-e84d32c23de2",
+      "name": "Merge"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Agendar Busca": {
+      "main": [
+        [
+          {
+            "node": "Buscar PDFs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Carregar Histórico",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Carregar Base Marcações",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar PDFs": {
+      "main": [
+        [
+          {
+            "node": "Processar Lista",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Processar Lista": {
+      "main": [
+        [
+          {
+            "node": "Baixar PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Baixar PDF": {
+      "main": [
+        [
+          {
+            "node": "Extrair Texto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extrair Texto": {
+      "main": [
+        [
+          {
+            "node": "Identificar Tipo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Identificar Tipo": {
+      "main": [
+        [
+          {
+            "node": "Processar Extrato",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Processar Fatura",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Processar Extrato Mercado Pago",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Processar Extrato": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Processar Fatura": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "Filtro IA": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unir Resultados",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Unir Resultados": {
+      "main": [
+        [
+          {
+            "node": "Transferencia Entre Contas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Salvar Planilha": {
+      "main": [
+        []
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter": {
+      "main": [
+        [
+          {
+            "node": "Carregar Padrões",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Carregar Histórico": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Carregar Base Marcações": {
+      "main": [
+        []
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Unir Resultados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classificador Otimizado": {
+      "main": [
+        [
+          {
+            "node": "Filtro IA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tirar Duplicidade": {
+      "main": [
+        [
+          {
+            "node": "Classificador Otimizado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Processar Extrato Mercado Pago": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transferencia Entre Contas": {
+      "main": [
+        [
+          {
+            "node": "Salvar Planilha",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Tirar Duplicidade",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "7e62aade-8975-4a36-b421-c8e0cb8f0377",
+  "meta": {
+    "instanceId": "98a7f76cbff973591af08e09b5be2fed14b55b37d878782c0638229a94477203"
+  },
+  "id": "9Xl3hipN1xU8hmvI",
+  "tags": []
+}

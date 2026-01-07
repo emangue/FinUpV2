@@ -61,6 +61,12 @@ class TransactionRepository:
         if filters.tipo:
             query = query.filter(JournalEntry.TipoTransacao == filters.tipo)
         
+        if filters.categoria_geral:
+            query = query.filter(JournalEntry.CategoriaGeral == filters.categoria_geral)
+        
+        if filters.tipo_gasto:
+            query = query.filter(JournalEntry.TipoGasto == filters.tipo_gasto)
+        
         if filters.cartao:
             query = query.filter(JournalEntry.NomeCartao == filters.cartao)
         
@@ -97,6 +103,10 @@ class TransactionRepository:
             query = query.filter(JournalEntry.SUBGRUPO == filters.subgrupo)
         if filters.tipo:
             query = query.filter(JournalEntry.TipoTransacao == filters.tipo)
+        if filters.categoria_geral:
+            query = query.filter(JournalEntry.CategoriaGeral == filters.categoria_geral)
+        if filters.tipo_gasto:
+            query = query.filter(JournalEntry.TipoGasto == filters.tipo_gasto)
         if filters.cartao:
             query = query.filter(JournalEntry.NomeCartao == filters.cartao)
         if filters.search:
@@ -142,6 +152,10 @@ class TransactionRepository:
             query = query.filter(JournalEntry.MesFatura == mes_fatura)
         if filters.tipo:
             query = query.filter(JournalEntry.TipoTransacao == filters.tipo)
+        if filters.categoria_geral:
+            query = query.filter(JournalEntry.CategoriaGeral == filters.categoria_geral)
+        if filters.tipo_gasto:
+            query = query.filter(JournalEntry.TipoGasto == filters.tipo_gasto)
         
         result = query.scalar()
         return result or 0.0

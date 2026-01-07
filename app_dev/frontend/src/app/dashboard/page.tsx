@@ -47,8 +47,9 @@ const DashboardPage = () => {
   const [categoriesError, setCategoriesError] = useState<string | null>(null);
   
   // Estados de filtros
-  const [selectedYear, setSelectedYear] = useState('2024');
+  const [selectedYear, setSelectedYear] = useState('2025');
   const [selectedMonth, setSelectedMonth] = useState('all');
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
 
   // Dados mock para desenvolvimento
   const mockMetrics: Metrics = {
@@ -74,15 +75,15 @@ const DashboardPage = () => {
       setLoadingMetrics(true);
       setMetricsError(null);
       
-      // Usar ano/mês atual se month='all'
-      const now = new Date();
-      const queryYear = year;
-      const queryMonth = month === 'all' ? now.getMonth() + 1 : month;
-      
+      // Se month='all', não enviar parâmetro month (backend retorna ano todo)
       const params = new URLSearchParams({ 
-        year: queryYear,
-        month: queryMonth.toString()
+        year: year
       });
+      
+      if (month !== 'all') {
+        params.append('month', month);
+      }
+      
       const response = await fetch(`/api/dashboard/metrics?${params}`);
       
       if (!response.ok) {
@@ -147,15 +148,15 @@ const DashboardPage = () => {
       setLoadingCategories(true);
       setCategoriesError(null);
       
-      // Usar ano/mês atual se month='all'
-      const now = new Date();
-      const queryYear = year;
-      const queryMonth = month === 'all' ? now.getMonth() + 1 : month;
-      
+      // Se month='all', não enviar parâmetro month (backend retorna ano todo)
       const params = new URLSearchParams({ 
-        year: queryYear,
-        month: queryMonth.toString()
+        year: year
       });
+      
+      if (month !== 'all') {
+        params.append('month', month);
+      }
+      
       const response = await fetch(`/api/dashboard/categories?${params}`);
       
       if (!response.ok) {
@@ -195,6 +196,7 @@ const DashboardPage = () => {
     fetchMetrics(year, month);
     fetchChartData(year, month);
     fetchCategoryData(year, month);
+    setLastUpdate(new Date());
   };
 
   useEffect(() => {
@@ -262,15 +264,26 @@ const DashboardPage = () => {
         <CreditCardExpenses />
       </div>
 
-      {/* Refresh Button */}
-      <div className="mt-6 flex justify-center">
+      {/* Refresh Button com indicação de última atualização */}
+      <div className="mt-6 flex justify-center items-center gap-4">
         <button
-          onClick={() => fetchData(selectedYear, selectedMonth)}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          onClick={() => {
+            console.log('🔄 Atualizando dashboard manualmente...');
+            fetchData(selectedYear, selectedMonth);
+          }}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
           disabled={loadingMetrics || loadingChart || loadingCategories}
         >
-          {(loadingMetrics || loadingChart || loadingCategories) ? 'Carregando...' : 'Atualizar Dados'}
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          {(loadingMetrics || loadingChart || loadingCategories) ? 'Carregando...' : 'Atualizar Dashboard'}
         </button>
+        {lastUpdate && (
+          <span className="text-sm text-muted-foreground">
+            Última atualização: {lastUpdate.toLocaleTimeString('pt-BR')}
+          </span>
+        )}
       </div>
     </DashboardLayout>
   );

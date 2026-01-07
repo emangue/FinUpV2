@@ -13,8 +13,14 @@ class DashboardService:
     def __init__(self, db: Session):
         self.repository = DashboardRepository(db)
     
-    def get_metrics(self, user_id: int, year: int, month: int) -> DashboardMetrics:
-        """Retorna métricas principais do dashboard"""
+    def get_metrics(self, user_id: int, year: int, month: int = None) -> DashboardMetrics:
+        """Retorna métricas principais do dashboard
+        
+        Args:
+            user_id: ID do usuário
+            year: Ano a filtrar
+            month: Mês específico (1-12) ou None para ano inteiro
+        """
         data = self.repository.get_metrics(user_id, year, month)
         return DashboardMetrics(**data)
     
@@ -24,7 +30,13 @@ class DashboardService:
         chart_points = [ChartDataPoint(**point) for point in data]
         return ChartDataResponse(data=chart_points)
     
-    def get_category_expenses(self, user_id: int, year: int, month: int) -> list[CategoryExpense]:
-        """Retorna despesas por categoria"""
+    def get_category_expenses(self, user_id: int, year: int, month: int = None) -> list[CategoryExpense]:
+        """Retorna despesas por categoria
+        
+        Args:
+            user_id: ID do usuário
+            year: Ano a filtrar
+            month: Mês específico (1-12) ou None para ano inteiro
+        """
         data = self.repository.get_category_expenses(user_id, year, month)
         return [CategoryExpense(**expense) for expense in data]

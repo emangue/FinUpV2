@@ -14,6 +14,7 @@ from .schemas import (
     ConfirmUploadResponse,
     DeletePreviewResponse
 )
+from .history_schemas import UploadHistoryListResponse
 
 router = APIRouter(prefix="/upload", tags=["upload"])
 
@@ -89,3 +90,24 @@ async def delete_preview(
     """
     service = UploadService(db)
     return service.delete_preview(session_id, user_id)
+
+@router.get("/history", response_model=UploadHistoryListResponse)
+async def get_upload_history(
+    limit: int = 50,
+    offset: int = 0,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Lista histórico de uploads do usuário
+    
+    **Parâmetros:**
+    - limit: Número máximo de registros (padrão: 50)
+    - offset: Deslocamento para paginação (padrão: 0)
+    
+    **Retorna:**
+    - total: Total de uploads no histórico
+    - uploads: Lista de registros de upload
+    """
+    service = UploadService(db)
+    return service.get_upload_history(user_id, limit, offset)
