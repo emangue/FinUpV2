@@ -27,11 +27,16 @@ class MarkedTransaction(RawTransaction):
     """
     Transação com IDs marcados
     Extends RawTransaction com campos de identificação
+    
+    IMPORTANTE: Todos os campos precisam ter default porque RawTransaction
+    tem campos opcionais, e Python não permite campos sem default depois
+    de campos com default na herança de dataclasses.
     """
     
-    id_transacao: str                       # Hash FNV-1a 64-bit
-    estabelecimento_base: str               # Sem XX/YY parcela
-    valor_positivo: float                   # abs(valor)
+    # Campos de identificação (preenchidos sempre, mas têm default para herança funcionar)
+    id_transacao: str = ""                  # Hash FNV-1a 64-bit
+    estabelecimento_base: str = ""          # Sem XX/YY parcela
+    valor_positivo: float = 0.0             # abs(valor)
     
     # Campos de parcela (opcionais)
     id_parcela: Optional[str] = None        # MD5 16-char (se tem parcela)
