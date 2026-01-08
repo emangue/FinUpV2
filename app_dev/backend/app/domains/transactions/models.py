@@ -42,8 +42,8 @@ class JournalEntry(Base):
     origem_classificacao = Column(String)
     upload_history_id = Column(Integer, ForeignKey("upload_history.id"), nullable=True, index=True)
     
-    # Estabelecimento normalizado
-    EstabelecimentoBase = Column(String)
+    # Estabelecimento normalizado (coluna no banco: Estabelecimento)
+    Estabelecimento = Column(String)
     
     # Parcelas
     parcela_atual = Column(Integer)
