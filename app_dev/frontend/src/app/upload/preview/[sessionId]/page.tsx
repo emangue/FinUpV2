@@ -77,6 +77,7 @@ export default function UploadPreviewPage() {
   const [registros, setRegistros] = React.useState<PreviewData[]>([])
   const [isConfirming, setIsConfirming] = React.useState(false)
   const [gruposSubgrupos, setGruposSubgrupos] = React.useState<GruposSubgrupos>({ grupos: [], subgruposPorGrupo: {} })
+  const [activeFilter, setActiveFilter] = React.useState<string>('todas')
 
   React.useEffect(() => {
     fetchPreviewData()
@@ -227,6 +228,22 @@ export default function UploadPreviewPage() {
     return formatDate(data, "MMMM 'de' yyyy", { locale: ptBR })
   }
 
+  // Filtrar registros baseado na aba ativa
+  const filteredRegistros = React.useMemo(() => {
+    switch (activeFilter) {
+      case 'classificadas':
+        return registros.filter(r => r.grupo && r.subgrupo)
+      case 'nao_classificadas':
+        return registros.filter(r => !r.grupo || !r.subgrupo || r.origem_classificacao === 'Não Classificado')
+      case 'regras_genericas':
+        return registros.filter(r => r.origem_classificacao === 'Regras Genéricas')
+      case 'base_padroes':
+        return registros.filter(r => r.origem_classificacao === 'Base Padrões')
+      default:
+        return registros
+    }
+  }, [registros, activeFilter])
+
   if (loading) {
     return (
       <DashboardLayout>
@@ -321,10 +338,52 @@ export default function UploadPreviewPage() {
           <CardHeader>
             <CardTitle>Lançamentos Detectados</CardTitle>
             <CardDescription>
-              {registros.length} lançamentos prontos para importação
+              {activeFilter === 'todas' 
+                ? `${registros.length} lançamentos prontos para importação`
+                : `${filteredRegistros.length} de ${registros.length} lançamentos`
+              }
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {/* Filtros de Origem - Abas */}
+            <div className="mb-4 flex gap-2 flex-wrap">
+              <Button
+                variant={activeFilter === 'todas' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setActiveFilter('todas')}
+              >
+                Todas
+              </Button>
+              <Button
+                variant={activeFilter === 'classificadas' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setActiveFilter('classificadas')}
+              >
+                Classificadas
+              </Button>
+              <Button
+                variant={activeFilter === 'nao_classificadas' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setActiveFilter('nao_classificadas')}
+              >
+                Não Classificadas
+              </Button>
+              <Button
+                variant={activeFilter === 'regras_genericas' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setActiveFilter('regras_genericas')}
+              >
+                Regras Genéricas
+              </Button>
+              <Button
+                variant={activeFilter === 'base_padroes' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setActiveFilter('base_padroes')}
+              >
+                Base Padrões
+              </Button>
+            </div>
+
             <div className="rounded-md border">
               <Table>
                 <TableHeader>
@@ -338,14 +397,14 @@ export default function UploadPreviewPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {registros.length === 0 ? (
+                  {filteredRegistros.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={6} className="text-center text-muted-foreground">
                         Nenhum registro encontrado
                       </TableCell>
                     </TableRow>
                   ) : (
-                    registros.map((registro) => (
+                    filteredRegistros.map((registro) => (
                       <TableRow key={registro.id}>
                         <TableCell className="font-mono text-sm">
                           {registro.data}
