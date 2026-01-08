@@ -3,7 +3,7 @@ Domínio Upload - Service
 Lógica de negócio com pipeline em 3 fases
 """
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from fastapi import HTTPException, status, UploadFile
 from datetime import datetime
 import tempfile
@@ -339,17 +339,17 @@ class UploadService:
                 cartao=raw.final_cartao,
                 mes_fatura=raw.mes_fatura,
                 created_at=now,
-                # Campos das fases seguintes (NULL por enquanto)
-                id_transacao=None,
-                id_parcela=None,
-                estabelecimento_base=None,
-                parcela_atual=None,
-                total_parcelas=None,
-                valor_positivo=None,
-                grupo=None,
-                subgrupo=None,
-                tipo_gasto=None,
-                categoria_geral=None,
+                # Campos das fases seguintes (NULL por enquanto) - CamelCase
+                IdTransacao=None,
+                IdParcela=None,
+                EstabelecimentoBase=None,
+                ParcelaAtual=None,
+                TotalParcelas=None,
+                ValorPositivo=None,
+                GRUPO=None,
+                SUBGRUPO=None,
+                TipoGasto=None,
+                CategoriaGeral=None,
                 origem_classificacao=None,
             )
             previews.append(preview)
@@ -397,12 +397,12 @@ class UploadService:
             ).first()
             
             if preview:
-                preview.id_transacao = marked.id_transacao
-                preview.id_parcela = marked.id_parcela
-                preview.estabelecimento_base = marked.estabelecimento_base
-                preview.parcela_atual = marked.parcela_atual
-                preview.total_parcelas = marked.total_parcelas
-                preview.valor_positivo = marked.valor_positivo
+                preview.IdTransacao = marked.id_transacao
+                preview.IdParcela = marked.id_parcela
+                preview.EstabelecimentoBase = marked.estabelecimento_base
+                preview.ParcelaAtual = marked.parcela_atual
+                preview.TotalParcelas = marked.total_parcelas
+                preview.ValorPositivo = marked.valor_positivo
                 preview.updated_at = datetime.now()
         
         self.db.commit()
@@ -435,13 +435,13 @@ class UploadService:
                 nome_cartao=p.nome_cartao,
                 final_cartao=p.cartao,
                 mes_fatura=p.mes_fatura,
-                # Marked fields
-                id_transacao=p.id_transacao,
-                estabelecimento_base=p.estabelecimento_base,
-                valor_positivo=p.valor_positivo,
-                id_parcela=p.id_parcela,
-                parcela_atual=p.parcela_atual,
-                total_parcelas=p.total_parcelas,
+                # Marked fields - ler do banco (CamelCase)
+                id_transacao=p.IdTransacao,
+                estabelecimento_base=p.EstabelecimentoBase,
+                valor_positivo=p.ValorPositivo,
+                id_parcela=p.IdParcela,
+                parcela_atual=p.ParcelaAtual,
+                total_parcelas=p.TotalParcelas,
             )
             marked_transactions.append((p.id, marked))
         
@@ -457,11 +457,13 @@ class UploadService:
             ).first()
             
             if preview:
-                preview.grupo = classified.grupo
-                preview.subgrupo = classified.subgrupo
-                preview.tipo_gasto = classified.tipo_gasto
-                preview.categoria_geral = classified.categoria_geral
+                preview.GRUPO = classified.grupo
+                preview.SUBGRUPO = classified.subgrupo
+                preview.TipoGasto = classified.tipo_gasto
+                preview.CategoriaGeral = classified.categoria_geral
                 preview.origem_classificacao = classified.origem_classificacao
+                preview.padrao_buscado = classified.padrao_buscado  # DEBUG
+                preview.MarcacaoIA = classified.marcacao_ia  # Sugestão da base_marcacoes
                 preview.updated_at = datetime.now()
         
         self.db.commit()
@@ -664,3 +666,50 @@ class UploadService:
             total=total,
             uploads=[UploadHistoryResponse.from_orm(u) for u in uploads]
         )
+    
+    def update_preview_classification(
+        self,
+        session_id: str,
+        preview_id: int,
+        grupo: Optional[str],
+        subgrupo: Optional[str],
+        user_id: int
+    ):
+        """
+        Atualiza classificação manual (grupo/subgrupo) de um registro de preview
+        """
+        logger.info(f"📝 Atualizando classificação manual: preview_id={preview_id}, grupo={grupo}, subgrupo={subgrupo}")
+        
+        # Buscar preview
+        preview = self.db.query(PreviewTransacao).filter(
+            PreviewTransacao.id == preview_id,
+            PreviewTransacao.session_id == session_id,
+            PreviewTransacao.user_id == user_id
+        ).first()
+        
+        if not preview:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"errorCode": "UPL_010", "error": "Registro de preview não encontrado"}
+            )
+        
+        # Atualizar campos
+        if grupo is not None:
+            preview.GRUPO = grupo
+        if subgrupo is not None:
+            preview.SUBGRUPO = subgrupo
+        
+        # Atualizar origem se foi modificado manualmente
+        if grupo or subgrupo:
+            preview.origem_classificacao = 'Manual'
+        
+        self.db.commit()
+        self.db.refresh(preview)
+        
+        return {
+            "success": True,
+            "preview_id": preview_id,
+            "grupo": preview.GRUPO,
+            "subgrupo": preview.SUBGRUPO,
+            "origem_classificacao": preview.origem_classificacao
+        }

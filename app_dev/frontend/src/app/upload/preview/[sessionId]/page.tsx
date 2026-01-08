@@ -16,6 +16,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import DashboardLayout from "@/components/dashboard-layout"
 
@@ -40,6 +47,7 @@ interface PreviewData {
   tipo_gasto?: string
   categoria_geral?: string
   origem_classificacao?: string
+  marcacao_ia?: string
   is_duplicate?: boolean
   duplicate_reason?: string
 }
@@ -53,6 +61,11 @@ interface Metadata {
   somaTotal: number
 }
 
+interface GruposSubgrupos {
+  grupos: string[]
+  subgruposPorGrupo: Record<string, string[]>
+}
+
 export default function UploadPreviewPage() {
   const params = useParams()
   const router = useRouter()
@@ -63,9 +76,11 @@ export default function UploadPreviewPage() {
   const [metadata, setMetadata] = React.useState<Metadata | null>(null)
   const [registros, setRegistros] = React.useState<PreviewData[]>([])
   const [isConfirming, setIsConfirming] = React.useState(false)
+  const [gruposSubgrupos, setGruposSubgrupos] = React.useState<GruposSubgrupos>({ grupos: [], subgruposPorGrupo: {} })
 
   React.useEffect(() => {
     fetchPreviewData()
+    fetchGruposSubgrupos()
   }, [sessionId])
 
   const fetchPreviewData = async () => {
@@ -102,6 +117,52 @@ export default function UploadPreviewPage() {
       setError(err instanceof Error ? err.message : 'Erro desconhecido')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchGruposSubgrupos = async () => {
+    try {
+      const response = await fetch('/api/categories/grupos-subgrupos')
+      if (response.ok) {
+        const data = await response.json()
+        setGruposSubgrupos(data)
+      }
+    } catch (err) {
+      console.error('Erro ao buscar grupos/subgrupos:', err)
+    }
+  }
+
+  const handleGrupoChange = async (previewId: number, grupo: string) => {
+    try {
+      const response = await fetch(`/api/upload/preview/${sessionId}/${previewId}?grupo=${grupo}`, {
+        method: 'PATCH'
+      })
+      
+      if (response.ok) {
+        // Atualizar local
+        setRegistros(prev => prev.map(r => 
+          r.id === previewId ? { ...r, grupo, subgrupo: undefined } : r
+        ))
+      }
+    } catch (err) {
+      console.error('Erro ao atualizar grupo:', err)
+    }
+  }
+
+  const handleSubgrupoChange = async (previewId: number, subgrupo: string) => {
+    try {
+      const response = await fetch(`/api/upload/preview/${sessionId}/${previewId}?subgrupo=${subgrupo}`, {
+        method: 'PATCH'
+      })
+      
+      if (response.ok) {
+        // Atualizar local
+        setRegistros(prev => prev.map(r => 
+          r.id === previewId ? { ...r, subgrupo } : r
+        ))
+      }
+    } catch (err) {
+      console.error('Erro ao atualizar subgrupo:', err)
     }
   }
 
@@ -270,13 +331,16 @@ export default function UploadPreviewPage() {
                   <TableRow>
                     <TableHead className="w-[100px]">Data</TableHead>
                     <TableHead>Lançamento</TableHead>
+                    <TableHead className="w-[180px]">Grupo</TableHead>
+                    <TableHead className="w-[180px]">Subgrupo</TableHead>
+                    <TableHead className="w-[120px]">Origem</TableHead>
                     <TableHead className="text-right w-[120px]">Valor</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {registros.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={3} className="text-center text-muted-foreground">
+                      <TableCell colSpan={6} className="text-center text-muted-foreground">
                         Nenhum registro encontrado
                       </TableCell>
                     </TableRow>
@@ -292,7 +356,61 @@ export default function UploadPreviewPage() {
                             <span className="text-xs text-muted-foreground">
                               {registro.banco} • {registro.cartao}
                             </span>
+                            {registro.marcacao_ia && (
+                              <span className="text-xs text-blue-600 mt-1">
+                                💡 {registro.marcacao_ia}
+                              </span>
+                            )}
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          <Select
+                            value={registro.grupo || ''}
+                            onValueChange={(value) => handleGrupoChange(registro.id, value)}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="Selecione grupo">
+                                {registro.grupo || 'Selecione grupo'}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              {gruposSubgrupos.grupos.map((grupo) => (
+                                <SelectItem key={grupo} value={grupo}>
+                                  {grupo}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell>
+                          <Select
+                            value={registro.subgrupo || ''}
+                            onValueChange={(value) => handleSubgrupoChange(registro.id, value)}
+                            disabled={!registro.grupo}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="Selecione subgrupo">
+                                {registro.subgrupo || 'Selecione subgrupo'}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              {registro.grupo && gruposSubgrupos.subgruposPorGrupo[registro.grupo]?.map((subgrupo) => (
+                                <SelectItem key={subgrupo} value={subgrupo}>
+                                  {subgrupo}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={
+                            registro.origem_classificacao === 'Manual' ? 'default' :
+                            registro.origem_classificacao === 'Base Padrões' ? 'secondary' :
+                            registro.origem_classificacao === 'Regras Genéricas' ? 'outline' :
+                            'secondary'
+                          } className="text-xs">
+                            {registro.origem_classificacao || 'N/A'}
+                          </Badge>
                         </TableCell>
                         <TableCell className="text-right">
                           <span className={registro.valor < 0 ? "text-red-600" : "text-green-600"}>

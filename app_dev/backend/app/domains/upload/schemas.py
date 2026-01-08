@@ -26,20 +26,22 @@ class PreviewTransacaoResponse(BaseModel):
     nome_arquivo: str
     created_at: Optional[datetime] = None
     
-    # Campos de identificação (Fase 2)
-    id_transacao: Optional[str] = None
-    id_parcela: Optional[str] = None
-    estabelecimento_base: Optional[str] = None
-    parcela_atual: Optional[int] = None
-    total_parcelas: Optional[int] = None
-    valor_positivo: Optional[float] = None
+    # Campos de identificação (Fase 2) - CamelCase para compatibilidade com banco
+    IdTransacao: Optional[str] = Field(None, alias="id_transacao")
+    IdParcela: Optional[str] = Field(None, alias="id_parcela")
+    EstabelecimentoBase: Optional[str] = Field(None, alias="estabelecimento_base")
+    ParcelaAtual: Optional[int] = Field(None, alias="parcela_atual")
+    TotalParcelas: Optional[int] = Field(None, alias="total_parcelas")
+    ValorPositivo: Optional[float] = Field(None, alias="valor_positivo")
     
-    # Campos de classificação (Fase 3)
-    grupo: Optional[str] = None
-    subgrupo: Optional[str] = None
-    tipo_gasto: Optional[str] = None
-    categoria_geral: Optional[str] = None
+    # Campos de classificação (Fase 3) - CamelCase para compatibilidade com banco
+    GRUPO: Optional[str] = Field(None, alias="grupo")
+    SUBGRUPO: Optional[str] = Field(None, alias="subgrupo")
+    TipoGasto: Optional[str] = Field(None, alias="tipo_gasto")
+    CategoriaGeral: Optional[str] = Field(None, alias="categoria_geral")
     origem_classificacao: Optional[str] = None
+    padrao_buscado: Optional[str] = None  # Debug: padrão montado usado na busca
+    MarcacaoIA: Optional[str] = Field(None, alias="marcacao_ia")  # Sugestão da base_marcacoes
     
     # Campos de deduplicação (Fase 4)
     is_duplicate: Optional[bool] = False
@@ -47,6 +49,7 @@ class PreviewTransacaoResponse(BaseModel):
     
     class Config:
         from_attributes = True
+        populate_by_name = True  # Permite usar tanto campo original quanto alias
 
 
 class ClassificationStats(BaseModel):

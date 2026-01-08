@@ -93,6 +93,27 @@ async def delete_preview(
     service = UploadService(db)
     return service.delete_preview(session_id, user_id)
 
+@router.patch("/preview/{session_id}/{preview_id}")
+async def update_preview_classification(
+    session_id: str,
+    preview_id: int,
+    grupo: str = None,
+    subgrupo: str = None,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Atualiza classificação (grupo/subgrupo) de um registro de preview
+    """
+    service = UploadService(db)
+    return service.update_preview_classification(
+        session_id=session_id,
+        preview_id=preview_id,
+        grupo=grupo,
+        subgrupo=subgrupo,
+        user_id=user_id
+    )
+
 @router.get("/history", response_model=UploadHistoryListResponse)
 async def get_upload_history(
     limit: int = 50,

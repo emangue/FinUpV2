@@ -41,6 +41,28 @@ def list_grouped_categories(
     service = CategoryService(db)
     return service.list_grouped_categories()
 
+@router.get("/grupos-subgrupos")
+def list_grupos_subgrupos(
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Lista grupos e subgrupos únicos da base_marcacoes
+    Formato: { grupos: [...], subgruposPorGrupo: { grupo: [subgrupos] } }
+    """
+    service = CategoryService(db)
+    grupos = service.repository.get_distinct_grupos()
+    
+    subgrupos_por_grupo = {}
+    for grupo in grupos:
+        subgrupos = service.repository.get_subgrupos_by_grupo(grupo)
+        subgrupos_por_grupo[grupo] = subgrupos
+    
+    return {
+        "grupos": grupos,
+        "subgruposPorGrupo": subgrupos_por_grupo
+    }
+
 @router.get("/{category_id}", response_model=CategoryResponse)
 def get_category(
     category_id: int,

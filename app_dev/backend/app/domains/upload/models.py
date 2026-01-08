@@ -14,8 +14,8 @@ class PreviewTransacao(Base):
     
     Campos preenchidos por fase:
     - Fase 1 (Raw): data, lancamento, valor, banco, tipo_documento, nome_cartao, nome_arquivo, data_criacao
-    - Fase 2 (Marking): id_transacao, id_parcela, estabelecimento_base, parcela_atual, total_parcelas, valor_positivo
-    - Fase 3 (Classification): grupo, subgrupo, tipo_gasto, categoria_geral, origem_classificacao
+    - Fase 2 (Marking): IdTransacao, IdParcela, EstabelecimentoBase, ParcelaAtual, TotalParcelas, ValorPositivo
+    - Fase 3 (Classification): GRUPO, SUBGRUPO, TipoGasto, CategoriaGeral, origem_classificacao, padrao_buscado
     - Fase 4 (Deduplication): is_duplicate, duplicate_reason
     """
     __tablename__ = "preview_transacoes"
@@ -39,20 +39,22 @@ class PreviewTransacao(Base):
     valor = Column(Float, nullable=False)
     data_criacao = Column(DateTime)  # Quando arquivo foi processado
     
-    # Fase 2: IDs e Normalização
-    id_transacao = Column(String, index=True)  # FNV-1a hash
-    id_parcela = Column(String, index=True)  # MD5 para parcelas
-    estabelecimento_base = Column(String)  # Sem XX/YY
-    parcela_atual = Column(Integer)  # Ex: 1
-    total_parcelas = Column(Integer)  # Ex: 12
-    valor_positivo = Column(Float)  # abs(valor)
+    # Fase 2: IDs e Normalização (CamelCase para compatibilidade legacy)
+    IdTransacao = Column(String, index=True)  # FNV-1a hash
+    IdParcela = Column(String, index=True)  # MD5 para parcelas
+    EstabelecimentoBase = Column(String)  # Sem XX/YY
+    ParcelaAtual = Column(Integer)  # Ex: 1
+    TotalParcelas = Column(Integer)  # Ex: 12
+    ValorPositivo = Column(Float)  # abs(valor)
     
-    # Fase 3: Classificação
-    grupo = Column(String)
-    subgrupo = Column(String)
-    tipo_gasto = Column(String)
-    categoria_geral = Column(String)
+    # Fase 3: Classificação (CamelCase para compatibilidade legacy)
+    GRUPO = Column(String)
+    SUBGRUPO = Column(String)
+    TipoGasto = Column(String)
+    CategoriaGeral = Column(String)
     origem_classificacao = Column(String)  # Base Parcelas, Base Padrões, etc
+    padrao_buscado = Column(String)  # Debug: padrão montado usado na busca
+    MarcacaoIA = Column(String)  # Sugestão da base_marcacoes (sempre preenchido)
     
     # Fase 4: Deduplicação (futura)
     is_duplicate = Column(Boolean, default=False)
