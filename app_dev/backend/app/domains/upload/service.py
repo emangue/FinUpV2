@@ -269,10 +269,13 @@ class UploadService:
                     logger.debug(f"  ❌ Excluindo: {transaction.lancamento} (regra: {regra.nome_transacao})")
                     break
             
-        if not should_exclude:
+            if not should_exclude:
                 transactions_filtered.append(transaction)
         
+        logger.info(f"📊 Exclusões aplicadas: {excluded_count} de {len(raw_transactions)} transações")
+        return transactions_filtered
 
+    def _fase1_raw_processing(
         self,
         file_path: str,
         banco: str,
