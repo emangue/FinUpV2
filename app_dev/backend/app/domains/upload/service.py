@@ -224,7 +224,10 @@ class UploadService:
         Aplica regras de exclusão da tabela transacoes_exclusao
         Remove transações que têm regras com acao='EXCLUIR'
         
-        Matching: nome_transacao normalizado contains regra normalizada
+        Matching SIMPLIFICADO:
+        1. Normaliza nome da transação e regra (sem acentos, uppercase)
+        2. Se regra está contida no nome da transação → EXCLUIR
+        3. Ignora verificações de banco e tipo (aplicar em TODOS)
         """
         # Buscar regras ativas de exclusão
         exclusoes = self.db.query(TransacaoExclusao).filter(
@@ -234,45 +237,35 @@ class UploadService:
         ).all()
         
         if not exclusoes:
+            logger.info("✅ Nenhuma regra de exclusão ativa")
             return raw_transactions
         
-        logger.info(f"🔍 Aplicando {len(exclusoes)} regras de exclusão")
+        logger.info(f"🔍 Aplicando {len(exclusoes)} regras de exclusão para user_id={user_id}")
+        
+        # Normalizar regras uma vez
+        regras_normalizadas = [(regra, normalizar(regra.nome_transacao)) for regra in exclusoes]
+        logger.info(f"  📋 Regras: {[r[1] for r in regras_normalizadas]}")
         
         # Filtrar transações
         transactions_filtered = []
         excluded_count = 0
         
         for transaction in raw_transactions:
-            should_exclude = False
             lancamento_norm = normalizar(transaction.lancamento)
+            should_exclude = False
             
-            for regra in exclusoes:
-                # Verificar se banco corresponde (se especificado na regra)
-                if regra.banco and normalizar(regra.banco) != normalizar(banco):
-                    continue
-                
-                # Verificar tipo_documento (se especificado)
-                # Regra pode ser: 'cartao', 'extrato', 'ambos', ou None
-                if regra.tipo_documento:
-                    tipo_regra_norm = normalizar(regra.tipo_documento)
-                    if tipo_regra_norm not in ['ambos', 'todos']:
-                        # Mapear 'fatura' -> 'cartao'
-                        tipo_doc_norm = 'cartao' if tipo_documento == 'fatura' else normalizar(tipo_documento)
-                        if tipo_regra_norm != tipo_doc_norm:
-                            continue
-                
-                # Verificar se nome da transação contém o padrão da regra
-                regra_norm = normalizar(regra.nome_transacao)
+            # Verificar cada regra
+            for regra, regra_norm in regras_normalizadas:
                 if regra_norm in lancamento_norm:
                     should_exclude = True
                     excluded_count += 1
-                    logger.debug(f"  ❌ Excluindo: {transaction.lancamento} (regra: {regra.nome_transacao})")
+                    logger.info(f"  ❌ EXCLUÍDO: '{transaction.lancamento}' (matched regra: '{regra.nome_transacao}')")
                     break
             
             if not should_exclude:
                 transactions_filtered.append(transaction)
         
-        logger.info(f"📊 Exclusões aplicadas: {excluded_count} de {len(raw_transactions)} transações")
+        logger.info(f"📊 RESULTADO: {excluded_count} excluídas | {len(transactions_filtered)} mantidas (de {len(raw_transactions)} total)")
         return transactions_filtered
 
     def _fase1_raw_processing(
