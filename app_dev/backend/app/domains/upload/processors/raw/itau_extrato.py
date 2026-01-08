@@ -97,13 +97,6 @@ def _preprocess_extrato_itau(df_raw: pd.DataFrame) -> pd.DataFrame:
     # Normalizar nomes de colunas
     df.columns = df.columns.str.strip().str.lower()
     
-    # Filtrar linhas válidas (remover saldo anterior, saldo disponível, lançamentos futuros)
-    df = df[~df.iloc[:, 1].astype(str).str.contains(
-        'SALDO|lançamentos futuros|DISPONÍVEL',
-        case=False,
-        na=False
-    )]
-    
     # Selecionar apenas colunas necessárias (data, lançamento, valor)
     # XLS Itaú: coluna 0=data, coluna 1=lançamento, coluna 3=valor
     df = df.iloc[:, [0, 1, 3]].copy()

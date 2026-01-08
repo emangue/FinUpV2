@@ -29,6 +29,19 @@ interface PreviewData {
   lancamento: string
   valor: number
   created_at: string
+  id_transacao?: string
+  id_parcela?: string
+  estabelecimento_base?: string
+  parcela_atual?: number
+  total_parcelas?: number
+  valor_positivo?: number
+  grupo?: string
+  subgrupo?: string
+  tipo_gasto?: string
+  categoria_geral?: string
+  origem_classificacao?: string
+  is_duplicate?: boolean
+  duplicate_reason?: string
 }
 
 interface Metadata {
@@ -65,8 +78,26 @@ export default function UploadPreviewPage() {
       }
 
       const data = await response.json()
-      setMetadata(data.metadata)
-      setRegistros(data.registros)
+      
+      // Backend retorna: { success, sessionId, totalRegistros, dados }
+      if (data.dados && data.dados.length > 0) {
+        const firstRecord = data.dados[0]
+        
+        // Construir metadata a partir dos dados
+        const metadata: Metadata = {
+          banco: firstRecord.banco || '',
+          cartao: firstRecord.cartao || '',
+          nomeArquivo: firstRecord.nome_arquivo || '',
+          mesFatura: firstRecord.mes_fatura || '',
+          totalRegistros: data.totalRegistros,
+          somaTotal: data.dados.reduce((sum: number, r: any) => sum + (r.valor || 0), 0)
+        }
+        
+        setMetadata(metadata)
+        setRegistros(data.dados)
+      } else {
+        throw new Error('Nenhum dado encontrado para esta sessão')
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro desconhecido')
     } finally {
@@ -118,7 +149,19 @@ export default function UploadPreviewPage() {
   }
 
   const formatMesFatura = (mesFatura: string) => {
-    const [ano, mes] = mesFatura.split('-')
+    // mesFatura pode vir como "202511" ou "2025-11"
+    let ano: string, mes: string
+    
+    if (mesFatura.includes('-')) {
+      [ano, mes] = mesFatura.split('-')
+    } else if (mesFatura.length === 6) {
+      // Formato YYYYMM
+      ano = mesFatura.substring(0, 4)
+      mes = mesFatura.substring(4, 6)
+    } else {
+      return mesFatura // Retornar original se não reconhecer formato
+    }
+    
     const data = new Date(parseInt(ano), parseInt(mes) - 1)
     return formatDate(data, "MMMM 'de' yyyy", { locale: ptBR })
   }

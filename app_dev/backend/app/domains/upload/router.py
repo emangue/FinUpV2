@@ -23,6 +23,7 @@ async def upload_preview(
     file: UploadFile = File(...),
     banco: str = Form(...),
     cartao: str = Form(None),
+    final_cartao: str = Form(None),
     mesFatura: str = Form(...),
     tipoDocumento: str = Form("fatura"),
     formato: str = Form("csv"),
@@ -52,7 +53,8 @@ async def upload_preview(
         user_id=user_id,
         cartao=cartao,
         tipo_documento=tipoDocumento,
-        formato=formato
+        formato=formato,
+        final_cartao=final_cartao
     )
 
 @router.get("/preview/{session_id}", response_model=GetPreviewResponse)

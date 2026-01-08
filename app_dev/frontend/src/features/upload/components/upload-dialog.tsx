@@ -104,11 +104,21 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
     setUploadError(null)
     
     try {
+      // Buscar final_cartao se cartão foi selecionado
+      let finalCartao = ''
+      if (creditCard) {
+        const selectedCard = cards.find(c => c.id.toString() === creditCard)
+        if (selectedCard) {
+          finalCartao = selectedCard.final_cartao || ''
+        }
+      }
+      
       // Enviar para API de preview
       const formData = new FormData()
       formData.append('file', selectedFile)
       formData.append('banco', bank)
       formData.append('cartao', creditCard || '')
+      formData.append('final_cartao', finalCartao)
       formData.append('mesFatura', `${selectedYear}-${selectedMonth}`)
       formData.append('tipoDocumento', activeTab) // 'fatura' ou 'extrato'
       formData.append('formato', fileFormat) // 'csv', 'xls', etc

@@ -76,22 +76,28 @@ async function handleProxy(
     
     // Preparar headers (remover headers específicos do Next.js)
     const headers = new Headers();
+    const contentType = request.headers.get('content-type');
+    
     request.headers.forEach((value, key) => {
       // Skip headers que não devem ser encaminhados
+      // Para multipart/form-data, NÃO incluir content-type (deixar o fetch gerar)
       if (!['host', 'connection', 'content-length'].includes(key.toLowerCase())) {
-        headers.set(key, value);
+        if (contentType?.includes('multipart/form-data') && key.toLowerCase() === 'content-type') {
+          // Não incluir - deixar o fetch criar automaticamente com boundary correto
+        } else {
+          headers.set(key, value);
+        }
       }
     });
     
     // Preparar body se for POST/PUT/PATCH
     let body: any = undefined;
     if (['POST', 'PUT', 'PATCH'].includes(method)) {
-      const contentType = request.headers.get('content-type');
-      
       if (contentType?.includes('application/json')) {
         body = await request.json();
         body = JSON.stringify(body);
       } else if (contentType?.includes('multipart/form-data')) {
+        // Para multipart/form-data, passar o FormData diretamente
         body = await request.formData();
       } else {
         body = await request.text();

@@ -149,31 +149,61 @@ def _preprocess_fatura_itau(df_raw: pd.DataFrame) -> pd.DataFrame:
     # Limpar dados
     df = df.dropna(subset=['data', 'lançamento', 'valor (R$)'])
     
-    # Converter valor (formato BR: 1.234,56 → float negativo para despesas)
+    # Converter valor para float (manter sinal original do arquivo)
     df['valor (R$)'] = df['valor (R$)'].apply(_convert_valor_br)
-    df['valor (R$)'] = df['valor (R$)'].apply(lambda x: -abs(x))  # Sempre negativo
     
-    # Filtrar linhas de pagamento/saldo
-    df = df[~df['lançamento'].str.contains('PAGAMENTO|SALDO|TOTAL', case=False, na=False)]
-    
-    # Remover valores zero
+    # Remover valores zero (exclusões específicas vêm da tabela transacoes_exclusao)
     df = df[df['valor (R$)'] != 0]
     
     return df.reset_index(drop=True)
 
 
 def _convert_valor_br(valor_str) -> float:
-    """Converte valor brasileiro (1.234,56) para float"""
+    """
+    Converte valor para float, detectando formato automaticamente
+    
+    Formatos aceitos:
+    - Brasileiro: 1.234,56 (ponto = milhar, vírgula = decimal)
+    - Americano: 1,234.56 (vírgula = milhar, ponto = decimal)
+    - Simples: 1234.56 ou 1234,56
+    """
     if pd.isna(valor_str):
         return 0.0
     
     valor_str = str(valor_str).strip()
-    # Remover pontos (separador de milhar) e substituir vírgula por ponto
-    valor_str = valor_str.replace('.', '').replace(',', '.')
+    
+    # Detectar formato baseado em posições de vírgula e ponto
+    tem_virgula = ',' in valor_str
+    tem_ponto = '.' in valor_str
+    
+    if tem_virgula and tem_ponto:
+        # Ambos presentes: ver qual vem por último (é o decimal)
+        pos_virgula = valor_str.rfind(',')
+        pos_ponto = valor_str.rfind('.')
+        
+        if pos_ponto > pos_virgula:
+            # Formato americano: 1,234.56
+            valor_str = valor_str.replace(',', '')  # Remove separador de milhar
+        else:
+            # Formato brasileiro: 1.234,56
+            valor_str = valor_str.replace('.', '')  # Remove separador de milhar
+            valor_str = valor_str.replace(',', '.')  # Troca vírgula por ponto
+    elif tem_virgula:
+        # Só vírgula: pode ser decimal brasileiro (42,29) ou milhar americano (1,234)
+        # Se há apenas uma vírgula E tem no máximo 2 dígitos após ela, é decimal
+        partes = valor_str.split(',')
+        if len(partes) == 2 and len(partes[1]) <= 2:
+            # Formato brasileiro: 42,29
+            valor_str = valor_str.replace(',', '.')
+        else:
+            # Formato americano milhar: 1,234
+            valor_str = valor_str.replace(',', '')
+    # Se só tem ponto, deixa como está (formato americano decimal)
     
     try:
         return float(valor_str)
     except ValueError:
+        logger.warning(f"Não foi possível converter valor: {valor_str}")
         return 0.0
 
 

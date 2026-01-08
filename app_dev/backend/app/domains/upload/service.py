@@ -26,6 +26,8 @@ from .history_schemas import UploadHistoryResponse, UploadHistoryListResponse
 from .processors import get_processor
 from .processors.marker import TransactionMarker
 from .processors.classifier import CascadeClassifier
+from app.domains.exclusoes.models import TransacaoExclusao
+from app.shared.utils import normalizar
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +119,15 @@ class UploadService:
                 )
                 logger.info(f"  ✅ {len(raw_transactions)} transações brutas processadas")
                 
+                # Aplicar regras de exclusão
+                raw_transactions = self._apply_exclusion_rules(
+                    raw_transactions,
+                    banco,
+                    tipo_documento,
+                    user_id
+                )
+                logger.info(f"  🚫 Após exclusões: {len(raw_transactions)} transações restantes")
+                
                 # Atualizar histórico com total_registros
                 self.repository.update_upload_history(
                     history_record.id,
@@ -202,7 +213,66 @@ class UploadService:
                 }
             )
     
-    def _fase1_raw_processing(
+    def _apply_exclusion_rules(
+        self,
+        raw_transactions,
+        banco: str,
+        tipo_documento: str,
+        user_id: int
+    ):
+        """
+        Aplica regras de exclusão da tabela transacoes_exclusao
+        Remove transações que têm regras com acao='EXCLUIR'
+        
+        Matching: nome_transacao normalizado contains regra normalizada
+        """
+        # Buscar regras ativas de exclusão
+        exclusoes = self.db.query(TransacaoExclusao).filter(
+            TransacaoExclusao.user_id == user_id,
+            TransacaoExclusao.ativo == 1,
+            TransacaoExclusao.acao.ilike('EXCLUIR')
+        ).all()
+        
+        if not exclusoes:
+            return raw_transactions
+        
+        logger.info(f"🔍 Aplicando {len(exclusoes)} regras de exclusão")
+        
+        # Filtrar transações
+        transactions_filtered = []
+        excluded_count = 0
+        
+        for transaction in raw_transactions:
+            should_exclude = False
+            lancamento_norm = normalizar(transaction.lancamento)
+            
+            for regra in exclusoes:
+                # Verificar se banco corresponde (se especificado na regra)
+                if regra.banco and normalizar(regra.banco) != normalizar(banco):
+                    continue
+                
+                # Verificar tipo_documento (se especificado)
+                # Regra pode ser: 'cartao', 'extrato', 'ambos', ou None
+                if regra.tipo_documento:
+                    tipo_regra_norm = normalizar(regra.tipo_documento)
+                    if tipo_regra_norm not in ['ambos', 'todos']:
+                        # Mapear 'fatura' -> 'cartao'
+                        tipo_doc_norm = 'cartao' if tipo_documento == 'fatura' else normalizar(tipo_documento)
+                        if tipo_regra_norm != tipo_doc_norm:
+                            continue
+                
+                # Verificar se nome da transação contém o padrão da regra
+                regra_norm = normalizar(regra.nome_transacao)
+                if regra_norm in lancamento_norm:
+                    should_exclude = True
+                    excluded_count += 1
+                    logger.debug(f"  ❌ Excluindo: {transaction.lancamento} (regra: {regra.nome_transacao})")
+                    break
+            
+        if not should_exclude:
+                transactions_filtered.append(transaction)
+        
+
         self,
         file_path: str,
         banco: str,

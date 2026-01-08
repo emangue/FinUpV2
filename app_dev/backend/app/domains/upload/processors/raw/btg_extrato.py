@@ -111,9 +111,6 @@ def _preprocess_extrato_btg(df_raw: pd.DataFrame) -> pd.DataFrame:
             "Verifique se o arquivo é um extrato válido do BTG."
         )
     
-    # Filtrar linhas de "Saldo Diário"
-    df = df[~df[desc_col].astype(str).str.contains('Saldo Diário', case=False, na=False)]
-    
     # Mapear colunas
     col_map = {}
     for col in df.columns:
