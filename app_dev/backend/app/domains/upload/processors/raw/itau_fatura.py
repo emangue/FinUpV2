@@ -152,8 +152,9 @@ def _preprocess_fatura_itau(df_raw: pd.DataFrame) -> pd.DataFrame:
     # Converter valor para float
     df['valor (R$)'] = df['valor (R$)'].apply(_convert_valor_br)
     
-    # ⚠️ MULTIPLICAR POR -1: faturas Itaú vêm positivas, mas são gastos (negativos)
-    df['valor (R$)'] = df['valor (R$)'].apply(lambda x: -abs(x))
+    # ⚠️ INVERTER SINAL: faturas Itaú vêm ao contrário (gastos positivos, estornos negativos)
+    # Multiplicar por -1 para corrigir: gastos ficam negativos, estornos positivos
+    df['valor (R$)'] = df['valor (R$)'] * -1
     
     # Remover valores zero (exclusões específicas vêm da tabela transacoes_exclusao)
     df = df[df['valor (R$)'] != 0]
