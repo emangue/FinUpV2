@@ -228,17 +228,17 @@ export default function UploadPreviewPage() {
     return formatDate(data, "MMMM 'de' yyyy", { locale: ptBR })
   }
 
-  // Filtrar registros baseado na aba ativa (ordem do processo cascata)
+  // Filtrar registros baseado na aba ativa (ordem do processo cascata: Nível 1-2-3-4)
   const filteredRegistros = React.useMemo(() => {
     switch (activeFilter) {
       case 'classificadas':
         return registros.filter(r => r.grupo && r.subgrupo)
       case 'base_parcelas':
         return registros.filter(r => r.origem_classificacao === 'Base Parcelas')
-      case 'journal_entries':
-        return registros.filter(r => r.origem_classificacao === 'Journal Entries')
       case 'base_padroes':
         return registros.filter(r => r.origem_classificacao === 'Base Padrões')
+      case 'journal_entries':
+        return registros.filter(r => r.origem_classificacao === 'Journal Entries')
       case 'regras_genericas':
         return registros.filter(r => r.origem_classificacao === 'Regras Genéricas')
       case 'nao_classificadas':
@@ -373,18 +373,18 @@ export default function UploadPreviewPage() {
                 Base Parcelas
               </Button>
               <Button
-                variant={activeFilter === 'journal_entries' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setActiveFilter('journal_entries')}
-              >
-                Journal Entries
-              </Button>
-              <Button
                 variant={activeFilter === 'base_padroes' ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => setActiveFilter('base_padroes')}
               >
                 Base Padrões
+              </Button>
+              <Button
+                variant={activeFilter === 'journal_entries' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setActiveFilter('journal_entries')}
+              >
+                Journal Entries
               </Button>
               <Button
                 variant={activeFilter === 'regras_genericas' ? 'default' : 'outline'}
