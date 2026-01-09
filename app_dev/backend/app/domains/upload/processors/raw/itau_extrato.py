@@ -179,6 +179,15 @@ def _preprocess_extrato_itau(df_raw: pd.DataFrame) -> pd.DataFrame:
     df = df[~df['lançamento'].str.upper().str.contains('SALDO', na=False)]
     logger.debug(f"Após filtrar saldos: {len(df)} linhas")
     
+    # Remover lançamentos futuros (após linha "SAÍDAS FUTURAS" ou similar)
+    # Itaú marca lançamentos futuros programados - não devem ser importados
+    for i in range(len(df)):
+        lancamento_upper = str(df.iloc[i]['lançamento']).upper()
+        if 'SAÍDA' in lancamento_upper and 'FUTURA' in lancamento_upper:
+            logger.debug(f"Encontrada linha 'SAÍDAS FUTURAS' na posição {i}, removendo {len(df) - i} linhas futuras")
+            df = df.iloc[:i].copy()
+            break
+    
     # Converter valor para float
     df['valor (R$)'] = pd.to_numeric(df['valor (R$)'], errors='coerce')
     df = df.dropna(subset=['valor (R$)'])
