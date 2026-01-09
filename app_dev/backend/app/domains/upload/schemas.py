@@ -62,12 +62,22 @@ class ClassificationStats(BaseModel):
     nao_classificado: int = 0
 
 
+class BalanceValidationResponse(BaseModel):
+    """Validação de saldo para extratos"""
+    saldo_inicial: Optional[float] = None
+    saldo_final: Optional[float] = None
+    soma_transacoes: Optional[float] = None
+    is_valid: Optional[bool] = None
+    diferenca: Optional[float] = None
+
+
 class UploadPreviewResponse(BaseModel):
     """Schema de resposta de upload/preview"""
     success: bool
     sessionId: str
     totalRegistros: int
     stats: Optional[ClassificationStats] = None
+    balance_validation: Optional[BalanceValidationResponse] = None
 
 class GetPreviewResponse(BaseModel):
     """Schema de resposta de dados de preview"""

@@ -139,7 +139,7 @@ class UploadService:
             try:
                 # ========== FASE 1: RAW PROCESSING ==========
                 logger.info("📝 Fase 1: Processamento Raw")
-                raw_transactions = self._fase1_raw_processing(
+                raw_transactions, balance_validation = self._fase1_raw_processing(
                     tmp_path,
                     banco,
                     tipo_documento,
@@ -148,6 +148,13 @@ class UploadService:
                     final_cartao
                 )
                 logger.info(f"  ✅ {len(raw_transactions)} transações brutas processadas")
+                
+                # Log de validação de saldo (se houver)
+                if balance_validation and balance_validation.saldo_inicial is not None:
+                    logger.info(f"  💰 Saldo inicial: R$ {balance_validation.saldo_inicial:.2f}")
+                    logger.info(f"  💰 Saldo final: R$ {balance_validation.saldo_final:.2f}")
+                    logger.info(f"  💰 Soma transações: R$ {balance_validation.soma_transacoes:.2f}")
+                    logger.info(f"  {'✅' if balance_validation.is_valid else '⚠️'} Validação: {balance_validation.is_valid} (diferença: R$ {balance_validation.diferenca:.2f})")
                 
                 # Aplicar regras de exclusão
                 raw_transactions = self._apply_exclusion_rules(
@@ -197,12 +204,20 @@ class UploadService:
             
             logger.info(f"✅ Upload processado com sucesso! Session: {session_id}")
             
-            return UploadPreviewResponse(
+            # Preparar resposta com balance_validation (se disponível)
+            response = UploadPreviewResponse(
                 success=True,
                 sessionId=session_id,
                 totalRegistros=len(raw_transactions),
                 stats=stats
             )
+            
+            # Adicionar validação de saldo se for extrato
+            if balance_validation and balance_validation.saldo_inicial is not None:
+                from .schemas import BalanceValidationResponse
+                response.balance_validation = BalanceValidationResponse(**balance_validation.to_dict())
+            
+            return response
             
         except HTTPException as http_exc:
             # Rollback: deletar session_id se falhou
@@ -309,6 +324,11 @@ class UploadService:
     ):
         """
         Fase 1: Processa arquivo bruto usando processadores específicos
+        
+        Returns:
+            Tupla (raw_transactions, balance_validation)
+            Para faturas: balance_validation será None
+            Para extratos: balance_validation com dados de validação
         """
         # Buscar processador adequado (normalização feita dentro de get_processor)
         processor = get_processor(banco, tipo_documento)
@@ -326,12 +346,22 @@ class UploadService:
         # Processar arquivo
         try:
             file_path_obj = Path(file_path)
-            raw_transactions = processor(
+            result = processor(
                 file_path_obj,
                 nome_arquivo,
                 nome_cartao,
                 final_cartao
             )
+            
+            # Verificar se retornou tupla (extrato com validação) ou lista (fatura)
+            if isinstance(result, tuple):
+                raw_transactions, balance_validation = result
+            else:
+                raw_transactions = result
+                balance_validation = None
+                
+            return raw_transactions, balance_validation
+            
         except ValueError as e:
             # Erro de formato de arquivo (header não encontrado, estrutura incorreta)
             logger.warning(f"⚠️ Formato de arquivo inválido: {str(e)}")
@@ -344,7 +374,7 @@ class UploadService:
                 }
             )
         
-        return raw_transactions
+        return raw_transactions, None
     
     def _save_raw_to_preview(self, raw_transactions, session_id: str, user_id: int):
         """

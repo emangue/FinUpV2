@@ -6,10 +6,10 @@ Adaptado de codigos_apoio/extrato_itau_xls.py
 import logging
 from pathlib import Path
 from datetime import datetime
-from typing import List
+from typing import List, Tuple
 import pandas as pd
 
-from .base import RawTransaction
+from .base import RawTransaction, BalanceValidation
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ def process_itau_extrato(
     nome_arquivo: str,
     nome_cartao: str = None,
     final_cartao: str = None
-) -> List[RawTransaction]:
+) -> Tuple[List[RawTransaction], BalanceValidation]:
     """
     Processa extrato Itaú XLS
     
@@ -30,7 +30,7 @@ def process_itau_extrato(
         final_cartao: Não usado para extrato (None)
         
     Returns:
-        Lista de RawTransaction
+        Tupla (Lista de RawTransaction, BalanceValidation)
     """
     logger.info(f"Processando extrato Itaú: {nome_arquivo}")
     
@@ -38,6 +38,10 @@ def process_itau_extrato(
         # Ler XLS
         df_raw = pd.read_excel(file_path)
         logger.debug(f"XLS lido: {len(df_raw)} linhas")
+        
+        # Extrair saldos ANTES de preprocessar
+        balance = _extract_balance_info(df_raw)
+        logger.info(f"Saldos extraídos: Inicial={balance.saldo_inicial}, Final={balance.saldo_final}")
         
         # Preprocessar
         df_processed = _preprocess_extrato_itau(df_raw)
@@ -62,12 +66,65 @@ def process_itau_extrato(
             )
             transactions.append(transaction)
         
+        # Calcular soma das transações e validar
+        balance.soma_transacoes = round(sum(t.valor for t in transactions), 2)
+        balance.validate()
+        
         logger.info(f"✅ Extrato Itaú processado: {len(transactions)} transações")
-        return transactions
+        logger.info(f"📊 Validação de saldo: {balance.is_valid} (diferença: {balance.diferenca})")
+        
+        return transactions, balance
         
     except Exception as e:
         logger.error(f"❌ Erro ao processar extrato Itaú: {str(e)}", exc_info=True)
         raise
+
+
+def _extract_balance_info(df_raw: pd.DataFrame) -> BalanceValidation:
+    """
+    Extrai saldo inicial e final do extrato Itaú
+    
+    Args:
+        df_raw: DataFrame bruto do Excel
+        
+    Returns:
+        BalanceValidation com saldos extraídos
+    """
+    balance = BalanceValidation()
+    
+    # Procurar saldo inicial (SALDO ANTERIOR)
+    for i in range(min(30, len(df_raw))):
+        row_values = df_raw.iloc[i].values
+        # Verificar se é linha de SALDO ANTERIOR
+        for j, val in enumerate(row_values):
+            if pd.notna(val) and 'SALDO ANTERIOR' in str(val).upper():
+                # Saldo está na última coluna (saldos R$) - geralmente coluna 4
+                if len(row_values) > 4 and pd.notna(row_values[4]):
+                    try:
+                        balance.saldo_inicial = float(row_values[4])
+                        logger.debug(f"Saldo inicial encontrado: {balance.saldo_inicial}")
+                    except (ValueError, TypeError):
+                        pass
+                break
+    
+    # Procurar saldo final (última linha com SALDO TOTAL DISPONÍVEL DIA)
+    # IMPORTANTE: Pegar o último mesmo que seja zero, para validar todas as transações
+    for i in range(len(df_raw)-1, -1, -1):
+        row_values = df_raw.iloc[i].values
+        # Verificar se é linha de SALDO TOTAL
+        for j, val in enumerate(row_values):
+            if pd.notna(val) and 'SALDO TOTAL' in str(val).upper():
+                # Saldo está na última coluna (saldos R$) - geralmente coluna 4
+                if len(row_values) > 4 and pd.notna(row_values[4]):
+                    try:
+                        balance.saldo_final = float(row_values[4])
+                        logger.debug(f"Saldo final encontrado: {balance.saldo_final}")
+                        return balance  # Retornar assim que encontrar o último
+                    except (ValueError, TypeError):
+                        pass
+                break
+    
+    return balance
 
 
 def _preprocess_extrato_itau(df_raw: pd.DataFrame) -> pd.DataFrame:

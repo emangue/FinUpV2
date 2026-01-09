@@ -9,6 +9,40 @@ from typing import Optional
 
 
 @dataclass
+class BalanceValidation:
+    """
+    Validação de saldo para extratos bancários
+    Saldo Inicial + Soma Transações = Saldo Final
+    """
+    saldo_inicial: Optional[float] = None
+    saldo_final: Optional[float] = None
+    soma_transacoes: Optional[float] = None
+    is_valid: Optional[bool] = None
+    diferenca: Optional[float] = None
+    
+    def validate(self) -> bool:
+        """Valida se saldo inicial + transações = saldo final"""
+        if self.saldo_inicial is None or self.saldo_final is None or self.soma_transacoes is None:
+            self.is_valid = None
+            return False
+        
+        calculado = round(self.saldo_inicial + self.soma_transacoes, 2)
+        self.diferenca = round(self.saldo_final - calculado, 2)
+        self.is_valid = abs(self.diferenca) < 0.01  # Tolerância de 1 centavo
+        return self.is_valid
+    
+    def to_dict(self) -> dict:
+        """Converte para dicionário"""
+        return {
+            'saldo_inicial': self.saldo_inicial,
+            'saldo_final': self.saldo_final,
+            'soma_transacoes': self.soma_transacoes,
+            'is_valid': self.is_valid,
+            'diferenca': self.diferenca
+        }
+
+
+@dataclass
 class RawTransaction:
     """
     Transação bruta após processamento inicial
