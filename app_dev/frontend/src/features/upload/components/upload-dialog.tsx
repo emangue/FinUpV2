@@ -57,7 +57,7 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
   const currentDate = new Date()
   const [selectedYear, setSelectedYear] = React.useState<string>(currentDate.getFullYear().toString())
   const [selectedMonth, setSelectedMonth] = React.useState<string>(String(currentDate.getMonth() + 1).padStart(2, '0'))
-  const [fileFormat, setFileFormat] = React.useState("csv")
+  const [fileFormat, setFileFormat] = React.useState("CSV")
   const [selectedFile, setSelectedFile] = React.useState<File | null>(null)
   const [password, setPassword] = React.useState("")
   const [bank, setBank] = React.useState("")
@@ -95,7 +95,7 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
       return
     }
     
-    if (fileFormat === "pdf_password" && !password) {
+    if (fileFormat === "PDF_PASSWORD" && !password) {
       setUploadError("Por favor, digite a senha do PDF.")
       return
     }
@@ -113,6 +113,9 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
         }
       }
       
+      // Determinar formato correto (PDF_PASSWORD → PDF)
+      const formatoParaAPI = fileFormat === "PDF_PASSWORD" ? "PDF" : fileFormat
+      
       // Enviar para API de preview
       const formData = new FormData()
       formData.append('file', selectedFile)
@@ -121,7 +124,10 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
       formData.append('final_cartao', finalCartao)
       formData.append('mesFatura', `${selectedYear}-${selectedMonth}`)
       formData.append('tipoDocumento', activeTab) // 'fatura' ou 'extrato'
-      formData.append('formato', fileFormat) // 'csv', 'xls', etc
+      formData.append('formato', formatoParaAPI) // 'CSV', 'Excel', 'PDF', 'OFX'
+      if (password) {
+        formData.append('senha', password) // Senha para PDFs protegidos
+      }
       
       const response = await fetch('/api/upload/preview', {
         method: 'POST',
@@ -158,7 +164,7 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
     const now = new Date()
     setSelectedYear(now.getFullYear().toString())
     setSelectedMonth(String(now.getMonth() + 1).padStart(2, '0'))
-    setFileFormat("csv")
+    setFileFormat("CSV")
     setPassword("")
     setBank("")
     setCreditCard("")
@@ -554,12 +560,12 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
             <RadioGroup value={fileFormat} onValueChange={setFileFormat}>
               <div className="flex items-center space-x-2">
                 <RadioGroupItem 
-                  value="csv" 
-                  id="csv" 
+                  value="CSV" 
+                  id="CSV" 
                   disabled={!isFormatAvailable('CSV')}
                 />
                 <Label 
-                  htmlFor="csv" 
+                  htmlFor="CSV" 
                   className={cn(
                     "flex items-center gap-2",
                     !isFormatAvailable('CSV') && "text-muted-foreground"
@@ -585,12 +591,12 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
               </div>
               <div className="flex items-center space-x-2">
                 <RadioGroupItem 
-                  value="excel" 
-                  id="excel" 
+                  value="Excel" 
+                  id="Excel" 
                   disabled={!isFormatAvailable('Excel')}
                 />
                 <Label 
-                  htmlFor="excel" 
+                  htmlFor="Excel" 
                   className={cn(
                     "flex items-center gap-2",
                     !isFormatAvailable('Excel') && "text-muted-foreground"
@@ -616,12 +622,12 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
               </div>
               <div className="flex items-center space-x-2">
                 <RadioGroupItem 
-                  value="pdf" 
-                  id="pdf" 
+                  value="PDF" 
+                  id="PDF" 
                   disabled={!isFormatAvailable('PDF')}
                 />
                 <Label 
-                  htmlFor="pdf" 
+                  htmlFor="PDF" 
                   className={cn(
                     "flex items-center gap-2",
                     !isFormatAvailable('PDF') && "text-muted-foreground"
@@ -647,12 +653,12 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
               </div>
               <div className="flex items-center space-x-2">
                 <RadioGroupItem 
-                  value="pdf_password" 
-                  id="pdf_password" 
+                  value="PDF_PASSWORD" 
+                  id="PDF_PASSWORD" 
                   disabled={!isFormatAvailable('PDF')}
                 />
                 <Label 
-                  htmlFor="pdf_password" 
+                  htmlFor="PDF_PASSWORD" 
                   className={cn(
                     "flex items-center gap-2",
                     !isFormatAvailable('PDF') && "text-muted-foreground"
@@ -678,12 +684,12 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
               </div>
               <div className="flex items-center space-x-2">
                 <RadioGroupItem 
-                  value="ofx" 
-                  id="ofx" 
+                  value="OFX" 
+                  id="OFX" 
                   disabled={!isFormatAvailable('OFX')}
                 />
                 <Label 
-                  htmlFor="ofx" 
+                  htmlFor="OFX" 
                   className={cn(
                     "flex items-center gap-2",
                     !isFormatAvailable('OFX') && "text-muted-foreground"
@@ -709,7 +715,7 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
               </div>
             </RadioGroup>
 
-            {fileFormat === "pdf_password" && (
+            {fileFormat === "PDF_PASSWORD" && (
               <div className="ml-6 space-y-2">
                 <Label htmlFor="password">Senha do PDF</Label>
                 <Input
