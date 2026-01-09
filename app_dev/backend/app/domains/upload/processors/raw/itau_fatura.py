@@ -149,6 +149,10 @@ def _preprocess_fatura_itau(df_raw: pd.DataFrame) -> pd.DataFrame:
     # Limpar dados
     df = df.dropna(subset=['data', 'lançamento', 'valor (R$)'])
     
+    # Converter data para DD/MM/YYYY (padrão esperado)
+    df['data'] = pd.to_datetime(df['data'], errors='coerce').dt.strftime('%d/%m/%Y')
+    df = df.dropna(subset=['data'])
+    
     # Converter valor para float
     df['valor (R$)'] = df['valor (R$)'].apply(_convert_valor_br)
     

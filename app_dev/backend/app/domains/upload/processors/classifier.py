@@ -44,12 +44,11 @@ class CascadeClassifier:
         self.generic_classifier = GenericRulesClassifier()  # Classificador de regras genéricas
         self.stats = {
             'total': 0,
-            'Base Parcelas': 0,
-            'Base Padrões': 0,
-            'Journal Entries': 0,
-            'Marcas Gerais': 0,
-            'Regras Genéricas': 0,
-            'Não Classificado': 0,
+            'base_parcelas': 0,
+            'base_padroes': 0,
+            'journal_entries': 0,
+            'regras_genericas': 0,
+            'nao_classificado': 0,
         }
         logger.debug(f"CascadeClassifier inicializado para user_id={user_id}")
     
@@ -86,14 +85,14 @@ class CascadeClassifier:
                 if result:
                     result.padrao_buscado = padrao_montado
                     result.marcacao_ia = marcacao_ia
-                    self.stats['Base Parcelas'] += 1
+                    self.stats['base_parcelas'] += 1
                     return result
             
             # Nível 2: Base Padrões
             result = self._classify_nivel2_padroes(marked, padrao_montado)
             if result:
                 result.marcacao_ia = marcacao_ia
-                self.stats['Base Padrões'] += 1
+                self.stats['base_padroes'] += 1
                 return result
             
             # Nível 3: Journal Entries
@@ -101,27 +100,19 @@ class CascadeClassifier:
             if result:
                 result.padrao_buscado = padrao_montado
                 result.marcacao_ia = marcacao_ia
-                self.stats['Journal Entries'] += 1
+                self.stats['journal_entries'] += 1
                 return result
             
-            # Nível 4: Marcas Gerais
-            result = self._classify_nivel4_marcas(marked)
+            # Nível 4: Regras Genéricas (hardcoded n8n)
+            result = self._classify_nivel4_regras_genericas(marked)
             if result:
                 result.padrao_buscado = padrao_montado
                 result.marcacao_ia = marcacao_ia
-                self.stats['Marcas Gerais'] += 1
-                return result
-            
-            # Nível 4.5: Regras Genéricas (hardcoded n8n)
-            result = self._classify_nivel45_regras_genericas(marked)
-            if result:
-                result.padrao_buscado = padrao_montado
-                result.marcacao_ia = marcacao_ia
-                self.stats['Regras Genéricas'] += 1
+                self.stats['regras_genericas'] += 1
                 return result
             
             # Nível 5: Não Classificado
-            self.stats['Não Classificado'] += 1
+            self.stats['nao_classificado'] += 1
             result = self._classify_nivel5_nao_classificado(marked)
             result.padrao_buscado = padrao_montado
             result.marcacao_ia = marcacao_ia
@@ -129,7 +120,7 @@ class CascadeClassifier:
             
         except Exception as e:
             logger.error(f"❌ Erro ao classificar: {str(e)}", exc_info=True)
-            self.stats['Não Classificado'] += 1
+            self.stats['nao_classificado'] += 1
             result = self._classify_nivel5_nao_classificado(marked)
             
             # Tentar montar padrão e marcação IA mesmo com erro
@@ -188,14 +179,14 @@ class CascadeClassifier:
             ).first()
             
             if parcela:
-                logger.debug(f"✅ Nível 1 (Parcelas): {marked.estabelecimento_base[:30]}...")
+                logger.debug(f"✅ Nível 1 (Parcelas): {marked.estabelecimento_base[:30]}... (status: {parcela.status})")
                 
                 return ClassifiedTransaction(
                     **marked.__dict__,
-                    grupo=parcela.GRUPO,
-                    subgrupo=parcela.SUBGRUPO,
-                    tipo_gasto=parcela.TipoGasto,
-                    categoria_geral=parcela.CategoriaGeral,
+                    grupo=parcela.grupo_sugerido,
+                    subgrupo=parcela.subgrupo_sugerido,
+                    tipo_gasto=parcela.tipo_gasto_sugerido,
+                    categoria_geral=None,
                     origem_classificacao='Base Parcelas',
                 )
         
@@ -264,115 +255,97 @@ class CascadeClassifier:
     def _classify_nivel3_journal(self, marked: MarkedTransaction) -> Optional[ClassifiedTransaction]:
         """
         Nível 3: Journal Entries
-        Usa histórico dos últimos 12 meses (≥2 ocorrências com mesma classificação)
+        Usa histórico com matching por tokens válidos (igual ao n8n)
         """
         try:
             # Import aqui para evitar circular import
             from app.domains.transactions.models import JournalEntry
+            from app.shared.utils import tokensValidos, intersecaoCount, toNumberFlexible
             
-            # Data limite: 12 meses atrás
-            data_limite = datetime.now() - timedelta(days=365)
-            
-            # Query journal_entries agrupando por estabelecimento_base
-            # Contar ocorrências de cada classificação
-            query = self.db.query(
-                JournalEntry.GRUPO,
-                JournalEntry.SUBGRUPO,
-                JournalEntry.TipoGasto,
-                JournalEntry.CategoriaGeral,
-                func.count().label('count')
-            ).filter(
+            # Buscar todo o histórico com classificação completa
+            historico = self.db.query(JournalEntry).filter(
                 and_(
-                    JournalEntry.EstabelecimentoBase == marked.estabelecimento_base,
                     JournalEntry.user_id == self.user_id,
-                    JournalEntry.DataPostagem >= data_limite,
-                    JournalEntry.GRUPO.isnot(None)
+                    JournalEntry.GRUPO.isnot(None),
+                    JournalEntry.SUBGRUPO.isnot(None),
+                    JournalEntry.TipoGasto.isnot(None)
                 )
-            ).group_by(
-                JournalEntry.GRUPO,
-                JournalEntry.SUBGRUPO,
-                JournalEntry.TipoGasto,
-                JournalEntry.CategoriaGeral
-            ).order_by(func.count().desc()).all()
+            ).all()
             
-            # Verificar se tem ≥2 ocorrências
-            if query and query[0].count >= 2:
-                result = query[0]
-                logger.debug(f"✅ Nível 3 (Journal): {marked.estabelecimento_base[:30]}... ({result.count}x)")
+            if not historico:
+                return None
+            
+            # Implementar lógica igual ao n8n
+            tokens_estab = tokensValidos(marked.estabelecimento_base)
+            v_trans = abs(toNumberFlexible(marked.valor_positivo))
+            
+            candidatos = []
+            for h in historico:
+                tokens_hist = tokensValidos(h.Estabelecimento or '')
+                inter = intersecaoCount(tokens_hist, tokens_estab)
+                v_hist = abs(toNumberFlexible(h.Valor))
                 
-                return ClassifiedTransaction(
-                    **marked.__dict__,
-                    grupo=result.GRUPO,
-                    subgrupo=result.SUBGRUPO,
-                    tipo_gasto=result.TipoGasto,
-                    categoria_geral=result.CategoriaGeral,
-                    origem_classificacao='Journal Entries',
-                )
+                # Lógica de valor igual ao n8n
+                if not (v_trans and v_hist):  # Se algum valor inválido
+                    valor_ok = True
+                elif abs(v_hist - v_trans) <= 5:  # Diferença <= 5
+                    valor_ok = True
+                else:  # Diferença percentual <= 20%
+                    valor_ok = abs(v_hist - v_trans) / max(v_hist, v_trans) <= 0.20
+                
+                completo = bool(h.GRUPO and h.SUBGRUPO and h.TipoGasto)
+                
+                # Calcular limiar de interseção igual ao n8n
+                limiar = 1 if min(len(tokens_estab), len(tokens_hist)) == 1 else 2
+                
+                if completo and valor_ok and inter >= limiar:
+                    candidatos.append({
+                        'h': h,
+                        'inter': inter,
+                        'valor_ok': valor_ok,
+                        'data': h.Data or datetime.min
+                    })
+            
+            if not candidatos:
+                return None
+            
+            # Ordenar por data mais recente primeiro (igual ao n8n)
+            candidatos.sort(key=lambda x: x['data'], reverse=True)
+            
+            # Filtrar PIX igual ao n8n (não usar histórico de PIX)
+            estab_upper = marked.estabelecimento_base.upper()
+            if 'PIX' in estab_upper:
+                logger.debug(f"❌ Nível 3 (Journal): PIX ignorado: {marked.estabelecimento_base[:30]}...")
+                return None
+            
+            # Retornar o primeiro candidato (mais recente)
+            escolhido = candidatos[0]['h']
+            logger.debug(f"✅ Nível 3 (Journal): {marked.estabelecimento_base[:30]}... (inter: {candidatos[0]['inter']}, valor_ok: {candidatos[0]['valor_ok']})")
+            
+            return ClassifiedTransaction(
+                **marked.__dict__,
+                grupo=escolhido.GRUPO,
+                subgrupo=escolhido.SUBGRUPO,
+                tipo_gasto=escolhido.TipoGasto,
+                categoria_geral=escolhido.CategoriaGeral,
+                origem_classificacao='Journal Entries',
+            )
         
         except Exception as e:
             logger.error(f"Erro Nível 3: {str(e)}")
         
         return None
     
-    def _classify_nivel4_marcas(self, marked: MarkedTransaction) -> Optional[ClassifiedTransaction]:
+    def _classify_nivel4_regras_genericas(self, marked: MarkedTransaction) -> Optional[ClassifiedTransaction]:
         """
-        Nível 4: Marcas Gerais
-        Usa keywords de base_marcacoes validadas contra BaseMarcacao
-        """
-        try:
-            # Import aqui para evitar circular import
-            from app.domains.categories.models import BaseMarcacoes, BaseMarcacao
-            
-            # Query base_marcacoes que contém keywords no estabelecimento
-            marcacoes = self.db.query(BaseMarcacoes).filter(
-                BaseMarcacoes.user_id == self.user_id
-            ).all()
-            
-            estab_lower = marked.estabelecimento_base.lower()
-            
-            for marcacao in marcacoes:
-                keywords = [kw.strip().lower() for kw in marcacao.palavras_chave.split(',')]
-                
-                # Verificar se alguma keyword está no estabelecimento
-                for keyword in keywords:
-                    if keyword and keyword in estab_lower:
-                        # Validar contra BaseMarcacao
-                        validacao = self.db.query(BaseMarcacao).filter(
-                            and_(
-                                BaseMarcacao.GRUPO == marcacao.grupo_sugerido,
-                                BaseMarcacao.SUBGRUPO == marcacao.subgrupo_sugerido,
-                                BaseMarcacao.Ativo == 1,
-                                BaseMarcacao.user_id == self.user_id
-                            )
-                        ).first()
-                        
-                        if validacao:
-                            logger.debug(f"✅ Nível 4 (Marcas): {marked.estabelecimento_base[:30]}... (keyword: {keyword})")
-                            
-                            return ClassifiedTransaction(
-                                **marked.__dict__,
-                                grupo=marcacao.grupo_sugerido,
-                                subgrupo=marcacao.subgrupo_sugerido,
-                                tipo_gasto=validacao.TipoGasto,
-                                categoria_geral=validacao.CategoriaGeral,
-                                origem_classificacao='Marcas Gerais',
-                            )
-        
-        except Exception as e:
-            logger.error(f"Erro Nível 4: {str(e)}")
-        
-        return None
-    
-    def _classify_nivel45_regras_genericas(self, marked: MarkedTransaction) -> Optional[ClassifiedTransaction]:
-        """
-        Nível 4.5: Regras Genéricas (hardcoded do n8n)
+        Nível 4: Regras Genéricas (hardcoded do n8n)
         Usa classificador de regras genéricas independente de banco
         """
         try:
             resultado = self.generic_classifier.classify(marked.estabelecimento_base)
             
             if resultado:
-                logger.debug(f"✅ Nível 4.5 (Regras Genéricas): {marked.estabelecimento_base[:30]}... (prioridade: {resultado['prioridade']})")
+                logger.debug(f"✅ Nível 4 (Regras Genéricas): {marked.estabelecimento_base[:30]}... (prioridade: {resultado['prioridade']})")
                 
                 return ClassifiedTransaction(
                     **marked.__dict__,
@@ -391,8 +364,7 @@ class CascadeClassifier:
     def _buscar_marcacao_ia(self, estabelecimento: str) -> Optional[str]:
         """
         Busca sugestão de marcação IA para QUALQUER transação
-        PRIMEIRO tenta regras genéricas (hardcoded do n8n)
-        DEPOIS tenta base_marcacoes (database do usuário)
+        Usa apenas regras genéricas (hardcoded do n8n)
         
         Returns:
             String formatada: "GRUPO > SUBGRUPO" ou None
@@ -404,26 +376,7 @@ class CascadeClassifier:
                 logger.debug(f"🎯 MarcaçãoIA (Regras Genéricas): {marcacao_generica}")
                 return marcacao_generica
             
-            # SEGUNDA TENTATIVA: base_marcacoes (database)
-            from app.domains.categories.models import BaseMarcacoes
-            
-            marcacoes = self.db.query(BaseMarcacoes).filter(
-                BaseMarcacoes.user_id == self.user_id
-            ).all()
-            
-            estab_lower = estabelecimento.lower()
-            
-            for marcacao in marcacoes:
-                keywords = [kw.strip().lower() for kw in marcacao.palavras_chave.split(',')]
-                
-                # Verificar se alguma keyword está no estabelecimento
-                for keyword in keywords:
-                    if keyword and keyword in estab_lower:
-                        # Retornar primeira marcação encontrada
-                        resultado = f"{marcacao.grupo_sugerido} > {marcacao.subgrupo_sugerido}"
-                        logger.debug(f"🎯 MarcaçãoIA (Base Marcações): {resultado}")
-                        return resultado
-            
+            # Não há segunda tentativa - só regras genéricas
             return None
         
         except Exception as e:

@@ -12,7 +12,7 @@ from typing import Optional
 # Imports de utilitários compartilhados
 from app.shared.utils import (
     fnv1a_64_hash,
-    generate_id_simples,
+    generate_id_transacao,
     normalizar_estabelecimento,
     arredondar_2_decimais
 )
@@ -46,8 +46,8 @@ def extrair_parcela_do_estabelecimento(estabelecimento: str) -> Optional[dict]:
                 'total': total
             }
     
-    # Tenta formato sem parênteses: "LOJA 3/12"
-    match = re.search(r'^(.+?)\s+(\d{1,2})/(\d{1,2})\s*$', estabelecimento)
+    # Tenta formato sem parênteses: "LOJA 3/12" OU "LOJA3/12" (colado)
+    match = re.search(r'^(.+?)\s*(\d{1,2})/(\d{1,2})\s*$', estabelecimento)
     if match:
         parcela = int(match.group(2))
         total = int(match.group(3))
@@ -90,7 +90,7 @@ class TransactionMarker:
     """
     
     def __init__(self):
-        self.collision_counts = {}  # Track collisions for suffix
+        self.seen_transactions = {}  # {chave_unica: count} para rastrear duplicatas
         logger.debug("TransactionMarker inicializado")
     
     def mark_transaction(self, raw: RawTransaction) -> MarkedTransaction:
@@ -122,26 +122,32 @@ class TransactionMarker:
             valor_positivo = abs(raw.valor)
             valor_arredondado = arredondar_2_decimais(valor_positivo)
             
-            # 3. Gerar IdTransacao (FNV-1a)
-            id_transacao = generate_id_simples(
+            # 3. Gerar chave única para detectar duplicatas no arquivo
+            chave_unica = f"{raw.data}|{estabelecimento_base}|{valor_arredondado:.2f}"
+            
+            # 4. Verificar se é duplicata dentro do arquivo e obter row_number
+            row_number = self._get_row_number_for_duplicate(chave_unica)
+            
+            # 5. Gerar IdTransacao (FNV-1a) com row_number se for duplicata
+            id_transacao = generate_id_transacao(
                 data=raw.data,
                 estabelecimento=estabelecimento_base,
-                valor=valor_arredondado
+                valor=valor_arredondado,
+                timestamp_micro=str(row_number) if row_number > 0 else None
             )
             
-            # 4. Handle collision (adicionar sufixo se necessário)
-            id_transacao = self._handle_collision(id_transacao)
-            
-            # 5. Gerar IdParcela se tem parcela (usando mesma lógica de populate_id_parcela.py)
+            # 6. Gerar IdParcela se tem parcela (usando mesma lógica de populate_id_parcela.py)
             id_parcela = None
             if info_parcela and total_parcelas:
-                # IdParcela = MD5(estabelecimento_base|valor|total) - 16 chars
+                # IMPORTANTE: Usar estabelecimento NORMALIZADO para match com base_parcelas
                 import hashlib
-                chave = f"{estabelecimento_base}|{valor_arredondado:.2f}|{total_parcelas}"
+                estab_normalizado_parcela = normalizar_estabelecimento(estabelecimento_base)
+                chave = f"{estab_normalizado_parcela}|{valor_arredondado:.2f}|{total_parcelas}"
                 id_parcela = hashlib.md5(chave.encode()).hexdigest()[:16]
-                logger.debug(f"IdParcela: {id_parcela} para {estabelecimento_base} {parcela_atual}/{total_parcelas}")
+                logger.debug(f"IdParcela: {id_parcela} para {estab_normalizado_parcela} {parcela_atual}/{total_parcelas}")
+                logger.debug(f"  Chave IdParcela: '{chave}'")
             
-            # 6. Criar MarkedTransaction
+            # 7. Criar MarkedTransaction
             marked = MarkedTransaction(
                 # Copiar campos de RawTransaction
                 banco=raw.banco,
@@ -203,24 +209,30 @@ class TransactionMarker:
         logger.info(f"✅ Marcação concluída: {len(marked_transactions)}/{len(raw_transactions)}")
         return marked_transactions
     
-    def _handle_collision(self, id_transacao: str) -> str:
+    def _get_row_number_for_duplicate(self, chave_unica: str) -> int:
         """
-        Handle hash collision adicionando sufixo
+        Retorna row_number sequencial para transações duplicadas no arquivo
+        
+        Para transações idênticas (mesma data, estabelecimento, valor),
+        retorna um número sequencial (0, 1, 2...) para diferenciar.
         
         Args:
-            id_transacao: ID base
+            chave_unica: Chave "Data|Estabelecimento|Valor"
             
         Returns:
-            ID único com sufixo se necessário
+            int: 0 para primeira ocorrência, 1+ para duplicatas
         """
-        if id_transacao not in self.collision_counts:
-            self.collision_counts[id_transacao] = 0
-            return id_transacao
+        if chave_unica not in self.seen_transactions:
+            # Primeira ocorrência desta transação
+            self.seen_transactions[chave_unica] = 0
+            return 0
         
-        # Collision detected
-        self.collision_counts[id_transacao] += 1
-        suffix = self.collision_counts[id_transacao]
+        # Duplicata detectada - incrementar contador
+        self.seen_transactions[chave_unica] += 1
+        row_number = self.seen_transactions[chave_unica]
         
-        logger.warning(f"⚠️ Collision detectada para {id_transacao}, usando sufixo _{suffix}")
+        logger.info(
+            f"🔄 Transação duplicada #{row_number + 1} detectada no arquivo: {chave_unica}"
+        )
         
-        return f"{id_transacao}_{suffix}"
+        return row_number

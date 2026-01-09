@@ -58,7 +58,7 @@ class ClassificationStats(BaseModel):
     base_parcelas: int = 0
     base_padroes: int = 0
     journal_entries: int = 0
-    marcas_gerais: int = 0
+    regras_genericas: int = 0
     nao_classificado: int = 0
 
 

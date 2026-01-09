@@ -147,7 +147,7 @@ class UploadService:
                 logger.info("🎯 Fase 3: Classificação")
                 stats = self._fase3_classification(session_id, user_id)
                 logger.info(f"  ✅ {stats.total} transações classificadas")
-                logger.info(f"  📊 Base Parcelas: {stats.base_parcelas} | Base Padrões: {stats.base_padroes} | Journal: {stats.journal_entries} | Marcas: {stats.marcas_gerais} | Não Classificado: {stats.nao_classificado}")
+                logger.info(f"  📊 Base Parcelas: {stats.base_parcelas} | Base Padrões: {stats.base_padroes} | Journal: {stats.journal_entries} | Regras Genéricas: {stats.regras_genericas} | Não Classificado: {stats.nao_classificado}")
                 
                 # Atualizar histórico com classification_stats
                 self.repository.update_upload_history(
@@ -156,7 +156,7 @@ class UploadService:
                         'base_parcelas': stats.base_parcelas,
                         'base_padroes': stats.base_padroes,
                         'journal_entries': stats.journal_entries,
-                        'marcas_gerais': stats.marcas_gerais,
+                        'regras_genericas': stats.regras_genericas,
                         'nao_classificado': stats.nao_classificado,
                     }
                 )
@@ -472,11 +472,11 @@ class UploadService:
         stats_dict = classifier.get_stats()
         return ClassificationStats(
             total=stats_dict['total'],
-            base_parcelas=stats_dict.get('Base Parcelas', 0),
-            base_padroes=stats_dict.get('Base Padrões', 0),
-            journal_entries=stats_dict.get('Journal Entries', 0),
-            marcas_gerais=stats_dict.get('Marcas Gerais', 0),
-            nao_classificado=stats_dict.get('Não Classificado', 0),
+            base_parcelas=stats_dict.get('base_parcelas', 0),
+            base_padroes=stats_dict.get('base_padroes', 0),
+            journal_entries=stats_dict.get('journal_entries', 0),
+            regras_genericas=stats_dict.get('regras_genericas', 0),
+            nao_classificado=stats_dict.get('nao_classificado', 0),
         )
     
     def get_preview_data(

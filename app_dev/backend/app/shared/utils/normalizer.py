@@ -5,6 +5,7 @@ Fonte: https://github.com/emangue/FinUp/tree/main/app/utils/normalizer.py
 """
 import re
 import unicodedata
+import math
 
 
 def normalizar(texto):
@@ -64,9 +65,9 @@ def normalizar_estabelecimento(estabelecimento):
     return estab.strip()
 
 
-def tokens_validos(texto):
+def tokensValidos(texto):
     """
-    Extrai tokens válidos de um texto (remove stop words)
+    Extrai tokens válidos de um texto (igual ao n8n)
     
     Args:
         texto (str): Texto para extrair tokens
@@ -74,11 +75,11 @@ def tokens_validos(texto):
     Returns:
         list: Lista de tokens válidos
     """
-    # Stop words (palavras a ignorar)
+    # Stop words (igual ao n8n)
     STOP_WORDS = {
         'BOLETO', 'PAGAMENTO', 'PAG', 'PIX', 'TED', 'MOBILE', 'TIT', 'INT',
         'OUTROS', 'BANCOS', 'PARA', 'AUTORIZACAO', 'TRANSACAO', 'LANCTO',
-        'DEBITO', 'CREDITO', 'AJUSTE', 'COMPRA', 'SALDO', 'DIA'
+        'DEBITO', 'CREDITO', 'AJUSTE', 'COMPRA'
     }
     
     # Normaliza e quebra em palavras
@@ -92,6 +93,58 @@ def tokens_validos(texto):
     ]
     
     return tokens
+
+
+def intersecaoCount(tokens_a, tokens_b):
+    """
+    Conta interseção entre duas listas de tokens
+    
+    Args:
+        tokens_a (list): Primeira lista de tokens
+        tokens_b (list): Segunda lista de tokens
+        
+    Returns:
+        int: Número de tokens em comum
+    """
+    set_a = set(tokens_a)
+    count = 0
+    for token in tokens_b:
+        if token in set_a:
+            count += 1
+    return count
+
+
+def toNumberFlexible(value):
+    """
+    Converte valor para número com flexibilidade (igual ao n8n)
+    
+    Args:
+        value: Valor para converter (str, int, float)
+        
+    Returns:
+        float: Número convertido ou 0 se inválido
+    """
+    if value is None:
+        return 0
+    
+    # Se já é número, retorna
+    if isinstance(value, (int, float)):
+        return float(value)
+    
+    # Se é string, tenta converter
+    try:
+        raw = str(value).strip().replace(',', '.').upper()
+        
+        # Verifica notação K (ex: "1.5K" = 1500)
+        k_match = re.match(r'^(\d+(?:\.\d+)?)\s*K$', raw)
+        if k_match:
+            return float(k_match.group(1)) * 1000
+        
+        # Conversão normal
+        number = float(raw)
+        return number if math.isfinite(number) else 0
+    except:
+        return 0
 
 
 def detectar_parcela(estabelecimento, origem=''):

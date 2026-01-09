@@ -66,6 +66,35 @@ def generate_id_transacao(data, estabelecimento, valor):
     return fnv1a_64_hash(chave)
 
 
+def generate_id_transacao(data, estabelecimento, valor, timestamp_micro=None):
+    """
+    Gera IdTransacao consistente usando hash FNV-1a
+    
+    Args:
+        data (str): Data no formato DD/MM/AAAA
+        estabelecimento (str): Nome do estabelecimento
+        valor (float): Valor da transação
+        timestamp_micro (str, optional): Timestamp em microsegundos para diferenciar duplicatas
+        
+    Returns:
+        str: IdTransacao (hash FNV-1a 64-bit)
+    """
+    # Normaliza estabelecimento (remove acentos, caracteres especiais)
+    from app.shared.utils.normalizer import normalizar
+    
+    estab_norm = normalizar(estabelecimento)
+    valor_str = f"{float(valor):.2f}"
+    
+    # Chave: Data|EstabelecimentoNormalizado|Valor[|Timestamp]
+    chave = f"{data}|{estab_norm}|{valor_str}"
+    
+    # Se fornecido timestamp, adiciona para garantir unicidade
+    if timestamp_micro:
+        chave += f"|{timestamp_micro}"
+    
+    return fnv1a_64_hash(chave)
+
+
 def generate_id_simples(data, estabelecimento, valor):
     """
     Gera ID simples (compatível com n8n)
@@ -91,7 +120,7 @@ def generate_id_simples(data, estabelecimento, valor):
     hash_val = 0
     for char in str_concat:
         hash_val = ((hash_val << 5) - hash_val) + ord(char)
-        hash_val = hash_val & hash_val  # Convert to 32bit integer
+        hash_val = hash_val & 0xFFFFFFFF  # Convert to 32bit integer
     
-    # Retorna em base 36
-    return format(abs(hash_val), 'x').upper()
+    # Retorna em decimal (consistente com journal_entries)
+    return str(abs(hash_val))

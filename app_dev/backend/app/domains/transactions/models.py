@@ -55,3 +55,37 @@ class JournalEntry(Base):
     
     # Relationships
     upload_history = relationship("UploadHistory", back_populates="transactions")
+
+
+class BaseParcelas(Base):
+    """
+    Modelo da tabela base_parcelas
+    Contém informações de parcelamentos
+    """
+    __tablename__ = "base_parcelas"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, index=True)
+    
+    # Identificação
+    id_parcela = Column(String, index=True)
+    estabelecimento_base = Column(String)
+    
+    # Dados da parcela
+    valor_parcela = Column(Float)
+    qtd_parcelas = Column(Integer)
+    qtd_pagas = Column(Integer)
+    valor_total_plano = Column(Float)
+    
+    # Classificação sugerida
+    grupo_sugerido = Column(String)
+    subgrupo_sugerido = Column(String)
+    tipo_gasto_sugerido = Column(String)
+    
+    # Controle
+    data_inicio = Column(String)  # Formato DD/MM/YYYY
+    status = Column(String)  # ativa, finalizado, cancelada
+    
+    # Temporal
+    created_at = Column(DateTime)
+    updated_at = Column(DateTime)
