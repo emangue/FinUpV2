@@ -21,6 +21,7 @@ class UploadHistoryResponse(BaseModel):
     transacoes_importadas: int
     transacoes_duplicadas: int
     classification_stats: Optional[Dict[str, Any]] = None
+    balance_validation: Optional[Dict[str, Any]] = None
     data_upload: datetime
     data_confirmacao: Optional[datetime] = None
     error_message: Optional[str] = None

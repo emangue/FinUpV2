@@ -59,6 +59,14 @@ interface Metadata {
   mesFatura: string
   totalRegistros: number
   somaTotal: number
+  tipoDocumento?: string
+  balanceValidation?: {
+    saldo_inicial: number
+    saldo_final: number
+    soma_transacoes: number
+    is_valid: boolean
+    diferenca: number
+  }
 }
 
 interface GruposSubgrupos {
@@ -95,18 +103,20 @@ export default function UploadPreviewPage() {
 
       const data = await response.json()
       
-      // Backend retorna: { success, sessionId, totalRegistros, dados }
+      // Backend retorna: { success, sessionId, totalRegistros, dados, banco, tipo_documento, nome_arquivo, nome_cartao, mes_fatura, balance_validation }
       if (data.dados && data.dados.length > 0) {
         const firstRecord = data.dados[0]
         
-        // Construir metadata a partir dos dados
+        // Construir metadata a partir dos dados do backend (priority) ou firstRecord (fallback)
         const metadata: Metadata = {
-          banco: firstRecord.banco || '',
+          banco: data.banco || firstRecord.banco || '',
           cartao: firstRecord.cartao || '',
-          nomeArquivo: firstRecord.nome_arquivo || '',
-          mesFatura: firstRecord.mes_fatura || '',
+          nomeArquivo: data.nome_arquivo || firstRecord.nome_arquivo || '',
+          mesFatura: data.mes_fatura || firstRecord.mes_fatura || '',
           totalRegistros: data.totalRegistros,
-          somaTotal: data.dados.reduce((sum: number, r: any) => sum + (r.valor || 0), 0)
+          somaTotal: data.dados.reduce((sum: number, r: any) => sum + (r.valor || 0), 0),
+          tipoDocumento: data.tipo_documento || '',
+          balanceValidation: data.balance_validation || undefined
         }
         
         setMetadata(metadata)
@@ -321,10 +331,44 @@ export default function UploadPreviewPage() {
                 <p className="text-sm text-muted-foreground">Arquivo</p>
                 <p className="font-semibold text-sm">{metadata.nomeArquivo}</p>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Mês Fatura</p>
-                <p className="font-semibold">{formatMesFatura(metadata.mesFatura)}</p>
-              </div>
+              
+              {/* Mostrar Mês Fatura ou Validação de Saldo baseado no tipo_documento */}
+              {metadata.tipoDocumento === 'extrato' && metadata.balanceValidation ? (
+                <>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Saldo Inicial</p>
+                    <p className="font-semibold">{formatCurrency(metadata.balanceValidation.saldo_inicial)}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Saldo Final</p>
+                    <p className="font-semibold">{formatCurrency(metadata.balanceValidation.saldo_final)}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Validação de Saldo</p>
+                    <div className="flex items-center gap-2">
+                      {metadata.balanceValidation.is_valid ? (
+                        <>
+                          <Check className="h-5 w-5 text-green-600" />
+                          <span className="font-semibold text-green-600">Válido</span>
+                        </>
+                      ) : (
+                        <>
+                          <X className="h-5 w-5 text-amber-600" />
+                          <span className="font-semibold text-amber-600">
+                            Diferença: {formatCurrency(metadata.balanceValidation.diferenca)}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div>
+                  <p className="text-sm text-muted-foreground">Mês Fatura</p>
+                  <p className="font-semibold">{formatMesFatura(metadata.mesFatura)}</p>
+                </div>
+              )}
+              
               <div>
                 <p className="text-sm text-muted-foreground">Total de Lançamentos</p>
                 <p className="font-semibold">{metadata.totalRegistros}</p>

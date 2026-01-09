@@ -21,6 +21,7 @@ from .schemas import (
     ConfirmUploadResponse,
     DeletePreviewResponse,
     ClassificationStats,
+    BalanceValidationResponse,
 )
 from .history_schemas import UploadHistoryResponse, UploadHistoryListResponse
 from .processors import get_processor
@@ -165,10 +166,16 @@ class UploadService:
                 )
                 logger.info(f"  🚫 Após exclusões: {len(raw_transactions)} transações restantes")
                 
-                # Atualizar histórico com total_registros
+                # Preparar balance_validation_dict para salvar no histórico
+                balance_validation_dict = None
+                if balance_validation and balance_validation.saldo_inicial is not None:
+                    balance_validation_dict = balance_validation.to_dict()
+                
+                # Atualizar histórico com total_registros e balance_validation
                 self.repository.update_upload_history(
                     history_record.id,
-                    total_registros=len(raw_transactions)
+                    total_registros=len(raw_transactions),
+                    balance_validation=balance_validation_dict
                 )
                 
                 # Salvar dados brutos no preview
@@ -560,11 +567,26 @@ class UploadService:
         
         dados = [PreviewTransacaoResponse.from_orm(p) for p in previews]
         
+        # Buscar metadados do upload history
+        history = self.repository.get_upload_history_by_session(session_id, user_id)
+        
+        # Preparar balance_validation se existir
+        balance_validation_response = None
+        if history and history.balance_validation:
+            balance_validation_response = BalanceValidationResponse(**history.balance_validation)
+        
         return GetPreviewResponse(
             success=True,
             sessionId=session_id,
             totalRegistros=len(dados),
-            dados=dados
+            dados=dados,
+            # Metadados do upload
+            banco=history.banco if history else None,
+            tipo_documento=history.tipo_documento if history else None,
+            nome_arquivo=history.nome_arquivo if history else None,
+            nome_cartao=history.nome_cartao if history else None,
+            mes_fatura=history.mes_fatura if history else None,
+            balance_validation=balance_validation_response
         )
     
     def confirm_upload(

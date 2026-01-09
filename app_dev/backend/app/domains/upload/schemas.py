@@ -85,6 +85,13 @@ class GetPreviewResponse(BaseModel):
     sessionId: str
     totalRegistros: int
     dados: List[PreviewTransacaoResponse]
+    # Metadados do upload (do UploadHistory)
+    banco: Optional[str] = None
+    tipo_documento: Optional[str] = None
+    nome_arquivo: Optional[str] = None
+    nome_cartao: Optional[str] = None
+    mes_fatura: Optional[str] = None
+    balance_validation: Optional[BalanceValidationResponse] = None
 
 class ConfirmUploadResponse(BaseModel):
     """Schema de resposta de confirmação de upload"""

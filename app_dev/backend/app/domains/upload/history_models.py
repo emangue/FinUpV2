@@ -45,6 +45,10 @@ class UploadHistory(Base):
     classification_stats = Column(JSON, nullable=True)
     # Exemplo: {"base_parcelas": 10, "base_padroes": 5, "journal_entries": 3, ...}
     
+    # Validação de saldo (para extratos) (JSON)
+    balance_validation = Column(JSON, nullable=True)
+    # Exemplo: {"saldo_inicial": 459.73, "saldo_final": 0.0, "soma_transacoes": -485.87, "is_valid": false, "diferenca": 26.14}
+    
     # Timestamps
     data_upload = Column(DateTime, default=datetime.now, nullable=False)
     data_confirmacao = Column(DateTime, nullable=True)  # NULL se cancelado/erro
