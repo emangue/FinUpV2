@@ -11,21 +11,48 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Plus } from "lucide-react"
-import { useBanks, BankFormModal, BanksTable, BankCompatibility } from "@/features/banks"
+import { useBanks, BanksTable, BankCompatibility, StatusType } from "@/features/banks"
+import { useToast } from "@/hooks/use-toast"
 
 export default function BancosPage() {
-  const { banks, loading, error, updateBank } = useBanks()
-  const [modalOpen, setModalOpen] = React.useState(false)
-  const [editingBank, setEditingBank] = React.useState<BankCompatibility | null>(null)
+  const { banks, loading, error, updateBank, fetchBanks } = useBanks()
+  const { toast } = useToast()
 
-  const handleEdit = (bank: BankCompatibility) => {
-    setEditingBank(bank)
-    setModalOpen(true)
-  }
+  const handleUpdateFormat = async (id: number, format: string, newStatus: StatusType) => {
+    try {
+      // Mapear formato para nome do campo
+      const formatFieldMap: Record<string, string> = {
+        'csv': 'csv_status',
+        'excel': 'excel_status',
+        'pdf': 'pdf_status',
+        'ofx': 'ofx_status'
+      }
+      
+      const fieldName = formatFieldMap[format.toLowerCase()]
+      if (!fieldName) {
+        throw new Error(`Formato inválido: ${format}`)
+      }
 
-  const handleSave = async (data: { status: 'OK' | 'WIP' | 'TBD' }) => {
-    if (editingBank) {
-      await updateBank(editingBank.id, data.status)
+      // Atualizar via API
+      await fetch(`/api/compatibility/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [fieldName]: newStatus })
+      })
+
+      // Recarregar dados
+      await fetchBanks()
+
+      toast({
+        title: "Status atualizado",
+        description: `${format.toUpperCase()} atualizado para ${newStatus}`,
+      })
+    } catch (err: any) {
+      toast({
+        title: "Erro ao atualizar",
+        description: err.message || "Erro desconhecido",
+        variant: "destructive"
+      })
     }
   }
 
@@ -42,13 +69,11 @@ export default function BancosPage() {
         </div>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle>Bancos Compatíveis</CardTitle>
-              <CardDescription>
-                {loading ? 'Carregando...' : `${banks.length} bancos/formatos cadastrados`}
-              </CardDescription>
-            </div>
+          <CardHeader>
+            <CardTitle>Bancos Compatíveis</CardTitle>
+            <CardDescription>
+              {loading ? 'Carregando...' : `${banks.length} bancos cadastrados`}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             {error && (
@@ -58,17 +83,22 @@ export default function BancosPage() {
             )}
             <BanksTable 
               banks={banks}
-              onEdit={handleEdit}
+              onUpdateFormat={handleUpdateFormat}
             />
           </CardContent>
         </Card>
 
-        <BankFormModal
-          open={modalOpen}
-          onOpenChange={setModalOpen}
-          bank={editingBank}
-          onSave={handleSave}
-        />
+        <div className="text-sm text-muted-foreground space-y-1">
+          <p>📋 <strong>Legenda:</strong></p>
+          <ul className="ml-4 space-y-1">
+            <li>• <span className="font-semibold text-green-600">OK</span> - Formato suportado e testado</li>
+            <li>• <span className="font-semibold text-yellow-600">WIP</span> - Em desenvolvimento</li>
+            <li>• <span className="font-semibold text-red-600">TBD</span> - A ser desenvolvido</li>
+          </ul>
+          <p className="mt-2 text-xs">
+            💡 Clique nos dropdowns para alterar o status de cada formato
+          </p>
+        </div>
       </div>
     </DashboardLayout>
   )

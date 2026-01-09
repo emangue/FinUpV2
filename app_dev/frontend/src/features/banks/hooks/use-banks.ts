@@ -36,12 +36,12 @@ export function useBanks() {
     }
   }, [fetchBanks])
 
-  const updateBank = useCallback(async (id: number, status: 'OK' | 'WIP' | 'TBD') => {
+  const updateBank = useCallback(async (id: number, data: BankUpdate) => {
     try {
       const response = await fetch(`/api/compatibility/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status })
+        body: JSON.stringify(data)
       })
       
       if (!response.ok) {
@@ -76,6 +76,7 @@ export function useBanks() {
     banks,
     loading,
     error,
+    fetchBanks,
     refetch: fetchBanks,
     createBank,
     updateBank,
