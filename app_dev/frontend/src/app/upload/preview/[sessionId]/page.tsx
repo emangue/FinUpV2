@@ -92,6 +92,16 @@ export default function UploadPreviewPage() {
     fetchGruposSubgrupos()
   }, [sessionId])
 
+  // Auto-filtrar para "Não Classificadas" se houver
+  React.useEffect(() => {
+    if (registros.length > 0) {
+      const naoClassificadas = registros.filter(r => !r.grupo || !r.subgrupo || r.origem_classificacao === 'Não Classificado')
+      if (naoClassificadas.length > 0) {
+        setActiveFilter('nao_classificadas')
+      }
+    }
+  }, [registros])
+
   const fetchPreviewData = async () => {
     try {
       setLoading(true)
@@ -238,21 +248,51 @@ export default function UploadPreviewPage() {
     return formatDate(data, "MMMM 'de' yyyy", { locale: ptBR })
   }
 
+  // Contar não classificadas e duplicadas
+  const contadores = React.useMemo(() => {
+    const duplicadas = registros.filter(r => r.is_duplicate)
+    const naoDuplicadas = registros.filter(r => !r.is_duplicate)
+    
+    const naoClassificadas = naoDuplicadas.filter(r => !r.grupo || !r.subgrupo || r.origem_classificacao === 'Não Classificado')
+    const validas = naoDuplicadas.filter(r => r.grupo && r.subgrupo)
+    const classificadas = naoDuplicadas.filter(r => r.grupo && r.subgrupo)
+    const baseParcelas = naoDuplicadas.filter(r => r.origem_classificacao === 'Base Parcelas')
+    const basePadroes = naoDuplicadas.filter(r => r.origem_classificacao === 'Base Padrões')
+    const journalEntries = naoDuplicadas.filter(r => r.origem_classificacao === 'Journal Entries')
+    const regrasGenericas = naoDuplicadas.filter(r => r.origem_classificacao === 'Regras Genéricas')
+    
+    return {
+      todas: registros.length,
+      naoDuplicadas: naoDuplicadas.length,
+      naoClassificadas: naoClassificadas.length,
+      duplicadas: duplicadas.length,
+      validas: validas.length,
+      classificadas: classificadas.length,
+      baseParcelas: baseParcelas.length,
+      basePadroes: basePadroes.length,
+      journalEntries: journalEntries.length,
+      regrasGenericas: regrasGenericas.length
+    }
+  }, [registros])
+
   // Filtrar registros baseado na aba ativa (ordem do processo cascata: Nível 1-2-3-4)
+  // Duplicadas são excluídas de todos os filtros exceto 'todas' e 'duplicadas'
   const filteredRegistros = React.useMemo(() => {
     switch (activeFilter) {
       case 'classificadas':
-        return registros.filter(r => r.grupo && r.subgrupo)
+        return registros.filter(r => !r.is_duplicate && r.grupo && r.subgrupo)
       case 'base_parcelas':
-        return registros.filter(r => r.origem_classificacao === 'Base Parcelas')
+        return registros.filter(r => !r.is_duplicate && r.origem_classificacao === 'Base Parcelas')
       case 'base_padroes':
-        return registros.filter(r => r.origem_classificacao === 'Base Padrões')
+        return registros.filter(r => !r.is_duplicate && r.origem_classificacao === 'Base Padrões')
       case 'journal_entries':
-        return registros.filter(r => r.origem_classificacao === 'Journal Entries')
+        return registros.filter(r => !r.is_duplicate && r.origem_classificacao === 'Journal Entries')
       case 'regras_genericas':
-        return registros.filter(r => r.origem_classificacao === 'Regras Genéricas')
+        return registros.filter(r => !r.is_duplicate && r.origem_classificacao === 'Regras Genéricas')
       case 'nao_classificadas':
-        return registros.filter(r => !r.grupo || !r.subgrupo || r.origem_classificacao === 'Não Classificado')
+        return registros.filter(r => !r.is_duplicate && (!r.grupo || !r.subgrupo || r.origem_classificacao === 'Não Classificado'))
+      case 'duplicadas':
+        return registros.filter(r => r.is_duplicate)
       default:
         return registros
     }
@@ -308,6 +348,43 @@ export default function UploadPreviewPage() {
             Cancelar
           </Button>
         </div>
+
+        {/* Status de Classificação */}
+        {contadores.naoClassificadas > 0 ? (
+          <Card className="border-amber-200 bg-amber-50">
+            <CardContent className="pt-6">
+              <div className="flex items-start gap-3">
+                <X className="h-5 w-5 text-amber-600 mt-0.5" />
+                <div className="flex-1">
+                  <h3 className="font-semibold text-amber-900">
+                    {contadores.naoClassificadas} {contadores.naoClassificadas === 1 ? 'transação' : 'transações'} sem classificação
+                  </h3>
+                  <p className="text-sm text-amber-700 mt-1">
+                    Complete a classificação antes de confirmar a importação. 
+                    {contadores.validas > 0 && ` ${contadores.validas} de ${contadores.total - contadores.duplicadas} transações já classificadas.`}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="border-green-200 bg-green-50">
+            <CardContent className="pt-6">
+              <div className="flex items-start gap-3">
+                <Check className="h-5 w-5 text-green-600 mt-0.5" />
+                <div className="flex-1">
+                  <h3 className="font-semibold text-green-900">
+                    Arquivo pronto para importação
+                  </h3>
+                  <p className="text-sm text-green-700 mt-1">
+                    {contadores.validas} {contadores.validas === 1 ? 'transação classificada' : 'transações classificadas'}
+                    {contadores.duplicadas > 0 && ` • ${contadores.duplicadas} duplicadas serão ignoradas`}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Metadata Card */}
         <Card>
@@ -381,6 +458,33 @@ export default function UploadPreviewPage() {
           </CardContent>
         </Card>
 
+        {/* Botão de Confirmação Superior - Mostrar apenas quando estiver tudo OK */}
+        {contadores.naoClassificadas === 0 && registros.length > 0 && (
+          <div className="flex justify-end gap-4">
+            <Button onClick={handleCancel} variant="outline" size="lg">
+              <X className="mr-2 h-4 w-4" />
+              Cancelar Importação
+            </Button>
+            <Button 
+              onClick={handleConfirm} 
+              size="lg"
+              disabled={isConfirming}
+            >
+              {isConfirming ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Processando...
+                </>
+              ) : (
+                <>
+                  <Check className="mr-2 h-4 w-4" />
+                  Confirmar Importação ({contadores.validas} transações)
+                </>
+              )}
+            </Button>
+          </div>
+        )}
+
         {/* Table */}
         <Card>
           <CardHeader>
@@ -400,50 +504,59 @@ export default function UploadPreviewPage() {
                 size="sm"
                 onClick={() => setActiveFilter('todas')}
               >
-                Todas
+                Todas ({contadores.todas})
               </Button>
               <Button
                 variant={activeFilter === 'classificadas' ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => setActiveFilter('classificadas')}
               >
-                Classificadas
+                Classificadas ({contadores.classificadas})
               </Button>
               <Button
                 variant={activeFilter === 'base_parcelas' ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => setActiveFilter('base_parcelas')}
               >
-                Base Parcelas
+                Base Parcelas ({contadores.baseParcelas})
               </Button>
               <Button
                 variant={activeFilter === 'base_padroes' ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => setActiveFilter('base_padroes')}
               >
-                Base Padrões
+                Base Padrões ({contadores.basePadroes})
               </Button>
               <Button
                 variant={activeFilter === 'journal_entries' ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => setActiveFilter('journal_entries')}
               >
-                Journal Entries
+                Journal Entries ({contadores.journalEntries})
               </Button>
               <Button
                 variant={activeFilter === 'regras_genericas' ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => setActiveFilter('regras_genericas')}
               >
-                Regras Genéricas
+                Regras Genéricas ({contadores.regrasGenericas})
               </Button>
               <Button
                 variant={activeFilter === 'nao_classificadas' ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => setActiveFilter('nao_classificadas')}
               >
-                Não Classificadas
+                Não Classificadas ({contadores.naoClassificadas})
               </Button>
+              {contadores.duplicadas > 0 && (
+                <Button
+                  variant={activeFilter === 'duplicadas' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setActiveFilter('duplicadas')}
+                >
+                  Duplicadas ({contadores.duplicadas})
+                </Button>
+              )}
             </div>
 
             <div className="rounded-md border">
@@ -547,7 +660,7 @@ export default function UploadPreviewPage() {
           </CardContent>
         </Card>
 
-        {/* Actions */}
+        {/* Actions Inferior */}
         <div className="flex justify-end gap-4">
           <Button onClick={handleCancel} variant="outline" size="lg">
             <X className="mr-2 h-4 w-4" />
@@ -556,17 +669,23 @@ export default function UploadPreviewPage() {
           <Button 
             onClick={handleConfirm} 
             size="lg"
-            disabled={isConfirming || registros.length === 0}
+            disabled={isConfirming || registros.length === 0 || contadores.naoClassificadas > 0}
+            className={contadores.naoClassificadas > 0 ? 'opacity-50 cursor-not-allowed' : ''}
           >
             {isConfirming ? (
               <>
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                 Processando...
               </>
+            ) : contadores.naoClassificadas > 0 ? (
+              <>
+                <X className="mr-2 h-4 w-4" />
+                Aguardando Classificação
+              </>
             ) : (
               <>
                 <Check className="mr-2 h-4 w-4" />
-                Confirmar e Importar
+                Confirmar Importação ({contadores.validas} transações)
               </>
             )}
           </Button>

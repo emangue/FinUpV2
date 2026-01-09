@@ -193,6 +193,11 @@ class UploadService:
                 logger.info(f"  ✅ {stats.total} transações classificadas")
                 logger.info(f"  📊 Base Parcelas: {stats.base_parcelas} | Base Padrões: {stats.base_padroes} | Journal: {stats.journal_entries} | Regras Genéricas: {stats.regras_genericas} | Não Classificado: {stats.nao_classificado}")
                 
+                # ========== FASE 4: DEDUPLICATION ==========
+                logger.info("🔍 Fase 4: Deduplicação")
+                duplicates_count = self._fase4_deduplication(session_id, user_id)
+                logger.info(f"  ✅ {duplicates_count} transações duplicadas identificadas")
+                
                 # Atualizar histórico com classification_stats
                 self.repository.update_upload_history(
                     history_record.id,
@@ -202,6 +207,7 @@ class UploadService:
                         'journal_entries': stats.journal_entries,
                         'regras_genericas': stats.regras_genericas,
                         'nao_classificado': stats.nao_classificado,
+                        'duplicadas': duplicates_count,
                     }
                 )
                 
@@ -545,6 +551,46 @@ class UploadService:
             regras_genericas=stats_dict.get('regras_genericas', 0),
             nao_classificado=stats_dict.get('nao_classificado', 0),
         )
+    
+    def _fase4_deduplication(self, session_id: str, user_id: int) -> int:
+        """
+        Fase 4: Identifica transações duplicadas
+        Verifica se IdTransacao já existe em journal_entries
+        Marca como duplicada e NÃO será importada
+        
+        Returns:
+            Número de duplicatas encontradas
+        """
+        from app.domains.transactions.models import JournalEntry
+        
+        # Buscar registros do preview
+        previews = self.repository.get_by_session_id(session_id, user_id)
+        
+        if not previews:
+            return 0
+        
+        duplicates_count = 0
+        
+        for preview in previews:
+            # Só verificar se tem IdTransacao
+            if not preview.IdTransacao:
+                continue
+            
+            # Verificar se já existe em journal_entries
+            existing = self.db.query(JournalEntry).filter(
+                JournalEntry.IdTransacao == preview.IdTransacao,
+                JournalEntry.user_id == user_id
+            ).first()
+            
+            if existing:
+                # Marcar como duplicada
+                preview.is_duplicate = True
+                preview.duplicate_reason = f"IdTransacao já existe em journal_entries (ID: {existing.id}, Data: {existing.Data})"
+                duplicates_count += 1
+                logger.debug(f"  🔍 Duplicata: {preview.data} - {preview.lancamento} (IdTransacao: {preview.IdTransacao})")
+        
+        self.db.commit()
+        return duplicates_count
     
     def get_preview_data(
         self,
