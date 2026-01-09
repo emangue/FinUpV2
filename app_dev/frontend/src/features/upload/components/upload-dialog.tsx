@@ -254,20 +254,22 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
     if (open) {
       resetForm()
       
-      // Buscar compatibilidade da API
+      // Buscar compatibilidade da API (formato matricial)
       fetch('/api/compatibility')
         .then(res => res.json())
         .then(data => {
           console.log('🔍 Compatibilidade carregada:', data)
           
-          // Transformar array de banks em objeto {[bank]: {[format]: status}}
+          // Transformar array de banks em objeto {[bank]: {CSV: status, Excel: status, ...}}
           const compatibilityMap: BankCompatibility = {}
           if (data.banks && Array.isArray(data.banks)) {
             data.banks.forEach((item: any) => {
-              if (!compatibilityMap[item.bank_name]) {
-                compatibilityMap[item.bank_name] = {}
+              compatibilityMap[item.bank_name] = {
+                'CSV': item.csv_status,
+                'Excel': item.excel_status,
+                'PDF': item.pdf_status,
+                'OFX': item.ofx_status
               }
-              compatibilityMap[item.bank_name][item.file_format] = item.status
             })
           }
           console.log('📊 Compatibilidade processada:', compatibilityMap)

@@ -27,6 +27,7 @@ from .processors import get_processor
 from .processors.marker import TransactionMarker
 from .processors.classifier import CascadeClassifier
 from app.domains.exclusoes.models import TransacaoExclusao
+from app.domains.compatibility.service import CompatibilityService
 from app.shared.utils import normalizar
 
 logger = logging.getLogger(__name__)
@@ -65,12 +66,41 @@ class UploadService:
         """
         logger.info(f"🚀 Iniciando upload: {file.filename} | Banco: {banco} | Tipo: {tipo_documento}")
         
-        # Validações
+        # Validações iniciais
         if not file:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={"errorCode": "UPL_001", "error": "Arquivo não fornecido"}
             )
+        
+        # ========== VALIDAÇÃO DE COMPATIBILIDADE ==========
+        logger.info(f"🔍 Validando compatibilidade: {banco} + {formato}")
+        
+        try:
+            compatibility_service = CompatibilityService(self.db)
+            validation = compatibility_service.validate_format(banco, formato)
+            
+            if not validation.is_supported:
+                logger.warning(f"❌ Formato não suportado: {banco} + {formato} (status: {validation.status})")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={
+                        "errorCode": "UPL_002",
+                        "error": f"Formato {formato} não suportado para {banco}",
+                        "status": validation.status,
+                        "message": validation.message,
+                        "suggestion": "Acesse Settings → Bancos para verificar formatos disponíveis"
+                    }
+                )
+            
+            logger.info(f"✅ Compatibilidade OK: {banco} + {formato}")
+            
+        except HTTPException as e:
+            # Se erro 404 (banco não cadastrado) ou 400 (formato inválido), propagar
+            if e.status_code in [404, 400]:
+                raise
+            # Outros erros de validação também propagam
+            raise
         
         session_id = None
         history_record = None

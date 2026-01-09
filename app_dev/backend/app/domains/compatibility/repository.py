@@ -5,31 +5,60 @@ from .models import BankFormatCompatibility
 from .schemas import BankCompatibilityCreate, BankCompatibilityUpdate
 
 class CompatibilityRepository:
+    """
+    Repository para Compatibilidade de Formatos
+    
+    Estrutura Matricial: 1 banco = 1 linha com colunas para cada formato
+    """
+    
     def __init__(self, db: Session):
         self.db = db
     
     def get_all(self) -> List[BankFormatCompatibility]:
-        """Buscar todos os registros de compatibilidade"""
+        """Buscar todos os bancos (1 linha por banco)"""
         return self.db.query(BankFormatCompatibility).order_by(
-            BankFormatCompatibility.bank_name,
-            BankFormatCompatibility.file_format
+            BankFormatCompatibility.bank_name
         ).all()
     
     def get_by_id(self, id: int) -> Optional[BankFormatCompatibility]:
-        """Buscar por ID"""
+        """Buscar banco por ID"""
         return self.db.query(BankFormatCompatibility).filter(
             BankFormatCompatibility.id == id
         ).first()
     
-    def get_by_bank_and_format(self, bank_name: str, file_format: str) -> Optional[BankFormatCompatibility]:
-        """Buscar por banco e formato específicos"""
+    def get_by_bank_name(self, bank_name: str) -> Optional[BankFormatCompatibility]:
+        """Buscar por nome do banco (case-insensitive)"""
         return self.db.query(BankFormatCompatibility).filter(
-            BankFormatCompatibility.bank_name == bank_name,
-            BankFormatCompatibility.file_format == file_format
+            func.lower(BankFormatCompatibility.bank_name) == bank_name.lower()
         ).first()
     
+    def get_format_status(self, bank_name: str, file_format: str) -> Optional[str]:
+        """
+        Buscar status de formato específico
+        
+        Args:
+            bank_name: Nome do banco
+            file_format: 'CSV', 'Excel', 'PDF', 'OFX'
+        
+        Returns:
+            'OK', 'WIP', 'TBD' ou None se banco não existe
+        """
+        bank = self.get_by_bank_name(bank_name)
+        if not bank:
+            return None
+        
+        # Mapear formato para coluna
+        format_map = {
+            'CSV': bank.csv_status,
+            'Excel': bank.excel_status,
+            'PDF': bank.pdf_status,
+            'OFX': bank.ofx_status
+        }
+        
+        return format_map.get(file_format)
+    
     def create(self, data: BankCompatibilityCreate) -> BankFormatCompatibility:
-        """Criar novo registro"""
+        """Criar novo banco com todos os formatos"""
         db_obj = BankFormatCompatibility(**data.model_dump())
         self.db.add(db_obj)
         self.db.commit()
@@ -37,7 +66,7 @@ class CompatibilityRepository:
         return db_obj
     
     def update(self, id: int, data: BankCompatibilityUpdate) -> Optional[BankFormatCompatibility]:
-        """Atualizar registro existente"""
+        """Atualizar banco e/ou status de formatos"""
         db_obj = self.get_by_id(id)
         if not db_obj:
             return None
@@ -51,7 +80,7 @@ class CompatibilityRepository:
         return db_obj
     
     def delete(self, id: int) -> bool:
-        """Deletar registro"""
+        """Deletar banco"""
         db_obj = self.get_by_id(id)
         if not db_obj:
             return False
@@ -61,5 +90,5 @@ class CompatibilityRepository:
         return True
     
     def count(self) -> int:
-        """Contar total de registros"""
+        """Contar total de bancos"""
         return self.db.query(func.count(BankFormatCompatibility.id)).scalar()
