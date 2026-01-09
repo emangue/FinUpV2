@@ -75,18 +75,20 @@ def _preprocess_extrato_itau(df_raw: pd.DataFrame) -> pd.DataFrame:
     Preprocessa DataFrame bruto do extrato Itaú XLS
     Lógica simplificada de extrato_itau_xls.preprocessar_extrato_itau_xls()
     """
-    # Detectar linha do cabeçalho (linha 8 geralmente)
+    # Detectar linha do cabeçalho (linha 7/8 geralmente)
     header_row = None
-    for i in range(min(15, len(df_raw))):
+    for i in range(min(20, len(df_raw))):
         row_str = ' '.join(str(val).lower() for val in df_raw.iloc[i].values if pd.notna(val))
-        if 'data' in row_str and 'lancamento' in row_str and 'valor' in row_str:
+        # Verificar se linha contém as 3 colunas principais
+        if 'data' in row_str and ('lancamento' in row_str or 'lançamento' in row_str) and 'valor' in row_str:
             header_row = i
+            logger.debug(f"Cabeçalho encontrado na linha {i}")
             break
     
     if header_row is None:
         raise ValueError(
             "Este arquivo não parece ser um extrato do Itaú no formato XLS esperado. "
-            "Verifique se o arquivo contém as colunas: data, lançamento, valor (geralmente a partir da linha 8)."
+            "Verifique se o arquivo contém as colunas: data, lançamento, valor (geralmente a partir da linha 7-8)."
         )
     
     # Extrair dados a partir do cabeçalho
@@ -97,13 +99,28 @@ def _preprocess_extrato_itau(df_raw: pd.DataFrame) -> pd.DataFrame:
     # Normalizar nomes de colunas
     df.columns = df.columns.str.strip().str.lower()
     
+    # Log das colunas encontradas
+    logger.debug(f"Colunas após normalização: {list(df.columns)}")
+    
+    # Pular primeira linha se for apenas "lançamentos" (linha decorativa)
+    if len(df) > 0:
+        first_row_str = ' '.join(str(val).lower() for val in df.iloc[0].values if pd.notna(val))
+        if first_row_str.strip() == 'lançamentos':
+            logger.debug("Pulando linha decorativa 'lançamentos'")
+            df = df[1:].reset_index(drop=True)
+    
     # Selecionar apenas colunas necessárias (data, lançamento, valor)
-    # XLS Itaú: coluna 0=data, coluna 1=lançamento, coluna 3=valor
+    # XLS Itaú: coluna 0=data, coluna 1=lançamento/lancamento, coluna 3=valor (R$)
     df = df.iloc[:, [0, 1, 3]].copy()
     df.columns = ['data', 'lançamento', 'valor (R$)']
     
     # Limpar dados
     df = df.dropna(subset=['data', 'lançamento', 'valor (R$)'])
+    
+    # Filtrar linhas que NÃO são transações reais (saldos)
+    # Remover linhas com "SALDO ANTERIOR", "SALDO TOTAL", etc
+    df = df[~df['lançamento'].str.upper().str.contains('SALDO', na=False)]
+    logger.debug(f"Após filtrar saldos: {len(df)} linhas")
     
     # Converter valor para float
     df['valor (R$)'] = pd.to_numeric(df['valor (R$)'], errors='coerce')
@@ -113,7 +130,10 @@ def _preprocess_extrato_itau(df_raw: pd.DataFrame) -> pd.DataFrame:
     df = df[df['valor (R$)'] != 0]
     
     # Converter data para DD/MM/YYYY
-    df['data'] = pd.to_datetime(df['data'], errors='coerce').dt.strftime('%d/%m/%Y')
+    df['data'] = pd.to_datetime(df['data'], format='%d/%m/%Y', errors='coerce')
     df = df.dropna(subset=['data'])
+    df['data'] = df['data'].dt.strftime('%d/%m/%Y')
+    
+    logger.debug(f"Transações válidas encontradas: {len(df)}")
     
     return df.reset_index(drop=True)
