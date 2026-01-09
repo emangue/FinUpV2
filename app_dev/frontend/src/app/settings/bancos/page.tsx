@@ -2,7 +2,6 @@
 
 import * as React from "react"
 import DashboardLayout from "@/components/dashboard-layout"
-import { Button } from "@/components/ui/button"
 import {
   Card,
   CardContent,
@@ -10,13 +9,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { Plus } from "lucide-react"
-import { useBanks, BanksTable, BankCompatibility, StatusType } from "@/features/banks"
-import { useToast } from "@/hooks/use-toast"
+import { useBanks, BanksTable, StatusType } from "@/features/banks"
 
 export default function BancosPage() {
-  const { banks, loading, error, updateBank, fetchBanks } = useBanks()
-  const { toast } = useToast()
+  const { banks, loading, error, fetchBanks } = useBanks()
+  const [updateStatus, setUpdateStatus] = React.useState<string | null>(null)
 
   const handleUpdateFormat = async (id: number, format: string, newStatus: StatusType) => {
     try {
@@ -34,25 +31,25 @@ export default function BancosPage() {
       }
 
       // Atualizar via API
-      await fetch(`/api/compatibility/${id}`, {
+      const response = await fetch(`/api/compatibility/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ [fieldName]: newStatus })
       })
 
+      if (!response.ok) {
+        throw new Error('Erro ao atualizar status')
+      }
+
       // Recarregar dados
       await fetchBanks()
 
-      toast({
-        title: "Status atualizado",
-        description: `${format.toUpperCase()} atualizado para ${newStatus}`,
-      })
+      // Mostrar feedback
+      setUpdateStatus(`✅ ${format.toUpperCase()} atualizado para ${newStatus}`)
+      setTimeout(() => setUpdateStatus(null), 3000)
     } catch (err: any) {
-      toast({
-        title: "Erro ao atualizar",
-        description: err.message || "Erro desconhecido",
-        variant: "destructive"
-      })
+      setUpdateStatus(`❌ Erro: ${err.message || 'Erro desconhecido'}`)
+      setTimeout(() => setUpdateStatus(null), 5000)
     }
   }
 
@@ -67,6 +64,12 @@ export default function BancosPage() {
             </p>
           </div>
         </div>
+
+        {updateStatus && (
+          <div className="p-3 bg-blue-50 border border-blue-200 rounded-md text-sm text-blue-800">
+            {updateStatus}
+          </div>
+        )}
 
         <Card>
           <CardHeader>
