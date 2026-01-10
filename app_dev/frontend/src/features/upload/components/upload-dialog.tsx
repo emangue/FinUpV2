@@ -394,7 +394,7 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
                   </SelectTrigger>
                   <SelectContent>
                     {availableBanks.map(bankName => (
-                      <SelectItem key={bankName} value={bankName.toLowerCase().replace(/ /g, '-')}>
+                      <SelectItem key={bankName} value={bankName}>
                         {bankName}
                       </SelectItem>
                     ))}
@@ -412,7 +412,7 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
                   </SelectTrigger>
                   <SelectContent>
                     {availableBanks.map(bankName => (
-                      <SelectItem key={bankName} value={bankName.toLowerCase().replace(/ /g, '-')}>
+                      <SelectItem key={bankName} value={bankName}>
                         {bankName}
                       </SelectItem>
                     ))}

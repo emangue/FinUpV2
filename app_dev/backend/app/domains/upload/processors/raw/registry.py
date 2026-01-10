@@ -25,6 +25,7 @@ PROCESSORS: dict[Tuple[str, str], ProcessorFunc] = {
     ('itau', 'extrato'): process_itau_extrato,
     ('btg', 'extrato'): process_btg_extrato,
     ('btg pactual', 'extrato'): process_btg_extrato,
+    ('btg-pactual', 'extrato'): process_btg_extrato,  # Variação com hífen
 }
 
 
