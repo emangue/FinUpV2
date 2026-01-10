@@ -86,12 +86,47 @@ class MarkedTransaction(RawTransaction):
 
 class TransactionMarker:
     """
-    Marca transações com IDs únicos
+    Marca transações com IDs únicos (v4.0.0 - Simplificado)
     """
     
     def __init__(self):
-        self.seen_transactions = {}  # {chave_unica: count} para rastrear duplicatas
-        logger.debug("TransactionMarker inicializado")
+        """Inicializa marker com controle de duplicados por arquivo"""
+        logger.debug("TransactionMarker inicializado - v4.1.0 (hash recursivo)")
+        # Dict para rastrear duplicados dentro do arquivo
+        # Chave: "data|lancamento_upper|valor" → Valor: contador de ocorrências
+        # Ex: "15/10/2025|PIX TRANSF EMANUEL15/10|1000.00" → 1, depois 2, depois 3, ..., N
+        self.seen_transactions = {}
+    
+    def _get_sequence_for_duplicate(self, chave_unica: str) -> int:
+        """
+        Retorna número de sequência para a chave única
+        
+        Args:
+            chave_unica: "data|lancamento_upper|valor"
+            
+        Returns:
+            1 para primeira ocorrência, 2 para segunda, 3 para terceira, ..., N para N-ésima
+            
+        Exemplos:
+            >>> marker = TransactionMarker()
+            >>> marker._get_sequence_for_duplicate("15/10/2025|PIX|100.00")
+            1  # Primeira vez
+            >>> marker._get_sequence_for_duplicate("15/10/2025|PIX|100.00")
+            2  # Segunda vez (duplicado!)
+            >>> marker._get_sequence_for_duplicate("15/10/2025|PIX|100.00")
+            3  # Terceira vez
+            >>> marker._get_sequence_for_duplicate("15/10/2025|PIX|100.00")
+            4  # Quarta vez
+            >>> # ... funciona para qualquer N
+        """
+        if chave_unica in self.seen_transactions:
+            # Já vimos antes - incrementa contador
+            self.seen_transactions[chave_unica] += 1
+        else:
+            # Primeira ocorrência
+            self.seen_transactions[chave_unica] = 1
+        
+        return self.seen_transactions[chave_unica]
     
     def mark_transaction(self, raw: RawTransaction) -> MarkedTransaction:
         """
@@ -122,21 +157,25 @@ class TransactionMarker:
             valor_positivo = abs(raw.valor)
             valor_arredondado = arredondar_2_decimais(valor_positivo)
             
-            # 3. Gerar chave única para detectar duplicatas no arquivo
-            chave_unica = f"{raw.data}|{estabelecimento_base}|{valor_arredondado:.2f}"
+            # 3. Detectar duplicados no arquivo e obter sequência
+            # Normaliza para UPPERCASE (case-insensitive)
+            lancamento_upper = raw.lancamento.upper().strip()
+            chave_unica = f"{raw.data}|{lancamento_upper}|{valor_arredondado:.2f}"
+            sequencia = self._get_sequence_for_duplicate(chave_unica)
             
-            # 4. Verificar se é duplicata dentro do arquivo e obter row_number
-            row_number = self._get_row_number_for_duplicate(chave_unica)
-            
-            # 5. Gerar IdTransacao (FNV-1a) com row_number se for duplicata
+            # 4. Gerar IdTransacao (v4.1.0 - hash recursivo para duplicados)
+            # seq=1: hash(chave)
+            # seq=2: hash(hash_seq1)
+            # seq=N: hash aplicado N-1 vezes recursivamente
+            # Garante hashes únicos para QUALQUER quantidade de duplicados
             id_transacao = generate_id_transacao(
                 data=raw.data,
-                estabelecimento=estabelecimento_base,
+                estabelecimento=raw.lancamento,  # ORIGINAL (com parcelas, datas, tudo)
                 valor=valor_arredondado,
-                timestamp_micro=str(row_number) if row_number > 0 else None
+                sequencia=sequencia
             )
             
-            # 6. Gerar IdParcela se tem parcela (usando mesma lógica de populate_id_parcela.py)
+            # 5. Gerar IdParcela se tem parcela (usando mesma lógica de populate_id_parcela.py)
             id_parcela = None
             if info_parcela and total_parcelas:
                 # IMPORTANTE: Usar estabelecimento NORMALIZADO para match com base_parcelas
@@ -208,31 +247,3 @@ class TransactionMarker:
         
         logger.info(f"✅ Marcação concluída: {len(marked_transactions)}/{len(raw_transactions)}")
         return marked_transactions
-    
-    def _get_row_number_for_duplicate(self, chave_unica: str) -> int:
-        """
-        Retorna row_number sequencial para transações duplicadas no arquivo
-        
-        Para transações idênticas (mesma data, estabelecimento, valor),
-        retorna um número sequencial (0, 1, 2...) para diferenciar.
-        
-        Args:
-            chave_unica: Chave "Data|Estabelecimento|Valor"
-            
-        Returns:
-            int: 0 para primeira ocorrência, 1+ para duplicatas
-        """
-        if chave_unica not in self.seen_transactions:
-            # Primeira ocorrência desta transação
-            self.seen_transactions[chave_unica] = 0
-            return 0
-        
-        # Duplicata detectada - incrementar contador
-        self.seen_transactions[chave_unica] += 1
-        row_number = self.seen_transactions[chave_unica]
-        
-        logger.info(
-            f"🔄 Transação duplicada #{row_number + 1} detectada no arquivo: {chave_unica}"
-        )
-        
-        return row_number
