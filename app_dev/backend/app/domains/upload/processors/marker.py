@@ -158,19 +158,31 @@ class TransactionMarker:
             valor_arredondado = arredondar_2_decimais(valor_positivo)
             
             # 3. Detectar duplicados no arquivo e obter sequência
-            # Normaliza para UPPERCASE (case-insensitive)
-            lancamento_upper = raw.lancamento.upper().strip()
-            chave_unica = f"{raw.data}|{lancamento_upper}|{valor_arredondado:.2f}"
+            # ESTRATÉGIA CONDICIONAL por tipo_documento:
+            # - EXTRATO: Usa lancamento COMPLETO (PIX TRANSF EMANUEL15/10 ≠ PIX TRANSF EMANUEL30/10)
+            # - FATURA: Usa estabelecimento_base (LOJA (1/12) = LOJA 01/05 = LOJA)
+            if raw.tipo_documento == 'extrato':
+                # Extrato: preserva TUDO (data no nome, detalhes específicos)
+                chave_hash = raw.lancamento.upper().strip()
+            else:
+                # Fatura: remove parcela (normaliza formatos diferentes)
+                chave_hash = estabelecimento_base.upper().strip()
+            
+            chave_unica = f"{raw.data}|{chave_hash}|{valor_arredondado:.2f}"
             sequencia = self._get_sequence_for_duplicate(chave_unica)
             
             # 4. Gerar IdTransacao (v4.1.0 - hash recursivo para duplicados)
-            # seq=1: hash(chave)
-            # seq=2: hash(hash_seq1)
-            # seq=N: hash aplicado N-1 vezes recursivamente
-            # Garante hashes únicos para QUALQUER quantidade de duplicados
+            # ESTRATÉGIA CONDICIONAL: mesma lógica do item 3
+            # - EXTRATO: hash(data|lancamento_completo|valor)
+            # - FATURA: hash(data|estabelecimento_base|valor)
+            if raw.tipo_documento == 'extrato':
+                estab_para_hash = raw.lancamento  # Completo
+            else:
+                estab_para_hash = estabelecimento_base  # Sem parcela
+            
             id_transacao = generate_id_transacao(
                 data=raw.data,
-                estabelecimento=raw.lancamento,  # ORIGINAL (com parcelas, datas, tudo)
+                estabelecimento=estab_para_hash,
                 valor=valor_arredondado,
                 sequencia=sequencia
             )

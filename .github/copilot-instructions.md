@@ -2,7 +2,137 @@
 
 ## ⚠️ REGRAS CRÍTICAS - SEMPRE SEGUIR
 
-### 🗄️ BANCO DE DADOS ÚNICO - REGRA INVIOLÁVEL
+### � TIPOS DE DOCUMENTO - ESTRATÉGIAS DIFERENTES (REGRA INVIOLÁVEL)
+
+**NUNCA usar a mesma lógica de hash/deduplicação para extrato e fatura!**
+
+Os dois tipos de documento têm requisitos **fundamentalmente opostos** para detecção de duplicatas:
+
+#### 🏦 EXTRATOS (Extrato Bancário, Conta Corrente)
+
+**Característica:** Transações únicas com detalhes específicos no nome
+
+**SEMPRE usar:** `lancamento` COMPLETO (texto integral)
+
+**Por quê:** Nomes similares com datas/detalhes diferentes são transações DIFERENTES
+
+**Exemplo CRÍTICO:**
+```python
+# ❌ ERRADO - Vai gerar o mesmo hash para transações diferentes!
+estabelecimento_base = "PIX TRANSF EMANUEL"  # Remove data
+hash1 = hash("15/10/2025|PIX TRANSF EMANUEL|1000.00")
+hash2 = hash("30/10/2025|PIX TRANSF EMANUEL|1000.00")
+# hash1 == hash2 → FALSO POSITIVO (são PIX diferentes!)
+
+# ✅ CORRETO - Preserva texto completo
+lancamento1 = "PIX TRANSF EMANUEL15/10"  # Data no nome
+lancamento2 = "PIX TRANSF EMANUEL30/10"  # Data diferente
+hash1 = hash("15/10/2025|PIX TRANSF EMANUEL15/10|1000.00")
+hash2 = hash("30/10/2025|PIX TRANSF EMANUEL30/10|1000.00")
+# hash1 != hash2 → CORRETO (são transações diferentes)
+```
+
+**Casos Reais:**
+- `PIX TRANSF EMANUEL15/10` vs `PIX TRANSF EMANUEL30/10` → Diferentes
+- `TED BANCO XP 15/10` vs `TED BANCO XP 30/10` → Diferentes
+- `Transferência Azul 01/12` vs `Transferência Azul 15/12` → Diferentes
+
+#### 💳 FATURAS (Cartão de Crédito)
+
+**Característica:** Parcelas do mesmo estabelecimento com formatos variados
+
+**SEMPRE usar:** `estabelecimento_base` (SEM parcela)
+
+**Por quê:** Formatos de parcela diferentes representam a MESMA transação base
+
+**Exemplo CRÍTICO:**
+```python
+# ✅ CORRETO - Normaliza formatos de parcela
+estabelecimento1 = "LOJA (1/12)"  # Formato antigo (parênteses)
+estabelecimento2 = "LOJA 01/12"   # Formato novo (espaço)
+estabelecimento_base1 = extrair_base("LOJA (1/12)")  # → "LOJA"
+estabelecimento_base2 = extrair_base("LOJA 01/12")   # → "LOJA"
+hash1 = hash("15/10/2025|LOJA|100.00")
+hash2 = hash("15/10/2025|LOJA|100.00")
+# hash1 == hash2 → CORRETO (mesma compra, formato diferente)
+
+# ❌ ERRADO - Vai ver como transações diferentes!
+lancamento1 = "LOJA (1/12)"
+lancamento2 = "LOJA 01/12"
+hash1 = hash("15/10/2025|LOJA (1/12)|100.00")
+hash2 = hash("15/10/2025|LOJA 01/12|100.00")
+# hash1 != hash2 → FALSO NEGATIVO (mesma transação não detectada!)
+```
+
+**Casos Reais:**
+- `NETFLIX (1/1)` vs `NETFLIX 01/01` → Mesma transação
+- `MERCADO (3/12)` vs `MERCADO 03/12` → Mesma transação
+- `UBER (2/5)` vs `UBER 02/05` → Mesma transação
+
+#### 🚨 IMPLEMENTAÇÃO OBRIGATÓRIA - Lógica Condicional
+
+**Em QUALQUER código que gere/valide IdTransacao, SEMPRE usar:**
+
+```python
+# ✅ CORRETO - Estratégia condicional
+if tipo_documento == 'extrato':
+    # Extrato: preserva TUDO
+    estabelecimento_para_hash = lancamento  # Completo
+else:
+    # Fatura: remove parcela
+    estabelecimento_para_hash = extrair_estabelecimento_base(lancamento)
+
+id_transacao = generate_id_transacao(
+    data=data,
+    estabelecimento=estabelecimento_para_hash,
+    valor=valor,
+    sequencia=sequencia
+)
+```
+
+**Arquivos que DEVEM ter lógica condicional:**
+- ✅ `app/domains/upload/processors/marker.py` - Upload de novos arquivos
+- ✅ `regenerate_sql.py` - Regeneração do banco
+- ✅ `app/domains/transactions/service.py` - Qualquer validação de duplicatas
+- ✅ Scripts de migração/regeneração de hashes
+
+**🚫 PROIBIÇÕES ABSOLUTAS:**
+
+```python
+# ❌ NUNCA fazer isso:
+estabelecimento_base = extrair_base(lancamento)  # Para TODOS os tipos
+hash_all = hash(f"{data}|{estabelecimento_base}|{valor}")
+
+# ❌ NUNCA usar lancamento completo para faturas:
+if tipo_documento == 'fatura':
+    hash_fatura = hash(f"{data}|{lancamento}|{valor}")  # Vai quebrar parcelas!
+
+# ❌ NUNCA usar estabelecimento_base para extratos:
+if tipo_documento == 'extrato':
+    estab_base = extrair_base(lancamento)
+    hash_extrato = hash(f"{data}|{estab_base}|{valor}")  # Vai gerar falsos positivos!
+```
+
+**📋 Checklist Antes de Modificar Hash/Deduplicação:**
+
+- [ ] ✅ Código usa lógica condicional baseada em `tipo_documento`?
+- [ ] ✅ Extrato usa `lancamento` completo?
+- [ ] ✅ Fatura usa `estabelecimento_base` (sem parcela)?
+- [ ] ✅ Testei com ambos os tipos de documento?
+- [ ] ✅ Validei que extratos não geram falsos positivos?
+- [ ] ✅ Validei que faturas normalizam parcelas diferentes?
+
+**🎯 Lembre-se:** Esta separação existe porque:
+- **Extratos** têm transações únicas com informações temporais no nome
+- **Faturas** têm parcelas da mesma compra com formatações variadas
+
+**Misturar as estratégias causa:**
+- ❌ Falsos positivos em extratos (transações diferentes vistas como duplicatas)
+- ❌ Falsos negativos em faturas (parcelas da mesma compra não detectadas)
+
+---
+
+### �🗄️ BANCO DE DADOS ÚNICO - REGRA INVIOLÁVEL
 
 **Path absoluto único para TODO o sistema:**
 ```

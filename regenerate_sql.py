@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
 """
-Regenerar hashes v4.1.0 via SQL direto (sem ORM)
+Regenerar hashes v4.1.0 via SQL direto (SEM parcela no hash)
+
+CORREÇÃO CRÍTICA:
+- Extrair parcela do estabelecimento
+- Gerar hash usando estabelecimento_base (SEM parcela)
+- "LOJA (1/12)" e "LOJA 01/12" → ambos viram hash("LOJA")
 """
 import sqlite3
+import re
 from pathlib import Path
 
 # Hash FNV-1a
@@ -16,9 +22,43 @@ def fnv1a_64_hash(text: str) -> str:
         h = (h * FNV_PRIME_64) & MASK64
     return str(h)
 
+# Extrair parcela (copiado de marker.py)
+def extrair_estabelecimento_base(estabelecimento: str) -> str:
+    """
+    Extrai estabelecimento base removendo parcela
+    
+    Formatos suportados:
+    - "LOJA (1/12)" → "LOJA"
+    - "LOJA 01/12" → "LOJA"
+    - "LOJA" → "LOJA"
+    """
+    # Formato com parênteses: "LOJA (3/12)"
+    match = re.search(r'^(.+?)\s*\((\d{1,2})/(\d{1,2})\)\s*$', estabelecimento)
+    if match:
+        return match.group(1).strip()
+    
+    # Formato sem parênteses: "LOJA 3/12" ou "LOJA3/12"
+    match = re.search(r'^(.+?)\s*(\d{1,2})/(\d{1,2})\s*$', estabelecimento)
+    if match:
+        return match.group(1).strip()
+    
+    # Sem parcela
+    return estabelecimento.strip()
+
 # Hash recursivo v4.1.0
-def generate_hash(data: str, estabelecimento: str, valor: float, seq: int) -> str:
-    estab_upper = estabelecimento.upper().strip()
+def generate_hash(data: str, estabelecimento: str, valor: float, seq: int, tipo_doc: str = 'fatura') -> str:
+    """
+    ESTRATÉGIA CONDICIONAL:
+    - extrato: usa estabelecimento COMPLETO
+    - fatura: usa estabelecimento_base (sem parcela)
+    """
+    # Extrair base apenas para faturas
+    if tipo_doc == 'extrato':
+        estab_para_hash = estabelecimento  # Completo
+    else:
+        estab_para_hash = extrair_estabelecimento_base(estabelecimento)  # Sem parcela
+    
+    estab_upper = estab_para_hash.upper().strip()
     valor_abs = abs(valor)
     chave = f"{data}|{estab_upper}|{valor_abs:.2f}"
     
@@ -42,7 +82,7 @@ def main():
     # 1. Buscar transações
     print("📊 Carregando...")
     cursor.execute("""
-        SELECT id, Data, Estabelecimento, Valor
+        SELECT id, Data, Estabelecimento, Valor, tipodocumento
         FROM journal_entries
         ORDER BY id
     """)
@@ -56,8 +96,16 @@ def main():
     grupos = defaultdict(list)
     
     for t in transactions:
-        tid, data, estab, valor = t
-        estab_upper = estab.upper().strip()
+        tid, data, estab, valor, tipo_doc = t
+        # ESTRATÉGIA CONDICIONAL por tipo_documento:
+        # - extrato: usa estabelecimento COMPLETO
+        # - fatura: usa estabelecimento_base (sem parcela)
+        if tipo_doc == 'extrato':
+            estab_para_hash = estab  # Completo (PIX TRANSF EMANUEL15/10)
+        else:
+            estab_para_hash = extrair_estabelecimento_base(estab)  # Sem parcela (LOJA)
+        
+        estab_upper = estab_para_hash.upper().strip()
         valor_abs = abs(valor)
         chave = f"{data}|{estab_upper}|{valor_abs:.2f}"
         grupos[chave].append(t)
@@ -66,8 +114,8 @@ def main():
     updates = []
     for chave, grupo in grupos.items():
         for seq, t in enumerate(grupo, start=1):
-            tid, data, estab, valor = t
-            novo_hash = generate_hash(data, estab, valor, seq)
+            tid, data, estab, valor, tipo_doc = t
+            novo_hash = generate_hash(data, estab, valor, seq, tipo_doc)
             updates.append((novo_hash, tid))
     
     print(f"   {len(updates)} atualizações")
