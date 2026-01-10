@@ -101,7 +101,8 @@ def _preprocess_extrato_btg(df_raw: pd.DataFrame) -> pd.DataFrame:
     # Identificar coluna "Descrição" (contém "Saldo Diário")
     desc_col = None
     for col in df.columns:
-        if 'descri' in col or 'transação' in col:
+        col_str = str(col).lower()
+        if 'descri' in col_str or 'transação' in col_str or 'transacao' in col_str:
             desc_col = col
             break
     
@@ -114,24 +115,31 @@ def _preprocess_extrato_btg(df_raw: pd.DataFrame) -> pd.DataFrame:
     # Mapear colunas
     col_map = {}
     for col in df.columns:
-        if 'data' in col:
+        col_str = str(col).lower()
+        if 'data' in col_str:
             col_map[col] = 'data'
-        elif 'categoria' in col:
+        elif 'categoria' in col_str:
             col_map[col] = 'categoria'
-        elif 'valor' in col:
+        elif 'valor' in col_str:
             col_map[col] = 'valor (R$)'
     
     col_map[desc_col] = 'descricao'
     df = df.rename(columns=col_map)
     
+    # Filtrar linhas de "Saldo Diário" ANTES de criar lançamento
+    mask_saldo_diario = df['descricao'].astype(str).str.contains('Saldo Diário', case=False, na=False)
+    df = df[~mask_saldo_diario]
+    
     # Criar coluna "lançamento" combinando categoria e descrição
-    df['lançamento'] = df['categoria'].astype(str) + ' - ' + df['descricao'].astype(str)
+    df['lançamento'] = df['categoria'].fillna('').astype(str) + ' - ' + df['descricao'].fillna('').astype(str)
     
     # Selecionar colunas necessárias
     df = df[['data', 'lançamento', 'valor (R$)']].copy()
     
-    # Limpar dados
-    df = df.dropna(subset=['data', 'lançamento', 'valor (R$)'])
+    # Limpar dados - remover linhas vazias ou inválidas
+    df = df[df['data'].notna()]
+    df = df[df['valor (R$)'].notna()]
+    df = df[~df['lançamento'].str.strip().isin(['', ' - ', 'nan - nan'])]
     
     # Converter valor para float
     df['valor (R$)'] = df['valor (R$)'].apply(_convert_valor_br)

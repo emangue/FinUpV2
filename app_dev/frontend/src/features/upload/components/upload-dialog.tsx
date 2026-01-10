@@ -205,22 +205,14 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
     setUploadError(null)
     
     try {
-      // Encontrar nome real do banco
-      const bankKey = Object.keys(compatibility).find(
-        key => key.toLowerCase().replace(/ /g, '-') === bank
-      )
-      
-      if (!bankKey) {
-        throw new Error("Banco não encontrado")
-      }
-      
+      // Bank já vem com nome correto (ex: "BTG Pactual")
       const response = await fetch('/api/cards', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           nome_cartao: newCardName.trim(),
           final_cartao: newCardFinal.trim(),
-          banco: bankKey
+          banco: bank
         })
       })
       
@@ -343,14 +335,9 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
   const getFormatStatus = (format: string): string => {
     if (!bank || !compatibility) return 'TBD'
     
-    // O banco no state está em lowercase com hífens, mas na API está com nome original
-    // Precisamos encontrar o banco correto na compatibilidade
-    const bankKey = Object.keys(compatibility).find(
-      key => key.toLowerCase().replace(/ /g, '-') === bank
-    )
-    
-    if (!bankKey || !compatibility[bankKey]) return 'TBD'
-    return compatibility[bankKey][format] || 'TBD'
+    // Bank agora vem com nome original (ex: "BTG Pactual")
+    if (!compatibility[bank]) return 'TBD'
+    return compatibility[bank][format] || 'TBD'
   }
   
   // Verificar se formato está disponível
