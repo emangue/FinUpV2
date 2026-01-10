@@ -48,6 +48,7 @@ Exemplos:
 import pandas as pd
 from pathlib import Path
 from typing import List, Dict, Any
+from datetime import datetime
 import logging
 
 try:
@@ -77,15 +78,22 @@ def process_btg_extrato(file_path: Path, banco: str, tipo_documento: str, user_e
     
     # Converter para RawTransaction
     raw_transactions = []
+    nome_arquivo = file_path.name
+    data_criacao = datetime.now()
+    
     for t in transacoes_dict:
+        # Valor já vem com sinal correto (+ para receitas, - para despesas)
         raw_tx = RawTransaction(
-            data=t['data'],
-            lancamento=t['lancamento'],
-            valor=t['valor'],
-            tipo=t['tipo'],
             banco=banco,
             tipo_documento=tipo_documento,
-            user_email=user_email
+            nome_arquivo=nome_arquivo,
+            data_criacao=data_criacao,
+            data=t['data'],
+            lancamento=t['lancamento'],
+            valor=t['valor'],  # Positivo para receitas, negativo para despesas
+            nome_cartao=None,
+            final_cartao=None,
+            mes_fatura=None,
         )
         raw_transactions.append(raw_tx)
     
@@ -268,10 +276,13 @@ def processar_btg_extrato_interno(file_path: Path, user_id: int) -> List[Dict[st
         # 13. Criar resultado final
         transacoes = []
         for _, row in df_trabalho.iterrows():
+            # Manter sinal original: positivo para receitas, negativo para despesas
+            valor_com_sinal = row['valor'] if row['valor'] > 0 else -abs(row['valor'])
+            
             transacao = {
                 'data': row['data'],
                 'lancamento': row['lancamento'],
-                'valor': abs(row['valor']),
+                'valor': valor_com_sinal,  # Com sinal correto
                 'tipo': 'Receitas' if row['valor'] > 0 else 'Despesas',
                 'user_id': user_id,
                 'banco': 'BTG Pactual',
@@ -280,7 +291,7 @@ def processar_btg_extrato_interno(file_path: Path, user_id: int) -> List[Dict[st
             transacoes.append(transacao)
         
         # 14. Calcular saldo total
-        saldo_total = sum(t['valor'] if t['tipo'] == 'Receitas' else -t['valor'] for t in transacoes)
+        saldo_total = sum(t['valor'] for t in transacoes)
         
         logger.info(f"✅ SUCESSO: {len(transacoes)} transações extraídas")
         logger.info(f"💵 Saldo total: R$ {saldo_total:,.2f}")
