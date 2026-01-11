@@ -55,13 +55,8 @@ class BudgetService:
         condicoes_meses = []
         for mes_anterior in meses_anteriores:
             ano_mes, mes_num = mes_anterior.split('-')
-            # Formato: dd/mm/yyyy → substr(4,2)=mm, substr(7,4)=yyyy
-            condicao = func.concat(
-                func.substr(JournalEntry.Data, 7, 4),  # ano
-                '-',
-                func.substr(JournalEntry.Data, 4, 2)   # mês
-            ) == mes_anterior
-            condicoes_meses.append(condicao)
+            mes_fatura_format = f"{ano_mes}{mes_num}"  # YYYYMM
+            condicoes_meses.append(JournalEntry.MesFatura == mes_fatura_format)
         
         # Buscar transações dos 3 meses anteriores
         transacoes = self.db.query(JournalEntry).filter(
@@ -79,12 +74,12 @@ class BudgetService:
         # Agrupar por mês e calcular soma
         meses_com_dados = {}
         for t in transacoes:
-            # Extrair mês-ano da transação (formato dd/mm/yyyy)
-            if len(t.Data) >= 10:
-                mes_transacao = t.Data[3:10]  # mm/yyyy
-                if mes_transacao not in meses_com_dados:
-                    meses_com_dados[mes_transacao] = 0
-                meses_com_dados[mes_transacao] += abs(t.Valor)
+            # Usar MesFatura para agrupar
+            if t.MesFatura:
+                mes_fatura = t.MesFatura  # YYYYMM
+                if mes_fatura not in meses_com_dados:
+                    meses_com_dados[mes_fatura] = 0
+                meses_com_dados[mes_fatura] += abs(t.Valor)
         
         # Calcular média (soma / qtd_meses_com_dados)
         if meses_com_dados:
@@ -140,12 +135,8 @@ class BudgetService:
         condicoes_meses = []
         for mes_anterior in meses_anteriores:
             ano_mes, mes_num = mes_anterior.split('-')
-            condicao = func.concat(
-                func.substr(JournalEntry.Data, 7, 4),
-                '-',
-                func.substr(JournalEntry.Data, 4, 2)
-            ) == mes_anterior
-            condicoes_meses.append(condicao)
+            mes_fatura_format = f"{ano_mes}{mes_num}"  # YYYYMM
+            condicoes_meses.append(JournalEntry.MesFatura == mes_fatura_format)
         
         # Buscar transações dos 3 meses anteriores
         transacoes = self.db.query(JournalEntry).filter(
@@ -160,18 +151,18 @@ class BudgetService:
         # Agrupar por mês
         detalhes_por_mes = {}
         for mes_ant in meses_anteriores:
-            detalhes_por_mes[mes_ant] = {
+            ano_mes, mes_num = mes_ant.split('-')
+            mes_fatura_format = f"{ano_mes}{mes_num}"  # YYYYMM
+            detalhes_por_mes[mes_fatura_format] = {
+                'mes_referencia': mes_ant,
                 'transacoes': [],
                 'total': 0.0
             }
         
         for t in transacoes:
-            if len(t.Data) >= 10:
-                # Extrair ano-mês da data (dd/mm/yyyy -> yyyy-mm)
-                mes_transacao = f"{t.Data[6:10]}-{t.Data[3:5]}"
-                if mes_transacao in detalhes_por_mes:
-                    detalhes_por_mes[mes_transacao]['transacoes'].append(t)
-                    detalhes_por_mes[mes_transacao]['total'] += abs(t.Valor)
+            if t.MesFatura and t.MesFatura in detalhes_por_mes:
+                detalhes_por_mes[t.MesFatura]['transacoes'].append(t)
+                detalhes_por_mes[t.MesFatura]['total'] += abs(t.Valor)
         
         # Construir lista de MesDetalhamento
         meses_detalhados = []
@@ -179,18 +170,21 @@ class BudgetService:
         
         # Ordenar meses do mais antigo para o mais recente
         for mes_ref in sorted(meses_anteriores):
-            detalhes = detalhes_por_mes[mes_ref]
-            ano_str, mes_str = mes_ref.split('-')
-            mes_nome = f"{meses_nomes[mes_str]} {ano_str}"
+            ano_mes, mes_num = mes_ref.split('-')
+            mes_fatura_format = f"{ano_mes}{mes_num}"  # YYYYMM
             
-            mes_det = MesDetalhamento(
-                mes_referencia=mes_ref,
-                mes_nome=mes_nome,
-                valor_total=round(detalhes['total'], 2),
-                quantidade_transacoes=len(detalhes['transacoes'])
-            )
-            meses_detalhados.append(mes_det)
-            total_geral += detalhes['total']
+            if mes_fatura_format in detalhes_por_mes:
+                detalhes = detalhes_por_mes[mes_fatura_format]
+                mes_nome = f"{meses_nomes[mes_num]} {ano_mes}"
+                
+                mes_det = MesDetalhamento(
+                    mes_referencia=mes_ref,
+                    mes_nome=mes_nome,
+                    valor_total=round(detalhes['total'], 2),
+                    quantidade_transacoes=len(detalhes['transacoes'])
+                )
+                meses_detalhados.append(mes_det)
+                total_geral += detalhes['total']
         
         # Calcular média (apenas meses com transações)
         meses_com_dados = [m for m in meses_detalhados if m.quantidade_transacoes > 0]
