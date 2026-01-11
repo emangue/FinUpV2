@@ -99,7 +99,7 @@ export default function TransactionsPage() {
     
     if (tipoGasto) initialFilters.tipoGasto = tipoGasto
     if (mesReferencia) {
-      // Converter YYYY-MM para mes_inicio e mes_fim
+      // Manter formato YYYY-MM que o Select entende
       initialFilters.mesInicio = mesReferencia
       initialFilters.mesFim = mesReferencia
     }
@@ -135,6 +135,15 @@ export default function TransactionsPage() {
       if (filters.subgrupo) params.append('subgrupo', filters.subgrupo)
       if (filters.tipoGasto) params.append('tipo_gasto', filters.tipoGasto)
       if (filters.banco) params.append('search', filters.banco)
+      
+      // Converter mesInicio/mesFim (formato "YYYY-MM") para year e month
+      if (filters.mesInicio) {
+        const [year, month] = filters.mesInicio.split('-')
+        if (year && month) {
+          params.append('year', year)
+          params.append('month', month)
+        }
+      }
 
       const response = await fetch(`/api/transactions/filtered-total?${params.toString()}`)
       if (response.ok) {
@@ -173,8 +182,14 @@ export default function TransactionsPage() {
       if (filters.subgrupo) params.append('subgrupo', filters.subgrupo)
       if (filters.tipoGasto) params.append('tipo_gasto', filters.tipoGasto)
       if (filters.banco) params.append('search', filters.banco) // Use search para banco
-      if (filters.mesInicio || filters.mesFim) {
-        // Se tiver filtros de mês, pode precisar de lógica adicional
+      
+      // Converter mesInicio/mesFim (formato "YYYY-MM") para year e month
+      if (filters.mesInicio) {
+        const [year, month] = filters.mesInicio.split('-')
+        if (year && month) {
+          params.append('year', year)
+          params.append('month', month)
+        }
       }
 
       const response = await fetch(`/api/transactions/list?${params.toString()}`)
