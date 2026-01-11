@@ -15,7 +15,7 @@ class DashboardRepository:
         self.db = db
     
     def _build_date_filter(self, year: int, month: Optional[int] = None):
-        """Constrói filtro para data no formato DD/MM/YYYY
+        """Constrói filtro para data usando coluna Ano e Data
         
         Args:
             year: Ano a filtrar
@@ -23,21 +23,24 @@ class DashboardRepository:
         """
         year_str = str(year)
         
-        # Se month=None, filtrar ano inteiro
+        # Se month=None, filtrar ano inteiro usando coluna Ano
         if month is None:
-            return JournalEntry.Data.like(f'%/{year_str}')
+            return JournalEntry.Ano == year_str
         
-        # Filtros para cobrir todos os formatos possíveis de data
-        # Ex: 01/01/2025, 1/1/2025, 31/12/2025
+        # Com mês específico, filtrar por Ano E mês na Data
+        # Ex: Ano='2025' AND Data LIKE '%/01/%' (para janeiro)
         month_str = f"{month:02d}"  # Garante 2 dígitos
         
         # Padrões possíveis: DD/MM/YYYY ou D/M/YYYY
         patterns = [
-            JournalEntry.Data.like(f'%/{month_str}/{year_str}'),  # %/01/2025
-            JournalEntry.Data.like(f'%/{month}/{year_str}')       # %/1/2025
+            JournalEntry.Data.like(f'%/{month_str}/%'),  # %/01/%
+            JournalEntry.Data.like(f'%/{month}/%')       # %/1/%
         ]
         
-        return or_(*patterns)
+        return and_(
+            JournalEntry.Ano == year_str,
+            or_(*patterns)
+        )
     
     def get_metrics(self, user_id: int, year: int, month: Optional[int] = None) -> Dict:
         """Calcula métricas principais

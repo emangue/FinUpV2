@@ -8,6 +8,9 @@ from fastapi.responses import JSONResponse
 from .core.config import settings
 from .core.database import engine, Base
 
+# Import models para SQLAlchemy resolver relationships
+from .domains.upload.history_models import UploadHistory  # CRITICAL: importar antes dos routers
+
 # Domínios isolados (arquitetura DDD)
 from .domains.transactions.router import router as transactions_router
 from .domains.users.router import router as users_router
