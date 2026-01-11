@@ -9,7 +9,12 @@ from datetime import datetime
 from app.core.database import get_db
 from app.shared.dependencies import get_current_user_id
 from .service import DashboardService
-from .schemas import DashboardMetrics, ChartDataResponse, CategoryExpense
+from .schemas import (
+    DashboardMetrics, 
+    ChartDataResponse, 
+    CategoryExpense,
+    BudgetVsActualResponse
+)
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -82,3 +87,24 @@ def get_category_expenses(
     
     service = DashboardService(db)
     return service.get_category_expenses(user_id, year, month)
+
+
+@router.get("/budget-vs-actual", response_model=BudgetVsActualResponse)
+def get_budget_vs_actual(
+    year: int = Query(..., description="Ano"),
+    month: int = Query(..., description="Mês (1-12)"),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Retorna comparação Realizado vs Planejado por TipoGasto:
+    - tipo_gasto
+    - realizado (valor gasto)
+    - planejado (valor orçado)
+    - percentual (realizado/planejado * 100)
+    - diferenca (realizado - planejado)
+    
+    Também retorna totais gerais e percentual geral.
+    """
+    service = DashboardService(db)
+    return service.get_budget_vs_actual(user_id, year, month)

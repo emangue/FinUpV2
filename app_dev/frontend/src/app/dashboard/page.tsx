@@ -245,6 +245,8 @@ const DashboardPage = () => {
         {/* Coluna Direita - Realizado vs Planejado */}
         <div className="lg:col-span-1">
           <BudgetVsActual
+            year={selectedYear}
+            month={selectedMonth}
             loading={false}
             error={null}
           />

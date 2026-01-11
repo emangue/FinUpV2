@@ -31,3 +31,20 @@ class CategoryExpense(BaseModel):
     categoria: str
     total: float
     percentual: float
+
+
+class BudgetVsActualItem(BaseModel):
+    """Comparação Realizado vs Planejado por TipoGasto"""
+    tipo_gasto: str
+    realizado: float
+    planejado: float
+    percentual: float  # (realizado / planejado) * 100
+    diferenca: float   # realizado - planejado
+
+
+class BudgetVsActualResponse(BaseModel):
+    """Resposta completa de Budget vs Actual"""
+    items: List[BudgetVsActualItem]
+    total_realizado: float
+    total_planejado: float
+    percentual_geral: float  # (total_realizado / total_planejado) * 100

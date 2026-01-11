@@ -6,7 +6,14 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 
 from .repository import DashboardRepository
-from .schemas import DashboardMetrics, ChartDataResponse, CategoryExpense, ChartDataPoint
+from .schemas import (
+    DashboardMetrics, 
+    ChartDataResponse, 
+    CategoryExpense, 
+    ChartDataPoint,
+    BudgetVsActualResponse,
+    BudgetVsActualItem
+)
 
 
 class DashboardService:
@@ -40,3 +47,16 @@ class DashboardService:
         """
         data = self.repository.get_category_expenses(user_id, year, month)
         return [CategoryExpense(**expense) for expense in data]
+    
+    def get_budget_vs_actual(self, user_id: int, year: int, month: int) -> BudgetVsActualResponse:
+        """Retorna comparação Realizado vs Planejado por TipoGasto"""
+        data = self.repository.get_budget_vs_actual(user_id, year, month)
+        
+        items = [BudgetVsActualItem(**item) for item in data["items"]]
+        
+        return BudgetVsActualResponse(
+            items=items,
+            total_realizado=data["total_realizado"],
+            total_planejado=data["total_planejado"],
+            percentual_geral=data["percentual_geral"]
+        )

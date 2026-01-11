@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Optional, List, Dict
 
 from app.domains.transactions.models import JournalEntry
+from app.domains.budget.models import BudgetPlanning
 
 
 class DashboardRepository:
@@ -171,3 +172,92 @@ class DashboardRepository:
             }
             for row in results
         ]
+    
+    def get_budget_vs_actual(self, user_id: int, year: int, month: int) -> Dict:
+        """Comparação Realizado vs Planejado por TipoGasto
+        
+        Args:
+            user_id: ID do usuário
+            year: Ano
+            month: Mês (1-12)
+        
+        Returns:
+            Dict com items (lista de comparações) e totais
+        """
+        # Construir mes_referencia (formato YYYY-MM)
+        mes_referencia = f"{year}-{month:02d}"
+        
+        # Filtro de data para o mês específico
+        date_filter = self._build_date_filter(year, month)
+        
+        # 1. Buscar valores planejados
+        budgets = self.db.query(
+            BudgetPlanning.tipo_gasto,
+            BudgetPlanning.valor_planejado
+        ).filter(
+            BudgetPlanning.user_id == user_id,
+            BudgetPlanning.mes_referencia == mes_referencia
+        ).all()
+        
+        # Criar dict de planejados
+        planejado_dict = {b.tipo_gasto: float(b.valor_planejado) for b in budgets}
+        
+        # 2. Buscar valores realizados agrupados por TipoGasto
+        realizados = self.db.query(
+            JournalEntry.TipoGasto,
+            func.sum(func.abs(JournalEntry.Valor)).label('total')
+        ).filter(
+            JournalEntry.user_id == user_id,
+            date_filter,
+            JournalEntry.CategoriaGeral == 'Despesa',
+            JournalEntry.IgnorarDashboard == 0,
+            JournalEntry.TipoGasto.isnot(None)
+        ).group_by(
+            JournalEntry.TipoGasto
+        ).all()
+        
+        # Criar dict de realizados
+        realizado_dict = {r.TipoGasto: float(r.total) for r in realizados}
+        
+        # 3. Combinar ambos (união de todos os TipoGasto)
+        all_tipos = set(planejado_dict.keys()) | set(realizado_dict.keys())
+        
+        items = []
+        total_realizado = 0.0
+        total_planejado = 0.0
+        
+        for tipo_gasto in sorted(all_tipos):
+            realizado = realizado_dict.get(tipo_gasto, 0.0)
+            planejado = planejado_dict.get(tipo_gasto, 0.0)
+            
+            # Calcular percentual (evitar divisão por zero)
+            if planejado > 0:
+                percentual = round((realizado / planejado) * 100, 1)
+            else:
+                percentual = 0.0 if realizado == 0 else 999.9  # Indica que não tem planejado
+            
+            diferenca = realizado - planejado
+            
+            items.append({
+                "tipo_gasto": tipo_gasto,
+                "realizado": realizado,
+                "planejado": planejado,
+                "percentual": percentual,
+                "diferenca": diferenca
+            })
+            
+            total_realizado += realizado
+            total_planejado += planejado
+        
+        # Percentual geral
+        if total_planejado > 0:
+            percentual_geral = round((total_realizado / total_planejado) * 100, 1)
+        else:
+            percentual_geral = 0.0
+        
+        return {
+            "items": items,
+            "total_realizado": total_realizado,
+            "total_planejado": total_planejado,
+            "percentual_geral": percentual_geral
+        }
