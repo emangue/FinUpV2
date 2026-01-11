@@ -88,8 +88,13 @@ export default function TransactionsPage() {
   const [editModalOpen, setEditModalOpen] = React.useState(false)
   const [selectedTransaction, setSelectedTransaction] = React.useState<Transaction | null>(null)
 
+  // Flag para controlar se já aplicou filtros dos query params
+  const [queryParamsApplied, setQueryParamsApplied] = React.useState(false)
+
   // Aplicar filtros de query params na primeira carga
   React.useEffect(() => {
+    if (queryParamsApplied) return // Só aplica uma vez
+    
     const initialFilters: FilterValues = {}
     
     const tipoGasto = searchParams.get('tipoGasto')
@@ -109,8 +114,15 @@ export default function TransactionsPage() {
     if (Object.keys(initialFilters).length > 0) {
       setAppliedFilters(initialFilters)
       setFiltersOpen(false) // Já vem com filtros aplicados
+      setQueryParamsApplied(true)
+      
+      // Disparar fetch imediatamente com os filtros
+      fetchTransactions(activeTab, 1, initialFilters)
+      fetchFilteredTotal(activeTab, initialFilters)
+    } else {
+      setQueryParamsApplied(true)
     }
-  }, [searchParams])
+  }, [searchParams, queryParamsApplied, activeTab])
 
   const fetchFilteredTotal = async (type: string, filters: FilterValues = {}) => {
     try {
@@ -219,9 +231,12 @@ export default function TransactionsPage() {
   }
 
   React.useEffect(() => {
+    // Se ainda não aplicou query params, espera
+    if (!queryParamsApplied) return
+    
     fetchTransactions(activeTab, 1, appliedFilters)
     fetchFilteredTotal(activeTab, appliedFilters)
-  }, [activeTab, appliedFilters])
+  }, [activeTab, appliedFilters, queryParamsApplied])
 
   const handleTabChange = (value: string) => {
     setActiveTab(value)
