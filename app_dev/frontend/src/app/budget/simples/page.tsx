@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Calendar, Save, Copy, ArrowLeft, DollarSign } from 'lucide-react';
+import { Calendar, Save, Copy, ArrowLeft, DollarSign, Check } from 'lucide-react';
 import { API_CONFIG } from '@/core/config/api.config';
 import Link from 'next/link';
 
@@ -321,10 +321,24 @@ export default function BudgetSimplesPage() {
       ) : (
         <Card>
           <CardHeader>
-            <CardTitle>Tipos de Gasto</CardTitle>
-            <CardDescription>
-              Defina o valor planejado para cada tipo de gasto
-            </CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Tipos de Gasto</CardTitle>
+                <CardDescription>
+                  Defina o valor planejado para cada tipo de gasto
+                </CardDescription>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={aplicarTodasMedias}
+                disabled={loading || saving || tiposGastoDisponiveis.length === 0}
+                className="flex items-center gap-2"
+              >
+                <Check className="h-4 w-4" />
+                Aplicar Todas as Médias
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -354,6 +368,18 @@ export default function BudgetSimplesPage() {
                         placeholder="0.00"
                         className="flex-1"
                       />
+                      {media && media > 0 && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => aplicarMedia(tipo)}
+                          disabled={loading || saving}
+                          title="Aplicar média dos últimos 3 meses"
+                          className="h-10 w-10 flex-shrink-0"
+                        >
+                          <Check className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 );

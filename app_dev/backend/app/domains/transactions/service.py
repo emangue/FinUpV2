@@ -246,17 +246,24 @@ class TransactionService:
                 mes_referencia=mes_referencia
             )
         
-        # Agrupar por TipoGasto e calcular soma
+        # Agrupar por TipoGasto e contar em quantos meses aparece
         somas_por_tipo = {}
+        meses_por_tipo = {}
         for t in transacoes:
             if t.TipoGasto not in somas_por_tipo:
                 somas_por_tipo[t.TipoGasto] = 0
+                meses_por_tipo[t.TipoGasto] = set()
             somas_por_tipo[t.TipoGasto] += abs(t.Valor)
+            # Extrair mês-ano da transação para contar meses únicos
+            mes_transacao = t.Data[3:10] if len(t.Data) >= 10 else None
+            if mes_transacao:
+                meses_por_tipo[t.TipoGasto].add(mes_transacao)
         
-        # Calcular média (soma / 3 meses)
+        # Calcular média real (soma / quantidade de meses com dados)
         tipos_com_media = []
         for tipo_gasto, soma in sorted(somas_por_tipo.items()):
-            media = soma / 3
+            qtd_meses = len(meses_por_tipo[tipo_gasto])
+            media = soma / qtd_meses if qtd_meses > 0 else 0
             tipos_com_media.append(TipoGastoComMedia(
                 tipo_gasto=tipo_gasto,
                 media_3_meses=round(media, 2)
