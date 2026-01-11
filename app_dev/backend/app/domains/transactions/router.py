@@ -14,10 +14,23 @@ from .schemas import (
     TransactionCreate,
     TransactionUpdate,
     TransactionListResponse,
-    TransactionFilters
+    TransactionFilters,
+    TiposGastoComMediaResponse
 )
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
+
+@router.get("/tipos-gasto-com-media", response_model=TiposGastoComMediaResponse)
+def get_tipos_gasto_com_media(
+    mes_referencia: str = Query(..., description="Formato YYYY-MM"),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Retorna tipos de gasto únicos de Despesa com média dos últimos 3 meses
+    """
+    service = TransactionService(db)
+    return service.get_tipos_gasto_com_media(user_id, mes_referencia)
 
 @router.get("/list", response_model=TransactionListResponse)
 def list_transactions(
@@ -55,6 +68,18 @@ def list_transactions(
     )
     
     return service.list_transactions(user_id, filters, page, limit)
+
+@router.get("/tipos-gasto-com-media", response_model=TiposGastoComMediaResponse)
+def get_tipos_gasto_com_media(
+    mes_referencia: str = Query(..., description="Formato YYYY-MM"),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Retorna tipos de gasto únicos de Despesa com média dos últimos 3 meses
+    """
+    service = TransactionService(db)
+    return service.get_tipos_gasto_com_media(user_id, mes_referencia)
 
 @router.get("/filtered-total")
 def get_filtered_total(

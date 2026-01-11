@@ -3,7 +3,7 @@ Budget Planning Schemas
 Pydantic schemas para validação e serialização
 """
 from pydantic import BaseModel, Field, validator
-from typing import List
+from typing import List, Optional
 from datetime import datetime
 import re
 
@@ -78,3 +78,63 @@ class BudgetGeralBulkUpsert(BaseModel):
         if not re.match(r'^\d{4}-\d{2}$', v):
             raise ValueError('mes_referencia deve estar no formato YYYY-MM')
         return v
+
+class BudgetGeralResponse(BaseModel):
+    """Schema de resposta para budget geral"""
+    id: int
+    user_id: int
+    categoria_geral: str
+    mes_referencia: str
+    valor_planejado: float
+    total_mensal: Optional[float] = None
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+class BudgetGeralListResponse(BaseModel):
+    """Schema de resposta para lista de budgets gerais"""
+    budgets: List[BudgetGeralResponse]
+    total: int
+
+# ===== SCHEMAS PARA CATEGORIA CONFIG =====
+
+class BudgetCategoriaConfigCreate(BaseModel):
+    """Schema para criação de categoria de orçamento"""
+    nome_categoria: str
+    ordem: int = 999
+    fonte_dados: str = Field(..., description="GRUPO ou TIPO_TRANSACAO")
+    filtro_valor: str
+    tipos_gasto_incluidos: Optional[str] = None  # JSON array
+    cor_visualizacao: str = "#94a3b8"
+    ativo: int = 1
+
+
+class BudgetCategoriaConfigUpdate(BaseModel):
+    """Schema para atualização de categoria"""
+    nome_categoria: Optional[str] = None
+    ordem: Optional[int] = None
+    filtro_valor: Optional[str] = None
+    tipos_gasto_incluidos: Optional[str] = None
+    cor_visualizacao: Optional[str] = None
+    ativo: Optional[int] = None
+
+
+class BudgetCategoriaConfigResponse(BaseModel):
+    """Schema de resposta para categoria"""
+    id: int
+    user_id: int
+    nome_categoria: str
+    ordem: int
+    fonte_dados: str
+    filtro_valor: str
+    tipos_gasto_incluidos: Optional[str] = None
+    cor_visualizacao: str
+    ativo: int
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True

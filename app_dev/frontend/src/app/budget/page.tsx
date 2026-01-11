@@ -178,12 +178,46 @@ export default function BudgetPage() {
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Meta Geral de Orçamento</h2>
           <p className="text-muted-foreground mt-2">
-            Defina metas gerais por categoria. Para detalhamento por tipo de gasto, use a{' '}
-            <Link href="/budget/detalhada" className="text-primary hover:underline font-medium">
-              Meta Detalhada
-            </Link>
+            Defina metas gerais por categoria ampla
           </p>
         </div>
+      </div>
+
+      {/* Cards de Acesso Rápido */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card className="hover:border-primary transition-colors cursor-pointer" onClick={() => window.location.href = '/budget/simples'}>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Meta por Tipo de Gasto
+            </CardTitle>
+            <CardDescription>
+              Defina orçamento para tipos de gasto específicos (Fixo, Ajustável, etc)
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button variant="outline" className="w-full" asChild>
+              <Link href="/budget/simples">Acessar Meta Simples →</Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:border-primary transition-colors cursor-pointer" onClick={() => window.location.href = '/budget/detalhada'}>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Meta por Categorias
+            </CardTitle>
+            <CardDescription>
+              Organize por categorias customizáveis com hierarquia (Casa, Cartão, etc)
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button variant="outline" className="w-full" asChild>
+              <Link href="/budget/detalhada">Acessar Meta Detalhada →</Link>
+            </Button>
+          </CardContent>
+        </Card>
       </div>
 
       {message && (

@@ -117,16 +117,18 @@ class BudgetService:
     
     # ===== MÉTODOS PARA BUDGET GERAL =====
     
-    def get_budget_geral_by_month(self, user_id: int, mes_referencia: str) -> List[BudgetResponse]:
+    def get_budget_geral_by_month(self, user_id: int, mes_referencia: str):
         """Lista budgets gerais de um mês específico"""
+        from .schemas import BudgetGeralResponse
         budgets = self.repository_geral.get_by_month(user_id, mes_referencia)
-        return [BudgetResponse.from_orm(b) for b in budgets]
+        return [BudgetGeralResponse.from_orm(b) for b in budgets]
     
-    def get_all_budget_geral(self, user_id: int) -> BudgetListResponse:
+    def get_all_budget_geral(self, user_id: int):
         """Lista todos os budgets gerais do usuário"""
+        from .schemas import BudgetGeralResponse, BudgetGeralListResponse
         budgets = self.repository_geral.get_all(user_id)
-        return BudgetListResponse(
-            budgets=[BudgetResponse.from_orm(b) for b in budgets],
+        return BudgetGeralListResponse(
+            budgets=[BudgetGeralResponse.from_orm(b) for b in budgets],
             total=len(budgets)
         )
     
@@ -284,6 +286,22 @@ class BudgetService:
             "ativo": config.ativo == 1
         }
     
+    def delete_categoria_config(self, config_id: int, user_id: int) -> None:
+        """Deleta (desativa) uma configuração de categoria"""
+        config = self.repository_categoria_config.get_by_id(config_id, user_id)
+        
+        if not config:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Categoria não encontrada"
+            )
+        
+        # Soft delete - apenas desativa
+        self.repository_categoria_config.update(config_id, user_id, {"ativo": 0})
+        
+        # Ou hard delete se preferir:
+        # self.repository_categoria_config.delete(config)
+    
     def bulk_upsert_budget_geral_com_validacao(
         self,
         user_id: int,
@@ -350,3 +368,34 @@ class BudgetService:
             "valor_anterior": valor_anterior,
             "soma_categorias": soma_categorias
         }
+
+    def get_tipos_gasto_disponiveis(self, user_id: int, fonte_dados: str, filtro_valor: str) -> list:
+        """
+        Retorna lista de tipos de gasto disponíveis para um grupo ou tipo de transação
+        
+        Args:
+            user_id: ID do usuário
+            fonte_dados: "GRUPO" ou "TIPO_TRANSACAO"
+            filtro_valor: Nome do grupo (ex: "Casa") ou tipo de transação (ex: "Cartão")
+        
+        Returns:
+            Lista de tipos de gasto únicos encontrados nas transações
+        """
+        from sqlalchemy import distinct
+        from app.domains.transactions.models import JournalEntry
+        
+        query = self.repository.db.query(
+            distinct(JournalEntry.TipoGasto)
+        ).filter(
+            JournalEntry.user_id == user_id,
+            JournalEntry.TipoGasto.isnot(None),
+            JournalEntry.TipoGasto != ''
+        )
+        
+        if fonte_dados == "GRUPO":
+            query = query.filter(JournalEntry.GRUPO == filtro_valor)
+        elif fonte_dados == "TIPO_TRANSACAO":
+            query = query.filter(JournalEntry.TipoTransacao == filtro_valor)
+        
+        tipos_gasto = [row[0] for row in query.all() if row[0]]
+        return sorted(tipos_gasto)

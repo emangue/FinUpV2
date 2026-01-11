@@ -176,6 +176,10 @@ const data = {
           url: "/budget",
         },
         {
+          title: "Meta Simples",
+          url: "/budget/simples",
+        },
+        {
           title: "Meta Detalhada",
           url: "/budget/detalhada",
         },

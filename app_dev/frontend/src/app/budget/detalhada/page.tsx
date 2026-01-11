@@ -18,7 +18,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
-import { Calendar, DollarSign, Save, Copy, ArrowLeft, AlertCircle, GripVertical } from 'lucide-react';
+import { Calendar, DollarSign, Save, Copy, ArrowLeft, GripVertical, Plus, Trash2, Edit } from 'lucide-react';
 import { API_CONFIG } from '@/core/config/api.config';
 import Link from 'next/link';
 import {
@@ -38,6 +38,14 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 interface BudgetItem {
   tipo_gasto: string;
@@ -45,10 +53,7 @@ interface BudgetItem {
   valor_planejado: number;
 }
 
-interface MetaGeralItem {
-  categoria_geral: string;
-  valor_planejado: number;
-}
+
 
 interface CategoriaConfig {
   id: number;
@@ -115,16 +120,34 @@ const meses = [
   { value: '12', label: 'Dezembro' },
 ];
 
+// Função para formatar moeda brasileira
+const formatarMoeda = (valor: number): string => {
+  return valor.toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+};
+
 export default function BudgetDetalhadaPage() {
   const currentDate = new Date();
   const [selectedMonth, setSelectedMonth] = useState(String(currentDate.getMonth() + 1).padStart(2, '0'));
   const [selectedYear, setSelectedYear] = useState(String(currentDate.getFullYear()));
   const [budgetData, setBudgetData] = useState<Record<string, number>>({});
-  const [metaGeral, setMetaGeral] = useState<Record<string, number>>({});
   const [categorias, setCategorias] = useState<CategoriaConfig[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  
+  // Estados para gerenciamento de categorias
+  const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [categoryToDelete, setCategoryToDelete] = useState<CategoriaConfig | null>(null);
+  const [newCategory, setNewCategory] = useState({
+    nome_categoria: '',
+    fonte_dados: 'GRUPO' as 'GRUPO' | 'TIPO_TRANSACAO',
+    filtro_valor: '',
+    cor_visualizacao: '#94a3b8',
+  });
 
   const mesReferencia = `${selectedYear}-${selectedMonth}`;
 
@@ -136,10 +159,9 @@ export default function BudgetDetalhadaPage() {
     })
   );
 
-  // Carregar dados do orçamento detalhado, meta geral e categorias
+  // Carregar dados do orçamento detalhado e categorias
   useEffect(() => {
     loadBudget();
-    loadMetaGeral();
     loadCategorias();
   }, [selectedMonth, selectedYear]);
 
@@ -151,6 +173,7 @@ export default function BudgetDetalhadaPage() {
       
       if (response.ok) {
         const result = await response.json();
+        console.log('Categorias carregadas:', result.categorias?.length, result.categorias);
         setCategorias(result.categorias || []);
       }
     } catch (error) {
@@ -185,25 +208,7 @@ export default function BudgetDetalhadaPage() {
     }
   };
 
-  const loadMetaGeral = async () => {
-    try {
-      const response = await fetch(
-        `${API_CONFIG.BACKEND_URL}/api/v1/budget/geral?mes_referencia=${mesReferencia}&user_id=1`
-      );
-      
-      if (response.ok) {
-        const result = await response.json();
-        const data = result.budgets || [];
-        const metaMap: Record<string, number> = {};
-        data.forEach((item: MetaGeralItem) => {
-          metaMap[item.categoria_geral] = item.valor_planejado;
-        });
-        setMetaGeral(metaMap);
-      }
-    } catch (error) {
-      console.error('Erro ao carregar meta geral:', error);
-    }
-  };
+
 
   const handleValueChange = (tipoGasto: string, value: string) => {
     const numValue = parseFloat(value) || 0;
@@ -284,15 +289,69 @@ export default function BudgetDetalhadaPage() {
     }
   };
 
+  const handleAddCategory = async () => {
+    if (!newCategory.nome_categoria || !newCategory.filtro_valor) {
+      setMessage({ type: 'error', text: 'Preencha todos os campos obrigatórios' });
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_CONFIG.BACKEND_URL}/api/v1/budget/categorias-config?user_id=1`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...newCategory,
+          ordem: categorias.length + 1,
+        }),
+      });
+
+      if (response.ok) {
+        setMessage({ type: 'success', text: 'Categoria adicionada com sucesso!' });
+        setShowAddCategoryModal(false);
+        setNewCategory({
+          nome_categoria: '',
+          fonte_dados: 'GRUPO',
+          filtro_valor: '',
+          cor_visualizacao: '#94a3b8',
+        });
+        await loadCategorias();
+        setTimeout(() => setMessage(null), 3000);
+      } else {
+        throw new Error('Erro ao adicionar categoria');
+      }
+    } catch (error) {
+      console.error('Erro ao adicionar categoria:', error);
+      setMessage({ type: 'error', text: 'Erro ao adicionar categoria' });
+    }
+  };
+
+  const handleDeleteCategory = async () => {
+    if (!categoryToDelete) return;
+
+    try {
+      const response = await fetch(
+        `${API_CONFIG.BACKEND_URL}/api/v1/budget/categorias-config/${categoryToDelete.id}?user_id=1`,
+        { method: 'DELETE' }
+      );
+
+      if (response.ok) {
+        setMessage({ type: 'success', text: 'Categoria deletada com sucesso!' });
+        setShowDeleteDialog(false);
+        setCategoryToDelete(null);
+        await loadCategorias();
+        setTimeout(() => setMessage(null), 3000);
+      } else {
+        throw new Error('Erro ao deletar categoria');
+      }
+    } catch (error) {
+      console.error('Erro ao deletar categoria:', error);
+      setMessage({ type: 'error', text: 'Erro ao deletar categoria' });
+    }
+  };
+
   const getTotalPorCategoria = (categoria: CategoriaConfig): number => {
     const tiposGasto = categoria.tipos_gasto_incluidos || [];
     return tiposGasto.reduce((sum, tipo) => sum + (budgetData[tipo] || 0), 0);
-  };
-
-  const isOverBudget = (categoria: CategoriaConfig): boolean => {
-    const total = getTotalPorCategoria(categoria);
-    const meta = metaGeral[categoria.nome_categoria] || 0;
-    return meta > 0 && total > meta;
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -349,6 +408,13 @@ export default function BudgetDetalhadaPage() {
             Detalhe o orçamento por categoria específica. Os totais não devem ultrapassar a meta geral.
           </p>
         </div>
+        <Button
+          onClick={() => setShowAddCategoryModal(true)}
+          className="flex items-center gap-2"
+        >
+          <Plus className="h-4 w-4" />
+          Nova Categoria
+        </Button>
       </div>
 
       {message && (
@@ -420,6 +486,15 @@ export default function BudgetDetalhadaPage() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="flex-1">
+              <Label htmlFor="total">Total Geral</Label>
+              <div className="flex items-center gap-2 h-10 px-3 py-2 border rounded-md bg-gray-50">
+                <span className="text-sm font-semibold">R$</span>
+                <span className="text-sm font-bold">
+                  {formatarMoeda((categorias?.reduce((sum, cat) => sum + getTotalPorCategoria(cat), 0) || 0))}
+                </span>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -439,45 +514,45 @@ export default function BudgetDetalhadaPage() {
             <Accordion type="multiple" className="w-full space-y-4">
               {categorias.map((categoria) => {
                 const total = getTotalPorCategoria(categoria);
-                const meta = metaGeral[categoria.nome_categoria] || 0;
-                const overBudget = isOverBudget(categoria);
                 const tiposGasto = categoria.tipos_gasto_incluidos || [];
 
                 return (
                   <SortableAccordionItem key={categoria.id} categoria={categoria}>
-                    <AccordionTrigger className="px-6 py-4 hover:no-underline">
-                      <div className="flex items-center justify-between w-full pr-4">
-                        <div className="flex items-center gap-3">
-                          <div
-                            className="w-4 h-4 rounded"
-                            style={{ backgroundColor: categoria.cor_visualizacao }}
-                          />
-                          <span className="font-semibold text-lg">{categoria.nome_categoria}</span>
-                          <span className="text-xs text-muted-foreground">
-                            ({categoria.fonte_dados === 'GRUPO' ? 'Grupo' : 'Tipo'}: {categoria.filtro_valor})
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-4 text-sm">
-                          <div>
-                            <span className="text-muted-foreground">Total: </span>
-                            <span className={`font-bold ${overBudget ? 'text-red-600' : ''}`}>
-                              R$ {total.toFixed(2)}
+                    <div className="relative">
+                      <AccordionTrigger className="px-6 py-4 hover:no-underline">
+                        <div className="flex items-center justify-between w-full pr-12">
+                          <div className="flex items-center gap-3">
+                            <div
+                              className="w-4 h-4 rounded"
+                              style={{ backgroundColor: categoria.cor_visualizacao }}
+                            />
+                            <span className="font-semibold text-lg">{categoria.nome_categoria}</span>
+                            <span className="text-xs text-muted-foreground">
+                              ({categoria.fonte_dados === 'GRUPO' ? 'Grupo' : 'Tipo'}: {categoria.filtro_valor})
                             </span>
                           </div>
-                          {meta > 0 && (
-                            <>
-                              <div>
-                                <span className="text-muted-foreground">Meta: </span>
-                                <span className="font-bold">R$ {meta.toFixed(2)}</span>
-                              </div>
-                              {overBudget && (
-                                <AlertCircle className="h-5 w-5 text-red-600" />
-                              )}
-                            </>
-                          )}
+                          <div className="flex items-center gap-4 text-sm">
+                            <div>
+                              <span className="text-muted-foreground">Total: </span>
+                              <span className="font-bold">
+                                R$ {formatarMoeda(total)}
+                              </span>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    </AccordionTrigger>
+                      </AccordionTrigger>
+                      <button
+                        className="absolute right-12 top-1/2 -translate-y-1/2 h-8 w-8 rounded-md flex items-center justify-center text-red-600 hover:text-red-700 hover:bg-red-50 transition-colors z-10"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCategoryToDelete(categoria);
+                          setShowDeleteDialog(true);
+                        }}
+                        aria-label="Deletar categoria"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
                     <AccordionContent>
                       <CardContent className="pt-0">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -526,6 +601,116 @@ export default function BudgetDetalhadaPage() {
           {saving ? 'Salvando...' : 'Salvar Orçamento Detalhado'}
         </Button>
       </div>
+
+      {/* Modal para adicionar nova categoria */}
+      <Dialog open={showAddCategoryModal} onOpenChange={setShowAddCategoryModal}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Nova Categoria de Orçamento</DialogTitle>
+            <DialogDescription>
+              Adicione uma nova categoria para organizar seu orçamento detalhado
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="nome_categoria">Nome da Categoria *</Label>
+              <Input
+                id="nome_categoria"
+                placeholder="Ex: Educação, Lazer, Investimentos"
+                value={newCategory.nome_categoria}
+                onChange={(e) => setNewCategory({ ...newCategory, nome_categoria: e.target.value })}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="fonte_dados">Fonte de Dados *</Label>
+              <Select 
+                value={newCategory.fonte_dados} 
+                onValueChange={(value: 'GRUPO' | 'TIPO_TRANSACAO') => 
+                  setNewCategory({ ...newCategory, fonte_dados: value })
+                }
+              >
+                <SelectTrigger id="fonte_dados">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="GRUPO">Grupo (da transação)</SelectItem>
+                  <SelectItem value="TIPO_TRANSACAO">Tipo de Transação</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="filtro_valor">
+                {newCategory.fonte_dados === 'GRUPO' ? 'Nome do Grupo' : 'Tipo de Transação'} *
+              </Label>
+              <Input
+                id="filtro_valor"
+                placeholder={newCategory.fonte_dados === 'GRUPO' ? 'Ex: Educação' : 'Ex: PIX'}
+                value={newCategory.filtro_valor}
+                onChange={(e) => setNewCategory({ ...newCategory, filtro_valor: e.target.value })}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="cor_visualizacao">Cor</Label>
+              <div className="flex gap-2 items-center">
+                <Input
+                  id="cor_visualizacao"
+                  type="color"
+                  value={newCategory.cor_visualizacao}
+                  onChange={(e) => setNewCategory({ ...newCategory, cor_visualizacao: e.target.value })}
+                  className="w-20 h-10"
+                />
+                <Input
+                  value={newCategory.cor_visualizacao}
+                  onChange={(e) => setNewCategory({ ...newCategory, cor_visualizacao: e.target.value })}
+                  placeholder="#94a3b8"
+                  className="flex-1"
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddCategoryModal(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleAddCategory}>
+              <Plus className="h-4 w-4 mr-2" />
+              Adicionar Categoria
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de confirmação para deletar */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Deletar Categoria</DialogTitle>
+            <DialogDescription>
+              Tem certeza que deseja deletar a categoria{' '}
+              <strong className="text-foreground">{categoryToDelete?.nome_categoria}</strong>?
+              <br />
+              <br />
+              Esta ação não pode ser desfeita. Todos os valores de orçamento associados
+              a esta categoria serão mantidos no banco de dados, mas a categoria não
+              aparecerá mais na lista.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleDeleteCategory}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Deletar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

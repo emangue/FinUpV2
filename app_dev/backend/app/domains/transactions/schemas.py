@@ -73,3 +73,13 @@ class TransactionFilters(BaseModel):
     tipo_gasto: Optional[str] = None
     cartao: Optional[str] = None
     search: Optional[str] = None
+
+class TipoGastoComMedia(BaseModel):
+    """Schema de tipo de gasto com média dos últimos 3 meses"""
+    tipo_gasto: str
+    media_3_meses: float
+
+class TiposGastoComMediaResponse(BaseModel):
+    """Schema de resposta de tipos de gasto com média"""
+    tipos_gasto: list[TipoGastoComMedia]
+    mes_referencia: str
