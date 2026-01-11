@@ -155,3 +155,117 @@ def bulk_upsert_budget_geral(
     service = BudgetService(db)
     return service.bulk_upsert_budget_geral(user_id, data.mes_referencia, data.budgets)
 
+
+# ===== ROTAS PARA CONFIGURAÇÃO DE CATEGORIAS =====
+
+@router.get("/budget/categorias-config", summary="Listar configuração de categorias")
+def list_categorias_config(
+    apenas_ativas: bool = Query(True, description="Retornar apenas categorias ativas"),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Lista categorias configuradas do usuário ordenadas por hierarquia
+    
+    Retorna configuração de categorias personalizáveis com ordem, cores, etc
+    """
+    service = BudgetService(db)
+    return {"categorias": service.get_categorias_config(user_id, apenas_ativas)}
+
+
+@router.post("/budget/categorias-config", summary="Criar nova categoria")
+def create_categoria_config(
+    data: dict,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Cria nova categoria configurada
+    
+    Body:
+    - nome_categoria: str
+    - ordem: int (opcional, default 999)
+    - fonte_dados: "GRUPO" | "TIPO_TRANSACAO"
+    - filtro_valor: str (ex: "Moradia", "Cartão")
+    - tipos_gasto_incluidos: List[str] (opcional)
+    - cor_visualizacao: str (hex, opcional, default "#94a3b8")
+    """
+    service = BudgetService(db)
+    return service.create_categoria_config(user_id, data)
+
+
+@router.patch("/budget/categorias-config/{config_id}", summary="Atualizar categoria")
+def update_categoria_config(
+    config_id: int,
+    data: dict,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Atualiza configuração de categoria existente
+    
+    Aceita atualização parcial de campos
+    """
+    service = BudgetService(db)
+    return service.update_categoria_config(config_id, user_id, data)
+
+
+@router.put("/budget/categorias-config/reordenar", summary="Reordenar categorias")
+def reordenar_categorias(
+    reorders: List[dict],
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Reordena múltiplas categorias em batch (drag & drop)
+    
+    Body: [{"id": 1, "nova_ordem": 3}, {"id": 2, "nova_ordem": 1}, ...]
+    """
+    service = BudgetService(db)
+    return {"categorias": service.reordenar_categorias(user_id, reorders)}
+
+
+@router.patch("/budget/categorias-config/{config_id}/tipos-gasto", summary="Atualizar TipoGasto")
+def update_tipos_gasto(
+    config_id: int,
+    tipos_gasto: List[str],
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Atualiza lista de TipoGasto incluídos em uma categoria
+    
+    Body: ["Ajustável", "Fixo", ...]
+    """
+    service = BudgetService(db)
+    return service.update_tipos_gasto_categoria(config_id, user_id, tipos_gasto)
+
+
+@router.post("/budget/geral/bulk-upsert-validado", summary="Criar/atualizar com validação")
+def bulk_upsert_budget_geral_validado(
+    data: dict,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Cria ou atualiza metas gerais com validação e auto-ajuste
+    
+    Body:
+    - mes_referencia: str (YYYY-MM)
+    - budgets: List[{categoria_geral, valor_planejado}]
+    - total_mensal: float (opcional, teto de gastos)
+    
+    Retorna:
+    - budgets: List
+    - total_ajustado: bool (se foi ajustado automaticamente)
+    - novo_total: float
+    - valor_anterior: float
+    - soma_categorias: float
+    """
+    service = BudgetService(db)
+    return service.bulk_upsert_budget_geral_com_validacao(
+        user_id=user_id,
+        mes_referencia=data["mes_referencia"],
+        budgets=data["budgets"],
+        total_mensal=data.get("total_mensal")
+    )
