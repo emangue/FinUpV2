@@ -177,6 +177,31 @@ export default function BudgetSimplesPage() {
     }
   };
 
+  const aplicarMedia = (tipoGasto: string) => {
+    const media = mediaHistorica[tipoGasto];
+    if (media && media > 0) {
+      setBudgetData(prev => ({
+        ...prev,
+        [tipoGasto]: media,
+      }));
+    }
+  };
+
+  const aplicarTodasMedias = () => {
+    const novosBudgets: Record<string, number> = {};
+    tiposGastoDisponiveis.forEach(tipo => {
+      const media = mediaHistorica[tipo];
+      if (media && media > 0) {
+        novosBudgets[tipo] = media;
+      } else {
+        novosBudgets[tipo] = budgetData[tipo] || 0;
+      }
+    });
+    setBudgetData(novosBudgets);
+    setMessage({ type: 'success', text: 'Todas as médias aplicadas com sucesso!' });
+    setTimeout(() => setMessage(null), 3000);
+  };
+
   const handleCopyPreviousMonth = async () => {
     const currentMonth = parseInt(selectedMonth);
     const currentYear = parseInt(selectedYear);
