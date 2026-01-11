@@ -69,6 +69,7 @@ class BudgetService:
             JournalEntry.TipoGasto == tipo_gasto,
             JournalEntry.CategoriaGeral == 'Despesa',
             JournalEntry.Valor < 0,  # Apenas saídas
+            JournalEntry.IgnorarDashboard == 0,  # Excluir transações ignoradas
             or_(*condicoes_meses)
         ).all()
         
@@ -152,6 +153,7 @@ class BudgetService:
             JournalEntry.TipoGasto == tipo_gasto,
             JournalEntry.CategoriaGeral == 'Despesa',
             JournalEntry.Valor < 0,
+            JournalEntry.IgnorarDashboard == 0,  # Excluir transações ignoradas
             or_(*condicoes_meses)
         ).all()
         
