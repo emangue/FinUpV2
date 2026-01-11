@@ -15,6 +15,7 @@ import {
 import { Calendar, Save, Copy, ArrowLeft, DollarSign, Check } from 'lucide-react';
 import { API_CONFIG } from '@/core/config/api.config';
 import Link from 'next/link';
+import { BudgetMediaDrilldownModal } from '@/features/budget/components/budget-media-drilldown-modal';
 
 interface BudgetItem {
   tipo_gasto: string;
@@ -63,6 +64,7 @@ export default function BudgetSimplesPage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [drilldownOpen, setDrilldownOpen] = useState<{ tipo: string; mes: string } | null>(null);
 
   const mesReferencia = `${selectedYear}-${selectedMonth}`;
 
@@ -386,9 +388,13 @@ export default function BudgetSimplesPage() {
                         {tipo}
                       </Label>
                       {media && media > 0 && (
-                        <span className="text-xs text-muted-foreground italic">
+                        <button
+                          onClick={() => setDrilldownOpen({ tipo, mes: mesReferencia })}
+                          className="text-xs text-primary hover:underline cursor-pointer italic"
+                          title="Clique para ver detalhamento dos 3 meses"
+                        >
                           média: R$ {formatarMoeda(media)}
-                        </span>
+                        </button>
                       )}
                     </div>
                     <div className="flex items-center gap-2">
@@ -449,6 +455,13 @@ export default function BudgetSimplesPage() {
           </Link>
         </p>
       </div>
+
+      <BudgetMediaDrilldownModal
+        open={!!drilldownOpen}
+        onOpenChange={(open) => !open && setDrilldownOpen(null)}
+        tipoGasto={drilldownOpen?.tipo || null}
+        mesReferencia={drilldownOpen?.mes || null}
+      />
     </div>
   );
 }

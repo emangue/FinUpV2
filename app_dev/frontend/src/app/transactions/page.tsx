@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useSearchParams } from "next/navigation"
 import DashboardLayout from "@/components/dashboard-layout"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -70,6 +71,7 @@ interface PaginationInfo {
 }
 
 export default function TransactionsPage() {
+  const searchParams = useSearchParams()
   const [activeTab, setActiveTab] = React.useState("all")
   const [transactions, setTransactions] = React.useState<Transaction[]>([])
   const [pagination, setPagination] = React.useState<PaginationInfo>({
@@ -85,6 +87,30 @@ export default function TransactionsPage() {
   const [somaTotal, setSomaTotal] = React.useState(0)
   const [editModalOpen, setEditModalOpen] = React.useState(false)
   const [selectedTransaction, setSelectedTransaction] = React.useState<Transaction | null>(null)
+
+  // Aplicar filtros de query params na primeira carga
+  React.useEffect(() => {
+    const initialFilters: FilterValues = {}
+    
+    const tipoGasto = searchParams.get('tipoGasto')
+    const mesReferencia = searchParams.get('mes_referencia')
+    const grupo = searchParams.get('grupo')
+    const estabelecimento = searchParams.get('estabelecimento')
+    
+    if (tipoGasto) initialFilters.tipoGasto = tipoGasto
+    if (mesReferencia) {
+      // Converter YYYY-MM para mes_inicio e mes_fim
+      initialFilters.mesInicio = mesReferencia
+      initialFilters.mesFim = mesReferencia
+    }
+    if (grupo) initialFilters.grupo = grupo
+    if (estabelecimento) initialFilters.estabelecimento = estabelecimento
+    
+    if (Object.keys(initialFilters).length > 0) {
+      setAppliedFilters(initialFilters)
+      setFiltersOpen(false) // Já vem com filtros aplicados
+    }
+  }, [searchParams])
 
   const fetchFilteredTotal = async (type: string, filters: FilterValues = {}) => {
     try {
@@ -180,7 +206,7 @@ export default function TransactionsPage() {
   React.useEffect(() => {
     fetchTransactions(activeTab, 1, appliedFilters)
     fetchFilteredTotal(activeTab, appliedFilters)
-  }, [activeTab])
+  }, [activeTab, appliedFilters])
 
   const handleTabChange = (value: string) => {
     setActiveTab(value)

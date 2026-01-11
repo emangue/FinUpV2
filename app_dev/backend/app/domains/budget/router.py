@@ -20,15 +20,8 @@ from .schemas import (
     BudgetGeralListResponse,
     BudgetCategoriaConfigCreate,
     BudgetCategoriaConfigUpdate,
-    BudgetCategoriaConfigResponse
-)
-from .schemas import (
-    BudgetCreate, 
-    BudgetUpdate, 
-    BudgetResponse, 
-    BudgetListResponse,
-    BudgetBulkUpsert,
-    BudgetGeralBulkUpsert
+    BudgetCategoriaConfigResponse,
+    DetalhamentoMediaResponse
 )
 
 router = APIRouter()
@@ -105,6 +98,30 @@ def listar_tipos_gasto_disponiveis(
     """
     service = BudgetService(db)
     return {"tipos_gasto": service.get_tipos_gasto_disponiveis(user_id, fonte_dados, filtro_valor)}
+
+
+@router.get("/budget/detalhamento-media", response_model=DetalhamentoMediaResponse, summary="Detalhamento da média dos 3 meses")
+def get_detalhamento_media(
+    tipo_gasto: str = Query(..., description="Tipo de gasto para detalhamento"),
+    mes_referencia: str = Query(..., description="Mês de referência no formato YYYY-MM"),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Retorna detalhamento dos 3 meses anteriores que compõem a média
+    
+    - **tipo_gasto**: Nome do tipo de gasto (ex: "Ajustável - Casa")
+    - **mes_referencia**: Mês planejado no formato YYYY-MM (ex: "2026-01")
+    
+    Retorna lista com cada um dos 3 meses anteriores contendo:
+    - Nome do mês (ex: "Dezembro 2025")
+    - Valor total do mês
+    - Quantidade de transações
+    
+    Também retorna média calculada e total geral
+    """
+    service = BudgetService(db)
+    return service.get_detalhamento_media(user_id, tipo_gasto, mes_referencia)
 
 
 # ----- ROTAS DE BULK OPERATIONS -----

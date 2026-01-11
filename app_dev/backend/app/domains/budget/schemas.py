@@ -140,3 +140,22 @@ class BudgetCategoriaConfigResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+
+# ===== SCHEMAS PARA DETALHAMENTO DE MÉDIA =====
+
+class MesDetalhamento(BaseModel):
+    """Detalhamento de um mês individual"""
+    mes_referencia: str = Field(..., description="Mês no formato YYYY-MM")
+    mes_nome: str = Field(..., description="Nome do mês (ex: Janeiro 2026)")
+    valor_total: float = Field(..., description="Valor total do mês")
+    quantidade_transacoes: int = Field(..., description="Quantidade de transações")
+
+
+class DetalhamentoMediaResponse(BaseModel):
+    """Resposta com detalhamento dos 3 meses da média"""
+    tipo_gasto: str
+    mes_planejado: str
+    meses_considerados: List[MesDetalhamento]
+    media_calculada: float
+    total_geral: float

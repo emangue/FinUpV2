@@ -94,6 +94,117 @@ class BudgetService:
         
         return 0.0
     
+    def get_detalhamento_media(
+        self, 
+        user_id: int, 
+        tipo_gasto: str, 
+        mes_referencia: str
+    ):
+        """
+        Retorna detalhamento dos 3 meses que compõem a média
+        
+        Args:
+            user_id: ID do usuário
+            tipo_gasto: Tipo de gasto
+            mes_referencia: Mês de referência no formato YYYY-MM
+            
+        Returns:
+            DetalhamentoMediaResponse com lista de meses detalhados
+        """
+        from .schemas import DetalhamentoMediaResponse, MesDetalhamento
+        
+        # Converter mes_referencia para calcular meses anteriores
+        ano, mes = map(int, mes_referencia.split('-'))
+        
+        # Calcular os 3 meses anteriores
+        meses_anteriores = []
+        for i in range(1, 4):  # 3 meses atrás
+            m = mes - i
+            a = ano
+            if m < 1:
+                m += 12
+                a -= 1
+            meses_anteriores.append(f"{a:04d}-{m:02d}")
+        
+        # Nomes dos meses em português
+        meses_nomes = {
+            '01': 'Janeiro', '02': 'Fevereiro', '03': 'Março',
+            '04': 'Abril', '05': 'Maio', '06': 'Junho',
+            '07': 'Julho', '08': 'Agosto', '09': 'Setembro',
+            '10': 'Outubro', '11': 'Novembro', '12': 'Dezembro'
+        }
+        
+        # Criar condições para cada mês
+        from sqlalchemy import or_
+        condicoes_meses = []
+        for mes_anterior in meses_anteriores:
+            ano_mes, mes_num = mes_anterior.split('-')
+            condicao = func.concat(
+                func.substr(JournalEntry.Data, 7, 4),
+                '-',
+                func.substr(JournalEntry.Data, 4, 2)
+            ) == mes_anterior
+            condicoes_meses.append(condicao)
+        
+        # Buscar transações dos 3 meses anteriores
+        transacoes = self.db.query(JournalEntry).filter(
+            JournalEntry.user_id == user_id,
+            JournalEntry.TipoGasto == tipo_gasto,
+            JournalEntry.CategoriaGeral == 'Despesa',
+            JournalEntry.Valor < 0,
+            or_(*condicoes_meses)
+        ).all()
+        
+        # Agrupar por mês
+        detalhes_por_mes = {}
+        for mes_ant in meses_anteriores:
+            detalhes_por_mes[mes_ant] = {
+                'transacoes': [],
+                'total': 0.0
+            }
+        
+        for t in transacoes:
+            if len(t.Data) >= 10:
+                # Extrair ano-mês da data (dd/mm/yyyy -> yyyy-mm)
+                mes_transacao = f"{t.Data[6:10]}-{t.Data[3:5]}"
+                if mes_transacao in detalhes_por_mes:
+                    detalhes_por_mes[mes_transacao]['transacoes'].append(t)
+                    detalhes_por_mes[mes_transacao]['total'] += abs(t.Valor)
+        
+        # Construir lista de MesDetalhamento
+        meses_detalhados = []
+        total_geral = 0.0
+        
+        # Ordenar meses do mais antigo para o mais recente
+        for mes_ref in sorted(meses_anteriores):
+            detalhes = detalhes_por_mes[mes_ref]
+            ano_str, mes_str = mes_ref.split('-')
+            mes_nome = f"{meses_nomes[mes_str]} {ano_str}"
+            
+            mes_det = MesDetalhamento(
+                mes_referencia=mes_ref,
+                mes_nome=mes_nome,
+                valor_total=round(detalhes['total'], 2),
+                quantidade_transacoes=len(detalhes['transacoes'])
+            )
+            meses_detalhados.append(mes_det)
+            total_geral += detalhes['total']
+        
+        # Calcular média (apenas meses com transações)
+        meses_com_dados = [m for m in meses_detalhados if m.quantidade_transacoes > 0]
+        if meses_com_dados:
+            media_calculada = total_geral / len(meses_com_dados)
+        else:
+            media_calculada = 0.0
+        
+        return DetalhamentoMediaResponse(
+            tipo_gasto=tipo_gasto,
+            mes_planejado=mes_referencia,
+            meses_considerados=meses_detalhados,
+            media_calculada=round(media_calculada, 2),
+            total_geral=round(total_geral, 2)
+        )
+    
     def get_budget(self, budget_id: int, user_id: int) -> BudgetResponse:
         """Busca budget por ID"""
         budget = self.repository.get_by_id(budget_id, user_id)
