@@ -1309,26 +1309,48 @@ git commit --no-verify -m "msg"
 
 ## 🚀 Iniciar/Parar Servidores (PROCESSO OTIMIZADO)
 
-### ⚡ COMANDO ÚNICO - Quando usuário pedir "ligar servidores"
+### ⚡ SEMPRE USAR OS SCRIPTS QUICK
 
-**SEMPRE usar este comando único:**
+**REGRA OBRIGATÓRIA:** NUNCA rodar servidores manualmente. SEMPRE usar os scripts:
 
 ```bash
-cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4 && chmod +x quick_start.sh && ./quick_start.sh
+# Iniciar tudo
+cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4 && ./quick_start.sh
+
+# Parar tudo
+cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4 && ./quick_stop.sh
+
+# Restart completo
+cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4 && ./quick_stop.sh && ./quick_start.sh
 ```
 
 **O que faz automaticamente:**
 - ✅ Limpa portas 8000 e 3000
-- ✅ Inicia Backend FastAPI (porta 8000) com venv
+- ✅ Ativa venv do Python automaticamente
+- ✅ Navega para diretórios corretos (backend/ e frontend/)
+- ✅ Inicia Backend FastAPI (porta 8000)
 - ✅ Inicia Frontend Next.js (porta 3000)
 - ✅ Roda em background com logs
 - ✅ Salva PIDs para controle
 
-**Parar servidores:**
-
+**🚫 NUNCA fazer:**
 ```bash
-cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4 && chmod +x quick_stop.sh && ./quick_stop.sh
+# ❌ ERRADO - Vai dar erro "ModuleNotFoundError: No module named 'app'"
+cd app_dev && python run.py
+
+# ❌ ERRADO - Vai tentar rodar Flask em vez de FastAPI
+cd app_dev && source venv/bin/activate && python run.py
+
+# ✅ CORRETO - Sempre usar os scripts quick
+./quick_start.sh
 ```
+
+**Por quê?**
+- Existem 2 arquivos `run.py`:
+  - `/app_dev/run.py` (Flask - ANTIGO, não usar)
+  - `/app_dev/backend/run.py` (FastAPI - CORRETO)
+- Os scripts quick garantem o caminho certo
+- Evita erros de módulo não encontrado
 
 ### URLs de Acesso
 
