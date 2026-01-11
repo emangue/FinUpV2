@@ -18,9 +18,26 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
-import { Calendar, DollarSign, Save, Copy, ArrowLeft, AlertCircle } from 'lucide-react';
+import { Calendar, DollarSign, Save, Copy, ArrowLeft, AlertCircle, GripVertical } from 'lucide-react';
 import { API_CONFIG } from '@/core/config/api.config';
 import Link from 'next/link';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface BudgetItem {
   tipo_gasto: string;
@@ -33,25 +50,55 @@ interface MetaGeralItem {
   valor_planejado: number;
 }
 
-// Mapeamento de TipoGasto para Categoria Geral
-const categoriaMapping: Record<string, string[]> = {
-  'Casa': ['Ajustável - Casa'],
-  'Cartão de Crédito': [
-    'Ajustável',
-    'Fixo',
-    'Ajustável - Delivery',
-    'Ajustável - Saídas',
-    'Ajustável - Supermercado',
-    'Ajustável - Roupas',
-    'Ajustável - Presentes',
-    'Ajustável - Assinaturas',
-    'Ajustável - Tech',
-  ],
-  'Doações': ['Ajustável - Doações'],
-  'Saúde': ['Ajustável - Esportes'],
-  'Viagens': ['Ajustável - Viagens'],
-  'Outros': ['Ajustável - Carro', 'Ajustável - Uber'],
-};
+interface CategoriaConfig {
+  id: number;
+  nome_categoria: string;
+  ordem: number;
+  fonte_dados: 'GRUPO' | 'TIPO_TRANSACAO';
+  filtro_valor: string;
+  tipos_gasto_incluidos: string[];
+  cor_visualizacao: string;
+  ativo: boolean;
+}
+
+// Componente sortable para accordion item
+function SortableAccordionItem({ categoria, children }: { categoria: CategoriaConfig; children: React.ReactNode }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: categoria.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="touch-none">
+      <AccordionItem value={categoria.id.toString()} className="border rounded-lg">
+        <Card>
+          <div className="flex items-center">
+            <div
+              {...attributes}
+              {...listeners}
+              className="px-2 py-4 cursor-grab active:cursor-grabbing hover:bg-gray-50 rounded-l-lg"
+            >
+              <GripVertical className="h-5 w-5 text-gray-400" />
+            </div>
+            <div className="flex-1">
+              {children}
+            </div>
+          </div>
+        </Card>
+      </AccordionItem>
+    </div>
+  );
+}
 
 const meses = [
   { value: '01', label: 'Janeiro' },
@@ -74,17 +121,42 @@ export default function BudgetDetalhadaPage() {
   const [selectedYear, setSelectedYear] = useState(String(currentDate.getFullYear()));
   const [budgetData, setBudgetData] = useState<Record<string, number>>({});
   const [metaGeral, setMetaGeral] = useState<Record<string, number>>({});
+  const [categorias, setCategorias] = useState<CategoriaConfig[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const mesReferencia = `${selectedYear}-${selectedMonth}`;
 
-  // Carregar dados do orçamento detalhado e meta geral
+  // Sensors para drag & drop
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  // Carregar dados do orçamento detalhado, meta geral e categorias
   useEffect(() => {
     loadBudget();
     loadMetaGeral();
+    loadCategorias();
   }, [selectedMonth, selectedYear]);
+
+  const loadCategorias = async () => {
+    try {
+      const response = await fetch(
+        `${API_CONFIG.BACKEND_URL}/api/v1/budget/categorias-config?user_id=1&apenas_ativas=true`
+      );
+      
+      if (response.ok) {
+        const result = await response.json();
+        setCategorias(result.categorias || []);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar categorias:', error);
+    }
+  };
 
   const loadBudget = async () => {
     setLoading(true);
@@ -212,15 +284,56 @@ export default function BudgetDetalhadaPage() {
     }
   };
 
-  const getTotalPorCategoria = (categoria: string): number => {
-    const tiposGasto = categoriaMapping[categoria] || [];
+  const getTotalPorCategoria = (categoria: CategoriaConfig): number => {
+    const tiposGasto = categoria.tipos_gasto_incluidos || [];
     return tiposGasto.reduce((sum, tipo) => sum + (budgetData[tipo] || 0), 0);
   };
 
-  const isOverBudget = (categoria: string): boolean => {
+  const isOverBudget = (categoria: CategoriaConfig): boolean => {
     const total = getTotalPorCategoria(categoria);
-    const meta = metaGeral[categoria] || 0;
+    const meta = metaGeral[categoria.nome_categoria] || 0;
     return meta > 0 && total > meta;
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = categorias.findIndex(c => c.id === active.id);
+    const newIndex = categorias.findIndex(c => c.id === over.id);
+
+    const reordered = arrayMove(categorias, oldIndex, newIndex);
+    setCategorias(reordered);
+
+    // Enviar reordenação para o backend
+    try {
+      const reorders = reordered.map((cat, index) => ({
+        id: cat.id,
+        nova_ordem: index + 1,
+      }));
+
+      const response = await fetch(
+        `${API_CONFIG.BACKEND_URL}/api/v1/budget/categorias-config/reordenar?user_id=1`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reordenar: reorders }),
+        }
+      );
+
+      if (!response.ok) {
+        // Reverter em caso de erro
+        const oldOrder = arrayMove(reordered, newIndex, oldIndex);
+        setCategorias(oldOrder);
+        setMessage({ type: 'error', text: 'Erro ao reordenar categorias' });
+      }
+    } catch (error) {
+      console.error('Erro ao reordenar:', error);
+      const oldOrder = arrayMove(reordered, newIndex, oldIndex);
+      setCategorias(oldOrder);
+      setMessage({ type: 'error', text: 'Erro ao reordenar categorias' });
+    }
   };
 
   return (
@@ -314,79 +427,87 @@ export default function BudgetDetalhadaPage() {
       {loading ? (
         <div className="text-center py-8 text-muted-foreground">Carregando...</div>
       ) : (
-        <Accordion type="multiple" className="w-full space-y-4">
-          {Object.entries(categoriaMapping).map(([categoria, tiposGasto]) => {
-            const total = getTotalPorCategoria(categoria);
-            const meta = metaGeral[categoria] || 0;
-            const overBudget = isOverBudget(categoria);
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext
+            items={categorias.map(c => c.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            <Accordion type="multiple" className="w-full space-y-4">
+              {categorias.map((categoria) => {
+                const total = getTotalPorCategoria(categoria);
+                const meta = metaGeral[categoria.nome_categoria] || 0;
+                const overBudget = isOverBudget(categoria);
+                const tiposGasto = categoria.tipos_gasto_incluidos || [];
 
-            return (
-              <AccordionItem key={categoria} value={categoria} className="border rounded-lg">
-                <Card>
-                  <AccordionTrigger className="px-6 py-4 hover:no-underline">
-                    <div className="flex items-center justify-between w-full pr-4">
-                      <div className="flex items-center gap-3">
-                        <DollarSign className="h-5 w-5" />
-                        <span className="font-semibold text-lg">{categoria}</span>
-                      </div>
-                      <div className="flex items-center gap-4 text-sm">
-                        <div>
-                          <span className="text-muted-foreground">Total: </span>
-                          <span className={`font-bold ${overBudget ? 'text-red-600' : ''}`}>
-                            R$ {total.toFixed(2)}
+                return (
+                  <SortableAccordionItem key={categoria.id} categoria={categoria}>
+                    <AccordionTrigger className="px-6 py-4 hover:no-underline">
+                      <div className="flex items-center justify-between w-full pr-4">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="w-4 h-4 rounded"
+                            style={{ backgroundColor: categoria.cor_visualizacao }}
+                          />
+                          <span className="font-semibold text-lg">{categoria.nome_categoria}</span>
+                          <span className="text-xs text-muted-foreground">
+                            ({categoria.fonte_dados === 'GRUPO' ? 'Grupo' : 'Tipo'}: {categoria.filtro_valor})
                           </span>
                         </div>
-                        {meta > 0 && (
-                          <>
-                            <div>
-                              <span className="text-muted-foreground">Meta: </span>
-                              <span className="font-bold">R$ {meta.toFixed(2)}</span>
-                            </div>
-                            {overBudget && (
-                              <AlertCircle className="h-5 w-5 text-red-600" />
-                            )}
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </AccordionTrigger>
-                  <AccordionContent>
-                    <CardContent className="pt-0">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {tiposGasto.map(tipo => (
-                          <div key={tipo} className="space-y-2">
-                            <Label htmlFor={tipo}>{tipo}</Label>
-                            <div className="flex items-center gap-2">
-                              <span className="text-muted-foreground">R$</span>
-                              <Input
-                                id={tipo}
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                value={budgetData[tipo] || ''}
-                                onChange={(e) => handleValueChange(tipo, e.target.value)}
-                                placeholder="0.00"
-                                className="flex-1"
-                              />
-                            </div>
+                        <div className="flex items-center gap-4 text-sm">
+                          <div>
+                            <span className="text-muted-foreground">Total: </span>
+                            <span className={`font-bold ${overBudget ? 'text-red-600' : ''}`}>
+                              R$ {total.toFixed(2)}
+                            </span>
                           </div>
-                        ))}
-                      </div>
-                      {overBudget && (
-                        <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
-                          <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
-                          <div className="text-sm text-red-800">
-                            <strong>Atenção:</strong> O total desta categoria (R$ {total.toFixed(2)}) ultrapassou a meta geral (R$ {meta.toFixed(2)}) em R$ {(total - meta).toFixed(2)}.
-                          </div>
+                          {meta > 0 && (
+                            <>
+                              <div>
+                                <span className="text-muted-foreground">Meta: </span>
+                                <span className="font-bold">R$ {meta.toFixed(2)}</span>
+                              </div>
+                              {overBudget && (
+                                <AlertCircle className="h-5 w-5 text-red-600" />
+                              )}
+                            </>
+                          )}
                         </div>
-                      )}
-                    </CardContent>
-                  </AccordionContent>
-                </Card>
-              </AccordionItem>
-            );
-          })}
-        </Accordion>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <CardContent className="pt-0">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {tiposGasto.map(tipo => (
+                            <div key={tipo} className="space-y-2">
+                              <Label htmlFor={tipo}>{tipo}</Label>
+                              <div className="flex items-center gap-2">
+                                <span className="text-muted-foreground">R$</span>
+                                <Input
+                                  id={tipo}
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={budgetData[tipo] || ''}
+                                  onChange={(e) => handleValueChange(tipo, e.target.value)}
+                                  placeholder="0.00"
+                                  className="flex-1"
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </AccordionContent>
+                  </SortableAccordionItem>
+                );
+              })}
+            </Accordion>
+          </SortableContext>
+        </DndContext>
       )}
 
       <div className="flex justify-end gap-4">

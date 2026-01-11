@@ -179,6 +179,10 @@ const data = {
           title: "Meta Detalhada",
           url: "/budget/detalhada",
         },
+        {
+          title: "Configurações",
+          url: "/budget/configuracoes",
+        },
       ],
     },
     {
