@@ -3,6 +3,7 @@ Budget Service
 Lógica de negócio para budget planning
 """
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import List, Optional, Dict, Any
 from fastapi import HTTPException, status
 import json
@@ -11,6 +12,7 @@ from .repository import BudgetRepository
 from .repository_geral import BudgetGeralRepository
 from .repository_categoria_config import BudgetCategoriaConfigRepository, BudgetGeralHistoricoRepository
 from .schemas import BudgetCreate, BudgetUpdate, BudgetResponse, BudgetListResponse
+from app.domains.transactions.models import JournalEntry
 
 
 class BudgetService:
@@ -22,6 +24,75 @@ class BudgetService:
         self.repository_geral = BudgetGeralRepository(db)
         self.repository_categoria_config = BudgetCategoriaConfigRepository(db)
         self.repository_historico = BudgetGeralHistoricoRepository(db)
+    
+    def calcular_media_3_meses(self, user_id: int, tipo_gasto: str, mes_referencia: str) -> float:
+        """
+        Calcula média dos últimos 3 meses anteriores ao mes_referencia
+        
+        Args:
+            user_id: ID do usuário
+            tipo_gasto: Tipo de gasto
+            mes_referencia: Mês no formato YYYY-MM
+            
+        Returns:
+            float: Média calculada (ou 0 se não houver dados)
+        """
+        # Converter mes_referencia para calcular meses anteriores
+        ano, mes = map(int, mes_referencia.split('-'))
+        
+        # Calcular os 3 meses anteriores
+        meses_anteriores = []
+        for i in range(1, 4):  # 3 meses atrás
+            m = mes - i
+            a = ano
+            if m < 1:
+                m += 12
+                a -= 1
+            meses_anteriores.append(f"{a:04d}-{m:02d}")
+        
+        # Criar condições para cada mês
+        from sqlalchemy import or_
+        condicoes_meses = []
+        for mes_anterior in meses_anteriores:
+            ano_mes, mes_num = mes_anterior.split('-')
+            # Formato: dd/mm/yyyy → substr(4,2)=mm, substr(7,4)=yyyy
+            condicao = func.concat(
+                func.substr(JournalEntry.Data, 7, 4),  # ano
+                '-',
+                func.substr(JournalEntry.Data, 4, 2)   # mês
+            ) == mes_anterior
+            condicoes_meses.append(condicao)
+        
+        # Buscar transações dos 3 meses anteriores
+        transacoes = self.db.query(JournalEntry).filter(
+            JournalEntry.user_id == user_id,
+            JournalEntry.TipoGasto == tipo_gasto,
+            JournalEntry.CategoriaGeral == 'Despesa',
+            JournalEntry.Valor < 0,  # Apenas saídas
+            or_(*condicoes_meses)
+        ).all()
+        
+        if not transacoes:
+            return 0.0
+        
+        # Agrupar por mês e calcular soma
+        meses_com_dados = {}
+        for t in transacoes:
+            # Extrair mês-ano da transação (formato dd/mm/yyyy)
+            if len(t.Data) >= 10:
+                mes_transacao = t.Data[3:10]  # mm/yyyy
+                if mes_transacao not in meses_com_dados:
+                    meses_com_dados[mes_transacao] = 0
+                meses_com_dados[mes_transacao] += abs(t.Valor)
+        
+        # Calcular média (soma / qtd_meses_com_dados)
+        if meses_com_dados:
+            total = sum(meses_com_dados.values())
+            qtd_meses = len(meses_com_dados)
+            media = total / qtd_meses
+            return round(media, 2)
+        
+        return 0.0
     
     def get_budget(self, budget_id: int, user_id: int) -> BudgetResponse:
         """Busca budget por ID"""
@@ -112,7 +183,26 @@ class BudgetService:
                     detail="valor_planejado deve ser maior que zero"
                 )
         
-        result = self.repository.bulk_upsert(user_id, mes_referencia, budgets)
+        # Criar ou atualizar cada budget com média calculada
+        result = []
+        for budget_data in budgets:
+            # Calcular média dos 3 meses anteriores
+            media = self.calcular_media_3_meses(
+                user_id=user_id,
+                tipo_gasto=budget_data["tipo_gasto"],
+                mes_referencia=mes_referencia
+            )
+            
+            # Upsert com média
+            budget = self.repository.upsert(
+                user_id=user_id,
+                tipo_gasto=budget_data["tipo_gasto"],
+                mes_referencia=mes_referencia,
+                valor_planejado=budget_data["valor_planejado"],
+                valor_medio_3_meses=media
+            )
+            result.append(budget)
+        
         return [BudgetResponse.from_orm(b) for b in result]
     
     # ===== MÉTODOS PARA BUDGET GERAL =====

@@ -89,18 +89,23 @@ class BudgetRepository:
         user_id: int, 
         tipo_gasto: str, 
         mes_referencia: str, 
-        valor_planejado: float
+        valor_planejado: float,
+        valor_medio_3_meses: float = 0.0
     ) -> BudgetPlanning:
         """Cria ou atualiza budget (insert or update)"""
         existing = self.get_by_tipo_gasto_and_month(user_id, tipo_gasto, mes_referencia)
         
         if existing:
-            return self.update(existing, {"valor_planejado": valor_planejado})
+            return self.update(existing, {
+                "valor_planejado": valor_planejado,
+                "valor_medio_3_meses": valor_medio_3_meses
+            })
         else:
             return self.create(user_id, {
                 "tipo_gasto": tipo_gasto,
                 "mes_referencia": mes_referencia,
-                "valor_planejado": valor_planejado
+                "valor_planejado": valor_planejado,
+                "valor_medio_3_meses": valor_medio_3_meses
             })
     
     def bulk_upsert(self, user_id: int, mes_referencia: str, budgets: List[dict]) -> List[BudgetPlanning]:

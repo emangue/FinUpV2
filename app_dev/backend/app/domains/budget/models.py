@@ -29,6 +29,7 @@ class BudgetPlanning(Base):
     
     # Valor
     valor_planejado = Column(Float, nullable=False)
+    valor_medio_3_meses = Column(Float, nullable=False, default=0.0)  # Média dos últimos 3 meses
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.now, nullable=False)

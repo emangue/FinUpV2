@@ -20,6 +20,7 @@ interface BudgetItem {
   tipo_gasto: string;
   mes_referencia: string;
   valor_planejado: number;
+  valor_medio_3_meses: number;
 }
 
 interface MediaHistorica {
@@ -116,10 +117,19 @@ export default function BudgetSimplesPage() {
         const result = await response.json();
         const data = result.budgets || [];
         const budgetMap: Record<string, number> = {};
+        const mediasMap: Record<string, number> = {};
+        
         data.forEach((item: BudgetItem) => {
           budgetMap[item.tipo_gasto] = item.valor_planejado;
+          mediasMap[item.tipo_gasto] = item.valor_medio_3_meses;
         });
+        
         setBudgetData(budgetMap);
+        // Atualizar médias com valores do banco (se existirem)
+        setMediaHistorica(prev => ({
+          ...prev,
+          ...mediasMap
+        }));
       } else {
         setBudgetData({});
       }
