@@ -130,6 +130,112 @@ const data = {
       ],
     },
   ],
+  navMain: [
+    {
+      title: "Dashboard",
+      url: "/dashboard",
+      icon: Home,
+      isActive: true,
+      items: [
+        {
+          title: "Visão Geral",
+          url: "/dashboard",
+        },
+        {
+          title: "Métricas",
+          url: "/dashboard/metrics",
+        },
+      ],
+    },
+    {
+      title: "Transações",
+      url: "/transactions",
+      icon: CreditCard,
+      items: [
+        {
+          title: "Todas",
+          url: "/transactions?tab=all",
+        },
+        {
+          title: "Receitas",
+          url: "/transactions?tab=receitas",
+        },
+        {
+          title: "Despesas",
+          url: "/transactions?tab=despesas",
+        },
+      ],
+    },
+    {
+      title: "Orçamento",
+      url: "/budget",
+      icon: DollarSign,
+      items: [
+        {
+          title: "Meta Geral",
+          url: "/budget",
+        },
+        {
+          title: "Meta Detalhada",
+          url: "/budget/detalhada",
+        },
+      ],
+    },
+    {
+      title: "Relatórios",
+      url: "/reports",
+      icon: BarChart3,
+      items: [
+        {
+          title: "Mensal",
+          url: "/reports/monthly",
+        },
+        {
+          title: "Anual",
+          url: "/reports/yearly",
+        },
+        {
+          title: "Categorias",
+          url: "/reports/categories",
+        },
+      ],
+    },
+    {
+      title: "Configurações",
+      url: "/settings",
+      icon: Settings,
+      items: [
+        {
+          title: "Perfil",
+          url: "/settings/profile",
+        },
+        {
+          title: "Administração",
+          url: "/settings/admin",
+        },
+        {
+          title: "Gestão de Bancos",
+          url: "/settings/bancos",
+        },
+        {
+          title: "Gestão de Cartões",
+          url: "/settings/cartoes",
+        },
+        {
+          title: "Gestão de Categorias",
+          url: "/settings/categorias",
+        },
+        {
+          title: "Regras de Exclusão",
+          url: "/settings/exclusoes",
+        },
+        {
+          title: "Backup",
+          url: "/settings/backup",
+        },
+      ],
+    },
+  ],
   projects: [
     {
       name: "Upload de Arquivos",
@@ -140,11 +246,6 @@ const data = {
       name: "Análise de Tendências",
       url: "/trends",
       icon: TrendingUp,
-    },
-    {
-      name: "Orçamento",
-      url: "/budget",
-      icon: DollarSign,
     },
   ],
 }

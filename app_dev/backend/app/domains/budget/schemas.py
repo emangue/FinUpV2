@@ -65,3 +65,16 @@ class BudgetBulkUpsert(BaseModel):
         if not re.match(r'^\d{4}-\d{2}$', v):
             raise ValueError('mes_referencia deve estar no formato YYYY-MM')
         return v
+
+
+class BudgetGeralBulkUpsert(BaseModel):
+    """Schema para criar/atualizar múltiplos budgets gerais de uma vez"""
+    mes_referencia: str = Field(..., description="Mês de referência no formato YYYY-MM")
+    budgets: List[dict] = Field(..., description="Lista de {categoria_geral: str, valor_planejado: float}")
+    
+    @validator('mes_referencia')
+    def validate_mes_referencia(cls, v):
+        """Valida formato YYYY-MM"""
+        if not re.match(r'^\d{4}-\d{2}$', v):
+            raise ValueError('mes_referencia deve estar no formato YYYY-MM')
+        return v

@@ -14,7 +14,8 @@ from .schemas import (
     BudgetUpdate, 
     BudgetResponse, 
     BudgetListResponse,
-    BudgetBulkUpsert
+    BudgetBulkUpsert,
+    BudgetGeralBulkUpsert
 )
 
 router = APIRouter()
@@ -22,12 +23,23 @@ router = APIRouter()
 
 @router.get("/budget", response_model=BudgetListResponse, summary="Listar budgets")
 def list_budgets(
+    mes_referencia: str = Query(None, description="Filtrar por mês (formato YYYY-MM)"),
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
-    """Lista todos os budgets do usuário"""
+    """
+    Lista budgets do usuário
+    
+    - Se mes_referencia for informado, retorna apenas daquele mês
+    - Se não, retorna todos os budgets
+    """
     service = BudgetService(db)
-    return service.get_all_budgets(user_id)
+    
+    if mes_referencia:
+        budgets = service.get_budgets_by_month(user_id, mes_referencia)
+        return {"budgets": budgets, "total": len(budgets)}
+    else:
+        return service.get_all_budgets(user_id)
 
 
 @router.get("/budget/month/{mes_referencia}", response_model=List[BudgetResponse], summary="Budgets por mês")
@@ -104,3 +116,42 @@ def bulk_upsert_budgets(
     """
     service = BudgetService(db)
     return service.bulk_upsert_budgets(user_id, data.mes_referencia, data.budgets)
+
+
+# ===== ROTAS PARA META GERAL =====
+
+@router.get("/budget/geral", response_model=BudgetListResponse, summary="Listar metas gerais")
+def list_budget_geral(
+    mes_referencia: str = Query(None, description="Filtrar por mês (formato YYYY-MM)"),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Lista metas gerais do usuário por categoria ampla
+    
+    - Se mes_referencia for informado, retorna apenas daquele mês
+    - Se não, retorna todas as metas gerais
+    """
+    service = BudgetService(db)
+    
+    if mes_referencia:
+        budgets = service.get_budget_geral_by_month(user_id, mes_referencia)
+        return {"budgets": budgets, "total": len(budgets)}
+    else:
+        return service.get_all_budget_geral(user_id)
+
+
+@router.post("/budget/geral/bulk-upsert", response_model=List[BudgetResponse], summary="Criar/atualizar múltiplas metas gerais")
+def bulk_upsert_budget_geral(
+    data: BudgetGeralBulkUpsert,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Cria ou atualiza múltiplas metas gerais de uma vez
+    
+    Útil para salvar todo o orçamento geral de um mês
+    """
+    service = BudgetService(db)
+    return service.bulk_upsert_budget_geral(user_id, data.mes_referencia, data.budgets)
+

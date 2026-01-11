@@ -7,6 +7,7 @@ from typing import List, Optional
 from fastapi import HTTPException, status
 
 from .repository import BudgetRepository
+from .repository_geral import BudgetGeralRepository
 from .schemas import BudgetCreate, BudgetUpdate, BudgetResponse, BudgetListResponse
 
 
@@ -15,6 +16,7 @@ class BudgetService:
     
     def __init__(self, db: Session):
         self.repository = BudgetRepository(db)
+        self.repository_geral = BudgetGeralRepository(db)
     
     def get_budget(self, budget_id: int, user_id: int) -> BudgetResponse:
         """Busca budget por ID"""
@@ -107,3 +109,43 @@ class BudgetService:
         
         result = self.repository.bulk_upsert(user_id, mes_referencia, budgets)
         return [BudgetResponse.from_orm(b) for b in result]
+    
+    # ===== MÉTODOS PARA BUDGET GERAL =====
+    
+    def get_budget_geral_by_month(self, user_id: int, mes_referencia: str) -> List[BudgetResponse]:
+        """Lista budgets gerais de um mês específico"""
+        budgets = self.repository_geral.get_by_month(user_id, mes_referencia)
+        return [BudgetResponse.from_orm(b) for b in budgets]
+    
+    def get_all_budget_geral(self, user_id: int) -> BudgetListResponse:
+        """Lista todos os budgets gerais do usuário"""
+        budgets = self.repository_geral.get_all(user_id)
+        return BudgetListResponse(
+            budgets=[BudgetResponse.from_orm(b) for b in budgets],
+            total=len(budgets)
+        )
+    
+    def bulk_upsert_budget_geral(
+        self, 
+        user_id: int, 
+        mes_referencia: str, 
+        budgets: List[dict]
+    ) -> List[BudgetResponse]:
+        """Cria ou atualiza múltiplos budgets gerais de uma vez"""
+        # Validar dados
+        for budget_data in budgets:
+            if "categoria_geral" not in budget_data or "valor_planejado" not in budget_data:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Cada budget geral deve ter 'categoria_geral' e 'valor_planejado'"
+                )
+            
+            if budget_data["valor_planejado"] <= 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="valor_planejado deve ser maior que zero"
+                )
+        
+        result = self.repository_geral.bulk_upsert(user_id, mes_referencia, budgets)
+        return [BudgetResponse.from_orm(b) for b in result]
+

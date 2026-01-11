@@ -4,7 +4,7 @@
  * Centraliza exports de componentes do domínio de dashboard
  */
 
-export { default as BudgetVsActual } from './budget-vs-actual'
+export { BudgetVsActual } from './budget-vs-actual'
 export { default as CategoryExpenses } from './category-expenses'
 export { default as ChartAreaInteractive } from './chart-area-interactive'
 export { default as CompactMetrics } from './compact-metrics'
