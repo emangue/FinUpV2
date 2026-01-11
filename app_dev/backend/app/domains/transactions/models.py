@@ -31,6 +31,9 @@ class JournalEntry(Base):
     SUBGRUPO = Column(String)
     CategoriaGeral = Column(String)
     
+    # Orçamento (coluna calculada para performance)
+    categoria_orcamento_id = Column(Integer, index=True, nullable=True)  # FK virtual para budget_categoria_config
+    
     # Identificação
     IdTransacao = Column(String, unique=True, index=True)
     IdParcela = Column(String)
