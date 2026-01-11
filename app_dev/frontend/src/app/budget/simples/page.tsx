@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Calendar, Save, Copy, ArrowLeft, DollarSign, Check } from 'lucide-react';
+import { Calendar, Save, Copy, ArrowLeft, DollarSign } from 'lucide-react';
 import { API_CONFIG } from '@/core/config/api.config';
 import Link from 'next/link';
 
@@ -142,31 +142,6 @@ export default function BudgetSimplesPage() {
       ...prev,
       [tipoGasto]: numValue,
     }));
-  };
-
-  const aplicarMedia = (tipoGasto: string) => {
-    const media = mediaHistorica[tipoGasto];
-    if (media && media > 0) {
-      setBudgetData(prev => ({
-        ...prev,
-        [tipoGasto]: media,
-      }));
-    }
-  };
-
-  const aplicarTodasMedias = () => {
-    const novosBudgets: Record<string, number> = {};
-    tiposGastoDisponiveis.forEach(tipo => {
-      const media = mediaHistorica[tipo];
-      if (media && media > 0) {
-        novosBudgets[tipo] = media;
-      } else {
-        novosBudgets[tipo] = budgetData[tipo] || 0;
-      }
-    });
-    setBudgetData(novosBudgets);
-    setMessage({ type: 'success', text: 'Todas as médias aplicadas com sucesso!' });
-    setTimeout(() => setMessage(null), 3000);
   };
 
   const handleSave = async () => {
@@ -321,29 +296,14 @@ export default function BudgetSimplesPage() {
                     </SelectItem>
                   ))}
                 </SelectContent>
-             div className="flex items-center justify-between">
-              <div>
-                <CardTitle>Tipos de Gasto</CardTitle>
-                <CardDescription>
-                  Defina o valor planejado para cada tipo de gasto
-                </CardDescription>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={aplicarTodasMedias}
-                disabled={loading || saving || tiposGastoDisponiveis.length === 0}
-              >
-                <Check className="h-4 w-4 mr-2" />
-                Aplicar Todas as Médias
-              </Button>
+              </Select>
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {tiposGastoDisponiveis
-                .filter(tipo => tipo !== 'Pagamento Fatura')
-                totalGeral)}
+            <div className="flex-1">
+              <Label>Total Geral</Label>
+              <div className="flex items-center gap-2 h-10 px-3 py-2 border rounded-md bg-gray-50">
+                <DollarSign className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-bold">
+                  R$ {formatarMoeda(totalGeral)}
                 </span>
               </div>
             </div>
@@ -379,17 +339,6 @@ export default function BudgetSimplesPage() {
                       {media && media > 0 && (
                         <span className="text-xs text-muted-foreground italic">
                           média: R$ {formatarMoeda(media)}
-                      {media && media > 0 && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => aplicarMedia(tipo)}
-                          title="Aplicar média dos últimos 3 meses"
-                          className="h-10 px-3"
-                        >
-                          <Check className="h-4 w-4" />
-                        </Button>
-                      )}
                         </span>
                       )}
                     </div>
