@@ -176,6 +176,7 @@ class TransactionService:
     ) -> TiposGastoComMediaResponse:
         """
         Retorna tipos de gasto únicos de Despesa com média dos últimos 3 meses
+        Busca os dados pré-calculados da tabela budget_planning
         
         Args:
             user_id: ID do usuário
@@ -184,50 +185,16 @@ class TransactionService:
         Returns:
             TiposGastoComMediaResponse com lista de tipos e suas médias
         """
-        # Converter mes_referencia para datetime
-        ano, mes = map(int, mes_referencia.split('-'))
+        from app.domains.budget.models import BudgetPlanning
         
-        # Calcular os 3 meses anteriores ao mês de referência
-        meses_anteriores = []
-        for i in range(1, 4):  # 3 meses atrás
-            m = mes - i
-            a = ano
-            if m < 1:
-                m += 12
-                a -= 1
-            meses_anteriores.append(f"{a:04d}-{m:02d}")
-        
-        print(f"DEBUG: Meses anteriores: {meses_anteriores}")  # Debug
-        
-        # Buscar transações de Despesa dos últimos 3 meses
-        # Data está em formato dd/mm/yyyy, então extraímos ano-mês: substr(7,4) + '-' + substr(4,2)
-        from sqlalchemy import or_
-        
-        # Criar condição para cada mês
-        condicoes_meses = []
-        for mes_anterior in meses_anteriores:
-            ano_mes, mes_num = mes_anterior.split('-')
-            # Formato: dd/mm/yyyy → substr(4,2)=mm, substr(7,4)=yyyy
-            condicao = func.concat(
-                func.substr(JournalEntry.Data, 7, 4),  # ano
-                '-',
-                func.substr(JournalEntry.Data, 4, 2)   # mês
-            ) == mes_anterior
-            condicoes_meses.append(condicao)
-        
-        transacoes = self.repository.db.query(JournalEntry).filter(
-            JournalEntry.user_id == user_id,
-            JournalEntry.CategoriaGeral == 'Despesa',
-            JournalEntry.TipoGasto.isnot(None),
-            JournalEntry.Valor < 0,  # Apenas saídas
-            or_(*condicoes_meses)
+        # Buscar tipos de gasto com médias da tabela budget_planning
+        budgets = self.repository.db.query(BudgetPlanning).filter(
+            BudgetPlanning.user_id == user_id,
+            BudgetPlanning.mes_referencia == mes_referencia
         ).all()
         
-        print(f"DEBUG: Total de transações encontradas: {len(transacoes)}")  # Debug
-        
-        # Se não encontrou transações, buscar todos os tipos de gasto que já existem no sistema
-        if not transacoes:
-            # Buscar tipos únicos de todas as transações de Despesa do usuário
+        # Se não encontrou no budget_planning, buscar tipos únicos das transações
+        if not budgets:
             tipos_unicos = self.repository.db.query(JournalEntry.TipoGasto).filter(
                 JournalEntry.user_id == user_id,
                 JournalEntry.CategoriaGeral == 'Despesa',
@@ -240,34 +207,19 @@ class TransactionService:
                     tipo_gasto=tipo_gasto,
                     media_3_meses=0.0
                 ))
-            
-            return TiposGastoComMediaResponse(
-                tipos_gasto=tipos_com_media,
-                mes_referencia=mes_referencia
-            )
+        else:
+            # Usar valores pré-calculados da tabela budget_planning
+            tipos_com_media = []
+            for budget in sorted(budgets, key=lambda x: x.tipo_gasto):
+                tipos_com_media.append(TipoGastoComMedia(
+                    tipo_gasto=budget.tipo_gasto,
+                    media_3_meses=round(budget.valor_medio_3_meses, 2)
+                ))
         
-        # Agrupar por TipoGasto e contar em quantos meses aparece
-        somas_por_tipo = {}
-        meses_por_tipo = {}
-        for t in transacoes:
-            if t.TipoGasto not in somas_por_tipo:
-                somas_por_tipo[t.TipoGasto] = 0
-                meses_por_tipo[t.TipoGasto] = set()
-            somas_por_tipo[t.TipoGasto] += abs(t.Valor)
-            # Extrair mês-ano da transação para contar meses únicos
-            mes_transacao = t.Data[3:10] if len(t.Data) >= 10 else None
-            if mes_transacao:
-                meses_por_tipo[t.TipoGasto].add(mes_transacao)
-        
-        # Calcular média real (soma / quantidade de meses com dados)
-        tipos_com_media = []
-        for tipo_gasto, soma in sorted(somas_por_tipo.items()):
-            qtd_meses = len(meses_por_tipo[tipo_gasto])
-            media = soma / qtd_meses if qtd_meses > 0 else 0
-            tipos_com_media.append(TipoGastoComMedia(
-                tipo_gasto=tipo_gasto,
-                media_3_meses=round(media, 2)
-            ))
+        return TiposGastoComMediaResponse(
+            tipos_gasto=tipos_com_media,
+            mes_referencia=mes_referencia
+        )
         
         return TiposGastoComMediaResponse(
             tipos_gasto=tipos_com_media,
