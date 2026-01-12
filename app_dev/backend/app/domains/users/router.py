@@ -160,7 +160,8 @@ def logout(
 
 @router.get("/auth/me", response_model=UserResponse)
 def get_current_user_info(
-    user: User = Depends(get_current_user)
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """
     Retorna informações do usuário autenticado
@@ -170,7 +171,23 @@ def get_current_user_info(
     2. Obter dados do usuário logado
     3. Middleware de autenticação
     """
-    return user
+    try:
+        # Garantir que o objeto user está completo
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Usuário não autenticado"
+            )
+        return user
+    except Exception as e:
+        # Log do erro para debug
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error in /auth/me: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao buscar dados do usuário: {str(e)}"
+        )
 
 
 @router.post("/auth/refresh", response_model=TokenResponse)

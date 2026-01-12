@@ -91,8 +91,8 @@ def get_category_expenses(
 
 @router.get("/budget-vs-actual", response_model=BudgetVsActualResponse)
 def get_budget_vs_actual(
-    year: int = Query(..., description="Ano"),
-    month: int = Query(..., description="Mês (1-12)"),
+    year: int = Query(None, description="Ano (opcional, default: ano atual)"),
+    month: int = Query(None, description="Mês (1-12, opcional, default: mês atual)"),
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
@@ -105,6 +105,13 @@ def get_budget_vs_actual(
     - diferenca (realizado - planejado)
     
     Também retorna totais gerais e percentual geral.
+    
+    Se year/month não informados, usa mês/ano atuais.
     """
+    from datetime import datetime
+    now = datetime.now()
+    year = year or now.year
+    month = month or now.month
+    
     service = DashboardService(db)
     return service.get_budget_vs_actual(user_id, year, month)

@@ -194,7 +194,7 @@ class TransactionMarker:
                 import hashlib
                 estab_normalizado_parcela = normalizar_estabelecimento(estabelecimento_base)
                 chave = f"{estab_normalizado_parcela}|{valor_arredondado:.2f}|{total_parcelas}"
-                id_parcela = hashlib.md5(chave.encode()).hexdigest()[:16]
+                id_parcela = hashlib.md5(chave.encode()).hexdigest()[:16]  # nosec B324 - MD5 usado apenas para ID único, não criptografia
                 logger.debug(f"IdParcela: {id_parcela} para {estab_normalizado_parcela} {parcela_atual}/{total_parcelas}")
                 logger.debug(f"  Chave IdParcela: '{chave}'")
             

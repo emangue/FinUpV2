@@ -57,7 +57,7 @@ class Settings(BaseSettings):
     
     # Rate Limiting
     RATE_LIMIT_PER_MINUTE: int = 60
-    LOGIN_RATE_LIMIT_PER_MINUTE: int = 5
+    LOGIN_RATE_LIMIT_PER_MINUTE: int = 60  # Aumentado para testes (1 req/sec)
     
     # Server
     HOST: str = "0.0.0.0"

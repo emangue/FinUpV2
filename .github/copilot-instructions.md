@@ -2,6 +2,66 @@
 
 ## ⚠️ REGRAS CRÍTICAS - SEMPRE SEGUIR
 
+### 🧪 PROCESSO DE TESTES PRÉ-DEPLOY (OBRIGATÓRIO)
+
+**ANTES DE QUALQUER DEPLOY (dev, staging, produção), SEMPRE executar:**
+
+```bash
+cd app_dev/backend
+chmod +x scripts/pre_deploy_tests.sh
+./scripts/pre_deploy_tests.sh
+```
+
+**O que o script testa (5 suites):**
+1. ✅ **User Isolation:** 20 testes de vazamento de dados entre usuários
+2. ✅ **Security Scan:** CVE detection com safety/bandit/pip-audit
+3. ✅ **Authentication:** 18+ testes de fluxo JWT (login/logout/refresh)
+4. ✅ **Backup/Restore:** 13 testes de integridade de backup SQLite
+5. ⚡ **Load Testing:** 50 usuários simultâneos, 1min (performance check)
+
+**Exit codes:**
+- `0` = ✅ SAFE TO DEPLOY (todos os testes críticos passaram)
+- `1` = ❌ DEPLOY BLOQUEADO (corrigir problemas e re-testar)
+
+**Logs gerados:** `/tmp/test_*.log` (isolation, security, auth, backup, load)
+
+**Integração CI/CD:**
+```yaml
+# GitHub Actions exemplo
+- name: Pre-Deploy Tests
+  run: |
+    cd app_dev/backend
+    source ../../venv/bin/activate
+    ./scripts/pre_deploy_tests.sh
+```
+
+**Quando adicionar novos testes:**
+1. Criar script em `app_dev/backend/tests/test_nova_funcionalidade.py`
+2. Adicionar chamada em `pre_deploy_tests.sh` (seção TEST SUITE X)
+3. Definir se é bloqueante (`required="true"`) ou não
+4. Documentar no `RELATORIO_FASE5_TESTES.md`
+
+**🚫 NUNCA:**
+- ❌ Fazer deploy sem executar pre_deploy_tests.sh
+- ❌ Ignorar falhas de testes bloqueantes
+- ❌ Comentar/desabilitar testes "para passar rápido"
+- ❌ Modificar critérios de aprovação sem justificativa documentada
+
+**✅ SEMPRE:**
+- ✅ Executar testes localmente ANTES de push
+- ✅ Adicionar testes para novas funcionalidades
+- ✅ Atualizar thresholds se houver mudança arquitetural justificada
+- ✅ Documentar falhas e fixes no RELATORIO_FASE5_TESTES.md
+
+**Critérios de Aprovação (atuais):**
+- User Isolation: 0 vazamentos (100% pass)
+- Security: 0 CVEs críticas
+- Authentication: ≤2 falhas aceitáveis (refresh token)
+- Backup: 100% integridade
+- Load: <5% error rate, <1000ms p95 (recomendado, não-bloqueante)
+
+---
+
 ### � TIPOS DE DOCUMENTO - ESTRATÉGIAS DIFERENTES (REGRA INVIOLÁVEL)
 
 **NUNCA usar a mesma lógica de hash/deduplicação para extrato e fatura!**
