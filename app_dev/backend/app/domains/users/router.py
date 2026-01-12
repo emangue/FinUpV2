@@ -2,10 +2,12 @@
 Domínio Users - Router
 Endpoints HTTP - autenticação e gestão de usuários
 """
-from fastapi import APIRouter, Depends, Query, Response, HTTPException, status
+from fastapi import APIRouter, Depends, Query, Response, HTTPException, status, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from datetime import timedelta
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from app.core.database import get_db
 from app.core.config import settings
@@ -23,27 +25,35 @@ from .schemas import (
     RefreshTokenRequest
 )
 
+# Configura rate limiter
+limiter = Limiter(key_func=get_remote_address)
+
 router = APIRouter(tags=["users"])
 
 
-# ======================================
-# Endpoints de Autenticação
-# ======================================
-
-@router.post("/auth/login", response_model=TokenResponse)
+@limiter.limit(f"{settings.LOGIN_RATE_LIMIT_PER_MINUTE}/minute")
 def login(
+    request: Request,  # IMPORTANTE: Request necessário para rate limiting
     credentials: LoginRequest,
     response: Response,
     db: Session = Depends(get_db)
 ):
     """
-    Endpoint de login com JWT
+    Endpoint de login com JWT e rate limiting
+    
+    Rate Limit: 5 requisições por minuto por IP (proteção brute force)
     
     Fluxo:
     1. Valida email + senha
     2. Gera access_token (15min) + refresh_token (7 dias)
     3. Salva tokens em httpOnly cookies
     4. Retorna tokens no body também (compatibilidade)
+    
+    Segurança:
+    - httpOnly cookie = protege contra XSS
+    - Secure cookie = HTTPS apenas em produção (⚠️ MEGA IMPORTANTE)
+    - SameSite=Lax = protege contra CSRF
+    - Rate limiting = 5 req/min por IPmpatibilidade)
     
     Segurança:
     - httpOnly cookie = protege contra XSS
@@ -83,22 +93,23 @@ def login(
         user_id=user.id,
         token_hash=refresh_token_hash,
         expires_at=refresh_expire
-    )
-    db.add(db_refresh_token)
-    db.commit()
-    
-    # Configurar cookies httpOnly
+    # ⚠️ MEGA IMPORTANTE: Em produção (HTTPS), secure=True obrigatório!
     is_production = settings.ENVIRONMENT == "production"
     
     response.set_cookie(
         key="access_token",
         value=access_token,
         httponly=True,  # JavaScript não pode acessar
-        secure=is_production,  # Apenas HTTPS em prod
+        secure=is_production,  # HTTPS obrigatório em prod (⚠️ importante!)
         samesite="lax",  # Proteção CSRF
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60  # segundos
     )
     
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=is_production,  # HTTPS obrigatório em prod (⚠️ importante!)
     response.set_cookie(
         key="refresh_token",
         value=refresh_token,

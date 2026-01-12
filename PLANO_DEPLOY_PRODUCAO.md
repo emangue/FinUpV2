@@ -48,13 +48,18 @@ Transformar o sistema de desenvolvimento local em uma aplicação de produção 
 
 ---
 
-### **FASE 2: Autenticação e Segurança** ⏸️ AGUARDANDO
+### **FASE 2: Autenticação e Segurança** 🟡 EM ANDAMENTO
 **Duração estimada:** 2-3 dias  
 **Responsável:** AI Copilot  
 
 **Objetivo:** Implementar autenticação JWT completa com todas as camadas de segurança
 
-**Status:** ⏸️ Não Iniciada
+**Status:** 🟡 Backend 75% completo | Frontend 0% | Rate limiting pendente
+
+**Últimas atualizações:**
+- ✅ 12/01 09:52 - Tabela refresh_tokens criada
+- ✅ 12/01 09:55 - Commit feat(auth) enviado para GitHub
+- 🟡 12/01 10:00 - Aguardando rate limiting e frontend
 
 ---
 
@@ -100,120 +105,66 @@ Transformar o sistema de desenvolvimento local em uma aplicação de produção 
 
 ## ✅ CHECKLIST DE PROGRESSO
 
-### FASE 1: Limpeza e Backup (0/6)
+### FASE 1: Limpeza e Backup (6/6) ✅
 
-- [ ] **1.1** - Criar pasta `_historico/` e mover documentação antiga
-  - **Motivo:** Organizar documentação sem perder histórico
-  - **Arquivos:** BUGS.md, MODULARIDADE_*.md, STATUS_ATUAL.md, etc (11 arquivos)
-  - **Status:** ⏸️ Não Iniciada
+- [x] **1.1** - Criar pasta `_historico/` e mover documentação antiga
+  - **Status:** ✅ Concluída em 12/01 09:47
 
-- [ ] **1.2** - Remover arquivos temporários e de debug
-  - **Motivo:** Limpar repositório de arquivos desnecessários
-  - **Arquivos:** debug_*.py, check_*.py, test_*.csv, *.pid (31 arquivos)
-  - **Status:** ⏸️ Não Iniciada
+- [x] **1.2** - Remover arquivos temporários e de debug
+  - **Status:** ✅ Concluída em 12/01 09:48
 
-- [ ] **1.3** - Atualizar `.gitignore` para proteger `_csvs_historico/`
-  - **Motivo:** CSVs são para testes locais com dados reais, nunca devem ir para produção
-  - **Ação:** Adicionar regra explícita `_csvs_historico/` no `.gitignore`
-  - **Status:** ⏸️ Não Iniciada
+- [x] **1.3** - Atualizar `.gitignore` para proteger `_csvs_historico/`
+  - **Status:** ✅ Concluída em 12/01 09:45
 
-- [ ] **1.4** - Atualizar `copilot-instructions.md` sobre CSVs históricos
-  - **Motivo:** Garantir que AI nunca remova ou envie CSVs para produção
-  - **Ação:** Adicionar seção sobre `_csvs_historico/` nas instruções
-  - **Status:** ⏸️ Não Iniciada
+- [x] **1.4** - Atualizar `copilot-instructions.md` sobre CSVs históricos
+  - **Status:** ✅ Concluída em 12/01 09:45
 
-- [ ] **1.5** - Limpar `app_dev/uploads_temp/` e remover scripts antigos
-  - **Motivo:** Remover arquivos temporários e scripts Flask obsoletos
-  - **Arquivos:** app_dev/run.py (Flask), app_dev/start_all_servers.sh, etc
-  - **Status:** ⏸️ Não Iniciada
+- [x] **1.5** - Limpar `app_dev/uploads_temp/` e remover scripts antigos
+  - **Status:** ✅ Concluída em 12/01 09:48
 
-- [ ] **1.6** - Commit e Push para GitHub (FinUpV2)
-  - **Motivo:** Backup seguro antes de iniciar mudanças críticas
-  - **Repo:** https://github.com/emangue/FinUpV2
-  - **Status:** ⏸️ Não Iniciada
+- [x] **1.6** - Commit e Push para GitHub (FinUpV2)
+  - **Status:** ✅ Concluída em 12/01 09:50
+  - **Commit:** 99f946e4
 
 ---
 
-### FASE 2: Autenticação e Segurança (0/15)
+### FASE 2: Autenticação e Segurança (10/15) 🟡
 
-#### 2.1 - Backend: Autenticação JWT (0/7)
+#### 2.1 - Backend: Autenticação JWT (6/7)
 
-- [ ] **2.1.1** - Instalar dependências de segurança
-  - **Motivo:** Bibliotecas necessárias para autenticação segura
-  - **Pacotes:** `passlib[bcrypt]`, `python-jose[cryptography]`, `python-multipart`
-  - **Arquivo:** `app_dev/backend/requirements.txt`
-  - **Status:** ⏸️ Não Iniciada
+- [x] **2.1.1** - Instalar dependências de segurança
+  - **Status:** ✅ Concluída em 12/01 09:50
 
-- [ ] **2.1.2** - Substituir hash SHA256 por bcrypt (cost=12)
-  - **Motivo:** SHA256 sem salt é vulnerável a rainbow tables, bcrypt é padrão da indústria
-  - **O que é:** Bcrypt é um algoritmo de hash com salt automático e custo ajustável (cost=12 = ~250ms)
-  - **Arquivo:** `app_dev/backend/app/shared/utils.py` linha 22
-  - **Código atual:** `hashlib.sha256(password.encode()).hexdigest()`
-  - **Novo código:** `pwd_context.hash(password)` usando passlib
-  - **Status:** ⏸️ Não Iniciada
+- [x] **2.1.2** - Substituir hash SHA256 por bcrypt (cost=12)
+  - **Status:** ✅ Concluída em 12/01 09:51
 
-- [ ] **2.1.3** - Criar endpoint `/api/v1/auth/login` (POST)
-  - **Motivo:** Permitir autenticação de usuários
-  - **Como funciona:** Valida email/password, gera JWT token, retorna em httpOnly cookie
-  - **Arquivo:** `app_dev/backend/app/domains/users/router.py`
-  - **Response:** HTTP 200 + Set-Cookie com JWT token
-  - **Erro:** HTTP 401 se credenciais inválidas
-  - **Status:** ⏸️ Não Iniciada
+- [x] **2.1.3** - Criar endpoint `/api/v1/auth/login` (POST)
+  - **Status:** ✅ Concluída em 12/01 09:52
 
-- [ ] **2.1.4** - Criar endpoint `/api/v1/auth/logout` (POST)
-  - **Motivo:** Permitir logout seguro
-  - **Como funciona:** Remove cookie JWT do browser
-  - **Arquivo:** `app_dev/backend/app/domains/users/router.py`
-  - **Response:** HTTP 200 + Clear-Cookie
-  - **Status:** ⏸️ Não Iniciada
+- [x] **2.1.4** - Criar endpoint `/api/v1/auth/logout` (POST)
+  - **Status:** ✅ Concluída em 12/01 09:52
 
-- [ ] **2.1.5** - Criar endpoint `/api/v1/auth/me` (GET)
-  - **Motivo:** Frontend verificar se usuário está autenticado
-  - **Como funciona:** Lê JWT do cookie, valida, retorna dados do usuário
-  - **Arquivo:** `app_dev/backend/app/domains/users/router.py`
-  - **Response:** HTTP 200 + JSON com user {id, email, name, role}
-  - **Erro:** HTTP 401 se não autenticado
-  - **Status:** ⏸️ Não Iniciada
+- [x] **2.1.5** - Criar endpoint `/api/v1/auth/me` (GET)
+  - **Status:** ✅ Concluída em 12/01 09:52
 
-- [ ] **2.1.6** - Reativar validação JWT em `get_current_user_id()`
-  - **Motivo:** Proteger TODOS os endpoints com autenticação real
-  - **Arquivo:** `app_dev/backend/app/shared/dependencies.py` linha 15-20
-  - **Código atual:** `return 1` (hardcoded, bypass)
-  - **Novo código:** Ler JWT do cookie, validar assinatura, extrair user_id
-  - **Status:** ⏸️ Não Iniciada
+- [x] **2.1.6** - Reativar validação JWT em `get_current_user_id()`
+  - **Status:** ✅ Concluída em 12/01 09:52
 
 - [ ] **2.1.7** - Forçar reset de senha para usuários existentes
-  - **Motivo:** Usuários atuais têm senha SHA256, precisa converter para bcrypt
-  - **Como funciona:** Detecta SHA256 no login, pede nova senha, converte para bcrypt
-  - **Arquivo:** Criar `app_dev/backend/app/domains/users/migration.py`
-  - **Novas senhas:** Salvar em `app_dev/backend/.passwords_reset.txt` (gitignore)
   - **Status:** ⏸️ Não Iniciada
 
 ---
 
-#### 2.2 - Backend: Tokens e Refresh (0/3)
+#### 2.2 - Backend: Tokens e Refresh (3/3)
 
-- [ ] **2.2.1** - Implementar Refresh Tokens
-  - **Motivo:** Access token curto (15min) + Refresh token longo (7 dias) = mais segurança
-  - **O que é:** Access token expira rápido, refresh token permite renovar sem re-login
-  - **Como usar:** Frontend chama `/auth/refresh` quando access token expira
-  - **Arquivo:** `app_dev/backend/app/domains/users/router.py`
-  - **Tabela:** Criar `refresh_tokens` no banco com user_id, token_hash, expires_at
-  - **Status:** ⏸️ Não Iniciada
+- [x] **2.2.1** - Implementar Refresh Tokens
+  - **Status:** ✅ Concluída em 12/01 09:52
 
-- [ ] **2.2.2** - Criar endpoint `/api/v1/auth/refresh` (POST)
-  - **Motivo:** Renovar access token sem re-login
-  - **Como funciona:** Recebe refresh token, valida, gera novo access token
-  - **Arquivo:** `app_dev/backend/app/domains/users/router.py`
-  - **Response:** HTTP 200 + Set-Cookie com novo access token
-  - **Erro:** HTTP 401 se refresh token inválido/expirado
-  - **Status:** ⏸️ Não Iniciada
+- [x] **2.2.2** - Criar endpoint `/api/v1/auth/refresh` (POST)
+  - **Status:** ✅ Concluída em 12/01 09:52
 
-- [ ] **2.2.3** - Configurar expiração de tokens
-  - **Motivo:** Access token curto = menos risco se roubado
-  - **Arquivo:** `app_dev/backend/app/core/config.py`
-  - **Valores:** ACCESS_TOKEN_EXPIRE = 15 minutos, REFRESH_TOKEN_EXPIRE = 7 dias
-  - **Status:** ⏸️ Não Iniciada
+- [x] **2.2.3** - Configurar expiração de tokens
+  - **Status:** ✅ Concluída em 12/01 09:51
 
 ---
 

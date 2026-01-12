@@ -2,10 +2,13 @@
 FastAPI Main Application - Arquitetura Modular em Domínios
 Com Autenticação JWT e Segurança
 """
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 import os
 
 # Carregar variáveis de ambiente do .env
@@ -30,6 +33,9 @@ from .domains.compatibility.router import router as compatibility_router
 from .domains.exclusoes.router import router as exclusoes_router
 from .domains.budget.router import router as budget_router
 
+# Configura Rate Limiter (proteção contra brute force)
+limiter = Limiter(key_func=get_remote_address)
+
 # Cria app FastAPI
 app = FastAPI(
     title=settings.APP_NAME,
@@ -39,7 +45,12 @@ app = FastAPI(
     redoc_url="/redoc"  # ReDoc
 )
 
+# Adiciona rate limiter ao estado da aplicação
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 # CORS - Permite Next.js se conectar COM cookies (allow_credentials=True)
+# ⚠️ PRODUÇÃO: BACKEND_CORS_ORIGINS deve ser HTTPS (https://financas.seudomain.com.br)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.BACKEND_CORS_ORIGINS,
