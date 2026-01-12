@@ -1,0 +1,100 @@
+# ==========================================
+# Systemd Service - Sistema de Finanças v4
+# ==========================================
+# 
+# Gerencia aplicação como serviço do sistema
+# Auto-restart em caso de falha ou reboot
+#
+# Instalação:
+#   sudo cp financas.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable financas
+#   sudo systemctl start financas
+#
+# Comandos:
+#   sudo systemctl status financas   # Ver status
+#   sudo systemctl restart financas  # Reiniciar
+#   sudo systemctl stop financas     # Parar
+#   sudo journalctl -u financas -f   # Ver logs
+# ==========================================
+
+[Unit]
+Description=Sistema de Finanças v4 - Multi-tenant
+Documentation=https://github.com/emangue/FinUpV2
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+# Tipo de serviço
+Type=simple
+
+# Usuário e grupo
+User=financas
+Group=financas
+
+# Diretório de trabalho
+WorkingDirectory=/var/www/financas
+
+# Variáveis de ambiente
+EnvironmentFile=/var/www/financas/.env
+
+# Comando de execução (Docker Compose)
+ExecStart=/usr/bin/docker-compose -f /var/www/financas/docker-compose.yml up
+
+# Comando de parada
+ExecStop=/usr/bin/docker-compose -f /var/www/financas/docker-compose.yml down
+
+# Restart automático
+Restart=always
+RestartSec=10
+
+# Timeout
+TimeoutStartSec=60
+TimeoutStopSec=30
+
+# Logs
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=financas-app
+
+# Recursos (ajustar conforme necessário)
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# Segurança
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/financas /var/www/financas/logs
+
+[Install]
+WantedBy=multi-user.target
+
+# ==========================================
+# OBSERVAÇÕES
+# ==========================================
+# 
+# 1. Restart Policy:
+#    - Restart=always: Reinicia em qualquer falha
+#    - RestartSec=10: Aguarda 10s antes de reiniciar
+# 
+# 2. Variáveis de Ambiente:
+#    - EnvironmentFile=/var/www/financas/.env
+#    - Definir SECRET_KEY, DATABASE_PATH, etc
+# 
+# 3. Logs:
+#    - journalctl -u financas -f (tempo real)
+#    - journalctl -u financas --since today
+#    - journalctl -u financas --since "1 hour ago"
+# 
+# 4. Monitoramento:
+#    - systemctl is-active financas
+#    - systemctl is-enabled financas
+#    - systemctl show financas
+# 
+# 5. Debugging:
+#    - systemctl status financas -l
+#    - journalctl -u financas -n 100
+#    - docker-compose logs -f
+# ==========================================

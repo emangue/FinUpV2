@@ -1,0 +1,183 @@
+# ==========================================
+# Docker Compose - Sistema de Finanças v4
+# ==========================================
+# 
+# Orquestra:
+# - App (backend + frontend)
+# - Nginx (proxy reverso + SSL)
+# - Volumes (dados persistentes)
+#
+# Uso:
+#   docker-compose up -d          # Iniciar
+#   docker-compose logs -f app    # Ver logs
+#   docker-compose down           # Parar
+# ==========================================
+
+version: '3.8'
+
+services:
+  # ==========================================
+  # APP: Backend FastAPI + Frontend Next.js
+  # ==========================================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: financas-app
+    restart: unless-stopped
+    
+    # Variáveis de ambiente
+    environment:
+      - ENVIRONMENT=production
+      - DEBUG=False
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_PATH=/var/lib/financas/db/financas.db
+      - BACKEND_CORS_ORIGINS=https://financas.seudomain.com.br
+      - ACCESS_TOKEN_EXPIRE_MINUTES=15
+      - REFRESH_TOKEN_EXPIRE_DAYS=7
+      - LOGIN_RATE_LIMIT_PER_MINUTE=5
+      
+      # Next.js
+      - NEXT_PUBLIC_BACKEND_URL=https://financas.seudomain.com.br
+      - NEXT_TELEMETRY_DISABLED=1
+    
+    # Volumes persistentes
+    volumes:
+      - financas-db:/var/lib/financas/db
+      - financas-uploads:/var/lib/financas/uploads
+      - financas-backups:/var/lib/financas/backups
+      - ./logs:/app/backend/logs
+    
+    # Portas (expostas apenas internamente, nginx faz proxy)
+    expose:
+      - "8000"  # Backend
+      - "3000"  # Frontend
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Dependências
+    depends_on:
+      - nginx
+    
+    # Network
+    networks:
+      - financas-network
+    
+    # Recursos (ajustar conforme necessário)
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # ==========================================
+  # NGINX: Proxy Reverso + SSL
+  # ==========================================
+  nginx:
+    image: nginx:alpine
+    container_name: financas-nginx
+    restart: unless-stopped
+    
+    # Portas públicas
+    ports:
+      - "80:80"    # HTTP (redirect to HTTPS)
+      - "443:443"  # HTTPS
+    
+    # Volumes
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./deploy/ssl:/etc/nginx/ssl:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - nginx-cache:/var/cache/nginx
+    
+    # Network
+    networks:
+      - financas-network
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    
+    # Recursos
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+# ==========================================
+# VOLUMES: Dados Persistentes
+# ==========================================
+volumes:
+  # Banco de dados SQLite
+  financas-db:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/lib/financas/db
+  
+  # Uploads de usuários
+  financas-uploads:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/lib/financas/uploads
+  
+  # Backups automatizados
+  financas-backups:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/lib/financas/backups
+  
+  # Cache do nginx
+  nginx-cache:
+    driver: local
+
+# ==========================================
+# NETWORKS: Rede Isolada
+# ==========================================
+networks:
+  financas-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+# ==========================================
+# OBSERVAÇÕES
+# ==========================================
+# 
+# 1. SECRET_KEY: Definir em .env na raiz do projeto
+#    Gerar com: openssl rand -hex 32
+# 
+# 2. SSL: Certificados Let's Encrypt em /etc/letsencrypt
+#    Rodar certbot-setup.sh antes do docker-compose up
+# 
+# 3. Backups: Configurar cron para rclone → S3
+#    Ver scripts/backup-to-s3.sh
+# 
+# 4. Logs: Acessíveis em ./logs/
+#    Rotação automática via logrotate
+# 
+# 5. Domínio: Substituir 'seudomain.com.br' pelo real
+#    Atualizar BACKEND_CORS_ORIGINS e NEXT_PUBLIC_BACKEND_URL
+# ==========================================
