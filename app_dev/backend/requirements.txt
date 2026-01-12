@@ -13,6 +13,7 @@ sqlalchemy==2.0.36
 # Authentication & Security
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
+bcrypt==4.2.1  # ⚠️ IMPORTANTE: 4.x compatível com passlib 1.7.4 (5.x remove __about__)
 python-multipart==0.0.20
 slowapi==0.1.9
 python-dotenv==1.2.1

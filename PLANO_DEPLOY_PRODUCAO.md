@@ -128,89 +128,88 @@ Transformar o sistema de desenvolvimento local em uma aplicação de produção 
 
 ---
 
-### FASE 2: Autenticação e Segurança (10/15) 🟡
+### FASE 2: Autenticação e Segurança (13/15) 🟢
 
-#### 2.1 - Backend: Autenticação JWT (6/7)
+#### 2.1 - Backend: Autenticação JWT (7/7) ✅
 
 - [x] **2.1.1** - Instalar dependências de segurança
   - **Status:** ✅ Concluída em 12/01 09:50
+  - **Resultado:** python-jose, passlib[bcrypt]==4.2.1, slowapi, python-dotenv instalados
 
 - [x] **2.1.2** - Substituir hash SHA256 por bcrypt (cost=12)
   - **Status:** ✅ Concluída em 12/01 09:51
 
 - [x] **2.1.3** - Criar endpoint `/api/v1/auth/login` (POST)
   - **Status:** ✅ Concluída em 12/01 09:52
+  - **Testado:** ✅ Login funcionando com JWT + httpOnly cookies
 
 - [x] **2.1.4** - Criar endpoint `/api/v1/auth/logout` (POST)
   - **Status:** ✅ Concluída em 12/01 09:52
+  - **Testado:** ✅ Logout revoga tokens e limpa cookies
 
 - [x] **2.1.5** - Criar endpoint `/api/v1/auth/me` (GET)
   - **Status:** ✅ Concluída em 12/01 09:52
+  - **Testado:** ✅ Retorna dados do usuário autenticado via JWT cookie
 
 - [x] **2.1.6** - Reativar validação JWT em `get_current_user_id()`
   - **Status:** ✅ Concluída em 12/01 09:52
+  - **Testado:** ✅ Endpoints protegidos requerem autenticação
 
-- [ ] **2.1.7** - Forçar reset de senha para usuários existentes
-  - **Status:** ⏸️ Não Iniciada
+- [x] **2.1.7** - Forçar reset de senha para usuários existentes
+  - **Status:** ✅ Concluída em 12/01 10:05
+  - **Script:** `scripts/migrate_admin_password.py` criado
+  - **Detecta:** SHA256 (64 chars hex), pbkdf2 (starts with pbkdf2:)
+  - **Retorna:** False para forçar re-autenticação
 
 ---
 
-#### 2.2 - Backend: Tokens e Refresh (3/3)
+#### 2.2 - Backend: Tokens e Refresh (3/3) ✅
 
 - [x] **2.2.1** - Implementar Refresh Tokens
   - **Status:** ✅ Concluída em 12/01 09:52
+  - **Tabela:** refresh_tokens criada com user_id, token_hash, expires_at
 
 - [x] **2.2.2** - Criar endpoint `/api/v1/auth/refresh` (POST)
   - **Status:** ✅ Concluída em 12/01 09:52
 
 - [x] **2.2.3** - Configurar expiração de tokens
   - **Status:** ✅ Concluída em 12/01 09:51
+  - **Access:** 15 minutos
+  - **Refresh:** 7 dias
 
 ---
 
-#### 2.3 - Backend: Rate Limiting (0/2)
+#### 2.3 - Backend: Rate Limiting (2/2) ✅
 
-- [ ] **2.3.1** - Instalar e configurar slowapi
-  - **Motivo:** Proteger contra brute force em endpoint de login
-  - **O que é:** Biblioteca que limita número de requisições por IP/usuário
-  - **Como funciona:** Conta requisições, retorna HTTP 429 se exceder limite
-  - **Arquivo:** `app_dev/backend/requirements.txt` + `app_dev/backend/app/main.py`
-  - **Limite:** 5 requisições/minuto por IP em `/auth/login`
-  - **Status:** ⏸️ Não Iniciada
+- [x] **2.3.1** - Instalar e configurar slowapi
+  - **Status:** ✅ Concluída em 12/01 10:00
+  - **Configurado:** 5 req/min no endpoint /auth/login
+  - **Testado:** ✅ Rate limit retorna 429 após 5 tentativas
 
-- [ ] **2.3.2** - Documentar rate limiting nginx para produção
-  - **Motivo:** Proteção adicional em nível de proxy reverso
-  - **O que é:** Nginx limita requisições globais antes de chegar ao backend
-  - **Arquivo:** Criar `app_dev/deploy/nginx.conf`
-  - **Limite:** 10 requisições/segundo global + burst de 20
-  - **Status:** ⏸️ Não Iniciada
+- [x] **2.3.2** - Documentar rate limiting nginx para produção
+  - **Status:** ✅ Concluída em 12/01 10:00
+  - **Documentação:** HTTPS_SSL_PRODUCAO.md com config nginx completo
 
 ---
 
-#### 2.4 - Variáveis de Ambiente (0/3)
+#### 2.4 - Variáveis de Ambiente (1/3) 🟡
 
-- [ ] **2.4.1** - Gerar SECRET_KEY forte para produção
-  - **Motivo:** Secret key atual é fraca e está no código (pode ser forjado JWT)
-  - **Como gerar:** `openssl rand -hex 32` (256 bits)
-  - **Arquivo:** Criar `app_dev/backend/.env.example` (template)
-  - **Valor:** SECRET_KEY será diferente em dev e prod
-  - **Status:** ⏸️ Não Iniciada
+- [x] **2.4.1** - Gerar SECRET_KEY forte para produção
+  - **Status:** ✅ Concluída em 12/01 09:51
+  - **Gerada:** SECRET_KEY 256-bit com openssl rand -hex 32
+  - **Arquivos:** .env, .env.example, .env.production.example criados
 
 - [ ] **2.4.2** - Instalar python-dotenv e migrar config.py
-  - **Motivo:** Separar configurações por ambiente (dev/prod)
-  - **Arquivo:** `app_dev/backend/app/core/config.py`
-  - **Código:** Usar `os.getenv("SECRET_KEY", "default-dev-only")`
-  - **Status:** ⏸️ Não Iniciada
-
+  - **Status:** ✅ PARCIAL - python-dotenv instalado, config.py migrado
+  - **Pendente:** Validar todas as variáveis carregam corretamente
+  
 - [ ] **2.4.3** - Atualizar .gitignore para proteger senhas reset
-  - **Motivo:** Arquivo com novas senhas não pode ir para GitHub
-  - **Arquivo:** `.gitignore`
-  - **Adicionar:** `app_dev/backend/.passwords_reset.txt`
-  - **Status:** ⏸️ Não Iniciada
+  - **Status:** ✅ PARCIAL - .passwords_reset.txt no .gitignore
+  - **Pendente:** Script de migração em massa de senhas
 
 ---
 
-#### 2.5 - Frontend: Integração Autenticação (0/3)
+#### 2.5 - Frontend: Integração Autenticação (0/3) ⏸️
 
 - [ ] **2.5.1** - Conectar página de login ao backend real
   - **Motivo:** Tela existe mas não funciona (bypass total)
