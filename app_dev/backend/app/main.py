@@ -1,15 +1,23 @@
 """
 FastAPI Main Application - Arquitetura Modular em Domínios
+Com Autenticação JWT e Segurança
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from dotenv import load_dotenv
+import os
+
+# Carregar variáveis de ambiente do .env
+# IMPORTANTE: Fazer isso ANTES de importar settings
+load_dotenv()
 
 from .core.config import settings
 from .core.database import engine, Base
 
 # Import models para SQLAlchemy resolver relationships
 from .domains.upload.history_models import UploadHistory  # CRITICAL: importar antes dos routers
+from .domains.users.models import RefreshToken  # IMPORTANT: criar tabela refresh_tokens
 
 # Domínios isolados (arquitetura DDD)
 from .domains.transactions.router import router as transactions_router
@@ -26,23 +34,24 @@ from .domains.budget.router import router as budget_router
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    description="API REST para Sistema de Finanças Pessoais - Arquitetura Modular",
+    description="API REST para Sistema de Finanças Pessoais - Arquitetura Modular com JWT",
     docs_url="/docs",  # Swagger UI
     redoc_url="/redoc"  # ReDoc
 )
 
-# CORS - Permite Next.js se conectar
+# CORS - Permite Next.js se conectar COM cookies (allow_credentials=True)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.BACKEND_CORS_ORIGINS,
-    allow_credentials=True,
+    allow_credentials=True,  # IMPORTANTE: Permite envio de cookies
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Set-Cookie"]  # IMPORTANTE: Expõe header de cookie
 )
 
 # Routers Modularizados (arquitetura DDD - Domain-Driven Design)
+app.include_router(users_router, prefix="/api/v1")  # Auth: /api/v1/auth/*, Users: /api/v1/users/*
 app.include_router(transactions_router, prefix="/api/v1", tags=["Transactions"])
-app.include_router(users_router, prefix="/api/v1", tags=["Users"])
 app.include_router(categories_router, prefix="/api/v1", tags=["Categories"])
 app.include_router(cards_router, prefix="/api/v1", tags=["Cards"])
 app.include_router(upload_router, prefix="/api/v1", tags=["Upload"])

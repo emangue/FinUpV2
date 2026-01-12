@@ -1,0 +1,15 @@
+# Development & Security Testing Requirements
+# Data: 2026-01-12
+
+# Security Scanning
+safety==3.2.11  # Check for known vulnerabilities in dependencies
+bandit==1.8.0  # Python code security analyzer
+pip-audit==2.8.2  # Audit Python packages for known vulnerabilities
+
+# Testing
+pytest==8.3.5
+pytest-asyncio==0.25.2
+httpx==0.28.1  # For testing FastAPI endpoints
+
+# Load Testing
+locust==2.33.2  # Load testing tool

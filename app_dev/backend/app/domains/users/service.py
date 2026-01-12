@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from typing import Optional, List
 from fastapi import HTTPException, status
 from datetime import datetime
-import hashlib
+from passlib.context import CryptContext
 
 from .repository import UserRepository
 from .models import User
@@ -17,9 +17,33 @@ from .schemas import (
     UserListResponse
 )
 
+# Configuração do bcrypt para hash de senhas
+# cost=12 = ~250ms de hash (equilibra segurança e performance)
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
 def hash_password(password: str) -> str:
-    """Hash de senha usando SHA256"""
-    return hashlib.sha256(password.encode()).hexdigest()
+    """
+    Hash de senha usando bcrypt com salt automático
+    
+    Bcrypt é padrão da indústria:
+    - Salt automático único para cada senha
+    - Cost factor ajustável (12 = ~250ms)
+    - Resistente a rainbow tables e brute force
+    """
+    return pwd_context.hash(password)
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """
+    Verifica senha em texto plano contra hash bcrypt
+    
+    Usado no login para validar credenciais
+    """
+    # Detecta senha antiga SHA256 (64 caracteres hex)
+    if len(hashed_password) == 64 and all(c in '0123456789abcdef' for c in hashed_password):
+        # SHA256 antiga - forçar migração
+        return False
+    
+    return pwd_context.verify(plain_password, hashed_password)
 
 class UserService:
     """

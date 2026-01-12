@@ -1,24 +1,86 @@
 """
-Dependências simples para preparação futura de multi-usuário
-Por enquanto, sempre retorna user_id = 1
+Dependências de autenticação e validação
+Lê JWT do cookie e valida usuário
 """
+from fastapi import Cookie, HTTPException, status, Depends
 from sqlalchemy.orm import Session
+from typing import Optional
 from app.core.database import get_db
 from app.domains.users.models import User
+from app.shared.auth import decode_token
 
-def get_current_user_id() -> int:
+def get_current_user_id(
+    access_token: Optional[str] = Cookie(None, alias="access_token")
+) -> int:
     """
-    Retorna o ID do usuário atual
+    Extrai e valida user_id do JWT cookie
     
-    Por enquanto fixo em 1 (admin padrão)
-    No futuro será substituído por lógica de autenticação real (JWT)
+    IMPORTANTE: Esta função agora valida autenticação REAL via JWT
+    - Lê cookie 'access_token' do browser
+    - Valida assinatura JWT
+    - Retorna user_id se válido
+    - Lança 401 Unauthorized se inválido/ausente
+    
+    Args:
+        access_token: Cookie JWT automático do browser
+        
+    Returns:
+        user_id validado
+        
+    Raises:
+        HTTPException 401: Se token ausente, inválido ou expirado
     """
-    return 1
+    if not access_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Não autenticado. Token ausente.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    user_id = decode_token(access_token)
+    
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token inválido ou expirado",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    return user_id
 
-def get_current_user(db: Session) -> User:
+
+def get_current_user(
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+) -> User:
     """
-    Retorna o usuário atual completo
-    Por enquanto sempre retorna user_id = 1
+    Retorna usuário completo autenticado
+    
+    Dependency chain: Cookie → JWT validation → Database query
+    
+    Args:
+        user_id: Extraído do JWT pelo get_current_user_id
+        db: Sessão do banco
+        
+    Returns:
+        Objeto User completo
+        
+    Raises:
+        HTTPException 404: Se usuário não encontrado
     """
-    user = db.query(User).filter(User.id == 1).first()
+    user = db.query(User).filter(User.id == user_id).first()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Usuário não encontrado"
+        )
+    
+    if user.ativo != 1:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Usuário desativado"
+        )
+    
     return user
+
