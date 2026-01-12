@@ -1,0 +1,33 @@
+=====================================
+RESUMO DO DEPLOY LIMPO
+=====================================
+
+PROBLEMA:
+- Servidor "poluído" com múltiplos deploys
+- Processos conflitantes
+- Estrutura inconsistente
+
+SOLUÇÃO:
+- Auditoria completa
+- Limpeza total
+- Deploy fresco e organizado
+
+ARQUIVOS CRIADOS:
+- audit_server.sh      (mapear estado atual)
+- clean_server.sh      (limpeza completa)
+- fresh_deploy.sh      (deploy organizado)
+- execute_all.sh       (orquestrador)
+- INSTRUCOES.md        (guia completo)
+
+EXECUÇÃO:
+1. scp -r deploy_manual root@148.230.78.91:/tmp/
+2. ssh root@148.230.78.91
+3. cd /tmp/deploy_manual && sudo ./execute_all.sh
+
+RESULTADO:
+- Sistema limpo e funcionando
+- Backend FastAPI na porta 8000
+- Pronto para desenvolvimento incremental
+
+PRÓXIMO: Implementar funcionalidades uma por vez
+=====================================

@@ -36,7 +36,7 @@ export default function BudgetConfiguracoesPage() {
     setLoading(true);
     try {
       const response = await fetch(
-        `${API_CONFIG.BACKEND_URL}/api/v1/budget/categorias-config?user_id=1`
+        `${API_CONFIG.BACKEND_URL}/api/v1/budget/categorias-config`
       );
       
       if (response.ok) {
@@ -58,7 +58,7 @@ export default function BudgetConfiguracoesPage() {
     try {
       // Salvar cores de todas as categorias
       const promises = categorias.map(cat =>
-        fetch(`${API_CONFIG.BACKEND_URL}/api/v1/budget/categorias-config/${cat.id}?user_id=1`, {
+        fetch(`${API_CONFIG.BACKEND_URL}/api/v1/budget/categorias-config/${cat.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ cor_visualizacao: cat.cor_visualizacao })

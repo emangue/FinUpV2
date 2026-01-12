@@ -74,7 +74,7 @@ export default function BudgetSimplesPage() {
       
       // Buscar tipos de gasto COM médias já calculadas do backend
       const response = await fetch(
-        `${API_CONFIG.BACKEND_URL}/api/v1/transactions/tipos-gasto-com-media?mes_referencia=${mesReferencia}&user_id=1`
+        `${API_CONFIG.BACKEND_URL}/api/v1/transactions/tipos-gasto-com-media?mes_referencia=${mesReferencia}`
       );
 
       if (!response.ok) {
@@ -112,7 +112,7 @@ export default function BudgetSimplesPage() {
     setMessage(null);
     try {
       const response = await fetch(
-        `${API_CONFIG.BACKEND_URL}/api/v1/budget?mes_referencia=${mesReferencia}&user_id=1`
+        `${API_CONFIG.BACKEND_URL}/api/v1/budget?mes_referencia=${mesReferencia}`
       );
       
       if (response.ok) {
@@ -167,7 +167,7 @@ export default function BudgetSimplesPage() {
           valor_planejado,
         }));
 
-      const response = await fetch(`${API_CONFIG.BACKEND_URL}/api/v1/budget/bulk-upsert?user_id=1`, {
+      const response = await fetch(`${API_CONFIG.BACKEND_URL}/api/v1/budget/bulk-upsert`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -231,7 +231,7 @@ export default function BudgetSimplesPage() {
     
     try {
       const response = await fetch(
-        `${API_CONFIG.BACKEND_URL}/api/v1/budget?mes_referencia=${prevMesReferencia}&user_id=1`
+        `${API_CONFIG.BACKEND_URL}/api/v1/budget?mes_referencia=${prevMesReferencia}`
       );
       
       if (response.ok) {

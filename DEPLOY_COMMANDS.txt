@@ -1,0 +1,98 @@
+# ==========================================
+# DEPLOY FINAL - Sistema Finanças V4
+# ==========================================
+# Execute estes comandos DIRETAMENTE no servidor via SSH
+# ssh root@148.230.78.91
+
+# 1. VERIFICAR ESTRUTURA
+cd /var/www/financas/app_dev
+pwd
+ls -la
+
+# 2. BACKEND - PREPARAR AMBIENTE
+cd backend
+source venv/bin/activate
+pip list | grep fastapi
+echo "✅ Python ambiente OK"
+
+# 3. TESTAR CONFIGURAÇÃO
+python -c "
+from app.core.config import settings
+print(f'Database: {settings.DATABASE_PATH}')
+print(f'Host: {settings.HOST}:{settings.PORT}')
+print(f'Secret: {settings.SECRET_KEY[:10]}...')
+print('✅ Config OK')
+"
+
+# 4. VERIFICAR BANCO
+ls -la /var/lib/financas/db/financas.db 2>/dev/null && echo "✅ Database exists" || echo "❌ Database missing"
+
+# 5. TESTE RÁPIDO DA APLICAÇÃO
+python -c "
+from app.main import app
+from app.core.database import SessionLocal
+print('✅ App imports OK')
+"
+
+# 6. INICIAR BACKEND (modo daemon)
+pkill -f uvicorn 2>/dev/null || true
+nohup python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 > /var/log/financas-backend.log 2>&1 &
+echo "✅ Backend started - PID: $!"
+
+# 7. AGUARDAR BACKEND SUBIR
+sleep 3
+curl -s http://localhost:8000/api/health | head -20
+echo ""
+
+# 8. FRONTEND - PREPARAR
+cd ../frontend
+echo "📦 Verificando Node.js..."
+node -v
+npm -v
+
+# 9. INSTALAR DEPENDÊNCIAS SE NECESSÁRIO
+if [ ! -d "node_modules" ]; then
+    echo "📦 Instalando dependências..."
+    npm install
+else
+    echo "✅ Dependencies exist"
+fi
+
+# 10. BUILD FRONTEND
+echo "🔧 Building frontend..."
+npm run build
+
+# 11. INICIAR FRONTEND
+pkill -f "next start" 2>/dev/null || true
+nohup npm start > /var/log/financas-frontend.log 2>&1 &
+echo "✅ Frontend started - PID: $!"
+
+# 12. VERIFICAR SERVIÇOS
+sleep 5
+echo "📊 SERVICES STATUS:"
+ps aux | grep -E "(uvicorn|next)" | grep -v grep
+
+echo ""
+echo "🌐 ACESSO:"
+echo "Backend:  http://148.230.78.91:8000"
+echo "Frontend: http://148.230.78.91:3000"
+echo "API Docs: http://148.230.78.91:8000/docs"
+
+echo ""
+echo "👤 LOGIN:"
+echo "Email: admin@financas.com"  
+echo "Senha: admin123"
+
+echo ""
+echo "📝 LOGS:"
+echo "Backend:  tail -f /var/log/financas-backend.log"
+echo "Frontend: tail -f /var/log/financas-frontend.log"
+
+# 13. TESTE FINAL
+echo ""
+echo "🧪 TESTE FINAL:"
+curl -s http://localhost:8000/api/health && echo "✅ Backend OK"
+curl -s http://localhost:3000 | head -5 && echo "✅ Frontend OK"
+
+echo ""
+echo "🎉 DEPLOY CONCLUÍDO!"

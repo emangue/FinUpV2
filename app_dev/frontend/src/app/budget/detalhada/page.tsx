@@ -168,7 +168,7 @@ export default function BudgetDetalhadaPage() {
   const loadCategorias = async () => {
     try {
       const response = await fetch(
-        `${API_CONFIG.BACKEND_URL}/api/v1/budget/categorias-config?user_id=1&apenas_ativas=true`
+        `${API_CONFIG.BACKEND_URL}/api/v1/budget/categorias-config?apenas_ativas=true`
       );
       
       if (response.ok) {
@@ -186,7 +186,7 @@ export default function BudgetDetalhadaPage() {
     setMessage(null);
     try {
       const response = await fetch(
-        `${API_CONFIG.BACKEND_URL}/api/v1/budget?mes_referencia=${mesReferencia}&user_id=1`
+        `${API_CONFIG.BACKEND_URL}/api/v1/budget?mes_referencia=${mesReferencia}`
       );
       
       if (response.ok) {
@@ -229,7 +229,7 @@ export default function BudgetDetalhadaPage() {
           valor_planejado,
         }));
 
-      const response = await fetch(`${API_CONFIG.BACKEND_URL}/api/v1/budget/bulk-upsert?user_id=1`, {
+      const response = await fetch(`${API_CONFIG.BACKEND_URL}/api/v1/budget/bulk-upsert`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -267,7 +267,7 @@ export default function BudgetDetalhadaPage() {
     
     try {
       const response = await fetch(
-        `${API_CONFIG.BACKEND_URL}/api/v1/budget?mes_referencia=${prevMesReferencia}&user_id=1`
+        `${API_CONFIG.BACKEND_URL}/api/v1/budget?mes_referencia=${prevMesReferencia}`
       );
       
       if (response.ok) {
@@ -296,7 +296,7 @@ export default function BudgetDetalhadaPage() {
     }
 
     try {
-      const response = await fetch(`${API_CONFIG.BACKEND_URL}/api/v1/budget/categorias-config?user_id=1`, {
+      const response = await fetch(`${API_CONFIG.BACKEND_URL}/api/v1/budget/categorias-config`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -330,7 +330,7 @@ export default function BudgetDetalhadaPage() {
 
     try {
       const response = await fetch(
-        `${API_CONFIG.BACKEND_URL}/api/v1/budget/categorias-config/${categoryToDelete.id}?user_id=1`,
+        `${API_CONFIG.BACKEND_URL}/api/v1/budget/categorias-config/${categoryToDelete.id}`,
         { method: 'DELETE' }
       );
 
@@ -373,7 +373,7 @@ export default function BudgetDetalhadaPage() {
       }));
 
       const response = await fetch(
-        `${API_CONFIG.BACKEND_URL}/api/v1/budget/categorias-config/reordenar?user_id=1`,
+        `${API_CONFIG.BACKEND_URL}/api/v1/budget/categorias-config/reordenar`,
         {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },

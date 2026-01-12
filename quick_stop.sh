@@ -4,19 +4,42 @@
 
 echo "🛑 Parando servidores..."
 
-# Parar via PIDs
+# Função para matar processo e seus filhos
+kill_tree() {
+    local pid=$1
+    local children=$(pgrep -P $pid)
+    for child in $children; do
+        kill_tree $child
+    done
+    kill -9 $pid 2>/dev/null || true
+}
+
+# Parar via PIDs (mata processo pai E filhos)
 if [ -f backend.pid ]; then
-    kill $(cat backend.pid) 2>/dev/null && echo "✅ Backend parado" || echo "⚠️  Backend já estava parado"
+    PID=$(cat backend.pid)
+    kill_tree $PID
+    echo "✅ Backend parado (PID: $PID + filhos)"
     rm backend.pid
 fi
 
 if [ -f frontend.pid ]; then
-    kill $(cat frontend.pid) 2>/dev/null && echo "✅ Frontend parado" || echo "⚠️  Frontend já estava parado"
+    PID=$(cat frontend.pid)
+    kill_tree $PID
+    echo "✅ Frontend parado (PID: $PID + filhos)"
     rm frontend.pid
 fi
 
-# Garantir que portas estão livres
-lsof -ti:8000 | xargs kill -9 2>/dev/null || true
-lsof -ti:3000 | xargs kill -9 2>/dev/null || true
+# Garantir que portas estão livres (mata processos órfãos)
+BACKEND_ORPHANS=$(lsof -ti:8000 2>/dev/null)
+if [ ! -z "$BACKEND_ORPHANS" ]; then
+    echo "$BACKEND_ORPHANS" | xargs kill -9 2>/dev/null
+    echo "🧹 Limpos $(echo $BACKEND_ORPHANS | wc -w | xargs) processos órfãos na porta 8000"
+fi
+
+FRONTEND_ORPHANS=$(lsof -ti:3000 2>/dev/null)
+if [ ! -z "$FRONTEND_ORPHANS" ]; then
+    echo "$FRONTEND_ORPHANS" | xargs kill -9 2>/dev/null
+    echo "🧹 Limpos $(echo $FRONTEND_ORPHANS | wc -w | xargs) processos órfãos na porta 3000"
+fi
 
 echo "✅ Portas 8000 e 3000 liberadas"

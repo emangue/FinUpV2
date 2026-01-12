@@ -41,37 +41,38 @@ def fnv1a_64_hash(text):
     return str(h)
 
 
-def generate_id_transacao(data, estabelecimento, valor, sequencia=None):
+def generate_id_transacao(data, estabelecimento, valor, user_id, sequencia=None):
     """
     Gera IdTransacao consistente usando hash FNV-1a 64-bit com hash recursivo para duplicados
     
-    ESTRATÉGIA v4.1.0 (HASH RECURSIVO):
-    - Hash BASE: Data|Estabelecimento|Valor
+    ESTRATÉGIA v4.2.1 (COM USER_ID):
+    - Hash BASE: UserID|Data|Estabelecimento COMPLETO (com parcela)|Valor EXATO (sem abs)
     - DUPLICADOS: Aplica hash recursivamente N vezes
     - seq=1: hash(chave)
     - seq=2: hash(hash_seq1)
     - seq=3: hash(hash_seq2)
     - seq=N: hash aplicado N-1 vezes recursivamente
-    - Garante hashes únicos para QUALQUER quantidade de duplicados
+    - Garante hashes únicos para QUALQUER quantidade de duplicados POR USUÁRIO
     
     Args:
         data (str): Data no formato DD/MM/AAAA
-        estabelecimento (str): Nome do estabelecimento ORIGINAL (com parcelas, etc)
-        valor (float): Valor da transação
+        estabelecimento (str): Nome COMPLETO do estabelecimento (COM parcelas se houver)
+        valor (float): Valor EXATO da transação (SEM abs - mantém sinal)
+        user_id (int): ID do usuário (garante isolamento entre usuários)
         sequencia (int, optional): Número da ocorrência (1=primeira, 2=segunda, etc). Default: 1
         
     Returns:
         str: IdTransacao (hash FNV-1a 64-bit em decimal)
         
     Exemplos:
-        >>> generate_id_transacao('15/10/2025', 'PIX TRANSF EMANUEL15/10', -1000.00, 1)
+        >>> generate_id_transacao('15/10/2025', 'NETFLIX (1/12)', -49.90, 1, 1)
         '8119916638940476640'
         
-        >>> generate_id_transacao('15/10/2025', 'PIX TRANSF EMANUEL15/10', -1000.00, 2)
-        '15234567890123456789'  # hash(hash_anterior)
+        >>> generate_id_transacao('15/10/2025', 'NETFLIX (1/12)', -49.90, 2, 1)
+        '9234567890123456789'  # Hash diferente por causa do user_id
         
-        >>> generate_id_transacao('15/10/2025', 'PIX TRANSF EMANUEL15/10', -1000.00, 10)
-        '98765432109876543210'  # hash aplicado 9 vezes
+        >>> generate_id_transacao('15/10/2025', 'NETFLIX (2/12)', -49.90, 1, 1)
+        '7234567890123456789'  # Hash diferente por causa da parcela
     """
     # Default sequencia = 1
     if sequencia is None:
@@ -80,12 +81,12 @@ def generate_id_transacao(data, estabelecimento, valor, sequencia=None):
     # UPPERCASE e trim (case-insensitive)
     estab_upper = str(estabelecimento).upper().strip()
     
-    # Valor absoluto com 2 casas decimais
-    valor_abs = abs(float(valor))
-    valor_str = f"{valor_abs:.2f}"
+    # Valor EXATO com 2 casas decimais (SEM abs - mantém sinal negativo/positivo)
+    valor_exato = float(valor)
+    valor_str = f"{valor_exato:.2f}"
     
-    # Chave base: Data|Estabelecimento|Valor
-    chave = f"{data}|{estab_upper}|{valor_str}"
+    # Chave base: UserID|Data|Estabelecimento COMPLETO|Valor EXATO
+    chave = f"{user_id}|{data}|{estab_upper}|{valor_str}"
     
     # Hash base
     hash_atual = fnv1a_64_hash(chave)

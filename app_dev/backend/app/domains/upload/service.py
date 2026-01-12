@@ -458,8 +458,8 @@ class UploadService:
             )
             raw_transactions.append((p.id, raw))
         
-        # Marcar com IDs
-        marker = TransactionMarker()
+        # Marcar com IDs (v4.2.1 - passa user_id)
+        marker = TransactionMarker(user_id=user_id)
         
         for preview_id, raw in raw_transactions:
             marked = marker.mark_transaction(raw)
@@ -586,6 +586,9 @@ class UploadService:
                 # Marcar como duplicada
                 preview.is_duplicate = True
                 preview.duplicate_reason = f"IdTransacao já existe em journal_entries (ID: {existing.id}, Data: {existing.Data})"
+                # IMPORTANTE: Limpar origem_classificacao para evitar aparecer em múltiplas abas
+                # Duplicatas devem aparecer APENAS na aba "Duplicadas"
+                preview.origem_classificacao = None
                 duplicates_count += 1
                 logger.debug(f"  🔍 Duplicata: {preview.data} - {preview.lancamento} (IdTransacao: {preview.IdTransacao})")
         

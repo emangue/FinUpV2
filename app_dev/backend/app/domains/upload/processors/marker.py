@@ -62,6 +62,32 @@ def extrair_parcela_do_estabelecimento(estabelecimento: str) -> Optional[dict]:
     return None
 
 
+def normalizar_formato_parcela(estabelecimento: str) -> str:
+    """
+    Normaliza formato de parcela para padrão único: "LOJA (X/Y)"
+    
+    Converte:
+    - "LOJA 01/05" → "LOJA (1/5)"
+    - "LOJA 1/5" → "LOJA (1/5)"
+    - "LOJA (01/05)" → "LOJA (1/5)"
+    - "LOJA (1/5)" → "LOJA (1/5)" (já está no padrão)
+    
+    Args:
+        estabelecimento: Nome do estabelecimento com possível parcela
+        
+    Returns:
+        Estabelecimento com formato normalizado
+    """
+    info = extrair_parcela_do_estabelecimento(estabelecimento)
+    
+    if info:
+        # Reconstruir com formato padrão (X/Y sem zeros à esquerda)
+        return f"{info['estabelecimento_base']} ({info['parcela']}/{info['total']})"
+    
+    # Sem parcela, retorna original
+    return estabelecimento
+
+
 @dataclass
 class MarkedTransaction(RawTransaction):
     """
@@ -86,12 +112,18 @@ class MarkedTransaction(RawTransaction):
 
 class TransactionMarker:
     """
-    Marca transações com IDs únicos (v4.0.0 - Simplificado)
+    Marca transações com IDs únicos (v4.2.1 - com user_id)
     """
     
-    def __init__(self):
-        """Inicializa marker com controle de duplicados por arquivo"""
-        logger.debug("TransactionMarker inicializado - v4.1.0 (hash recursivo)")
+    def __init__(self, user_id: int):
+        """
+        Inicializa marker com controle de duplicados por arquivo
+        
+        Args:
+            user_id: ID do usuário (necessário para isolamento no hash)
+        """
+        self.user_id = user_id
+        logger.debug(f"TransactionMarker inicializado - v4.2.1 (user_id={user_id})")
         # Dict para rastrear duplicados dentro do arquivo
         # Chave: "data|lancamento_upper|valor" → Valor: contador de ocorrências
         # Ex: "15/10/2025|PIX TRANSF EMANUEL15/10|1000.00" → 1, depois 2, depois 3, ..., N
@@ -108,7 +140,7 @@ class TransactionMarker:
             1 para primeira ocorrência, 2 para segunda, 3 para terceira, ..., N para N-ésima
             
         Exemplos:
-            >>> marker = TransactionMarker()
+            >>> marker = TransactionMarker(user_id=1)
             >>> marker._get_sequence_for_duplicate("15/10/2025|PIX|100.00")
             1  # Primeira vez
             >>> marker._get_sequence_for_duplicate("15/10/2025|PIX|100.00")
@@ -158,32 +190,31 @@ class TransactionMarker:
             valor_arredondado = arredondar_2_decimais(valor_positivo)
             
             # 3. Detectar duplicados no arquivo e obter sequência
-            # ESTRATÉGIA CONDICIONAL por tipo_documento:
-            # - EXTRATO: Usa lancamento COMPLETO (PIX TRANSF EMANUEL15/10 ≠ PIX TRANSF EMANUEL30/10)
-            # - FATURA: Usa estabelecimento_base (LOJA (1/12) = LOJA 01/05 = LOJA)
-            if raw.tipo_documento == 'extrato':
-                # Extrato: preserva TUDO (data no nome, detalhes específicos)
-                chave_hash = raw.lancamento.upper().strip()
-            else:
-                # Fatura: remove parcela (normaliza formatos diferentes)
-                chave_hash = estabelecimento_base.upper().strip()
+            # ESTRATÉGIA v4.2.1 CONDICIONAL:
+            # - FATURA: Normaliza parcela ("LOJA 01/05" → "LOJA (1/5)")
+            # - EXTRATO: NÃO normaliza (mantém original, pois "BA04/10" é parte do nome)
+            tipo_doc_lower = raw.tipo_documento.lower() if raw.tipo_documento else ''
+            is_fatura = 'fatura' in tipo_doc_lower or 'cartao' in tipo_doc_lower or 'cartão' in tipo_doc_lower
             
-            chave_unica = f"{raw.data}|{chave_hash}|{valor_arredondado:.2f}"
+            if is_fatura:
+                # Fatura: normalizar formato de parcela
+                estab_normalizado = normalizar_formato_parcela(raw.lancamento)
+            else:
+                # Extrato: manter original (não confundir "BA04/10" com parcela)
+                estab_normalizado = raw.lancamento
+            
+            estab_hash = estab_normalizado.upper().strip()
+            valor_hash = arredondar_2_decimais(raw.valor)  # VALOR EXATO (com sinal)
+            
+            chave_unica = f"{raw.data}|{estab_hash}|{valor_hash:.2f}"
             sequencia = self._get_sequence_for_duplicate(chave_unica)
             
-            # 4. Gerar IdTransacao (v4.1.0 - hash recursivo para duplicados)
-            # ESTRATÉGIA CONDICIONAL: mesma lógica do item 3
-            # - EXTRATO: hash(data|lancamento_completo|valor)
-            # - FATURA: hash(data|estabelecimento_base|valor)
-            if raw.tipo_documento == 'extrato':
-                estab_para_hash = raw.lancamento  # Completo
-            else:
-                estab_para_hash = estabelecimento_base  # Sem parcela
-            
+            # 4. Gerar IdTransacao (v4.2.1 - com user_id + formato normalizado apenas para faturas)
             id_transacao = generate_id_transacao(
                 data=raw.data,
-                estabelecimento=estab_para_hash,
-                valor=valor_arredondado,
+                estabelecimento=estab_normalizado,  # Normalizado apenas se fatura
+                valor=raw.valor,  # VALOR EXATO (com sinal)
+                user_id=self.user_id,  # Isola por usuário
                 sequencia=sequencia
             )
             

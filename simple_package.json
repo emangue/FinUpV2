@@ -1,0 +1,10 @@
+{
+  "name": "financas-frontend-simple",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "node simple_frontend.js"
+  },
+  "dependencies": {
+    "express": "^4.18.0"
+  }
+}

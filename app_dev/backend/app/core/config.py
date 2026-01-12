@@ -1,11 +1,18 @@
 """
 Configurações do Backend FastAPI
 """
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pathlib import Path
+from typing import Union
 
 class Settings(BaseSettings):
     """Configurações da aplicação"""
+    
+    model_config = SettingsConfigDict(
+        case_sensitive=True,
+        env_file=".env",
+        env_file_encoding='utf-8'
+    )
     
     # App
     APP_NAME: str = "Sistema de Finanças API"
@@ -18,23 +25,18 @@ class Settings(BaseSettings):
     DATABASE_PATH: Path = Path("/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4/app_dev/backend/database/financas_dev.db")
     DATABASE_URL: str = f"sqlite:///{DATABASE_PATH}"
     
-    # JWT
-    SECRET_KEY: str = "seu-secret-key-super-secreto-mude-em-producao"
-    ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 horas
-    
-    # CORS
-    BACKEND_CORS_ORIGINS: list = [
-        "http://localhost:3000",  # Next.js dev server
-        "http://127.0.0.1:3000",
-    ]
+    # CORS - Aceita tanto lista quanto string separada por vírgulas
+    BACKEND_CORS_ORIGINS: Union[list[str], str] = "http://localhost:3000,http://127.0.0.1:3000"
     
     # Server
     HOST: str = "0.0.0.0"
     PORT: int = 8000
     
-    class Config:
-        case_sensitive = True
-        env_file = ".env"
+    @property
+    def cors_origins_list(self) -> list[str]:
+        """Retorna CORS origins sempre como lista"""
+        if isinstance(self.BACKEND_CORS_ORIGINS, str):
+            return [origin.strip() for origin in self.BACKEND_CORS_ORIGINS.split(",")]
+        return self.BACKEND_CORS_ORIGINS
 
 settings = Settings()

@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 """
-Regenerar hashes v4.1.0 via SQL direto (SEM parcela no hash)
+Regenerar hashes v4.2.1 (normalização condicional por tipo de documento)
 
-CORREÇÃO CRÍTICA:
-- Extrair parcela do estabelecimento
-- Gerar hash usando estabelecimento_base (SEM parcela)
-- "LOJA (1/12)" e "LOJA 01/12" → ambos viram hash("LOJA")
+ESTRATÉGIA v4.2.1:
+- FATURA: Normaliza formato de parcela ("LOJA 01/05" → "LOJA (1/5)")
+- EXTRATO: Mantém original ("JOAO BA04/10" não é parcela!)
+- user_id + valor EXATO (com sinal)
+- Hash recursivo para duplicados
 """
 import sqlite3
 import re
 from pathlib import Path
+from typing import Optional
 
 # Hash FNV-1a
 def fnv1a_64_hash(text: str) -> str:
@@ -22,45 +24,60 @@ def fnv1a_64_hash(text: str) -> str:
         h = (h * FNV_PRIME_64) & MASK64
     return str(h)
 
-# Extrair parcela (copiado de marker.py)
-def extrair_estabelecimento_base(estabelecimento: str) -> str:
+def extrair_parcela_do_estabelecimento(estabelecimento: str) -> Optional[dict]:
     """
-    Extrai estabelecimento base removendo parcela
-    
-    Formatos suportados:
-    - "LOJA (1/12)" → "LOJA"
-    - "LOJA 01/12" → "LOJA"
-    - "LOJA" → "LOJA"
+    Extrai informação de parcela do estabelecimento
+    Suporta formatos: "LOJA (3/12)" ou "LOJA 3/12"
     """
     # Formato com parênteses: "LOJA (3/12)"
     match = re.search(r'^(.+?)\s*\((\d{1,2})/(\d{1,2})\)\s*$', estabelecimento)
     if match:
-        return match.group(1).strip()
+        parcela = int(match.group(2))
+        total = int(match.group(3))
+        if 1 <= parcela <= total <= 99:
+            return {
+                'estabelecimento_base': match.group(1).strip(),
+                'parcela': parcela,
+                'total': total
+            }
     
-    # Formato sem parênteses: "LOJA 3/12" ou "LOJA3/12"
+    # Formato sem parênteses: "LOJA 3/12" OU "LOJA3/12"
     match = re.search(r'^(.+?)\s*(\d{1,2})/(\d{1,2})\s*$', estabelecimento)
     if match:
-        return match.group(1).strip()
+        parcela = int(match.group(2))
+        total = int(match.group(3))
+        if 1 <= parcela <= total <= 99:
+            return {
+                'estabelecimento_base': match.group(1).strip(),
+                'parcela': parcela,
+                'total': total
+            }
     
-    # Sem parcela
-    return estabelecimento.strip()
+    return None
 
-# Hash recursivo v4.1.0
-def generate_hash(data: str, estabelecimento: str, valor: float, seq: int, tipo_doc: str = 'fatura') -> str:
+def normalizar_formato_parcela(estabelecimento: str) -> str:
     """
-    ESTRATÉGIA CONDICIONAL:
-    - extrato: usa estabelecimento COMPLETO
-    - fatura: usa estabelecimento_base (sem parcela)
+    Normaliza formato de parcela para padrão único: "LOJA (X/Y)"
+    Converte "LOJA 01/05" → "LOJA (1/5)"
     """
-    # Extrair base apenas para faturas
-    if tipo_doc == 'extrato':
-        estab_para_hash = estabelecimento  # Completo
-    else:
-        estab_para_hash = extrair_estabelecimento_base(estabelecimento)  # Sem parcela
+    info = extrair_parcela_do_estabelecimento(estabelecimento)
     
-    estab_upper = estab_para_hash.upper().strip()
-    valor_abs = abs(valor)
-    chave = f"{data}|{estab_upper}|{valor_abs:.2f}"
+    if info:
+        # Reconstruir com formato padrão (X/Y sem zeros à esquerda)
+        return f"{info['estabelecimento_base']} ({info['parcela']}/{info['total']})"
+    
+    # Sem parcela, retorna original
+    return estabelecimento
+
+# Hash recursivo v4.2.1
+def generate_hash(data: str, estabelecimento: str, valor: float, user_id: int, seq: int) -> str:
+    """
+    v4.2.1: user_id + estabelecimento COMPLETO + valor EXATO
+    Garante isolamento entre usuários e parcelas únicas
+    """
+    estab_upper = estabelecimento.upper().strip()
+    valor_exato = float(valor)  # SEM abs - mantém sinal
+    chave = f"{user_id}|{data}|{estab_upper}|{valor_exato:.2f}"
     
     hash_atual = fnv1a_64_hash(chave)
     for _ in range(seq - 1):
@@ -75,59 +92,66 @@ def main():
     cursor = conn.cursor()
     
     print("=" * 80)
-    print("REGENERAÇÃO v4.1.0 (SQL Direto)")
+    print("REGENERAÇÃO v4.2.1 (com user_id + estabelecimento completo + valor exato)")
     print("=" * 80)
     print()
     
-    # 1. Buscar transações
+    # 1. Buscar transações (INCLUINDO tipodocumento para normalização condicional)
     print("📊 Carregando...")
     cursor.execute("""
-        SELECT id, Data, Estabelecimento, Valor, tipodocumento
+        SELECT id, Data, Estabelecimento, Valor, arquivo_origem, user_id, tipodocumento
         FROM journal_entries
-        ORDER BY id
+        ORDER BY user_id, arquivo_origem, id
     """)
     transactions = cursor.fetchall()
     print(f"   {len(transactions)} transações")
     print()
     
-    # 2. Agrupar e numerar sequência
-    print("🔄 Calculando hashes...")
+    # 2. Agrupar GLOBALMENTE por user + chave (não por arquivo!)
+    # CORREÇÃO: Transações idênticas em arquivos diferentes devem ter sequência incremental
+    print("🔄 Calculando hashes v4.2.1 (user_id + agrupamento GLOBAL)...")
     from collections import defaultdict
-    grupos = defaultdict(list)
+    grupos_global = defaultdict(lambda: defaultdict(int))
     
-    for t in transactions:
-        tid, data, estab, valor, tipo_doc = t
-        # ESTRATÉGIA CONDICIONAL por tipo_documento:
-        # - extrato: usa estabelecimento COMPLETO
-        # - fatura: usa estabelecimento_base (sem parcela)
-        if tipo_doc == 'extrato':
-            estab_para_hash = estab  # Completo (PIX TRANSF EMANUEL15/10)
-        else:
-            estab_para_hash = extrair_estabelecimento_base(estab)  # Sem parcela (LOJA)
-        
-        estab_upper = estab_para_hash.upper().strip()
-        valor_abs = abs(valor)
-        chave = f"{data}|{estab_upper}|{valor_abs:.2f}"
-        grupos[chave].append(t)
-    
-    # 3. Gerar updates
     updates = []
-    for chave, grupo in grupos.items():
-        for seq, t in enumerate(grupo, start=1):
-            tid, data, estab, valor, tipo_doc = t
-            novo_hash = generate_hash(data, estab, valor, seq, tipo_doc)
-            updates.append((novo_hash, tid))
+    for t in transactions:
+        tid, data, estab, valor, arquivo, user_id, tipo_doc = t
+        
+        # v4.2.1 CONDICIONAL: Normalizar apenas FATURAS
+        # - FATURA: "LOJA 01/05" → "LOJA (1/5)"
+        # - EXTRATO: "JOAO BA04/10" mantém original (BA04 é parte do nome!)
+        tipo_doc_lower = tipo_doc.lower() if tipo_doc else ''
+        is_fatura = 'fatura' in tipo_doc_lower or 'cartao' in tipo_doc_lower or 'cartão' in tipo_doc_lower
+        
+        if is_fatura:
+            # Fatura: normalizar formato de parcela
+            estab_normalizado = normalizar_formato_parcela(estab)
+        else:
+            # Extrato: manter original
+            estab_normalizado = estab
+        
+        estab_upper = estab_normalizado.upper().strip()
+        valor_exato = float(valor)  # SEM abs
+        chave_unica = f"{data}|{estab_upper}|{valor_exato:.2f}"
+        
+        # Controle de sequência GLOBAL por usuário
+        grupos_global[user_id][chave_unica] += 1
+        sequencia = grupos_global[user_id][chave_unica]
+        
+        # Gerar hash (user_id + estabelecimento normalizado se fatura + valor exato)
+        novo_hash = generate_hash(data, estab_normalizado, valor, user_id, sequencia)
+        updates.append((novo_hash, tid))
     
     print(f"   {len(updates)} atualizações")
     print()
     
-    # 4. Confirmar
+    # 3. Confirmar
     resp = input("Continuar? (SIM): ")
     if resp != "SIM":
         print("Cancelado")
         return
     
-    # 5. Aplicar
+    # 4. Aplicar
     print("💾 Aplicando...")
     cursor.executemany(
         "UPDATE journal_entries SET IdTransacao = ? WHERE id = ?",
@@ -136,7 +160,7 @@ def main():
     conn.commit()
     
     print(f"✅ {len(updates)} hashes regenerados!")
-    print("🎯 Sistema agora usa v4.1.0")
+    print("🎯 Sistema agora usa v4.2.1 (user_id + estabelecimento completo + valor exato)")
     
     conn.close()
 
