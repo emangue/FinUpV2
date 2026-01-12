@@ -128,7 +128,17 @@ Transformar o sistema de desenvolvimento local em uma aplicação de produção 
 
 ---
 
-### FASE 2: Autenticação e Segurança (13/15) 🟢
+### FASE 2: Autenticação e Segurança (15/15) ✅ COMPLETO
+
+**Status:** 🎉 100% Concluído em 12/01/2026
+
+**Resumo:**
+- ✅ Backend JWT com bcrypt, refresh tokens, rate limiting
+- ✅ Frontend integrado com httpOnly cookies
+- ✅ Middleware e useAuth reativados
+- ✅ Documentação HTTPS completa
+
+**Próximos Passos:** Phase 3 - Infraestrutura (Docker, nginx, systemd)
 
 #### 2.1 - Backend: Autenticação JWT (7/7) ✅
 
@@ -209,28 +219,25 @@ Transformar o sistema de desenvolvimento local em uma aplicação de produção 
 
 ---
 
-#### 2.5 - Frontend: Integração Autenticação (0/3) ⏸️
+#### 2.5 - Frontend: Integração Autenticação (3/3) ✅
 
-- [ ] **2.5.1** - Conectar página de login ao backend real
-  - **Motivo:** Tela existe mas não funciona (bypass total)
-  - **Como funciona:** Chama `/api/v1/auth/login`, salva cookie, redireciona
-  - **Arquivo:** `app_dev/frontend/src/app/login/page.tsx`
-  - **IMPORTANTE:** Manter layout/visão exatamente como está
-  - **Código:** Usar `credentials: 'include'` em todas as chamadas fetch
-  - **Status:** ⏸️ Não Iniciada
+- [x] **2.5.1** - Conectar página de login ao backend real
+  - **Status:** ✅ Concluída em 12/01 10:10
+  - **Implementado:** authAPI.login() com withCredentials: true
+  - **Credenciais:** admin@email.com (corrigido)
+  - **Cookies:** httpOnly salvos automaticamente pelo browser
 
-- [ ] **2.5.2** - Reativar middleware de autenticação
-  - **Motivo:** Middleware está com bypass total, precisa validar sessão
-  - **Como funciona:** Chama `/api/v1/auth/me` antes de cada página, redireciona para /login se não autenticado
-  - **Arquivo:** `app_dev/frontend/src/middleware.ts` linha 20
-  - **Código atual:** `return NextResponse.next()` (bypass)
-  - **Status:** ⏸️ Não Iniciada
+- [x] **2.5.2** - Reativar middleware de autenticação
+  - **Status:** ✅ Concluída em 12/01 10:10
+  - **Implementado:** Validação via /auth/me em rotas protegidas
+  - **Redireciona:** Para /login se access_token ausente/inválido
+  - **Mantém:** Layout visual IDÊNTICO (requisito cumprido)
 
-- [ ] **2.5.3** - Reativar hook useAuth
-  - **Motivo:** Hook tem bypass, precisa verificar autenticação real
-  - **Arquivo:** `app_dev/frontend/src/hooks/useAuth.ts`
-  - **Como funciona:** Chama `/api/v1/auth/me`, armazena estado do usuário
-  - **Status:** ⏸️ Não Iniciada
+- [x] **2.5.3** - Reativar hook useAuth
+  - **Status:** ✅ Concluída em 12/01 10:10
+  - **Implementado:** useAuth() com authAPI.me()
+  - **Retorna:** { user, loading, isAuthenticated }
+  - **Redireciona:** Opcional via redirectIfNotAuth param
 
 ---
 
