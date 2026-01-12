@@ -1454,6 +1454,283 @@ python init_db.py
 
 ---
 
+## � DEPLOY E INFRAESTRUTURA - APRENDIZADOS CRÍTICOS
+
+### 📦 Estrutura de Deploy (Criada em 12/01/2026)
+
+**Arquivos de infraestrutura prontos para produção:**
+
+```
+app_dev/
+├── Dockerfile                    # Multi-stage: Node 20 + Python 3.11
+├── docker-compose.yml            # Orquestração: app + nginx + volumes
+├── docker-entrypoint.sh          # Init: DB vazio + admin user
+├── .env.example                  # Template de variáveis
+├── deploy/
+│   └── nginx.conf                # Proxy SSL/TLS 1.2-1.3
+└── scripts/
+    ├── deploy.sh                 # Master: 8 steps automatizados
+    ├── certbot-setup.sh          # Let's Encrypt automation
+    ├── backup-to-s3.sh           # S3 criptografado (AES-256)
+    └── financas.service          # Systemd auto-restart
+```
+
+### 🔒 Segurança em Produção - REGRAS INVIOLÁVEIS
+
+**1. HTTPS OBRIGATÓRIO:**
+- ✅ nginx.conf força redirect HTTP → HTTPS
+- ✅ TLS 1.2-1.3 (disable TLS 1.0/1.1)
+- ✅ HSTS header (max-age=31536000, 1 ano)
+- ✅ Modern cipher suites apenas
+- ✅ OCSP stapling para performance
+
+**2. DATABASE SEGURA:**
+- ✅ Banco VAZIO em produção (docker-entrypoint.sh cria do zero)
+- ✅ NUNCA copiar `/app_dev/backend/database/financas_dev.db` para produção
+- ✅ Apenas admin@financas.com criado (senha padrão: admin123)
+- ✅ Usuários fazem upload de próprios CSVs via sistema
+- ✅ Path produção: `/var/lib/financas/db/financas.db` (Docker volume)
+
+**3. RATE LIMITING:**
+- ✅ Global: 10 req/s (burst 20) via nginx
+- ✅ Login: 5 req/min (burst 3) via nginx + slowapi backend
+- ✅ Zones separados para controle granular
+
+**4. SECURITY HEADERS (nginx.conf):**
+```nginx
+add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+add_header X-Frame-Options "SAMEORIGIN" always;
+add_header X-Content-Type-Options "nosniff" always;
+add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';" always;
+```
+
+**5. COOKIES SEGUROS:**
+- ✅ httpOnly=True (não acessível via JavaScript)
+- ✅ secure=True em produção (HTTPS only)
+- ✅ samesite='lax' (proteção CSRF)
+- ✅ Tokens: access 15min, refresh 7 dias
+
+### 🐳 Docker - Boas Práticas Implementadas
+
+**Dockerfile Multi-Stage (3 estágios):**
+```dockerfile
+# Stage 1: Frontend builder (Node 20-alpine)
+FROM node:20-alpine AS frontend-builder
+WORKDIR /app/frontend
+COPY frontend/ .
+RUN npm ci && npm run build
+
+# Stage 2: Backend builder (Python 3.11-slim)
+FROM python:3.11-slim AS backend-builder
+WORKDIR /app/backend
+COPY backend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Stage 3: Runtime (combina ambos)
+FROM python:3.11-slim
+# Non-root user 'financas' (UID 1000)
+# Expõe 8000 (backend) e 3000 (frontend)
+# Health check na porta 8000
+```
+
+**docker-compose.yml - Volumes Persistentes:**
+```yaml
+volumes:
+  financas-db:        # /var/lib/financas/db/
+  financas-uploads:   # /var/lib/financas/uploads/
+  financas-backups:   # /var/lib/financas/backups/
+  nginx-cache:        # /var/cache/nginx/
+```
+
+**⚠️ NUNCA:**
+- ❌ Rodar container como root (sempre criar user 'financas')
+- ❌ Hardcoded secrets no Dockerfile (usar .env)
+- ❌ Expor porta 8000/3000 externamente (nginx proxy apenas)
+- ❌ Volumes anônimos (sempre nomear para persistência)
+
+### 🔐 Variáveis de Ambiente (.env produção)
+
+**Obrigatórias:**
+```bash
+# Segurança
+SECRET_KEY=<openssl rand -hex 32>  # NUNCA usar dev secret!
+
+# Database
+DATABASE_PATH=/var/lib/financas/db/financas.db
+
+# JWT
+ACCESS_TOKEN_EXPIRE_MINUTES=15
+REFRESH_TOKEN_EXPIRE_DAYS=7
+
+# CORS (HTTPS!)
+BACKEND_CORS_ORIGINS=https://seudominio.com.br
+
+# Next.js
+NEXT_PUBLIC_BACKEND_URL=https://seudominio.com.br
+```
+
+**⚠️ CRÍTICO:**
+- ✅ Gerar SECRET_KEY NOVO em produção (nunca reusar dev)
+- ✅ CORS origins DEVE ser HTTPS (nunca http:// em prod)
+- ✅ .env NUNCA vai para Git (já no .gitignore)
+
+### 📦 Backup S3 - Configuração
+
+**Script:** `scripts/backup-to-s3.sh`
+
+**Processo:**
+1. SQLite hot backup (`.backup` command, não trava DB)
+2. Gzip compression (reduce ~50% tamanho)
+3. rclone upload com AES-256 encryption
+4. Retenção: 30 dias local, indefinido S3
+
+**Configurar rclone (fazer na VM após deploy):**
+```bash
+rclone config
+# Nome: s3
+# Type: s3
+# Provider: AWS
+# Credentials: IAM com PutObject apenas
+# Encryption: AES-256
+```
+
+**Cron diário (criado automaticamente por deploy.sh):**
+```bash
+# /etc/cron.daily/financas-backup
+#!/bin/bash
+/var/www/financas/scripts/backup-to-s3.sh >> /var/log/financas-backup.log 2>&1
+```
+
+**Custo estimado:** R$ 1,50/mês para 1GB (S3 Standard)
+
+### 🔄 Processo de Deploy (deploy.sh)
+
+**8 Steps Automatizados:**
+
+1. **Validar pré-requisitos:** Docker, docker-compose, git
+2. **Configurar ambiente:** Criar user 'financas', diretórios
+3. **Clonar/Atualizar código:** Git pull ou clone inicial
+4. **Configurar .env:** Gerar SECRET_KEY, solicitar domínio
+5. **Setup SSL:** Rodar certbot-setup.sh (Let's Encrypt)
+6. **Build Docker:** `docker-compose build --no-cache`
+7. **Iniciar serviços:** `docker-compose up -d`
+8. **Auto-restart + Backups:** Systemd service + cron
+
+**Usar assim na VM:**
+```bash
+# Na VM (como root)
+sudo ./scripts/deploy.sh
+```
+
+**Output esperado:**
+```
+✓ Deploy concluído com sucesso!
+  Domínio:   https://seudominio.com.br
+  Login:     admin@financas.com / admin123
+  ⚠️ IMPORTANTE: Alterar senha padrão!
+```
+
+### 🔧 Manutenção em Produção
+
+**Logs:**
+```bash
+# App logs
+docker-compose logs -f app
+sudo journalctl -u financas -f
+
+# Nginx logs
+docker-compose logs -f nginx
+tail -f /var/log/nginx/access.log
+tail -f /var/log/nginx/error.log
+```
+
+**Restart:**
+```bash
+# Via systemd (recomendado)
+sudo systemctl restart financas
+
+# Direto (se systemd falhar)
+docker-compose restart
+```
+
+**Health checks:**
+```bash
+# Backend
+curl https://seudominio.com.br/api/health
+
+# Containers
+docker-compose ps
+
+# Resources
+docker stats
+```
+
+**SSL renewal (automático via cron):**
+```bash
+# Manual (se necessário)
+sudo certbot renew --nginx
+```
+
+### 🚨 Troubleshooting Produção
+
+**Container não inicia:**
+```bash
+docker-compose logs app | tail -50
+# Verificar SECRET_KEY, DATABASE_PATH, permissões
+```
+
+**SSL não funciona:**
+```bash
+sudo certbot certificates  # Ver status
+sudo nginx -t              # Validar config
+```
+
+**Database corrompido:**
+```bash
+# Restaurar do S3
+cd /var/lib/financas/backups/
+rclone copy s3:financas-backups/daily/latest/financas.db.gz .
+gunzip financas.db.gz
+mv financas.db ../db/
+docker-compose restart app
+```
+
+**Portas não respondem:**
+```bash
+# Ver se nginx está roteando
+sudo netstat -tlnp | grep -E '80|443'
+docker-compose ps nginx
+```
+
+### 📝 Checklist de Deploy
+
+**Antes do deploy:**
+- [ ] ✅ Backend JWT testado localmente
+- [ ] ✅ Frontend conectado e funcionando
+- [ ] ✅ Middleware autenticação ativo
+- [ ] ✅ Database dev com dados de teste OK
+- [ ] ✅ .gitignore protegendo .env e _csvs_historico/
+- [ ] ✅ Commit e push no GitHub
+
+**Durante o deploy:**
+- [ ] ✅ VM provisionada (Ubuntu 22.04+)
+- [ ] ✅ DNS apontando para IP da VM
+- [ ] ✅ Rodar deploy.sh como root
+- [ ] ✅ Certificado SSL gerado (Let's Encrypt)
+- [ ] ✅ Admin user criado (admin@financas.com)
+- [ ] ✅ Health check retorna 200
+
+**Após o deploy:**
+- [ ] ⚠️ Alterar senha padrão do admin
+- [ ] ✅ Testar login com novo usuário
+- [ ] ✅ Upload de CSV de teste
+- [ ] ✅ Verificar transações aparecendo
+- [ ] ✅ Validar SSL (https://ssllabs.com)
+- [ ] ✅ Configurar backup S3
+- [ ] ✅ Testar restore de backup
+
+---
+
 ## 💡 Lembrete Final
 
 **Este sistema existe para:**
@@ -1462,5 +1739,6 @@ python init_db.py
 - ✅ Garantir rastreabilidade completa
 - ✅ Proteger código em produção
 - ✅ Permitir trabalho incremental seguro
+- ✅ Deploy seguro em produção com HTTPS
 
 **Sempre que começar a trabalhar no projeto, leia este arquivo primeiro!** 🎯

@@ -1,0 +1,115 @@
+# ==========================================
+# Alertmanager Configuration
+# ==========================================
+# 
+# Roteia alertas do Prometheus para:
+# - Email
+# - Slack (opcional)
+# - Webhook (opcional)
+#
+# ==========================================
+
+global:
+  resolve_timeout: 5m
+  # SMTP configuration (Gmail example)
+  smtp_smarthost: 'smtp.gmail.com:587'
+  smtp_from: 'alertas@financas.com'
+  smtp_auth_username: 'seu-email@gmail.com'
+  smtp_auth_password: 'sua-senha-app'  # App password, não senha normal!
+  smtp_require_tls: true
+
+# Templates
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Routing tree
+route:
+  receiver: 'default'
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 12h
+  
+  routes:
+    # Critical alerts - enviar imediatamente
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      group_wait: 0s
+      repeat_interval: 1h
+    
+    # Warning alerts - agrupar por 5 minutos
+    - match:
+        severity: warning
+      receiver: 'warning-alerts'
+      group_wait: 5m
+      repeat_interval: 4h
+    
+    # Info alerts - agrupar por 1 hora
+    - match:
+        severity: info
+      receiver: 'info-alerts'
+      group_wait: 1h
+      repeat_interval: 24h
+
+# Receivers
+receivers:
+  # Default receiver (all alerts)
+  - name: 'default'
+    email_configs:
+      - to: 'admin@financas.com'
+        send_resolved: true
+        headers:
+          Subject: '[Financas] Alert: {{ .GroupLabels.alertname }}'
+        html: |
+          <h2>Alert: {{ .GroupLabels.alertname }}</h2>
+          <p><b>Status:</b> {{ .Status }}</p>
+          <p><b>Severity:</b> {{ .CommonLabels.severity }}</p>
+          <p><b>Summary:</b> {{ .CommonAnnotations.summary }}</p>
+          <p><b>Description:</b> {{ .CommonAnnotations.description }}</p>
+          <p><b>Time:</b> {{ .StartsAt }}</p>
+  
+  # Critical alerts (email + slack)
+  - name: 'critical-alerts'
+    email_configs:
+      - to: 'admin@financas.com, devops@financas.com'
+        send_resolved: true
+        headers:
+          Subject: '⚠️ [CRITICAL] {{ .GroupLabels.alertname }}'
+    # Descomentar para Slack:
+    # slack_configs:
+    #   - api_url: 'https://hooks.slack.com/services/YOUR/WEBHOOK/URL'
+    #     channel: '#alerts-critical'
+    #     title: '⚠️ Critical Alert: {{ .GroupLabels.alertname }}'
+    #     text: '{{ .CommonAnnotations.description }}'
+  
+  # Warning alerts (email apenas)
+  - name: 'warning-alerts'
+    email_configs:
+      - to: 'admin@financas.com'
+        send_resolved: true
+        headers:
+          Subject: '⚠️ [WARNING] {{ .GroupLabels.alertname }}'
+  
+  # Info alerts (log apenas, sem email)
+  - name: 'info-alerts'
+    # Apenas log, sem notificação externa
+
+# Inhibition rules
+inhibit_rules:
+  # Se serviço está down, suprimir outros alertas dele
+  - source_match:
+      severity: 'critical'
+      alertname: 'ServiceDown'
+    target_match_re:
+      severity: 'warning|info'
+    equal: ['job', 'instance']
+  
+  # Se disk space crítico, suprimir warnings de disk space
+  - source_match:
+      severity: 'critical'
+      alertname: 'LowDiskSpace'
+    target_match:
+      severity: 'warning'
+      alertname: 'LowDiskSpace'
+    equal: ['instance']

@@ -1,0 +1,176 @@
+# ==========================================
+# Prometheus Alert Rules
+# ==========================================
+# 
+# Alertas para condições críticas:
+# - High error rate (>5%)
+# - High response time (>2s p95)
+# - Low disk space (<10%)
+# - Backup failures
+# - Service down
+#
+# ==========================================
+
+groups:
+  - name: financas_alerts
+    interval: 30s
+    rules:
+      # ==========================================
+      # Service Availability
+      # ==========================================
+      - alert: ServiceDown
+        expr: up{job="financas-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Backend service is down"
+          description: "O backend FastAPI está indisponível há mais de 1 minuto."
+
+      - alert: NginxDown
+        expr: up{job="nginx"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Nginx proxy is down"
+          description: "Nginx não está respondendo."
+
+      # ==========================================
+      # Error Rate
+      # ==========================================
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum(rate(http_requests_total{status=~"5.."}[5m]))
+            /
+            sum(rate(http_requests_total[5m]))
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High HTTP 5xx error rate"
+          description: "Taxa de erro 5xx está acima de 5% nos últimos 5 minutos."
+
+      - alert: CriticalErrorRate
+        expr: |
+          (
+            sum(rate(http_requests_total{status=~"5.."}[5m]))
+            /
+            sum(rate(http_requests_total[5m]))
+          ) > 0.10
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical HTTP 5xx error rate"
+          description: "Taxa de erro 5xx está acima de 10%! Investigar imediatamente."
+
+      # ==========================================
+      # Response Time
+      # ==========================================
+      - alert: HighResponseTime
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (le)
+          ) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High response time (p95 > 2s)"
+          description: "95% das requisições estão demorando mais de 2 segundos."
+
+      - alert: CriticalResponseTime
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (le)
+          ) > 5
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical response time (p95 > 5s)"
+          description: "Sistema muito lento! p95 acima de 5 segundos."
+
+      # ==========================================
+      # System Resources
+      # ==========================================
+      - alert: HighMemoryUsage
+        expr: |
+          (
+            node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes
+          ) / node_memory_MemTotal_bytes > 0.90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage (>90%)"
+          description: "Uso de memória RAM acima de 90%."
+
+      - alert: LowDiskSpace
+        expr: |
+          (
+            node_filesystem_avail_bytes{mountpoint="/var/lib/financas"}
+            /
+            node_filesystem_size_bytes{mountpoint="/var/lib/financas"}
+          ) < 0.10
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Low disk space (<10%)"
+          description: "Espaço em disco abaixo de 10% em /var/lib/financas. Limpar backups antigos."
+
+      - alert: HighCPUUsage
+        expr: |
+          100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage (>80%)"
+          description: "CPU acima de 80% por mais de 10 minutos."
+
+      # ==========================================
+      # Database
+      # ==========================================
+      - alert: DatabaseSizeGrowing
+        expr: |
+          node_filesystem_size_bytes{mountpoint="/var/lib/financas/db"}
+          -
+          node_filesystem_avail_bytes{mountpoint="/var/lib/financas/db"}
+          > 10737418240  # 10GB
+        for: 1h
+        labels:
+          severity: info
+        annotations:
+          summary: "Database size > 10GB"
+          description: "Database crescendo. Considerar otimização ou upgrade."
+
+      # ==========================================
+      # Backup
+      # ==========================================
+      - alert: BackupFailed
+        expr: |
+          time() - backup_last_success_timestamp_seconds > 86400  # 24h
+        for: 1h
+        labels:
+          severity: critical
+        annotations:
+          summary: "Backup não executado há mais de 24h"
+          description: "Último backup bem-sucedido foi há mais de 1 dia!"
+
+      # ==========================================
+      # Rate Limiting
+      # ==========================================
+      - alert: HighRateLimitHits
+        expr: |
+          sum(rate(nginx_http_requests_total{status="429"}[5m])) > 10
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: "High rate limit hits"
+          description: "Muitas requisições sendo bloqueadas por rate limit. Possível ataque ou bug."

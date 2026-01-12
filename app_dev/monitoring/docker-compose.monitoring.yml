@@ -1,0 +1,134 @@
+# ==========================================
+# Docker Compose - Monitoring Stack
+# ==========================================
+# 
+# Stack de monitoring com:
+# - Prometheus (métricas)
+# - Grafana (dashboards)
+# - Alertmanager (alertas)
+# - Node Exporter (métricas do sistema)
+# - Nginx Exporter (métricas do nginx)
+#
+# Uso:
+#   docker-compose -f docker-compose.monitoring.yml up -d
+#
+# Acessos:
+#   - Grafana: http://localhost:3001 (admin/admin)
+#   - Prometheus: http://localhost:9090
+#   - Alertmanager: http://localhost:9093
+#
+# ==========================================
+
+version: '3.8'
+
+services:
+  # ==========================================
+  # Prometheus - Time Series Database
+  # ==========================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: financas-prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    ports:
+      - '9090:9090'
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./alerts.yml:/etc/prometheus/alerts/alerts.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - monitoring
+    depends_on:
+      - node-exporter
+
+  # ==========================================
+  # Grafana - Visualization & Dashboards
+  # ==========================================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: financas-grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3001
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+    ports:
+      - '3001:3000'
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana-dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+    networks:
+      - monitoring
+    depends_on:
+      - prometheus
+
+  # ==========================================
+  # Alertmanager - Alert Routing
+  # ==========================================
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: financas-alertmanager
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    ports:
+      - '9093:9093'
+    volumes:
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/alertmanager
+    networks:
+      - monitoring
+
+  # ==========================================
+  # Node Exporter - System Metrics
+  # ==========================================
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: financas-node-exporter
+    restart: unless-stopped
+    command:
+      - '--path.rootfs=/host'
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    ports:
+      - '9100:9100'
+    volumes:
+      - /:/host:ro,rslave
+    networks:
+      - monitoring
+
+  # ==========================================
+  # Nginx Exporter - Nginx Metrics
+  # ==========================================
+  nginx-exporter:
+    image: nginx/nginx-prometheus-exporter:latest
+    container_name: financas-nginx-exporter
+    restart: unless-stopped
+    command:
+      - '-nginx.scrape-uri=http://nginx:80/nginx_status'
+    ports:
+      - '9113:9113'
+    networks:
+      - monitoring
+      - financas-network  # Acesso ao nginx do app
+
+networks:
+  monitoring:
+    driver: bridge
+  financas-network:
+    external: true  # Network criado pelo docker-compose.yml principal
+
+volumes:
+  prometheus-data:
+  grafana-data:
+  alertmanager-data:
