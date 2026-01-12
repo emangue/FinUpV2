@@ -113,39 +113,30 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
         }
       }
       
-      // Determinar formato correto (PDF_PASSWORD → PDF)
-      const formatoParaAPI = fileFormat === "PDF_PASSWORD" ? "PDF" : fileFormat
+      // Criar sessionId único e navegar direto para confirm-ai (como funcionava ontem)
+      const sessionId = `temp_${Date.now()}_${Math.random().toString(36).substring(7)}`
       
-      // Enviar para API de preview
-      const formData = new FormData()
-      formData.append('file', selectedFile)
-      formData.append('banco', bank)
-      formData.append('cartao', creditCard || '')
-      formData.append('final_cartao', finalCartao)
-      formData.append('mesFatura', `${selectedYear}-${selectedMonth}`)
-      formData.append('tipoDocumento', activeTab) // 'fatura' ou 'extrato'
-      formData.append('formato', formatoParaAPI) // 'CSV', 'Excel', 'PDF', 'OFX'
-      if (password) {
-        formData.append('senha', password) // Senha para PDFs protegidos
+      // Simular dados de sessão no localStorage para a tela confirm-ai
+      const sessionData = {
+        sessionId,
+        file: selectedFile.name,
+        banco,
+        cartao: creditCard,
+        finalCartao,
+        mesFatura: `${selectedYear}-${selectedMonth}`,
+        tipoDocumento: activeTab,
+        formato: fileFormat === "PDF_PASSWORD" ? "PDF" : fileFormat,
+        password: password || '',
+        uploadDate: new Date().toISOString()
       }
       
-      const response = await fetch('/api/upload/preview', {
-        method: 'POST',
-        body: formData
-      })
-      
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Erro ao processar arquivo')
-      }
-      
-      const data = await response.json()
+      localStorage.setItem(`upload_session_${sessionId}`, JSON.stringify(sessionData))
       
       // Fechar dialog
       onOpenChange(false)
       
-      // Navegar para página de preview com o sessionId
-      router.push(`/upload/preview/${data.sessionId}`)
+      // Navegar para página confirm-ai (que funcionava ontem)
+      router.push(`/upload/confirm-ai?session=${sessionId}`)
       
       // Chamar callback de sucesso
       if (onUploadSuccess) {

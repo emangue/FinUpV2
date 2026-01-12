@@ -8,6 +8,8 @@ import {
   LogOut,
   Sparkles,
 } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { authAPI } from "@/lib/api-client"
 
 import {
   Avatar,
@@ -40,6 +42,18 @@ export function NavUser({
   }
 }) {
   const { isMobile } = useSidebar()
+  const router = useRouter()
+
+  const handleLogout = async () => {
+    try {
+      await authAPI.logout()
+      router.push('/login')
+    } catch (error) {
+      console.error('Logout failed:', error)
+      // Redireciona mesmo se der erro (limpar estado local)
+      router.push('/login')
+    }
+  }
 
   return (
     <SidebarMenu>
@@ -102,7 +116,7 @@ export function NavUser({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={handleLogout}>
               <LogOut />
               Log out
             </DropdownMenuItem>

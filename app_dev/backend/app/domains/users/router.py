@@ -265,7 +265,7 @@ def list_users(
     service = UserService(db)
     return service.list_users(apenas_ativos)
 
-@router.get("/{user_id}", response_model=UserResponse)
+@router.get("/user/{user_id}", response_model=UserResponse)
 def get_user(
     user_id: int,
     db: Session = Depends(get_db)
@@ -276,7 +276,7 @@ def get_user(
     service = UserService(db)
     return service.get_user(user_id)
 
-@router.post("/", response_model=UserResponse, status_code=201)
+@router.post("/user/", response_model=UserResponse, status_code=201)
 def create_user(
     user: UserCreate,
     db: Session = Depends(get_db)
@@ -287,7 +287,7 @@ def create_user(
     service = UserService(db)
     return service.create_user(user)
 
-@router.put("/{user_id}", response_model=UserResponse)
+@router.put("/user/{user_id}", response_model=UserResponse)
 def update_user(
     user_id: int,
     update_data: UserUpdate,
@@ -299,7 +299,7 @@ def update_user(
     service = UserService(db)
     return service.update_user(user_id, update_data)
 
-@router.delete("/{user_id}")
+@router.delete("/user/{user_id}")
 def delete_user(
     user_id: int,
     db: Session = Depends(get_db)
@@ -310,7 +310,7 @@ def delete_user(
     service = UserService(db)
     return service.delete_user(user_id)
 
-@router.post("/{user_id}/reset-password")
+@router.post("/user/{user_id}/reset-password")
 def reset_password(
     user_id: int,
     nova_senha: str,

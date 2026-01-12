@@ -108,57 +108,12 @@ const data = {
           url: "/reports/monthly",
         },
         {
-          title: "Anual",
+          title: "Anual", 
           url: "/reports/yearly",
         },
         {
           title: "Categorias",
-          url: "/reports/categories",
-        },
-      ],
-    },
-    {
-      title: "Configurações",
-      url: "/settings",
-      icon: Settings,
-      items: [
-        {
-          title: "Perfil",
-          url: "/settings/profile",
-        },
-        {
-          title: "Administração",
-          url: "/settings/admin",
-        },
-        {
-          title: "Gestão de Bancos",
-          url: "/settings/bancos",
-        },
-        {
-          title: "Gestão de Cartões",
-          url: "/settings/cartoes",
-        },
-        {
-          title: "Gestão de Categorias",
-          url: "/settings/categorias",
-        },
-        {
-          title: "Regras de Exclusão",
-          url: "/settings/exclusoes",
-        },
-        {
-          title: "Backup",
-          url: "/settings/backup",
-        },
-      ],
-    },
-  ],
-          title: "Anual",
-          url: "/reports/yearly",
-        },
-        {
-          title: "Categorias",
-          url: "/reports/categories",
+          url: "/reports/categories", 
         },
       ],
     },

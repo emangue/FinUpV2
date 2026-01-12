@@ -61,7 +61,7 @@ app.add_middleware(
 )
 
 # Routers Modularizados (arquitetura DDD - Domain-Driven Design)
-app.include_router(users_router, prefix="/api/v1")  # Auth: /api/v1/auth/*, Users: /api/v1/users/*
+# ORDEM IMPORTANTE: Routers específicos ANTES dos genéricos (evitar /{id} capturar paths específicos)
 app.include_router(transactions_router, prefix="/api/v1", tags=["Transactions"])
 app.include_router(categories_router, prefix="/api/v1", tags=["Categories"])
 app.include_router(cards_router, prefix="/api/v1", tags=["Cards"])
@@ -70,6 +70,7 @@ app.include_router(dashboard_router, prefix="/api/v1", tags=["Dashboard"])
 app.include_router(compatibility_router, prefix="/api/v1", tags=["Compatibility"])
 app.include_router(exclusoes_router, prefix="/api/v1", tags=["Exclusoes"])
 app.include_router(budget_router, prefix="/api/v1", tags=["Budget"])
+app.include_router(users_router, prefix="/api/v1")  # Auth: /api/v1/auth/*, Users: /api/v1/{user_id} - ÚLTIMO para evitar capturar outros paths
 
 @app.get("/")
 def root():

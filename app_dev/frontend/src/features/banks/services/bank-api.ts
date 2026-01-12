@@ -1,7 +1,7 @@
 import { BankCompatibility, BankCreate, BankUpdate, BankResponse } from '../types'
 
 export async function fetchBanks(): Promise<BankResponse> {
-  const response = await fetch('/api/compatibility')
+  const response = await fetch('/api/compatibility/')
   if (!response.ok) {
     throw new Error(`Erro ao buscar bancos: ${response.statusText}`)
   }
@@ -9,7 +9,7 @@ export async function fetchBanks(): Promise<BankResponse> {
 }
 
 export async function createBank(data: BankCreate): Promise<BankCompatibility> {
-  const response = await fetch('/api/compatibility', {
+  const response = await fetch('/api/compatibility/', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

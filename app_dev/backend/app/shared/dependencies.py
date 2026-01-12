@@ -1,8 +1,8 @@
 """
 Dependências de autenticação e validação
-Lê JWT do cookie e valida usuário
+Lê JWT do cookie ou header Authorization e valida usuário
 """
-from fastapi import Cookie, HTTPException, status, Depends
+from fastapi import Cookie, HTTPException, status, Depends, Header
 from sqlalchemy.orm import Session
 from typing import Optional, TYPE_CHECKING
 from app.core.database import get_db
@@ -12,19 +12,19 @@ if TYPE_CHECKING:
     from app.domains.users.models import User
 
 def get_current_user_id(
-    access_token: Optional[str] = Cookie(None, alias="access_token")
+    access_token: Optional[str] = Cookie(None, alias="access_token"),
+    authorization: Optional[str] = Header(None)
 ) -> int:
     """
-    Extrai e valida user_id do JWT cookie
+    Extrai e valida user_id do JWT cookie ou header Authorization
     
-    IMPORTANTE: Esta função agora valida autenticação REAL via JWT
-    - Lê cookie 'access_token' do browser
-    - Valida assinatura JWT
-    - Retorna user_id se válido
-    - Lança 401 Unauthorized se inválido/ausente
+    IMPORTANTE: Aceita autenticação via:
+    1. Cookie 'access_token' (frontend web)
+    2. Header 'Authorization: Bearer <token>' (API calls)
     
     Args:
         access_token: Cookie JWT automático do browser
+        authorization: Header Authorization com Bearer token
         
     Returns:
         user_id validado
@@ -32,14 +32,23 @@ def get_current_user_id(
     Raises:
         HTTPException 401: Se token ausente, inválido ou expirado
     """
-    if not access_token:
+    token = None
+    
+    # Tentar obter token do cookie primeiro
+    if access_token:
+        token = access_token
+    # Se não há cookie, tentar header Authorization
+    elif authorization and authorization.startswith("Bearer "):
+        token = authorization[7:]  # Remove "Bearer " prefix
+    
+    if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Não autenticado. Token ausente.",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    user_id = decode_token(access_token)
+    user_id = decode_token(token)
     
     if user_id is None:
         raise HTTPException(
