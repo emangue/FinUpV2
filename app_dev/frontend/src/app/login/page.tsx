@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('admin@financas.com');
+  const [email, setEmail] = useState('admin@email.com');
   const [password, setPassword] = useState('admin123');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,10 +24,11 @@ export default function LoginPage() {
       const response = await authAPI.login(email, password);
       console.log('Login successful:', response);
       
-      // Aguardar um pouco para garantir que o token foi salvo
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Cookies httpOnly são salvos automaticamente pelo browser
+      // Aguardar um pouco para garantir que o cookie foi processado
+      await new Promise(resolve => setTimeout(resolve, 300));
       
-      // Usar replace ao invés de push para evitar voltar para login
+      // Usar window.location.href para garantir reload completo
       window.location.href = '/dashboard';
     } catch (err: any) {
       console.error('Login error:', err);
@@ -84,7 +85,7 @@ export default function LoginPage() {
           
           <div className="mt-4 text-sm text-gray-500 text-center">
             <p>Credenciais de teste:</p>
-            <p>Email: admin@financas.com</p>
+            <p>Email: admin@email.com</p>
             <p>Senha: admin123</p>
           </div>
         </CardContent>
