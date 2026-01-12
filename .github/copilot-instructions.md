@@ -132,7 +132,41 @@ if tipo_documento == 'extrato':
 
 ---
 
-### �🗄️ BANCO DE DADOS ÚNICO - REGRA INVIOLÁVEL
+### 📁 ARQUIVOS CSV HISTÓRICOS - REGRA INVIOLÁVEL
+
+**NUNCA remover ou modificar a pasta `_csvs_historico/`**
+
+**Propósito:** Arquivos CSV reais para testes de processamento e validação
+
+**Localização:** `/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4/_csvs_historico/`
+
+**🚫 NUNCA:**
+- Remover a pasta `_csvs_historico/`
+- Deletar arquivos CSV dentro dela
+- Incluir em commits (já está no .gitignore)
+- Copiar para ambiente de produção
+- Usar em testes automatizados de CI/CD
+
+**✅ SEMPRE:**
+- Manter a pasta apenas no ambiente de desenvolvimento
+- Usar para testes manuais com dados reais
+- Adicionar novos CSVs de teste conforme necessário
+- Garantir que está no .gitignore
+
+**🔍 VERIFICAÇÃO:**
+```bash
+# Deve estar no .gitignore
+grep "_csvs_historico" .gitignore
+
+# Não deve aparecer em git status
+git status --ignored | grep _csvs_historico
+```
+
+**Motivo:** Contém extratos e faturas reais para validar processadores, mas não deve ir para produção ou GitHub por conter dados sensíveis.
+
+---
+
+### 🗄️ BANCO DE DADOS ÚNICO - REGRA INVIOLÁVEL
 
 **Path absoluto único para TODO o sistema:**
 ```

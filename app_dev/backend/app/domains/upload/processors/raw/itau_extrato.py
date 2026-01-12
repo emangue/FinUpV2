@@ -171,31 +171,22 @@ def _preprocess_extrato_itau(df_raw: pd.DataFrame) -> pd.DataFrame:
     df = df.iloc[:, [0, 1, 3]].copy()
     df.columns = ['data', 'lançamento', 'valor (R$)']
     
-    # IMPORTANTE: Remover lançamentos futuros ANTES do dropna()
-    # Procurar linha marcadora "saídas futuras" ou "lançamentos futuros"
-    # Essas linhas podem ter NaN nas colunas, então precisamos verificar antes de limpar
-    for i in range(len(df)):
-        # Verificar TODAS as colunas da linha para detectar marcadores
-        row_values = df.iloc[i].values
-        row_text = ' '.join(str(val).lower() for val in row_values if pd.notna(val))
-        
-        # Detectar marcadores de lançamentos futuros
-        if ('saída' in row_text or 'saida' in row_text) and 'futura' in row_text:
-            logger.debug(f"Encontrada linha marcadora de futuras na posição {i}: '{row_text}', removendo {len(df) - i} linhas")
-            df = df.iloc[:i].copy()
-            break
-        if 'lançamento' in row_text and 'futuro' in row_text:
-            logger.debug(f"Encontrada linha 'lançamentos futuros' na posição {i}: '{row_text}', removendo {len(df) - i} linhas")
-            df = df.iloc[:i].copy()
-            break
-    
-    # Limpar dados (agora sim, depois de remover futuras)
+    # Limpar dados
     df = df.dropna(subset=['data', 'lançamento', 'valor (R$)'])
     
     # Filtrar linhas que NÃO são transações reais (saldos)
     # Remover linhas com "SALDO ANTERIOR", "SALDO TOTAL", etc
     df = df[~df['lançamento'].str.upper().str.contains('SALDO', na=False)]
     logger.debug(f"Após filtrar saldos: {len(df)} linhas")
+    
+    # Remover lançamentos futuros (após linha "SAÍDAS FUTURAS" ou similar)
+    # Itaú marca lançamentos futuros programados - não devem ser importados
+    for i in range(len(df)):
+        lancamento_upper = str(df.iloc[i]['lançamento']).upper()
+        if 'SAÍDA' in lancamento_upper and 'FUTURA' in lancamento_upper:
+            logger.debug(f"Encontrada linha 'SAÍDAS FUTURAS' na posição {i}, removendo {len(df) - i} linhas futuras")
+            df = df.iloc[:i].copy()
+            break
     
     # Converter valor para float
     df['valor (R$)'] = pd.to_numeric(df['valor (R$)'], errors='coerce')

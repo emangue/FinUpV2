@@ -76,6 +76,8 @@ app_dev/static/uploads/
 
 # Temporary scripts and data
 _temp_scripts/
+
+# CSVs históricos - APENAS para testes locais, NUNCA para produção
 _csvs_historico/
 
 # Environment variables
@@ -84,6 +86,10 @@ _csvs_historico/
 .env.development.local
 .env.test.local
 .env.production.local
+
+# Senhas de reset (geradas durante migração SHA256 → bcrypt)
+app_dev/backend/.passwords_reset.txt
+.passwords_reset.txt
 
 # Backup files
 *.bak
