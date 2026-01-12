@@ -4,10 +4,12 @@ Lê JWT do cookie e valida usuário
 """
 from fastapi import Cookie, HTTPException, status, Depends
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from app.core.database import get_db
-from app.domains.users.models import User
 from app.shared.auth import decode_token
+
+if TYPE_CHECKING:
+    from app.domains.users.models import User
 
 def get_current_user_id(
     access_token: Optional[str] = Cookie(None, alias="access_token")
@@ -52,7 +54,7 @@ def get_current_user_id(
 def get_current_user(
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
-) -> User:
+):
     """
     Retorna usuário completo autenticado
     
@@ -68,6 +70,8 @@ def get_current_user(
     Raises:
         HTTPException 404: Se usuário não encontrado
     """
+    from app.domains.users.models import User  # Import local para evitar circular
+    
     user = db.query(User).filter(User.id == user_id).first()
     
     if not user:

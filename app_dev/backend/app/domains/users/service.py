@@ -37,13 +37,34 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     Verifica senha em texto plano contra hash bcrypt
     
     Usado no login para validar credenciais
+    
+    IMPORTANTE: Apenas bcrypt é aceito. Hashes antigos (SHA256, pbkdf2) retornam False
+    para forçar migração.
     """
     # Detecta senha antiga SHA256 (64 caracteres hex)
     if len(hashed_password) == 64 and all(c in '0123456789abcdef' for c in hashed_password):
         # SHA256 antiga - forçar migração
         return False
     
-    return pwd_context.verify(plain_password, hashed_password)
+    # Detecta pbkdf2 (Flask-Bcrypt antigo)
+    if hashed_password.startswith('pbkdf2:'):
+        # pbkdf2 antigo - forçar migração
+        return False
+    
+    # Verificar que é bcrypt válido ($2b$, $2a$, $2y$)
+    if not (hashed_password.startswith('$2b$') or 
+            hashed_password.startswith('$2a$') or 
+            hashed_password.startswith('$2y$')):
+        # Hash desconhecido - rejeitar
+        return False
+    
+    try:
+        return pwd_context.verify(plain_password, hashed_password)
+    except ValueError as e:
+        # Se senha > 72 bytes (caso bcrypt antigo mal formatado)
+        if "72 bytes" in str(e):
+            return False
+        raise
 
 class UserService:
     """

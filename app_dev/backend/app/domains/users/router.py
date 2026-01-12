@@ -31,6 +31,7 @@ limiter = Limiter(key_func=get_remote_address)
 router = APIRouter(tags=["users"])
 
 
+@router.post("/auth/login", response_model=TokenResponse)
 @limiter.limit(f"{settings.LOGIN_RATE_LIMIT_PER_MINUTE}/minute")
 def login(
     request: Request,  # IMPORTANTE: Request necessário para rate limiting
@@ -93,6 +94,10 @@ def login(
         user_id=user.id,
         token_hash=refresh_token_hash,
         expires_at=refresh_expire
+    )
+    db.add(db_refresh_token)
+    db.commit()
+    
     # ⚠️ MEGA IMPORTANTE: Em produção (HTTPS), secure=True obrigatório!
     is_production = settings.ENVIRONMENT == "production"
     
@@ -110,11 +115,6 @@ def login(
         value=refresh_token,
         httponly=True,
         secure=is_production,  # HTTPS obrigatório em prod (⚠️ importante!)
-    response.set_cookie(
-        key="refresh_token",
-        value=refresh_token,
-        httponly=True,
-        secure=is_production,
         samesite="lax",
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60  # segundos
     )
