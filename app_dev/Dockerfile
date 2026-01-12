@@ -19,7 +19,7 @@ FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 
-# Copiar package.json e instalar dependências
+# Copiar package.json e instalar TODAS as dependências (incluindo devDependencies para build)
 COPY frontend/package*.json ./
 RUN npm ci
 
