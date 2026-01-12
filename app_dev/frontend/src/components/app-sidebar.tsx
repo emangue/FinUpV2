@@ -76,6 +76,29 @@ const data = {
       ],
     },
     {
+      title: "Orçamento",
+      url: "/budget",
+      icon: DollarSign,
+      items: [
+        {
+          title: "Meta Geral",
+          url: "/budget",
+        },
+        {
+          title: "Meta Simples",
+          url: "/budget/simples",
+        },
+        {
+          title: "Meta Detalhada",
+          url: "/budget/detalhada",
+        },
+        {
+          title: "Configurações",
+          url: "/budget/configuracoes",
+        },
+      ],
+    },
+    {
       title: "Relatórios",
       url: "/reports",
       icon: BarChart3,
@@ -130,75 +153,6 @@ const data = {
       ],
     },
   ],
-  navMain: [
-    {
-      title: "Dashboard",
-      url: "/dashboard",
-      icon: Home,
-      isActive: true,
-      items: [
-        {
-          title: "Visão Geral",
-          url: "/dashboard",
-        },
-        {
-          title: "Métricas",
-          url: "/dashboard/metrics",
-        },
-      ],
-    },
-    {
-      title: "Transações",
-      url: "/transactions",
-      icon: CreditCard,
-      items: [
-        {
-          title: "Todas",
-          url: "/transactions?tab=all",
-        },
-        {
-          title: "Receitas",
-          url: "/transactions?tab=receitas",
-        },
-        {
-          title: "Despesas",
-          url: "/transactions?tab=despesas",
-        },
-      ],
-    },
-    {
-      title: "Orçamento",
-      url: "/budget",
-      icon: DollarSign,
-      items: [
-        {
-          title: "Meta Geral",
-          url: "/budget",
-        },
-        {
-          title: "Meta Simples",
-          url: "/budget/simples",
-        },
-        {
-          title: "Meta Detalhada",
-          url: "/budget/detalhada",
-        },
-        {
-          title: "Configurações",
-          url: "/budget/configuracoes",
-        },
-      ],
-    },
-    {
-      title: "Relatórios",
-      url: "/reports",
-      icon: BarChart3,
-      items: [
-        {
-          title: "Mensal",
-          url: "/reports/monthly",
-        },
-        {
           title: "Anual",
           url: "/reports/yearly",
         },
