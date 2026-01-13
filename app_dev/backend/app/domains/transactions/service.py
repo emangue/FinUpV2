@@ -130,9 +130,46 @@ class TransactionService:
         if "Valor" in update_dict:
             transaction.ValorPositivo = abs(transaction.Valor)
         
+        # Recalcular CategoriaGeral se GRUPO mudou
+        if "GRUPO" in update_dict:
+            transaction.CategoriaGeral = self._determine_categoria_geral(
+                transaction.GRUPO, 
+                transaction.Valor
+            )
+        
         # Salvar
         updated = self.repository.update(transaction)
         return TransactionResponse.from_orm(updated)
+    
+    def _determine_categoria_geral(self, grupo: Optional[str], valor: float) -> Optional[str]:
+        """
+        Determina CategoriaGeral baseado no GRUPO e valor da transação
+        
+        Regras:
+        - Transferência Entre Contas → Transferência
+        - Investimentos → Investimentos
+        - Valor positivo → Receita
+        - Valor negativo → Despesa
+        """
+        if not grupo:
+            return None
+        
+        # Normalizar grupo para comparação
+        grupo_lower = grupo.lower().strip()
+        
+        # Regra 1: Transferência
+        if 'transferencia' in grupo_lower or 'transferência' in grupo_lower:
+            return 'Transferência'
+        
+        # Regra 2: Investimentos
+        if 'investimento' in grupo_lower:
+            return 'Investimentos'
+        
+        # Regra 3: Baseado no sinal do valor
+        if valor >= 0:
+            return 'Receita'
+        else:
+            return 'Despesa'
     
     def delete_transaction(
         self,

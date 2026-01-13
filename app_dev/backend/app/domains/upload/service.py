@@ -146,7 +146,8 @@ class UploadService:
                     tipo_documento,
                     file.filename,
                     cartao,
-                    final_cartao
+                    final_cartao,
+                    mes_fatura
                 )
                 logger.info(f"  ✅ {len(raw_transactions)} transações brutas processadas")
                 
@@ -333,10 +334,14 @@ class UploadService:
         tipo_documento: str,
         nome_arquivo: str,
         nome_cartao: str = None,
-        final_cartao: str = None
+        final_cartao: str = None,
+        mes_fatura_input: str = None
     ):
         """
         Fase 1: Processa arquivo bruto usando processadores específicos
+        
+        Args:
+            mes_fatura_input: Mês da fatura do Form (YYYY-MM) - usado apenas para faturas
         
         Returns:
             Tupla (raw_transactions, balance_validation)
@@ -372,6 +377,26 @@ class UploadService:
             else:
                 raw_transactions = result
                 balance_validation = None
+            
+            # ========== GERAR MesFatura CORRETAMENTE ==========
+            # EXTRATO: MesFatura = YYYYMM da Data da transação
+            # FATURA: MesFatura = input do Form (YYYY-MM) convertido para YYYYMM
+            for raw in raw_transactions:
+                if tipo_documento == 'extrato':
+                    # Extrair YYYYMM da Data (formato DD/MM/YYYY)
+                    if raw.data and '/' in raw.data:
+                        partes = raw.data.split('/')
+                        if len(partes) == 3:
+                            dia, mes, ano = partes
+                            raw.mes_fatura = f"{ano}{mes.zfill(2)}"
+                    else:
+                        raw.mes_fatura = None
+                else:
+                    # Fatura: usar input do Form (YYYY-MM → YYYYMM)
+                    if mes_fatura_input:
+                        raw.mes_fatura = mes_fatura_input.replace('-', '')
+                    else:
+                        raw.mes_fatura = raw.mes_fatura  # Mantém o que veio do processador
                 
             return raw_transactions, balance_validation
             

@@ -28,8 +28,8 @@ interface Transaction {
   Valor: number
   ValorPositivo: number
   TipoTransacao: string
-  GRUPO: string
-  SUBGRUPO: string
+  Grupo: string
+  SubGrupo: string
   TipoGasto: string
   origem_classificacao: string
   MesFatura: string
@@ -54,15 +54,21 @@ export function EditTransactionModal({
   const [grupo, setGrupo] = React.useState("")
   const [subgrupo, setSubgrupo] = React.useState("")
   const [grupos, setGrupos] = React.useState<string[]>([])
-  const [subgrupos, setSubgrupos] = React.useState<string[]>([])
+  const [subgruposPorGrupo, setSubgruposPorGrupo] = React.useState<Record<string, string[]>>({})
   const [loading, setLoading] = React.useState(false)
   const [addGroupOpen, setAddGroupOpen] = React.useState(false)
   const [addGroupType, setAddGroupType] = React.useState<'grupo' | 'subgrupo'>('grupo')
 
+  // Subgrupos filtrados pelo grupo selecionado
+  const subgruposDisponiveis = React.useMemo(() => {
+    if (!grupo) return []
+    return subgruposPorGrupo[grupo] || []
+  }, [grupo, subgruposPorGrupo])
+
   React.useEffect(() => {
     if (transaction) {
-      setGrupo(transaction.GRUPO || "")
-      setSubgrupo(transaction.SUBGRUPO || "")
+      setGrupo(transaction.Grupo || "")
+      setSubgrupo(transaction.SubGrupo || "")
     }
   }, [transaction])
 
@@ -72,11 +78,11 @@ export function EditTransactionModal({
 
   const fetchGrupos = async () => {
     try {
-      const response = await fetch('/api/grupos')
+      const response = await fetch('/api/categories/grupos-subgrupos')
       if (response.ok) {
         const data = await response.json()
         setGrupos(data.grupos || [])
-        setSubgrupos(data.subgrupos || [])
+        setSubgruposPorGrupo(data.subgruposPorGrupo || {})
       }
     } catch (error) {
       console.error('Erro ao buscar grupos:', error)
@@ -88,7 +94,7 @@ export function EditTransactionModal({
 
     setLoading(true)
     try {
-      const response = await fetch(`/api/transactions/${transaction.IdTransacao}`, {
+      const response = await fetch(`/api/transactions/update/${transaction.IdTransacao}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ GRUPO: grupo, SUBGRUPO: subgrupo })
@@ -98,6 +104,8 @@ export function EditTransactionModal({
         onSave()
         onOpenChange(false)
       } else {
+        const errorData = await response.json()
+        console.error('Erro na resposta:', errorData)
         alert('Erro ao salvar alterações')
       }
     } catch (error) {
@@ -207,12 +215,12 @@ export function EditTransactionModal({
             <div className="grid gap-2">
               <Label htmlFor="subgrupo">Subgrupo</Label>
               <div className="flex gap-2">
-                <Select value={subgrupo} onValueChange={setSubgrupo}>
+                <Select value={subgrupo} onValueChange={setSubgrupo} disabled={!grupo}>
                   <SelectTrigger id="subgrupo" className="flex-1">
-                    <SelectValue placeholder="Selecione um subgrupo" />
+                    <SelectValue placeholder={grupo ? "Selecione um subgrupo" : "Selecione um grupo primeiro"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {subgrupos.map((s) => (
+                    {subgruposDisponiveis.map((s) => (
                       <SelectItem key={s} value={s}>
                         {s}
                       </SelectItem>
