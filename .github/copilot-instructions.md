@@ -1,6 +1,114 @@
-# 🤖 Instruções GitHub Copilot - Sistema Modular de Finanças v4
+# 🤖 Instruções GitHub Copilot - Sistema Modular de Finanças v5
 
 ## ⚠️ REGRAS CRÍTICAS - SEMPRE SEGUIR
+
+### 🔄 GESTÃO AUTOMÁTICA DE VERSÃO DA PASTA (REGRA OBRIGATÓRIA)
+
+**Quando o usuário renomear a pasta do projeto (ex: V5 → V6), você DEVE atualizar todas as referências automaticamente.**
+
+#### Scripts Disponíveis:
+
+1. **`check_version.py`** - Valida se todas as referências estão corretas
+2. **`fix_version.py`** - Corrige automaticamente todas as referências
+
+#### Arquivos que São Atualizados:
+
+- ✅ `quick_start.sh` - Script de inicialização
+- ✅ `quick_stop.sh` - Script de parada  
+- ✅ `backup_daily.sh` - Script de backup
+- ✅ `app_dev/backend/.env` - Variáveis de ambiente
+- ✅ `app_dev/backend/app/core/config.py` - Configuração backend
+- ✅ `app_dev/frontend/src/lib/db-config.ts` - Configuração frontend
+
+#### Workflow Obrigatório ao Detectar Mudança de Versão:
+
+```bash
+# 1. Usuário renomeou: ProjetoFinancasV5 → ProjetoFinancasV6
+
+# 2. VOCÊ DEVE executar:
+cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV6
+python check_version.py              # Valida inconsistências
+
+# 3. Se houver inconsistências:
+python fix_version.py --dry-run      # Simula correções (mostrar ao usuário)
+python fix_version.py --backup       # Aplica com backup
+
+# 4. Reiniciar servidores:
+./quick_stop.sh && sleep 2 && ./quick_start.sh
+
+# 5. Validar novamente:
+python check_version.py
+```
+
+#### Detecção Automática:
+
+Os scripts detectam a versão automaticamente baseado no nome da pasta:
+- `ProjetoFinancasV5` → detecta **V4**
+- `ProjetoFinancasV5` → detecta **V5**  
+- `ProjetoFinancasV6` → detecta **V6**
+
+#### Quando Executar:
+
+- 🔄 **SEMPRE** que detectar que o path atual contém versão diferente dos arquivos
+- 🔄 Quando o usuário mencionar que renomeou a pasta
+- 🔄 Se encontrar erros de "arquivo não encontrado" com paths de versão antiga
+- 🔄 Antes de qualquer modificação em arquivos de config
+
+#### Output Esperado do check_version.py:
+
+```
+🔍 RELATÓRIO DE VALIDAÇÃO DE VERSÃO
+======================================================================
+
+📁 Versão atual detectada: V6
+
+❌ Arquivos com versão incorreta (3):
+   app_dev/backend/.env
+      Linha 11: Encontrado V5 (deveria ser V6)
+   
+📊 Resumo: 3 corretos, 3 incorretos
+
+💡 Para corrigir: python fix_version.py
+```
+
+#### 🚫 NUNCA:
+
+- Modificar manualmente os paths em cada arquivo (use os scripts!)
+- Ignorar inconsistências de versão
+- Rodar servidores sem corrigir versões
+- Esquecer de reiniciar servidores após correção
+
+---
+
+### 💾 BACKUP DIÁRIO AUTOMÁTICO (REGRA OBRIGATÓRIA)
+
+**SEMPRE executar backup diário no início de cada sessão de trabalho:**
+
+```bash
+cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5 && chmod +x backup_daily.sh && ./backup_daily.sh
+```
+
+**O que faz:**
+- ✅ Cria backup diário do banco de dados (um por dia)
+- ✅ Mantém últimos 7 dias automaticamente
+- ✅ Armazena em `app_dev/backend/database/backups_daily/`
+- ✅ Verifica se já existe backup de hoje (não duplica)
+
+**Quando executar:**
+- 🔄 No início de cada sessão de trabalho (antes de qualquer modificação)
+- 🔄 Antes de executar migrations/regenerações
+- 🔄 Antes de modificar schema do banco
+- 🔄 Antes de executar scripts que modificam dados
+
+**Procedimento Obrigatório:**
+1. Verificar se backup de hoje existe: `ls -lh app_dev/backend/database/backups_daily/`
+2. Se não existir: Executar `./backup_daily.sh`
+3. Confirmar sucesso antes de prosseguir com modificações
+
+**🚫 NUNCA:**
+- Pular backup antes de modificações críticas
+- Deletar pasta `backups_daily/` manualmente
+- Modificar banco sem backup do dia atual
 
 ### � TIPOS DE DOCUMENTO - ESTRATÉGIAS DIFERENTES (REGRA INVIOLÁVEL)
 
@@ -136,7 +244,7 @@ if tipo_documento == 'extrato':
 
 **Path absoluto único para TODO o sistema:**
 ```
-/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4/app_dev/backend/database/financas_dev.db
+/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/backend/database/financas_dev.db
 ```
 
 **Arquivos de configuração:**
@@ -586,7 +694,7 @@ DATABASE_PATH = "./financas.db"
 DB_PATH = Path(__file__).parent / "database" / "financas.db"
 
 # ✅ CORRETO - Path absoluto único
-DATABASE_PATH = Path("/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4/app_dev/backend/database/financas_dev.db")
+DATABASE_PATH = Path("/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/backend/database/financas_dev.db")
 ```
 
 ---
@@ -1083,7 +1191,7 @@ tail -30 backend.log | grep -i error
 **SEMPRE usar este comando único:**
 
 ```bash
-cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4 && chmod +x quick_start.sh && ./quick_start.sh
+cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5 && chmod +x quick_start.sh && ./quick_start.sh
 ```
 
 **O que faz automaticamente:**
@@ -1096,7 +1204,7 @@ cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4 && chmod +x quick_st
 **Parar servidores:**
 
 ```bash
-cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4 && chmod +x quick_stop.sh && ./quick_stop.sh
+cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5 && chmod +x quick_stop.sh && ./quick_stop.sh
 ```
 
 ### URLs de Acesso
@@ -1120,17 +1228,17 @@ cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4 && chmod +x quick_st
 **Comando completo de restart:**
 
 ```bash
-cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4 && ./quick_stop.sh && ./quick_start.sh
+cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5 && ./quick_stop.sh && ./quick_start.sh
 ```
 
 ### 📋 Monitoramento de Logs
 
 ```bash
 # Backend
-tail -f /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4/backend.log
+tail -f /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/backend.log
 
 # Frontend
-tail -f /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4/frontend.log
+tail -f /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/frontend.log
 ```
 
 ### 🚨 Troubleshooting Rápido
@@ -1143,7 +1251,7 @@ lsof -ti:3000 | xargs kill -9 2>/dev/null
 
 **Banco não inicializado:**
 ```bash
-cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4/app_dev
+cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev
 source venv/bin/activate
 python init_db.py
 ```
@@ -1315,13 +1423,13 @@ git commit --no-verify -m "msg"
 
 ```bash
 # Iniciar tudo
-cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4 && ./quick_start.sh
+cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5 && ./quick_start.sh
 
 # Parar tudo
-cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4 && ./quick_stop.sh
+cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5 && ./quick_stop.sh
 
 # Restart completo
-cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4 && ./quick_stop.sh && ./quick_start.sh
+cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5 && ./quick_stop.sh && ./quick_start.sh
 ```
 
 **O que faz automaticamente:**
@@ -1373,17 +1481,17 @@ cd app_dev && source venv/bin/activate && python run.py
 **Comando completo de restart:**
 
 ```bash
-cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4 && ./quick_stop.sh && ./quick_start.sh
+cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5 && ./quick_stop.sh && ./quick_start.sh
 ```
 
 ### 📋 Monitoramento de Logs
 
 ```bash
 # Backend
-tail -f /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4/backend.log
+tail -f /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/backend.log
 
 # Frontend
-tail -f /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4/frontend.log
+tail -f /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/frontend.log
 ```
 
 ### 🚨 Troubleshooting Rápido
@@ -1396,7 +1504,7 @@ lsof -ti:3000 | xargs kill -9 2>/dev/null
 
 **Banco não inicializado:**
 ```bash
-cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4/app_dev
+cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev
 source venv/bin/activate
 python init_db.py
 ```

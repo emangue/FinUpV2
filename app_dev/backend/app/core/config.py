@@ -22,8 +22,12 @@ class Settings(BaseSettings):
     # Database - CAMINHO ABSOLUTO FIXO
     # ⚠️ IMPORTANTE: Este é o ÚNICO banco usado por TODA a aplicação
     # Backend FastAPI e Frontend Next.js SEMPRE usam este arquivo
-    DATABASE_PATH: Path = Path("/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4/app_dev/backend/database/financas_dev.db")
-    DATABASE_URL: str = f"sqlite:///{DATABASE_PATH}"
+    DATABASE_PATH: Path = Path("/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/backend/database/financas_dev.db")
+    
+    @property
+    def DATABASE_URL(self) -> str:
+        """Retorna URL do banco de dados"""
+        return f"sqlite:///{self.DATABASE_PATH}"
     
     # CORS - Aceita tanto lista quanto string separada por vírgulas
     BACKEND_CORS_ORIGINS: Union[list[str], str] = "http://localhost:3000,http://127.0.0.1:3000"

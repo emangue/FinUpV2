@@ -1,6 +1,11 @@
 #!/bin/bash
-# Quick Start - Sistema Financeiro v4
+# Quick Start - Sistema Financeiro v5
 # Uso: ./quick_start.sh
+#
+# ⚠️ ATENÇÃO: Se você renomeou a pasta (ex: V5 → V6), execute ANTES:
+#   python check_version.py          # Valida versões
+#   python fix_version.py            # Corrige automaticamente
+#   (Ver .github/copilot-instructions.md para detalhes)
 
 echo "🚀 Iniciando servidores..."
 echo ""
@@ -57,17 +62,17 @@ echo "   ✅ Portas liberadas"
 echo ""
 
 # Verificar se node_modules existe no frontend
-if [ ! -d "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4/app_dev/frontend/node_modules" ]; then
+if [ ! -d "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/node_modules" ]; then
     echo "⚠️  node_modules não encontrado no frontend!"
     echo "   Executando npm install..."
-    cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4/app_dev/frontend
+    cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend
     npm install > /dev/null 2>&1
     cd ../..
     echo ""
 fi
 
 # Backend (porta 8000)
-cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4/app_dev
+cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev
 source venv/bin/activate
 cd backend
 nohup python run.py > ../../backend.log 2>&1 &

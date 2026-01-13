@@ -3,7 +3,7 @@ Domínio Transactions - Schemas
 Pydantic schemas para validação e serialização
 """
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, Union, List
 from datetime import datetime
 
 class TransactionBase(BaseModel):
@@ -70,7 +70,7 @@ class TransactionFilters(BaseModel):
     subgrupo: Optional[str] = None
     tipo: Optional[str] = None
     categoria_geral: Optional[str] = None
-    tipo_gasto: Optional[str] = None
+    tipo_gasto: Optional[Union[str, List[str]]] = None  # Aceita string ou lista
     cartao: Optional[str] = None
     search: Optional[str] = None
 

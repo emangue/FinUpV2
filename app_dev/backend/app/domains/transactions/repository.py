@@ -40,12 +40,13 @@ class TransactionRepository:
         """Lista transações com filtros"""
         query = self.db.query(JournalEntry).filter(JournalEntry.user_id == user_id)
         
-        if filters.year:
-            query = query.filter(JournalEntry.Ano == filters.year)
-        
-        if filters.month:
+        if filters.year and filters.month:
+            # Mês específico: usa MesFatura exato
             mes_fatura = f"{filters.year}{filters.month:02d}"
             query = query.filter(JournalEntry.MesFatura == mes_fatura)
+        elif filters.year:
+            # Ano inteiro: filtra MesFatura começando com o ano
+            query = query.filter(JournalEntry.MesFatura.like(f"{filters.year}%"))
         
         if filters.estabelecimento:
             query = query.filter(
@@ -65,7 +66,10 @@ class TransactionRepository:
             query = query.filter(JournalEntry.CategoriaGeral == filters.categoria_geral)
         
         if filters.tipo_gasto:
-            query = query.filter(JournalEntry.TipoGasto == filters.tipo_gasto)
+            if isinstance(filters.tipo_gasto, list):
+                query = query.filter(JournalEntry.TipoGasto.in_(filters.tipo_gasto))
+            else:
+                query = query.filter(JournalEntry.TipoGasto == filters.tipo_gasto)
         
         if filters.cartao:
             query = query.filter(JournalEntry.NomeCartao == filters.cartao)
@@ -88,11 +92,13 @@ class TransactionRepository:
         )
         
         # Aplicar mesmos filtros
-        if filters.year:
-            query = query.filter(JournalEntry.Ano == filters.year)
-        if filters.month:
+        if filters.year and filters.month:
+            # Mês específico: usa MesFatura exato
             mes_fatura = f"{filters.year}{filters.month:02d}"
             query = query.filter(JournalEntry.MesFatura == mes_fatura)
+        elif filters.year:
+            # Ano inteiro: filtra MesFatura começando com o ano
+            query = query.filter(JournalEntry.MesFatura.like(f"{filters.year}%"))
         if filters.estabelecimento:
             query = query.filter(
                 JournalEntry.Estabelecimento.ilike(f"%{filters.estabelecimento}%")
@@ -106,7 +112,10 @@ class TransactionRepository:
         if filters.categoria_geral:
             query = query.filter(JournalEntry.CategoriaGeral == filters.categoria_geral)
         if filters.tipo_gasto:
-            query = query.filter(JournalEntry.TipoGasto == filters.tipo_gasto)
+            if isinstance(filters.tipo_gasto, list):
+                query = query.filter(JournalEntry.TipoGasto.in_(filters.tipo_gasto))
+            else:
+                query = query.filter(JournalEntry.TipoGasto == filters.tipo_gasto)
         if filters.cartao:
             query = query.filter(JournalEntry.NomeCartao == filters.cartao)
         if filters.search:
@@ -145,17 +154,22 @@ class TransactionRepository:
         )
         
         # Aplicar filtros
-        if filters.year:
-            query = query.filter(JournalEntry.Ano == filters.year)
-        if filters.month:
+        if filters.year and filters.month:
+            # Mês específico: usa MesFatura exato
             mes_fatura = f"{filters.year}{filters.month:02d}"
             query = query.filter(JournalEntry.MesFatura == mes_fatura)
+        elif filters.year:
+            # Ano inteiro: filtra MesFatura começando com o ano
+            query = query.filter(JournalEntry.MesFatura.like(f"{filters.year}%"))
         if filters.tipo:
             query = query.filter(JournalEntry.TipoTransacao == filters.tipo)
         if filters.categoria_geral:
             query = query.filter(JournalEntry.CategoriaGeral == filters.categoria_geral)
         if filters.tipo_gasto:
-            query = query.filter(JournalEntry.TipoGasto == filters.tipo_gasto)
+            if isinstance(filters.tipo_gasto, list):
+                query = query.filter(JournalEntry.TipoGasto.in_(filters.tipo_gasto))
+            else:
+                query = query.filter(JournalEntry.TipoGasto == filters.tipo_gasto)
         
         result = query.scalar()
         return result or 0.0

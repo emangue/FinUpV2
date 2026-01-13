@@ -2,7 +2,8 @@
 Domínio Dashboard - Router
 Endpoints HTTP para métricas e estatísticas
 """
-from fastapi import APIRouter, Depends, Query
+from typing import Optional
+from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime
 
@@ -92,7 +93,8 @@ def get_category_expenses(
 @router.get("/budget-vs-actual", response_model=BudgetVsActualResponse)
 def get_budget_vs_actual(
     year: int = Query(..., description="Ano"),
-    month: int = Query(..., description="Mês (1-12)"),
+    month: Optional[int] = Query(None, description="Mês (1-12) ou None para YTD"),
+    ytd: bool = Query(False, description="Year to Date - soma de todos os meses do ano"),
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
@@ -104,7 +106,17 @@ def get_budget_vs_actual(
     - percentual (realizado/planejado * 100)
     - diferenca (realizado - planejado)
     
+    Se ytd=True, retorna soma de todo o ano até a data atual.
     Também retorna totais gerais e percentual geral.
     """
     service = DashboardService(db)
+    
+    # Se ytd=True, passar None como month para buscar ano todo
+    if ytd:
+        return service.get_budget_vs_actual(user_id, year, None)
+    
+    # Se month não for fornecido, retornar erro
+    if month is None:
+        raise HTTPException(status_code=400, detail="month é obrigatório quando ytd=False")
+    
     return service.get_budget_vs_actual(user_id, year, month)

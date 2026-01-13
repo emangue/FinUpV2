@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Bar, BarChart, CartesianGrid, XAxis } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -21,6 +21,7 @@ interface ChartAreaInteractiveProps {
   data?: ChartDataItem[];
   loading?: boolean;
   error?: string | null;
+  selectedMonth?: string; // 'all' ou '1'-'12'
 }
 
 const chartConfig = {
@@ -37,8 +38,22 @@ const chartConfig = {
 const ChartAreaInteractive: React.FC<ChartAreaInteractiveProps> = ({
   data = [],
   loading = false,
-  error = null
+  error = null,
+  selectedMonth = 'all'
 }) => {
+  // Mapear nomes de meses para índices (1-12)
+  const monthNameToIndex: { [key: string]: number } = {
+    'Jan': 1, 'Fev': 2, 'Mar': 3, 'Abr': 4, 'Mai': 5, 'Jun': 6,
+    'Jul': 7, 'Ago': 8, 'Set': 9, 'Out': 10, 'Nov': 11, 'Dez': 12
+  };
+
+  // Mostrar todos os 12 meses com scroll horizontal
+  const visibleData = useMemo(() => {
+    if (!data || data.length === 0) return [];
+    
+    // Retornar todos os dados disponíveis (12 meses)
+    return data;
+  }, [data]);
   const formatCurrency = (value: number): string => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -103,8 +118,10 @@ const ChartAreaInteractive: React.FC<ChartAreaInteractiveProps> = ({
         <CardTitle className="text-base">Receitas vs Despesas</CardTitle>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={chartConfig}>
-          <BarChart accessibilityLayer data={data}>
+        <div className="overflow-x-auto">
+          <div style={{ minWidth: '200px' }}>
+            <ChartContainer config={chartConfig}>
+              <BarChart accessibilityLayer data={visibleData}>
             <CartesianGrid vertical={false} />
             <XAxis
               dataKey="mes"
@@ -117,10 +134,12 @@ const ChartAreaInteractive: React.FC<ChartAreaInteractiveProps> = ({
               cursor={false}
               content={<CustomTooltip />}
             />
-            <Bar dataKey="receitas" fill="var(--color-receitas)" radius={4} />
-            <Bar dataKey="despesas" fill="var(--color-despesas)" radius={4} />
-          </BarChart>
-        </ChartContainer>
+                <Bar dataKey="receitas" fill="var(--color-receitas)" radius={4} />
+                <Bar dataKey="despesas" fill="var(--color-despesas)" radius={4} />
+              </BarChart>
+            </ChartContainer>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );

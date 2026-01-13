@@ -97,17 +97,34 @@ export default function TransactionsPage() {
     
     const initialFilters: FilterValues = {}
     
-    const tipoGasto = searchParams.get('tipoGasto')
+    // getAll para pegar múltiplos valores de tipo_gasto
+    const tiposGasto = searchParams.getAll('tipo_gasto')
+    const year = searchParams.get('year')
+    const month = searchParams.get('month')
     const mesReferencia = searchParams.get('mes_referencia')
     const grupo = searchParams.get('grupo')
     const estabelecimento = searchParams.get('estabelecimento')
     
-    if (tipoGasto) initialFilters.tipoGasto = tipoGasto
-    if (mesReferencia) {
+    // Se tiver múltiplos tipos, juntar com vírgula para passar no filtro
+    if (tiposGasto.length > 0) {
+      initialFilters.tipoGasto = tiposGasto.join(',')
+    }
+    
+    // Se vier year e month da dashboard, converter para mes_referencia
+    if (year && month) {
+      const mesRef = `${year}-${month.padStart(2, '0')}`
+      initialFilters.mesInicio = mesRef
+      initialFilters.mesFim = mesRef
+    } else if (year) {
+      // Se tiver só year (todos os meses), filtrar o ano inteiro
+      initialFilters.mesInicio = `${year}-01`
+      initialFilters.mesFim = `${year}-12`
+    } else if (mesReferencia) {
       // Manter formato YYYY-MM que o Select entende
       initialFilters.mesInicio = mesReferencia
       initialFilters.mesFim = mesReferencia
     }
+    
     if (grupo) initialFilters.grupo = grupo
     if (estabelecimento) initialFilters.estabelecimento = estabelecimento
     
@@ -145,15 +162,22 @@ export default function TransactionsPage() {
       if (filters.estabelecimento) params.append('estabelecimento', filters.estabelecimento)
       if (filters.grupo) params.append('grupo', filters.grupo)
       if (filters.subgrupo) params.append('subgrupo', filters.subgrupo)
-      if (filters.tipoGasto) params.append('tipo_gasto', filters.tipoGasto)
+      if (filters.tipoGasto) {
+        // Se tiver múltiplos tipos separados por vírgula, adicionar cada um
+        const tipos = filters.tipoGasto.split(',').map(t => t.trim()).filter(t => t)
+        tipos.forEach(tipo => params.append('tipo_gasto', tipo))
+      }
       if (filters.banco) params.append('search', filters.banco)
       
       // Converter mesInicio/mesFim (formato "YYYY-MM") para year e month
       if (filters.mesInicio) {
         const [year, month] = filters.mesInicio.split('-')
-        if (year && month) {
+        if (year) {
           params.append('year', year)
-          params.append('month', month)
+          // Só adicionar month se mesInicio e mesFim forem iguais (mês específico)
+          if (month && filters.mesInicio === filters.mesFim) {
+            params.append('month', month)
+          }
         }
       }
 
@@ -192,15 +216,22 @@ export default function TransactionsPage() {
       if (filters.estabelecimento) params.append('estabelecimento', filters.estabelecimento)
       if (filters.grupo) params.append('grupo', filters.grupo)
       if (filters.subgrupo) params.append('subgrupo', filters.subgrupo)
-      if (filters.tipoGasto) params.append('tipo_gasto', filters.tipoGasto)
+      if (filters.tipoGasto) {
+        // Se tiver múltiplos tipos separados por vírgula, adicionar cada um
+        const tipos = filters.tipoGasto.split(',').map(t => t.trim()).filter(t => t)
+        tipos.forEach(tipo => params.append('tipo_gasto', tipo))
+      }
       if (filters.banco) params.append('search', filters.banco) // Use search para banco
       
       // Converter mesInicio/mesFim (formato "YYYY-MM") para year e month
       if (filters.mesInicio) {
         const [year, month] = filters.mesInicio.split('-')
-        if (year && month) {
+        if (year) {
           params.append('year', year)
-          params.append('month', month)
+          // Só adicionar month se mesInicio e mesFim forem iguais (mês específico)
+          if (month && filters.mesInicio === filters.mesFim) {
+            params.append('month', month)
+          }
         }
       }
 

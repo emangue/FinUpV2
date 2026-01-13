@@ -1,5 +1,5 @@
 #!/bin/bash
-# Quick Stop - Sistema Financeiro v4
+# Quick Stop - Sistema Financeiro v5
 # Uso: ./quick_stop.sh
 
 echo "🛑 Parando servidores..."

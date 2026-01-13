@@ -16,7 +16,7 @@ class DashboardRepository:
         self.db = db
     
     def _build_date_filter(self, year: int, month: Optional[int] = None):
-        """Constrói filtro para data usando coluna Ano e Data
+        """Constrói filtro usando MesFatura
         
         Args:
             year: Ano a filtrar
@@ -28,20 +28,9 @@ class DashboardRepository:
         if month is None:
             return JournalEntry.Ano == year_str
         
-        # Com mês específico, filtrar por Ano E mês na Data
-        # Ex: Ano='2025' AND Data LIKE '%/01/%' (para janeiro)
-        month_str = f"{month:02d}"  # Garante 2 dígitos
-        
-        # Padrões possíveis: DD/MM/YYYY ou D/M/YYYY
-        patterns = [
-            JournalEntry.Data.like(f'%/{month_str}/%'),  # %/01/%
-            JournalEntry.Data.like(f'%/{month}/%')       # %/1/%
-        ]
-        
-        return and_(
-            JournalEntry.Ano == year_str,
-            or_(*patterns)
-        )
+        # Com mês específico, usar MesFatura (formato YYYYMM)
+        mes_fatura = f"{year}{month:02d}"
+        return JournalEntry.MesFatura == mes_fatura
     
     def get_metrics(self, user_id: int, year: int, month: Optional[int] = None) -> Dict:
         """Calcula métricas principais
@@ -89,44 +78,58 @@ class DashboardRepository:
         }
     
     def get_chart_data(self, user_id: int, year: int, month: int) -> List[Dict]:
-        """Retorna dados para gráfico de área (receitas vs despesas por mês do ano)"""
-        # Query agrupada por mês do ano - FILTRAR IgnorarDashboard = 0
-        results = self.db.query(
-            func.substr(JournalEntry.Data, 4, 2).label('month'),  # Extrai MM de DD/MM/YYYY
-            func.sum(
-                case(
-                    (JournalEntry.CategoriaGeral == 'Receita', func.abs(JournalEntry.Valor)),
-                    else_=0
-                )
-            ).label('receitas'),
-            func.sum(
-                case(
-                    (JournalEntry.CategoriaGeral == 'Despesa', func.abs(JournalEntry.Valor)),
-                    else_=0
-                )
-            ).label('despesas')
-        ).filter(
-            JournalEntry.user_id == user_id,
-            JournalEntry.Data.like(f'%/{year}'),  # Filtra pelo ano
-            JournalEntry.IgnorarDashboard == 0  # Apenas transações que aparecem no dashboard
-        ).group_by(
-            func.substr(JournalEntry.Data, 4, 2)
-        ).order_by(
-            func.substr(JournalEntry.Data, 4, 2)
-        ).all()
+        """Retorna dados para gráfico de área (receitas vs despesas) - sempre 12 meses de histórico
         
-        # Mapear número do mês para nome
+        Retorna os últimos 12 meses até o mês especificado, incluindo ano anterior se necessário.
+        Se month=1 (janeiro), retorna fev/ano-1 até jan/ano atual.
+        """
+        from datetime import datetime
+        from dateutil.relativedelta import relativedelta
+        
+        # Determinar o mês de referência (último mês a ser incluído)
+        reference_date = datetime(year, month if month > 0 else 12, 1)
+        
+        # Calcular os últimos 12 meses
+        months_data = []
         month_names = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 
                        'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
         
-        return [
-            {
-                "date": month_names[int(row.month) - 1] if row.month else "Unknown",
-                "receitas": float(row.receitas or 0),
-                "despesas": float(row.despesas or 0)
-            }
-            for row in results
-        ]
+        for i in range(11, -1, -1):  # 11 meses atrás até o mês atual
+            target_date = reference_date - relativedelta(months=i)
+            target_month = target_date.month
+            target_year = target_date.year
+            
+            # Query para o mês específico usando MesFatura
+            mes_fatura = f"{target_year}{target_month:02d}"
+            
+            result = self.db.query(
+                func.sum(
+                    case(
+                        (JournalEntry.CategoriaGeral == 'Receita', func.abs(JournalEntry.Valor)),
+                        else_=0
+                    )
+                ).label('receitas'),
+                func.sum(
+                    case(
+                        (JournalEntry.CategoriaGeral == 'Despesa', func.abs(JournalEntry.Valor)),
+                        else_=0
+                    )
+                ).label('despesas')
+            ).filter(
+                JournalEntry.user_id == user_id,
+                JournalEntry.MesFatura == mes_fatura,
+                JournalEntry.IgnorarDashboard == 0
+            ).first()
+            
+            months_data.append({
+                "date": month_names[target_month - 1],
+                "receitas": float(result.receitas or 0) if result else 0.0,
+                "despesas": float(result.despesas or 0) if result else 0.0,
+                "year": target_year,  # Adicionar ano para referência
+                "month": target_month
+            })
+        
+        return months_data
     
     def get_category_expenses(self, user_id: int, year: int, month: Optional[int] = None) -> List[Dict]:
         """Retorna despesas agrupadas por categoria
@@ -173,34 +176,51 @@ class DashboardRepository:
             for row in results
         ]
     
-    def get_budget_vs_actual(self, user_id: int, year: int, month: int) -> Dict:
+    def get_budget_vs_actual(self, user_id: int, year: int, month: Optional[int] = None) -> Dict:
         """Comparação Realizado vs Planejado por TipoGasto
         
         Args:
             user_id: ID do usuário
             year: Ano
-            month: Mês (1-12)
+            month: Mês (1-12) ou None para YTD (Year to Date - todo o ano)
         
         Returns:
             Dict com items (lista de comparações) e totais
         """
-        # Construir mes_referencia (formato YYYY-MM)
-        mes_referencia = f"{year}-{month:02d}"
-        
-        # Filtro de data para o mês específico
-        date_filter = self._build_date_filter(year, month)
-        
-        # 1. Buscar valores planejados
-        budgets = self.db.query(
-            BudgetPlanning.tipo_gasto,
-            BudgetPlanning.valor_planejado
-        ).filter(
-            BudgetPlanning.user_id == user_id,
-            BudgetPlanning.mes_referencia == mes_referencia
-        ).all()
-        
-        # Criar dict de planejados
-        planejado_dict = {b.tipo_gasto: float(b.valor_planejado) for b in budgets}
+        # Se month=None, buscar todo o ano (YTD)
+        if month is None:
+            # Filtro de data para o ano inteiro
+            date_filter = self._build_date_filter(year, None)
+            
+            # 1. Buscar valores planejados de todos os meses do ano
+            budgets = self.db.query(
+                BudgetPlanning.tipo_gasto,
+                func.sum(BudgetPlanning.valor_planejado).label('total_planejado')
+            ).filter(
+                BudgetPlanning.user_id == user_id,
+                BudgetPlanning.mes_referencia.like(f'{year}-%')
+            ).group_by(
+                BudgetPlanning.tipo_gasto
+            ).all()
+            
+            # Criar dict de planejados
+            planejado_dict = {b.tipo_gasto: float(b.total_planejado) for b in budgets}
+        else:
+            # Mês específico
+            mes_referencia = f"{year}-{month:02d}"
+            date_filter = self._build_date_filter(year, month)
+            
+            # 1. Buscar valores planejados do mês
+            budgets = self.db.query(
+                BudgetPlanning.tipo_gasto,
+                BudgetPlanning.valor_planejado
+            ).filter(
+                BudgetPlanning.user_id == user_id,
+                BudgetPlanning.mes_referencia == mes_referencia
+            ).all()
+            
+            # Criar dict de planejados
+            planejado_dict = {b.tipo_gasto: float(b.valor_planejado) for b in budgets}
         
         # 2. Buscar valores realizados agrupados por TipoGasto
         realizados = self.db.query(

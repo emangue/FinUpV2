@@ -74,7 +74,7 @@ export default function BudgetSimplesPage() {
       
       // Buscar tipos de gasto COM médias já calculadas do backend
       const response = await fetch(
-        `${API_CONFIG.BACKEND_URL}/api/v1/transactions/tipos-gasto-com-media?mes_referencia=${mesReferencia}`
+        `/api/transactions/tipos-gasto-com-media?mes_referencia=${mesReferencia}`
       );
 
       if (!response.ok) {
@@ -112,12 +112,14 @@ export default function BudgetSimplesPage() {
     setMessage(null);
     try {
       const response = await fetch(
-        `${API_CONFIG.BACKEND_URL}/api/v1/budget?mes_referencia=${mesReferencia}`
+        `/api/budget?mes_referencia=${mesReferencia}`
       );
       
       if (response.ok) {
         const result = await response.json();
+        console.log('Resposta da API budget:', result);
         const data = result.budgets || [];
+        console.log('Budgets extraídos:', data);
         const budgetMap: Record<string, number> = {};
         const mediasMap: Record<string, number> = {};
         
@@ -126,6 +128,7 @@ export default function BudgetSimplesPage() {
           mediasMap[item.tipo_gasto] = item.valor_medio_3_meses;
         });
         
+        console.log('BudgetMap final:', budgetMap);
         setBudgetData(budgetMap);
         // Atualizar médias com valores do banco (se existirem)
         setMediaHistorica(prev => ({
@@ -133,6 +136,7 @@ export default function BudgetSimplesPage() {
           ...mediasMap
         }));
       } else {
+        console.error('Resposta não OK:', response.status);
         setBudgetData({});
       }
     } catch (error) {
@@ -167,7 +171,7 @@ export default function BudgetSimplesPage() {
           valor_planejado,
         }));
 
-      const response = await fetch(`${API_CONFIG.BACKEND_URL}/api/v1/budget/bulk-upsert`, {
+      const response = await fetch(`/api/budget/bulk-upsert`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -231,7 +235,7 @@ export default function BudgetSimplesPage() {
     
     try {
       const response = await fetch(
-        `${API_CONFIG.BACKEND_URL}/api/v1/budget?mes_referencia=${prevMesReferencia}`
+        `/api/budget?mes_referencia=${prevMesReferencia}`
       );
       
       if (response.ok) {
@@ -404,7 +408,7 @@ export default function BudgetSimplesPage() {
                         type="number"
                         step="0.01"
                         min="0"
-                        value={budgetData[tipo] || ''}
+                        value={budgetData[tipo] !== undefined ? budgetData[tipo] : ''}
                         onChange={(e) => handleValueChange(tipo, e.target.value)}
                         placeholder="0.00"
                         className="flex-1"

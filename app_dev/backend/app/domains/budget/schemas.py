@@ -12,7 +12,7 @@ class BudgetBase(BaseModel):
     """Schema base para Budget"""
     tipo_gasto: str = Field(..., description="Tipo de gasto (Fixo, Ajustável, Essencial, etc)")
     mes_referencia: str = Field(..., description="Mês de referência no formato YYYY-MM")
-    valor_planejado: float = Field(..., gt=0, description="Valor planejado (deve ser > 0)")
+    valor_planejado: float = Field(..., ge=0, description="Valor planejado (pode ser >= 0)")
     valor_medio_3_meses: float = Field(default=0.0, description="Média calculada dos últimos 3 meses")
     
     @validator('mes_referencia')

@@ -130,8 +130,17 @@ class TransactionService:
         if "Valor" in update_dict:
             transaction.ValorPositivo = abs(transaction.Valor)
         
-        # Recalcular CategoriaGeral se GRUPO mudou
-        if "GRUPO" in update_dict:
+        # Se GRUPO ou SUBGRUPO mudaram, buscar TipoGasto na base_marcacoes
+        if "GRUPO" in update_dict or "SUBGRUPO" in update_dict:
+            tipo_gasto = self._buscar_tipo_gasto_base_marcacoes(
+                transaction.GRUPO, 
+                transaction.SUBGRUPO,
+                transaction.Valor
+            )
+            if tipo_gasto:
+                transaction.TipoGasto = tipo_gasto
+            
+            # Recalcular CategoriaGeral baseado no GRUPO
             transaction.CategoriaGeral = self._determine_categoria_geral(
                 transaction.GRUPO, 
                 transaction.Valor
@@ -140,6 +149,53 @@ class TransactionService:
         # Salvar
         updated = self.repository.update(transaction)
         return TransactionResponse.from_orm(updated)
+    
+    def _buscar_tipo_gasto_base_marcacoes(
+        self, 
+        grupo: Optional[str], 
+        subgrupo: Optional[str],
+        valor: float
+    ) -> Optional[str]:
+        """
+        Busca TipoGasto na base_marcacoes baseado em GRUPO e SUBGRUPO
+        
+        Para combinações com múltiplos TipoGasto (ex: Outros | Outros),
+        usa o valor da transação para decidir:
+        - Valor >= 0 → Receita - Outras
+        - Valor < 0 → Ajustável (despesa)
+        """
+        if not grupo or not subgrupo:
+            return None
+        
+        from app.domains.categories.models import BaseMarcacao
+        
+        # Buscar TipoGasto na base_marcacoes
+        marcacoes = self.repository.db.query(BaseMarcacao).filter(
+            BaseMarcacao.GRUPO == grupo,
+            BaseMarcacao.SUBGRUPO == subgrupo
+        ).all()
+        
+        if not marcacoes:
+            return None
+        
+        # Se há apenas um TipoGasto, usar esse
+        if len(marcacoes) == 1:
+            return marcacoes[0].TipoGasto
+        
+        # Se há múltiplos (ex: Outros | Outros), decidir pelo valor
+        # Valor >= 0 → buscar TipoGasto que contenha "Receita"
+        # Valor < 0 → buscar TipoGasto que não contenha "Receita"
+        if valor >= 0:
+            for m in marcacoes:
+                if m.TipoGasto and 'Receita' in m.TipoGasto:
+                    return m.TipoGasto
+        else:
+            for m in marcacoes:
+                if m.TipoGasto and 'Receita' not in m.TipoGasto:
+                    return m.TipoGasto
+        
+        # Fallback: retornar o primeiro
+        return marcacoes[0].TipoGasto
     
     def _determine_categoria_geral(self, grupo: Optional[str], valor: float) -> Optional[str]:
         """

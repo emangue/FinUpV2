@@ -32,7 +32,7 @@ import Database from 'better-sqlite3'
  * - Backend FastAPI: /app_dev/backend/database/financas_dev.db
  * - Frontend Next.js: /app_dev/backend/database/financas_dev.db
  */
-const DB_ABSOLUTE_PATH = '/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV4/app_dev/backend/database/financas_dev.db'
+const DB_ABSOLUTE_PATH = '/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/backend/database/financas_dev.db'
 
 /**
  * Retorna o caminho absoluto do banco de dados

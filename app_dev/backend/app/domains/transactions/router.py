@@ -4,7 +4,7 @@ Endpoints HTTP - apenas validação e chamadas de service
 """
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Optional, List
 
 from app.core.database import get_db
 from app.shared.dependencies import get_current_user_id
@@ -43,7 +43,7 @@ def list_transactions(
     subgrupo: Optional[str] = None,
     tipo: Optional[str] = None,
     categoria_geral: Optional[str] = None,
-    tipo_gasto: Optional[str] = None,
+    tipo_gasto: Optional[List[str]] = Query(None),  # Aceita múltiplos valores
     cartao: Optional[str] = None,
     search: Optional[str] = None,
     user_id: int = Depends(get_current_user_id),
@@ -87,7 +87,7 @@ def get_filtered_total(
     month: Optional[int] = None,
     tipo: Optional[str] = None,
     categoria_geral: Optional[str] = None,
-    tipo_gasto: Optional[str] = None,
+    tipo_gasto: Optional[List[str]] = Query(None),  # Aceita múltiplos valores
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):

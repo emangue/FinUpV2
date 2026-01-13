@@ -113,10 +113,12 @@ const DashboardPage = () => {
       setLoadingChart(true);
       setChartError(null);
       
-      // Para chart-data, sempre buscar o ano todo (ignora month)
+      // Buscar 12 meses de histórico até o mês selecionado (ou último mês se 'all')
+      const targetMonth = month === 'all' ? '12' : month;
+      
       const params = new URLSearchParams({ 
         year: year,
-        month: '1' // Pode ser qualquer mês, backend ignora e retorna o ano todo
+        month: targetMonth
       });
       const response = await fetch(`/api/dashboard/chart-data?${params}`);
       
@@ -215,30 +217,31 @@ const DashboardPage = () => {
         </p>
       </div>
 
+      {/* Filtros e Métricas Centralizados */}
+      <div className="flex justify-center items-center gap-8 mb-6">
+        <DateFilters 
+          selectedYear={selectedYear}
+          selectedMonth={selectedMonth}
+          onYearChange={handleYearChange}
+          onMonthChange={handleMonthChange}
+        />
+        
+        <CompactMetrics 
+          metrics={metrics || undefined}
+          loading={loadingMetrics}
+          error={metricsError}
+        />
+      </div>
+
       {/* Grid Layout Principal */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         {/* Coluna Esquerda - Gráfico Receitas vs Despesas */}
-        <div className="lg:col-span-2">
-          {/* Filtros de Data e Métricas na mesma linha */}
-          <div className="flex justify-between items-center mb-4">
-            <DateFilters 
-              selectedYear={selectedYear}
-              selectedMonth={selectedMonth}
-              onYearChange={handleYearChange}
-              onMonthChange={handleMonthChange}
-            />
-            
-            <CompactMetrics 
-              metrics={metrics || undefined}
-              loading={loadingMetrics}
-              error={metricsError}
-            />
-          </div>
-          
+        <div className="lg:col-span-1">
           <ChartAreaInteractive
             data={chartData}
             loading={loadingChart}
             error={chartError}
+            selectedMonth={selectedMonth}
           />
         </div>
 
