@@ -119,6 +119,10 @@ const data = {
           url: "/settings/categorias",
         },
         {
+          title: "Gestão de Grupos",
+          url: "/settings/grupos",
+        },
+        {
           title: "Regras de Exclusão",
           url: "/settings/exclusoes",
         },
@@ -230,6 +234,10 @@ const data = {
         {
           title: "Gestão de Categorias",
           url: "/settings/categorias",
+        },
+        {
+          title: "Gestão de Grupos",
+          url: "/settings/grupos",
         },
         {
           title: "Regras de Exclusão",

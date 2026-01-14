@@ -9,11 +9,12 @@ import { DemaisBreakdownModal } from './demais-breakdown-modal';
 import { TipoGastoBreakdownModal } from './tipo-gasto-breakdown-modal';
 
 interface BudgetVsActualItem {
-  tipo_gasto: string;
+  grupo: string;
   realizado: number;
   planejado: number;
   percentual: number;
   diferenca: number;
+  tipos_inclusos?: BudgetVsActualItem[]; // Para o item "Demais"
 }
 
 interface BudgetVsActualData {
@@ -37,7 +38,7 @@ export function BudgetVsActual({ year, month, loading = false, error = null }: B
   const [demaisModalOpen, setDemaisModalOpen] = useState(false);
   const [demaisTipos, setDemaisTipos] = useState<BudgetVsActualItem[]>([]);
   const [tipoGastoModalOpen, setTipoGastoModalOpen] = useState(false);
-  const [selectedTipoGasto, setSelectedTipoGasto] = useState<string>('');
+  const [selectedGrupo, setSelectedGrupo] = useState<string>('');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -166,7 +167,7 @@ export function BudgetVsActual({ year, month, loading = false, error = null }: B
               // Agrupar os demais
               const others = sortedItems.slice(5);
               const demaisItem = others.length > 0 ? {
-                tipo_gasto: 'Demais',
+                grupo: 'Demais',
                 realizado: others.reduce((sum, item) => sum + item.realizado, 0),
                 planejado: others.reduce((sum, item) => sum + item.planejado, 0),
                 percentual: 0, // Será calculado abaixo
@@ -187,25 +188,25 @@ export function BudgetVsActual({ year, month, loading = false, error = null }: B
               
               return displayItems.map((item) => {
                 // Se for "Demais", abrir modal em vez de link direto
-                const isDemais = item.tipo_gasto === 'Demais' && 'tipos_inclusos' in item;
+                const isDemais = item.grupo === 'Demais' && 'tipos_inclusos' in item;
                 
                 const handleClick = (e: React.MouseEvent) => {
                   if (isDemais) {
                     e.preventDefault();
-                    setDemaisTipos(item.tipos_inclusos);
+                    setDemaisTipos(item.tipos_inclusos || []);
                     setDemaisModalOpen(true);
                   } else {
-                    // Abrir modal de subgrupos para tipo de gasto normal
+                    // Abrir modal de subgrupos para grupo normal
                     e.preventDefault();
-                    setSelectedTipoGasto(item.tipo_gasto);
+                    setSelectedGrupo(item.grupo);
                     setTipoGastoModalOpen(true);
                   }
                 };
                 
                 return (
-                <div key={item.tipo_gasto} className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium truncate">{item.tipo_gasto}</span>
+                <div key={item.grupo} className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium truncate">{item.grupo}</span>
                     <div className="flex items-center gap-2">
                       <span className={`font-bold ${getColorClass(item.percentual)}`}>
                         {item.percentual.toFixed(1)}%
@@ -302,20 +303,20 @@ export function BudgetVsActual({ year, month, loading = false, error = null }: B
         </div>
       </CardContent>
 
-      {/* Modal de detalhamento do "Demais" */}
+      {/* Modal de detalhamento por grupo */}
       <DemaisBreakdownModal
         open={demaisModalOpen}
         onOpenChange={setDemaisModalOpen}
-        tipos={demaisTipos}
+        grupos={demaisTipos}
         year={parseInt(year)}
         month={parseInt(month)}
       />
 
-      {/* Modal de detalhamento de Tipo de Gasto (subgrupos) */}
+      {/* Modal de detalhamento de Grupo (subgrupos) */}
       <TipoGastoBreakdownModal
         open={tipoGastoModalOpen}
         onOpenChange={setTipoGastoModalOpen}
-        tipoGasto={selectedTipoGasto}
+        grupo={selectedGrupo}
         year={parseInt(year)}
         month={month === 'all' ? 0 : parseInt(month)}
       />
