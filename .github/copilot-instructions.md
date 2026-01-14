@@ -80,7 +80,60 @@ Os scripts detectam a versão automaticamente baseado no nome da pasta:
 
 ---
 
-### 💾 BACKUP DIÁRIO AUTOMÁTICO (REGRA OBRIGATÓRIA)
+### � FILTROS DE DATA - REGRA INVIOLÁVEL (NUNCA USAR CAMPO DATA)
+
+**REGRA CRÍTICA:** JAMAIS usar o campo `Data` (string DD/MM/YYYY) para filtros SQL.
+
+**✅ SEMPRE usar:**
+- `JournalEntry.Ano == year` (campo integer)
+- `JournalEntry.Mes == month` (campo integer, 1-12)
+- `JournalEntry.MesFatura == "YYYYMM"` (campo string formatado, apenas se necessário)
+
+**❌ NUNCA usar:**
+```python
+# ❌ PROIBIDO - Campo Data é string DD/MM/YYYY
+JournalEntry.Data.like(f'%/{year}')
+JournalEntry.Data.like(f'%/{month:02d}/{year}')
+date_filter baseado em JournalEntry.Data
+_build_date_filter() que usa campo Data
+```
+
+**✅ CORRETO:**
+```python
+# ✅ Filtros eficientes e confiáveis
+filters = [
+    JournalEntry.user_id == user_id,
+    JournalEntry.Ano == year,           # Ano como integer
+    JournalEntry.Mes == month,          # Mês como integer (se específico)
+    JournalEntry.CategoriaGeral == 'Despesa',
+    JournalEntry.IgnorarDashboard == 0
+]
+
+# Para ano inteiro (YTD)
+filters = [
+    JournalEntry.user_id == user_id,
+    JournalEntry.Ano == year,           # Só ano, sem filtro de mês
+    JournalEntry.CategoriaGeral == 'Despesa',
+    JournalEntry.IgnorarDashboard == 0
+]
+```
+
+**Por quê essa regra existe:**
+- ❌ Campo `Data` é string "DD/MM/YYYY" → filtros lentos e propensos a erros
+- ✅ Campos `Ano` e `Mes` são integers → filtros rápidos e precisos
+- ❌ LIKE patterns em strings são ineficientes 
+- ✅ Comparações de integers são otimizadas pelo banco
+
+**Checklist obrigatório antes de qualquer query:**
+- [ ] ✅ Usa `JournalEntry.Ano == year`?
+- [ ] ✅ Se mês específico, usa `JournalEntry.Mes == month`?
+- [ ] ❌ NÃO usa campo `Data`?
+- [ ] ❌ NÃO usa `_build_date_filter()`?
+- [ ] ❌ NÃO usa `.like()` em datas?
+
+---
+
+### �💾 BACKUP DIÁRIO AUTOMÁTICO (REGRA OBRIGATÓRIA)
 
 **SEMPRE executar backup diário no início de cada sessão de trabalho:**
 

@@ -44,7 +44,6 @@ const data = {
       title: "Dashboard",
       url: "/dashboard",
       icon: Home,
-      isActive: true,
       items: [
         {
           title: "Visão Geral",
@@ -135,7 +134,6 @@ const data = {
       title: "Dashboard",
       url: "/dashboard",
       icon: Home,
-      isActive: true,
       items: [
         {
           title: "Visão Geral",

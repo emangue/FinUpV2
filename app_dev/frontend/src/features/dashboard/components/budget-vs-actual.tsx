@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { TrendingUp, TrendingDown, AlertCircle } from 'lucide-react';
 import { DemaisBreakdownModal } from './demais-breakdown-modal';
+import { TipoGastoBreakdownModal } from './tipo-gasto-breakdown-modal';
 
 interface BudgetVsActualItem {
   tipo_gasto: string;
@@ -35,6 +36,8 @@ export function BudgetVsActual({ year, month, loading = false, error = null }: B
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [demaisModalOpen, setDemaisModalOpen] = useState(false);
   const [demaisTipos, setDemaisTipos] = useState<BudgetVsActualItem[]>([]);
+  const [tipoGastoModalOpen, setTipoGastoModalOpen] = useState(false);
+  const [selectedTipoGasto, setSelectedTipoGasto] = useState<string>('');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -191,6 +194,11 @@ export function BudgetVsActual({ year, month, loading = false, error = null }: B
                     e.preventDefault();
                     setDemaisTipos(item.tipos_inclusos);
                     setDemaisModalOpen(true);
+                  } else {
+                    // Abrir modal de subgrupos para tipo de gasto normal
+                    e.preventDefault();
+                    setSelectedTipoGasto(item.tipo_gasto);
+                    setTipoGastoModalOpen(true);
                   }
                 };
                 
@@ -202,25 +210,12 @@ export function BudgetVsActual({ year, month, loading = false, error = null }: B
                       <span className={`font-bold ${getColorClass(item.percentual)}`}>
                         {item.percentual.toFixed(1)}%
                       </span>
-                      {isDemais ? (
-                        <button
-                          onClick={handleClick}
-                          className="text-muted-foreground text-xs hover:text-primary hover:underline cursor-pointer"
-                        >
-                          {formatCurrency(item.realizado)}
-                        </button>
-                      ) : (
-                        <Link 
-                          href={
-                            month === 'all' 
-                              ? `/transactions?year=${year}&tipo_gasto=${encodeURIComponent(item.tipo_gasto)}`
-                              : `/transactions?year=${year}&month=${month}&tipo_gasto=${encodeURIComponent(item.tipo_gasto)}`
-                          }
-                          className="text-muted-foreground text-xs hover:text-primary hover:underline cursor-pointer"
-                        >
-                          {formatCurrency(item.realizado)}
-                        </Link>
-                      )}
+                      <button
+                        onClick={handleClick}
+                        className="text-muted-foreground text-xs hover:text-primary hover:underline cursor-pointer"
+                      >
+                        {formatCurrency(item.realizado)}
+                      </button>
                     </div>
                   </div>
                   <Progress 
@@ -314,6 +309,15 @@ export function BudgetVsActual({ year, month, loading = false, error = null }: B
         tipos={demaisTipos}
         year={parseInt(year)}
         month={parseInt(month)}
+      />
+
+      {/* Modal de detalhamento de Tipo de Gasto (subgrupos) */}
+      <TipoGastoBreakdownModal
+        open={tipoGastoModalOpen}
+        onOpenChange={setTipoGastoModalOpen}
+        tipoGasto={selectedTipoGasto}
+        year={parseInt(year)}
+        month={month === 'all' ? 0 : parseInt(month)}
       />
     </Card>
   );

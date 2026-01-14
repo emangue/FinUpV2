@@ -109,6 +109,28 @@ export function DemaisBreakdownModal({
             </div>
           </div>
 
+          {/* Diferença e Percentual */}
+          <div className="grid grid-cols-2 gap-4 pt-4 border-t">
+            <div className="space-y-1">
+              <p className="text-sm text-muted-foreground">Diferença</p>
+              <p className={`text-2xl font-bold ${totalRealizado > totalPlanejado ? 'text-red-600' : 'text-green-600'}`}>
+                {totalRealizado > totalPlanejado ? '+' : ''}{formatCurrency(totalRealizado - totalPlanejado)}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {totalRealizado > totalPlanejado ? 'Acima' : 'Abaixo'} do planejado
+              </p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm text-muted-foreground">Percentual</p>
+              <p className={`text-2xl font-bold ${totalPlanejado > 0 && (totalRealizado / totalPlanejado * 100) >= 100 ? 'text-red-600' : 'text-green-600'}`}>
+                {totalPlanejado > 0 ? `${((totalRealizado / totalPlanejado) * 100).toFixed(1)}%` : 'N/A'}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Do orçamento utilizado
+              </p>
+            </div>
+          </div>
+
           {/* Botão fechar */}
           <div className="flex justify-end pt-4">
             <Button variant="outline" onClick={() => onOpenChange(false)}>

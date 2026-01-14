@@ -151,16 +151,21 @@ export function TransactionFilters({
                 <SelectContent className="max-h-[300px]">
                   <SelectItem value=" ">Limpar filtro</SelectItem>
                   <SelectItem value="Casa">Casa</SelectItem>
-                  <SelectItem value="Energia">Energia</SelectItem>
-                  <SelectItem value="Internet">Internet</SelectItem>
-                  <SelectItem value="Condomínio">Condomínio</SelectItem>
-                  <SelectItem value="Supermercado">Supermercado</SelectItem>
                   <SelectItem value="Combustível">Combustível</SelectItem>
+                  <SelectItem value="Condomínio">Condomínio</SelectItem>
+                  <SelectItem value="EUA">EUA</SelectItem>
+                  <SelectItem value="Energia">Energia</SelectItem>
                   <SelectItem value="Estacionamento">Estacionamento</SelectItem>
-                  <SelectItem value="Saúde">Saúde</SelectItem>
-                  <SelectItem value="Viagens">Viagens</SelectItem>
+                  <SelectItem value="Foz do Iguaçu">Foz do Iguaçu</SelectItem>
+                  <SelectItem value="Internet">Internet</SelectItem>
+                  <SelectItem value="Madrid">Madrid</SelectItem>
                   <SelectItem value="MeLi + Amazon">MeLi + Amazon</SelectItem>
                   <SelectItem value="Outros">Outros</SelectItem>
+                  <SelectItem value="Portugal">Portugal</SelectItem>
+                  <SelectItem value="Saúde">Saúde</SelectItem>
+                  <SelectItem value="Supermercado">Supermercado</SelectItem>
+                  <SelectItem value="Viagens">Viagens</SelectItem>
+                  <SelectItem value="Vitoria">Vitoria</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -178,26 +183,24 @@ export function TransactionFilters({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value=" ">Limpar filtro</SelectItem>
-                <SelectItem value="Alimentação">Alimentação</SelectItem>
-                <SelectItem value="Apps e Assinaturas">Apps e Assinaturas</SelectItem>
-                <SelectItem value="Cartão de Crédito">Cartão de Crédito</SelectItem>
-                <SelectItem value="Combustível">Combustível</SelectItem>
-                <SelectItem value="Educação">Educação</SelectItem>
-                <SelectItem value="Estacionamento">Estacionamento</SelectItem>
-                <SelectItem value="Internet">Internet</SelectItem>
-                <SelectItem value="Lazer">Lazer</SelectItem>
-                <SelectItem value="Manutenção">Manutenção</SelectItem>
-                <SelectItem value="Mercado">Mercado</SelectItem>
-                <SelectItem value="Outros">Outros</SelectItem>
-                <SelectItem value="Pedágio">Pedágio</SelectItem>
+                <SelectItem value="Ajustável - Alimentação">Ajustável - Alimentação</SelectItem>
+                <SelectItem value="Ajustável - Assinaturas">Ajustável - Assinaturas</SelectItem>
+                <SelectItem value="Ajustável - Carro">Ajustável - Carro</SelectItem>
+                <SelectItem value="Ajustável - Casa">Ajustável - Casa</SelectItem>
+                <SelectItem value="Ajustável - Doações">Ajustável - Doações</SelectItem>
+                <SelectItem value="Ajustável - Presentes">Ajustável - Presentes</SelectItem>
+                <SelectItem value="Ajustável - Roupas">Ajustável - Roupas</SelectItem>
+                <SelectItem value="Ajustável - Saídas">Ajustável - Saídas</SelectItem>
+                <SelectItem value="Ajustável - Supermercado">Ajustável - Supermercado</SelectItem>
+                <SelectItem value="Ajustável - Tech">Ajustável - Tech</SelectItem>
+                <SelectItem value="Ajustável - Uber">Ajustável - Uber</SelectItem>
+                <SelectItem value="Ajustável - Viagens">Ajustável - Viagens</SelectItem>
+                <SelectItem value="Ajustável - Delivery">Ajustável - Delivery</SelectItem>
+                <SelectItem value="Ajustável - Esportes">Ajustável - Esportes</SelectItem>
+                <SelectItem value="Ajustável">Ajustável</SelectItem>
+                <SelectItem value="Fixo">Fixo</SelectItem>
                 <SelectItem value="Receita - Outras">Receita - Outras</SelectItem>
                 <SelectItem value="Receita - Salário">Receita - Salário</SelectItem>
-                <SelectItem value="Restaurante">Restaurante</SelectItem>
-                <SelectItem value="Saúde">Saúde</SelectItem>
-                <SelectItem value="Seguro">Seguro</SelectItem>
-                <SelectItem value="Telefone">Telefone</SelectItem>
-                <SelectItem value="Transferência">Transferência</SelectItem>
-                <SelectItem value="Transporte">Transporte</SelectItem>
               </SelectContent>
             </Select>
           </div>

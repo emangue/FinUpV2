@@ -87,14 +87,10 @@ export default function TransactionsPage() {
   const [somaTotal, setSomaTotal] = React.useState(0)
   const [editModalOpen, setEditModalOpen] = React.useState(false)
   const [selectedTransaction, setSelectedTransaction] = React.useState<Transaction | null>(null)
+  const [isInitialized, setIsInitialized] = React.useState(false)
 
-  // Flag para controlar se já aplicou filtros dos query params
-  const [queryParamsApplied, setQueryParamsApplied] = React.useState(false)
-
-  // Aplicar filtros de query params na primeira carga
+  // Aplicar filtros de query params sempre que mudarem
   React.useEffect(() => {
-    if (queryParamsApplied) return // Só aplica uma vez
-    
     const initialFilters: FilterValues = {}
     
     // getAll para pegar múltiplos valores de tipo_gasto
@@ -103,6 +99,7 @@ export default function TransactionsPage() {
     const month = searchParams.get('month')
     const mesReferencia = searchParams.get('mes_referencia')
     const grupo = searchParams.get('grupo')
+    const subgrupo = searchParams.get('subgrupo')
     const estabelecimento = searchParams.get('estabelecimento')
     
     // Se tiver múltiplos tipos, juntar com vírgula para passar no filtro
@@ -126,20 +123,32 @@ export default function TransactionsPage() {
     }
     
     if (grupo) initialFilters.grupo = grupo
+    if (subgrupo) initialFilters.subgrupo = subgrupo
     if (estabelecimento) initialFilters.estabelecimento = estabelecimento
     
     if (Object.keys(initialFilters).length > 0) {
       setAppliedFilters(initialFilters)
-      setFiltersOpen(false) // Já vem com filtros aplicados
-      setQueryParamsApplied(true)
+      setFiltersOpen(false)
+      setIsInitialized(true)
       
       // Disparar fetch imediatamente com os filtros
       fetchTransactions(activeTab, 1, initialFilters)
       fetchFilteredTotal(activeTab, initialFilters)
     } else {
-      setQueryParamsApplied(true)
+      setIsInitialized(true)
+      // Buscar sem filtros se não houver query params
+      fetchTransactions(activeTab, 1, {})
+      fetchFilteredTotal(activeTab, {})
     }
-  }, [searchParams, queryParamsApplied, activeTab])
+  }, [searchParams])
+
+  React.useEffect(() => {
+    // Se ainda não inicializou, espera
+    if (!isInitialized) return
+    
+    fetchTransactions(activeTab, 1, appliedFilters)
+    fetchFilteredTotal(activeTab, appliedFilters)
+  }, [activeTab, appliedFilters, isInitialized])
 
   const fetchFilteredTotal = async (type: string, filters: FilterValues = {}) => {
     try {
@@ -260,14 +269,6 @@ export default function TransactionsPage() {
       setLoading(false)
     }
   }
-
-  React.useEffect(() => {
-    // Se ainda não aplicou query params, espera
-    if (!queryParamsApplied) return
-    
-    fetchTransactions(activeTab, 1, appliedFilters)
-    fetchFilteredTotal(activeTab, appliedFilters)
-  }, [activeTab, appliedFilters, queryParamsApplied])
 
   const handleTabChange = (value: string) => {
     setActiveTab(value)

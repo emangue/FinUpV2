@@ -120,3 +120,24 @@ def get_budget_vs_actual(
         raise HTTPException(status_code=400, detail="month é obrigatório quando ytd=False")
     
     return service.get_budget_vs_actual(user_id, year, month)
+
+
+@router.get("/subgrupos-by-tipo")
+def get_subgrupos_by_tipo(
+    year: int = Query(..., description="Ano"),
+    month: Optional[int] = Query(None, description="Mês (1-12) ou None para YTD"),
+    tipo_gasto: str = Query(..., description="Tipo de Gasto"),
+    ytd: bool = Query(False, description="Year to Date - soma de todos os meses do ano"),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Retorna subgrupos de um tipo de gasto específico com valores e percentuais.
+    """
+    service = DashboardService(db)
+    
+    # Se ytd=True, passar None como month para buscar ano todo
+    if ytd:
+        month = None
+    
+    return service.get_subgrupos_by_tipo(user_id, year, month, tipo_gasto)

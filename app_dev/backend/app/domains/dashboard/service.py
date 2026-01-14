@@ -60,3 +60,13 @@ class DashboardService:
             total_planejado=data["total_planejado"],
             percentual_geral=data["percentual_geral"]
         )
+    
+    def get_subgrupos_by_tipo(self, user_id: int, year: int, month: int, tipo_gasto: str):
+        """Retorna subgrupos de um tipo de gasto específico"""
+        data = self.repository.get_subgrupos_by_tipo(user_id, year, month, tipo_gasto)
+        total_planejado = self.repository.get_planejado_by_tipo(user_id, year, month, tipo_gasto)
+        return {
+            "subgrupos": data,
+            "total_realizado": sum(item["valor"] for item in data),
+            "total_planejado": total_planejado
+        }

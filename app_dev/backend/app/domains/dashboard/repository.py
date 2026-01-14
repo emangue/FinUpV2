@@ -223,21 +223,28 @@ class DashboardRepository:
             planejado_dict = {b.tipo_gasto: float(b.valor_planejado) for b in budgets}
         
         # 2. Buscar valores realizados agrupados por TipoGasto
-        realizados = self.db.query(
-            JournalEntry.TipoGasto,
-            func.sum(func.abs(JournalEntry.Valor)).label('total')
-        ).filter(
+        # REGRA: NUNCA usar campo Data (string) para filtros - usar Ano/Mes (integer)
+        realizados_filters = [
             JournalEntry.user_id == user_id,
-            date_filter,
+            JournalEntry.Ano == year,
             JournalEntry.CategoriaGeral == 'Despesa',
             JournalEntry.IgnorarDashboard == 0,
             JournalEntry.TipoGasto.isnot(None)
-        ).group_by(
+        ]
+        
+        # Se month=None, buscar todo o ano; se month especificado, filtrar mês
+        if month is not None:
+            realizados_filters.append(JournalEntry.Mes == month)
+            
+        realizados = self.db.query(
+            JournalEntry.TipoGasto,
+            func.sum(JournalEntry.Valor).label('total')
+        ).filter(*realizados_filters).group_by(
             JournalEntry.TipoGasto
         ).all()
         
-        # Criar dict de realizados
-        realizado_dict = {r.TipoGasto: float(r.total) for r in realizados}
+        # Criar dict de realizados (converter para positivo apenas na exibição)
+        realizado_dict = {r.TipoGasto: abs(float(r.total)) for r in realizados}
         
         # 3. Combinar ambos (união de todos os TipoGasto)
         all_tipos = set(planejado_dict.keys()) | set(realizado_dict.keys())
@@ -281,3 +288,81 @@ class DashboardRepository:
             "total_planejado": total_planejado,
             "percentual_geral": percentual_geral
         }
+    
+    def get_subgrupos_by_tipo(self, user_id: int, year: int, month: int, tipo_gasto: str):
+        """Busca subgrupos de um tipo de gasto específico com valores"""
+        from sqlalchemy import func
+        from app.domains.transactions.models import JournalEntry
+        
+        # Filtros base (usar campos integer, NUNCA campo Data string)
+        filters = [
+            JournalEntry.user_id == user_id,
+            JournalEntry.Ano == year,  # ← Usar campo Ano (integer)
+            JournalEntry.TipoGasto == tipo_gasto,
+            JournalEntry.CategoriaGeral == 'Despesa',
+            JournalEntry.IgnorarDashboard == 0
+        ]
+        
+        # Filtro de mês (se especificado) - usar campo Mes (integer)
+        if month is not None:
+            filters.append(JournalEntry.Mes == month)
+        
+        # Query para buscar subgrupos e somar valores
+        query = (
+            self.db.query(
+                JournalEntry.SUBGRUPO.label('subgrupo'),
+                func.sum(JournalEntry.Valor).label('valor')
+            )
+            .filter(*filters)
+            .group_by(JournalEntry.SUBGRUPO)
+        )
+        
+        results = query.all()
+        
+        # Ordenar por valor absoluto (maior primeiro) para exibição
+        results = sorted(results, key=lambda x: abs(x.valor), reverse=True)
+        
+        # Calcular total para percentuais (mantém valores reais para cálculo correto)
+        total = sum(r.valor for r in results)
+        total_abs = sum(abs(r.valor) for r in results)
+        
+        # Formatar resposta (exibe valores como positivos, mas percentual baseado no total real)
+        subgrupos = []
+        for row in results:
+            subgrupos.append({
+                "subgrupo": row.subgrupo or "Sem subgrupo",
+                "valor": abs(float(row.valor)),  # Exibe como positivo
+                "percentual": round((abs(row.valor) / total_abs * 100), 1) if total_abs > 0 else 0.0
+            })
+        
+        return subgrupos
+    
+    def get_planejado_by_tipo(self, user_id: int, year: int, month: int, tipo_gasto: str):
+        """Busca o valor planejado para um tipo de gasto específico"""
+        from sqlalchemy import func
+        from app.domains.budget.models import BudgetPlanning
+        
+        # Construir mes_referencia no formato YYYY-MM
+        if month is not None:
+            mes_referencia = f"{year}-{month:02d}"
+            filters = [
+                BudgetPlanning.user_id == user_id,
+                BudgetPlanning.mes_referencia == mes_referencia,
+                BudgetPlanning.tipo_gasto == tipo_gasto
+            ]
+        else:
+            # Se month é None, buscar todos os meses do ano
+            filters = [
+                BudgetPlanning.user_id == user_id,
+                BudgetPlanning.mes_referencia.like(f"{year}-%"),
+                BudgetPlanning.tipo_gasto == tipo_gasto
+            ]
+        
+        # Query para somar valor planejado
+        query = (
+            self.db.query(func.sum(BudgetPlanning.valor_planejado))
+            .filter(*filters)
+        )
+        
+        result = query.scalar()
+        return float(result) if result else 0.0

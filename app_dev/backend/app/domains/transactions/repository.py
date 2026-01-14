@@ -170,6 +170,14 @@ class TransactionRepository:
                 query = query.filter(JournalEntry.TipoGasto.in_(filters.tipo_gasto))
             else:
                 query = query.filter(JournalEntry.TipoGasto == filters.tipo_gasto)
+        if filters.grupo:
+            query = query.filter(JournalEntry.GRUPO == filters.grupo)
+        if filters.subgrupo:
+            query = query.filter(JournalEntry.SUBGRUPO == filters.subgrupo)
+        if filters.estabelecimento:
+            query = query.filter(JournalEntry.Estabelecimento.ilike(f"%{filters.estabelecimento}%"))
+        if filters.search:
+            query = query.filter(JournalEntry.Estabelecimento.ilike(f"%{filters.search}%"))
         
         result = query.scalar()
         return result or 0.0

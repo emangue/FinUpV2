@@ -205,6 +205,8 @@ function Sidebar({
     )
   }
 
+  const { open, setOpen } = useSidebar()
+
   return (
     <div
       className="group peer text-sidebar-foreground hidden md:block"
@@ -213,6 +215,8 @@ function Sidebar({
       data-variant={variant}
       data-side={side}
       data-slot="sidebar"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
     >
       {/* This is what handles the sidebar gap on desktop */}
       <div

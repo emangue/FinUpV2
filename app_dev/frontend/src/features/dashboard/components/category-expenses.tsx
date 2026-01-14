@@ -123,11 +123,16 @@ const CategoryExpenses: React.FC<CategoryExpensesProps> = ({
             />
             <Bar dataKey="percentual" fill="var(--color-percentual)" radius={8}>
               <LabelList
-                position="top"
-                offset={12}
-                className="fill-foreground"
-                fontSize={12}
-                formatter={(value: number) => `${value.toFixed(1)}%`}
+                position="insideTop"
+                offset={8}
+                className="fill-white/80"
+                fontSize={11}
+                fontWeight={500}
+                formatter={(value: number, entry: any) => {
+                  const valor = entry?.valor || 0;
+                  const valorEmMil = valor / 1000;
+                  return `${valorEmMil.toFixed(1)}k`;
+                }}
               />
             </Bar>
           </BarChart>

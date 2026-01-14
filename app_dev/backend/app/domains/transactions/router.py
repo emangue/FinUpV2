@@ -88,6 +88,10 @@ def get_filtered_total(
     tipo: Optional[str] = None,
     categoria_geral: Optional[str] = None,
     tipo_gasto: Optional[List[str]] = Query(None),  # Aceita múltiplos valores
+    grupo: Optional[str] = None,
+    subgrupo: Optional[str] = None,
+    estabelecimento: Optional[str] = None,
+    search: Optional[str] = None,
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
@@ -96,7 +100,17 @@ def get_filtered_total(
     """
     service = TransactionService(db)
     
-    filters = TransactionFilters(year=year, month=month, tipo=tipo, categoria_geral=categoria_geral, tipo_gasto=tipo_gasto)
+    filters = TransactionFilters(
+        year=year, 
+        month=month, 
+        tipo=tipo, 
+        categoria_geral=categoria_geral, 
+        tipo_gasto=tipo_gasto,
+        grupo=grupo,
+        subgrupo=subgrupo,
+        estabelecimento=estabelecimento,
+        search=search
+    )
     
     return service.get_filtered_total(user_id, filters)
 

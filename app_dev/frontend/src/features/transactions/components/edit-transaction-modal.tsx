@@ -182,6 +182,15 @@ export function EditTransactionModal({
                 <Label className="text-xs text-muted-foreground">Tipo de Gasto</Label>
                 <p className="text-sm">{transaction.TipoGasto}</p>
               </div>
+              {/* Mostrar Mês da Fatura apenas para Cartão de Crédito */}
+              {transaction.TipoTransacao === 'Cartão de Crédito' && transaction.MesFatura && (
+                <div className="col-span-2">
+                  <Label className="text-xs text-muted-foreground">Mês da Fatura</Label>
+                  <p className="text-sm font-medium text-blue-600">
+                    {transaction.MesFatura.substring(4, 6)}/{transaction.MesFatura.substring(0, 4)}
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Grupo */}

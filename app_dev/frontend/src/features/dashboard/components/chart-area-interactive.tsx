@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useMemo } from 'react';
-import { Bar, BarChart, CartesianGrid, XAxis } from 'recharts';
+import React, { useMemo, useRef, useEffect } from 'react';
+import { Bar, BarChart, CartesianGrid, XAxis, LabelList } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -41,6 +41,16 @@ const ChartAreaInteractive: React.FC<ChartAreaInteractiveProps> = ({
   error = null,
   selectedMonth = 'all'
 }) => {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Scroll para a direita e para baixo ao montar o componente
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollLeft = scrollRef.current.scrollWidth;
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [data]);
+
   // Mapear nomes de meses para índices (1-12)
   const monthNameToIndex: { [key: string]: number } = {
     'Jan': 1, 'Fev': 2, 'Mar': 3, 'Abr': 4, 'Mai': 5, 'Jun': 6,
@@ -118,10 +128,16 @@ const ChartAreaInteractive: React.FC<ChartAreaInteractiveProps> = ({
         <CardTitle className="text-base">Receitas vs Despesas</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="overflow-x-auto">
-          <div style={{ minWidth: '200px' }}>
+        <div ref={scrollRef} className="overflow-auto h-[350px]">
+          <div style={{ minWidth: '1400px' }}>
             <ChartContainer config={chartConfig}>
-              <BarChart accessibilityLayer data={visibleData}>
+              <BarChart 
+                accessibilityLayer 
+                data={visibleData}
+                barSize={70}
+                barGap={10}
+                barCategoryGap={30}
+              >
             <CartesianGrid vertical={false} />
             <XAxis
               dataKey="mes"
@@ -134,8 +150,32 @@ const ChartAreaInteractive: React.FC<ChartAreaInteractiveProps> = ({
               cursor={false}
               content={<CustomTooltip />}
             />
-                <Bar dataKey="receitas" fill="var(--color-receitas)" radius={4} />
-                <Bar dataKey="despesas" fill="var(--color-despesas)" radius={4} />
+                <Bar dataKey="receitas" fill="var(--color-receitas)" radius={4}>
+                  <LabelList
+                    position="insideTop"
+                    offset={8}
+                    className="fill-white/80"
+                    fontSize={11}
+                    fontWeight={500}
+                    formatter={(value: number) => {
+                      const valorEmMil = value / 1000;
+                      return `${valorEmMil.toFixed(1)}k`;
+                    }}
+                  />
+                </Bar>
+                <Bar dataKey="despesas" fill="var(--color-despesas)" radius={4}>
+                  <LabelList
+                    position="insideTop"
+                    offset={8}
+                    className="fill-white/80"
+                    fontSize={11}
+                    fontWeight={500}
+                    formatter={(value: number) => {
+                      const valorEmMil = value / 1000;
+                      return `${valorEmMil.toFixed(1)}k`;
+                    }}
+                  />
+                </Bar>
               </BarChart>
             </ChartContainer>
           </div>
