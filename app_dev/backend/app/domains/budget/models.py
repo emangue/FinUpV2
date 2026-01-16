@@ -10,7 +10,7 @@ from app.core.database import Base
 
 class BudgetPlanning(Base):
     """
-    Planejamento orçamentário mensal por TipoGasto
+    Planejamento orçamentário mensal por Grupo
     Permite comparação Realizado vs Planejado no dashboard
     """
     __tablename__ = "budget_planning"
@@ -22,7 +22,7 @@ class BudgetPlanning(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     
     # Classificação
-    tipo_gasto = Column(String(50), nullable=False)  # Fixo, Ajustável, Essencial, etc
+    grupo = Column(String(100), nullable=False)  # Casa, Cartão de Crédito, Saúde, etc
     
     # Período
     mes_referencia = Column(String(7), nullable=False, index=True)  # Formato: YYYY-MM
@@ -36,7 +36,7 @@ class BudgetPlanning(Base):
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, nullable=False)
     
     def __repr__(self):
-        return f"<BudgetPlanning(id={self.id}, user_id={self.user_id}, tipo_gasto={self.tipo_gasto}, mes={self.mes_referencia}, valor={self.valor_planejado})>"
+        return f"<BudgetPlanning(id={self.id}, user_id={self.user_id}, grupo={self.grupo}, mes={self.mes_referencia}, valor={self.valor_planejado})>"
 
 
 class BudgetGeral(Base):

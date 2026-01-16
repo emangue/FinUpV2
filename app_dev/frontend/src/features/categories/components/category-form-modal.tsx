@@ -30,12 +30,9 @@ interface CategoryFormModalProps {
 
 const TIPO_GASTO_OPTIONS = [
   'Ajustável',
-  'Ajustável - Delivery',
-  'Ajustável - Tech',
-  'Ajustável - Saídas',
-  'Essencial',
   'Fixo',
-  'Investimento',
+  'Investimentos',
+  'Transferência',
   'Receita'
 ]
 

@@ -34,8 +34,8 @@ class CategoryExpense(BaseModel):
 
 
 class BudgetVsActualItem(BaseModel):
-    """Comparação Realizado vs Planejado por TipoGasto"""
-    tipo_gasto: str
+    """Comparação Realizado vs Planejado por Grupo"""
+    grupo: str
     realizado: float
     planejado: float
     percentual: float  # (realizado / planejado) * 100
@@ -48,3 +48,11 @@ class BudgetVsActualResponse(BaseModel):
     total_realizado: float
     total_planejado: float
     percentual_geral: float  # (total_realizado / total_planejado) * 100
+
+
+class CreditCardExpense(BaseModel):
+    """Despesa por cartão de crédito"""
+    cartao: str
+    total: float
+    percentual: float
+    num_transacoes: int

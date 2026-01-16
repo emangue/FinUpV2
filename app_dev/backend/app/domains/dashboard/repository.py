@@ -48,15 +48,16 @@ class DashboardRepository:
             JournalEntry.IgnorarDashboard == 0  # Apenas transações que aparecem no dashboard
         )
         
-        # Total de despesas (CategoriaGeral = 'Despesa')
-        total_despesas = base_query.filter(
+        # Total de despesas (CategoriaGeral = 'Despesa') - soma valores negativos
+        despesas_raw = base_query.filter(
             JournalEntry.CategoriaGeral == 'Despesa'
-        ).with_entities(func.sum(func.abs(JournalEntry.Valor))).scalar() or 0.0
+        ).with_entities(func.sum(JournalEntry.Valor)).scalar() or 0.0
+        total_despesas = abs(despesas_raw)  # Aplicar abs() só para exibição
         
-        # Total de receitas (CategoriaGeral = 'Receita')
+        # Total de receitas (CategoriaGeral = 'Receita') - soma valores positivos
         total_receitas = base_query.filter(
             JournalEntry.CategoriaGeral == 'Receita'
-        ).with_entities(func.sum(func.abs(JournalEntry.Valor))).scalar() or 0.0
+        ).with_entities(func.sum(JournalEntry.Valor)).scalar() or 0.0
         
         # Total de cartões (TipoTransacao = 'Cartão de Crédito')
         total_cartoes = base_query.filter(
@@ -66,11 +67,11 @@ class DashboardRepository:
         # Número de transações
         num_transacoes = base_query.count()
         
-        # Saldo do período (Receitas - Despesas)
-        saldo_periodo = total_receitas - total_despesas
+        # Saldo do período (Receitas + Despesas, onde Despesas são negativas)
+        saldo_periodo = total_receitas + despesas_raw
         
         return {
-            "total_despesas": abs(total_despesas),
+            "total_despesas": total_despesas,
             "total_receitas": total_receitas,
             "total_cartoes": total_cartoes,
             "saldo_periodo": saldo_periodo,
@@ -105,14 +106,16 @@ class DashboardRepository:
             result = self.db.query(
                 func.sum(
                     case(
-                        (JournalEntry.CategoriaGeral == 'Receita', func.abs(JournalEntry.Valor)),
+                        (JournalEntry.CategoriaGeral == 'Receita', JournalEntry.Valor),
                         else_=0
                     )
                 ).label('receitas'),
-                func.sum(
-                    case(
-                        (JournalEntry.CategoriaGeral == 'Despesa', func.abs(JournalEntry.Valor)),
-                        else_=0
+                func.abs(
+                    func.sum(
+                        case(
+                            (JournalEntry.CategoriaGeral == 'Despesa', JournalEntry.Valor),
+                            else_=0
+                        )
                     )
                 ).label('despesas')
             ).filter(
@@ -177,7 +180,7 @@ class DashboardRepository:
         ]
     
     def get_budget_vs_actual(self, user_id: int, year: int, month: Optional[int] = None) -> Dict:
-        """Comparação Realizado vs Planejado por TipoGasto
+        """Comparação Realizado vs Planejado por Grupo
         
         Args:
             user_id: ID do usuário
@@ -189,30 +192,26 @@ class DashboardRepository:
         """
         # Se month=None, buscar todo o ano (YTD)
         if month is None:
-            # Filtro de data para o ano inteiro
-            date_filter = self._build_date_filter(year, None)
-            
             # 1. Buscar valores planejados de todos os meses do ano
             budgets = self.db.query(
-                BudgetPlanning.tipo_gasto,
+                BudgetPlanning.grupo,
                 func.sum(BudgetPlanning.valor_planejado).label('total_planejado')
             ).filter(
                 BudgetPlanning.user_id == user_id,
                 BudgetPlanning.mes_referencia.like(f'{year}-%')
             ).group_by(
-                BudgetPlanning.tipo_gasto
+                BudgetPlanning.grupo
             ).all()
             
             # Criar dict de planejados
-            planejado_dict = {b.tipo_gasto: float(b.total_planejado) for b in budgets}
+            planejado_dict = {b.grupo: float(b.total_planejado) for b in budgets}
         else:
             # Mês específico
             mes_referencia = f"{year}-{month:02d}"
-            date_filter = self._build_date_filter(year, month)
             
             # 1. Buscar valores planejados do mês
             budgets = self.db.query(
-                BudgetPlanning.tipo_gasto,
+                BudgetPlanning.grupo,
                 BudgetPlanning.valor_planejado
             ).filter(
                 BudgetPlanning.user_id == user_id,
@@ -220,42 +219,43 @@ class DashboardRepository:
             ).all()
             
             # Criar dict de planejados
-            planejado_dict = {b.tipo_gasto: float(b.valor_planejado) for b in budgets}
+            planejado_dict = {b.grupo: float(b.valor_planejado) for b in budgets}
         
-        # 2. Buscar valores realizados agrupados por TipoGasto
+        # 2. Buscar valores realizados agrupados por Grupo
         # REGRA: NUNCA usar campo Data (string) para filtros - usar Ano/Mes (integer)
         realizados_filters = [
             JournalEntry.user_id == user_id,
             JournalEntry.Ano == year,
-            JournalEntry.CategoriaGeral == 'Despesa',
+            JournalEntry.CategoriaGeral == 'Despesa',  # FILTRO CRÍTICO: Apenas despesas
             JournalEntry.IgnorarDashboard == 0,
-            JournalEntry.TipoGasto.isnot(None)
+            JournalEntry.GRUPO.isnot(None)
         ]
         
         # Se month=None, buscar todo o ano; se month especificado, filtrar mês
         if month is not None:
-            realizados_filters.append(JournalEntry.Mes == month)
+            mes_fatura = f"{year}{month:02d}"  # Formato YYYYMM
+            realizados_filters.append(JournalEntry.MesFatura == mes_fatura)
             
         realizados = self.db.query(
-            JournalEntry.TipoGasto,
+            JournalEntry.GRUPO,
             func.sum(JournalEntry.Valor).label('total')
         ).filter(*realizados_filters).group_by(
-            JournalEntry.TipoGasto
+            JournalEntry.GRUPO
         ).all()
         
         # Criar dict de realizados (converter para positivo apenas na exibição)
-        realizado_dict = {r.TipoGasto: abs(float(r.total)) for r in realizados}
+        realizado_dict = {r.GRUPO: abs(float(r.total)) for r in realizados}
         
-        # 3. Combinar ambos (união de todos os TipoGasto)
-        all_tipos = set(planejado_dict.keys()) | set(realizado_dict.keys())
+        # 3. Combinar ambos (união de todos os Grupos)
+        all_grupos = set(planejado_dict.keys()) | set(realizado_dict.keys())
         
         items = []
         total_realizado = 0.0
         total_planejado = 0.0
         
-        for tipo_gasto in sorted(all_tipos):
-            realizado = realizado_dict.get(tipo_gasto, 0.0)
-            planejado = planejado_dict.get(tipo_gasto, 0.0)
+        for grupo in sorted(all_grupos):
+            realizado = realizado_dict.get(grupo, 0.0)
+            planejado = planejado_dict.get(grupo, 0.0)
             
             # Calcular percentual (evitar divisão por zero)
             if planejado > 0:
@@ -266,7 +266,7 @@ class DashboardRepository:
             diferenca = realizado - planejado
             
             items.append({
-                "tipo_gasto": tipo_gasto,
+                "grupo": grupo,
                 "realizado": realizado,
                 "planejado": planejado,
                 "percentual": percentual,
@@ -289,7 +289,7 @@ class DashboardRepository:
             "percentual_geral": percentual_geral
         }
     
-    def get_subgrupos_by_tipo(self, user_id: int, year: int, month: int, tipo_gasto: str):
+    def get_subgrupos_by_tipo(self, user_id: int, year: int, month: int, grupo: str):
         """Busca subgrupos de um tipo de gasto específico com valores"""
         from sqlalchemy import func
         from app.domains.transactions.models import JournalEntry
@@ -298,14 +298,15 @@ class DashboardRepository:
         filters = [
             JournalEntry.user_id == user_id,
             JournalEntry.Ano == year,  # ← Usar campo Ano (integer)
-            JournalEntry.TipoGasto == tipo_gasto,
-            JournalEntry.CategoriaGeral == 'Despesa',
+            JournalEntry.GRUPO == grupo,
+            JournalEntry.CategoriaGeral == 'Despesa',  # Apenas despesas
             JournalEntry.IgnorarDashboard == 0
         ]
         
-        # Filtro de mês (se especificado) - usar campo Mes (integer)
+        # Filtro de mês (se especificado) - usar campo MesFatura (string YYYYMM)
         if month is not None:
-            filters.append(JournalEntry.Mes == month)
+            mes_fatura = f"{year}{month:02d}"  # Formato YYYYMM
+            filters.append(JournalEntry.MesFatura == mes_fatura)
         
         # Query para buscar subgrupos e somar valores
         query = (
@@ -337,8 +338,8 @@ class DashboardRepository:
         
         return subgrupos
     
-    def get_planejado_by_tipo(self, user_id: int, year: int, month: int, tipo_gasto: str):
-        """Busca o valor planejado para um tipo de gasto específico"""
+    def get_planejado_by_tipo(self, user_id: int, year: int, month: int, grupo: str):
+        """Busca o valor planejado para um grupo específico"""
         from sqlalchemy import func
         from app.domains.budget.models import BudgetPlanning
         
@@ -348,14 +349,14 @@ class DashboardRepository:
             filters = [
                 BudgetPlanning.user_id == user_id,
                 BudgetPlanning.mes_referencia == mes_referencia,
-                BudgetPlanning.tipo_gasto == tipo_gasto
+                BudgetPlanning.grupo == grupo
             ]
         else:
             # Se month é None, buscar todos os meses do ano
             filters = [
                 BudgetPlanning.user_id == user_id,
                 BudgetPlanning.mes_referencia.like(f"{year}-%"),
-                BudgetPlanning.tipo_gasto == tipo_gasto
+                BudgetPlanning.grupo == grupo
             ]
         
         # Query para somar valor planejado
@@ -366,3 +367,55 @@ class DashboardRepository:
         
         result = query.scalar()
         return float(result) if result else 0.0
+    
+    def get_credit_card_expenses(self, user_id: int, year: int, month: Optional[int] = None) -> List[Dict]:
+        """Retorna despesas agrupadas por cartão de crédito
+        
+        Args:
+            user_id: ID do usuário
+            year: Ano a filtrar
+            month: Mês específico (1-12) ou None para ano inteiro
+        
+        Returns:
+            Lista de dicts com: cartao, total, percentual, num_transacoes
+        """
+        # Filtro base
+        date_filter = self._build_date_filter(year, month)
+        
+        # Query agrupada por cartão - apenas transações com NomeCartao não nulo
+        query = (
+            self.db.query(
+                JournalEntry.NomeCartao.label('cartao'),
+                func.abs(func.sum(JournalEntry.Valor)).label('total'),
+                func.count(JournalEntry.id).label('num_transacoes')
+            )
+            .filter(
+                JournalEntry.user_id == user_id,
+                date_filter,
+                JournalEntry.IgnorarDashboard == 0,
+                JournalEntry.CategoriaGeral == 'Despesa',  # Apenas despesas
+                JournalEntry.NomeCartao.isnot(None),  # Apenas com cartão
+                JournalEntry.NomeCartao != ''  # Não vazio
+            )
+            .group_by(JournalEntry.NomeCartao)
+            .order_by(func.abs(func.sum(JournalEntry.Valor)).desc())
+        )
+        
+        results = query.all()
+        
+        if not results:
+            return []
+        
+        # Calcular total geral para percentuais
+        total_geral = sum(r.total for r in results)
+        
+        # Formatar resposta
+        return [
+            {
+                'cartao': r.cartao,
+                'total': float(r.total),
+                'percentual': round((r.total / total_geral * 100), 1) if total_geral > 0 else 0.0,
+                'num_transacoes': int(r.num_transacoes)
+            }
+            for r in results
+        ]

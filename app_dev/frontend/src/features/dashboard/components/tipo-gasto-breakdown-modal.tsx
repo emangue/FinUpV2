@@ -28,7 +28,7 @@ interface TipoGastoBreakdownData {
 interface TipoGastoBreakdownModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  tipoGasto: string
+  grupo: string
   year: number
   month: number
 }
@@ -36,7 +36,7 @@ interface TipoGastoBreakdownModalProps {
 export function TipoGastoBreakdownModal({
   open,
   onOpenChange,
-  tipoGasto,
+  grupo,
   year,
   month
 }: TipoGastoBreakdownModalProps) {
@@ -45,17 +45,17 @@ export function TipoGastoBreakdownModal({
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    if (open && tipoGasto) {
+    if (open && grupo) {
       fetchSubgrupos()
     }
-  }, [open, tipoGasto, year, month])
+  }, [open, grupo, year, month])
 
   const fetchSubgrupos = async () => {
     try {
       setLoading(true)
       const url = month === 0 
-        ? `/api/dashboard/subgrupos-by-tipo?year=${year}&tipo_gasto=${encodeURIComponent(tipoGasto)}&ytd=true`
-        : `/api/dashboard/subgrupos-by-tipo?year=${year}&month=${month}&tipo_gasto=${encodeURIComponent(tipoGasto)}`
+        ? `/api/dashboard/subgrupos-by-tipo?year=${year}&grupo=${encodeURIComponent(grupo)}&ytd=true`
+        : `/api/dashboard/subgrupos-by-tipo?year=${year}&month=${month}&grupo=${encodeURIComponent(grupo)}`
       
       const response = await fetch(url)
       if (!response.ok) throw new Error('Erro ao buscar subgrupos')
@@ -84,9 +84,9 @@ export function TipoGastoBreakdownModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Detalhamento - {tipoGasto}</DialogTitle>
+          <DialogTitle>Detalhamento - {grupo}</DialogTitle>
           <DialogDescription>
-            Veja o detalhamento dos subgrupos que compõem &quot;{tipoGasto}&quot;
+            Veja o detalhamento dos subgrupos que compõem &quot;{grupo}&quot;
           </DialogDescription>
         </DialogHeader>
 
@@ -127,8 +127,8 @@ export function TipoGastoBreakdownModal({
                           <Link
                             href={
                               month === 0
-                                ? `/transactions?year=${year}&tipo_gasto=${encodeURIComponent(tipoGasto)}&subgrupo=${encodeURIComponent(item.subgrupo || '')}&grupo=Viagens`
-                                : `/transactions?year=${year}&month=${month}&tipo_gasto=${encodeURIComponent(tipoGasto)}&subgrupo=${encodeURIComponent(item.subgrupo || '')}&grupo=Viagens`
+                                ? `/transactions?year=${year}&grupo=${encodeURIComponent(grupo)}&subgrupo=${encodeURIComponent(item.subgrupo || '')}`
+                                : `/transactions?year=${year}&month=${month}&grupo=${encodeURIComponent(grupo)}&subgrupo=${encodeURIComponent(item.subgrupo || '')}`
                             }
                             onClick={() => onOpenChange(false)}
                           >

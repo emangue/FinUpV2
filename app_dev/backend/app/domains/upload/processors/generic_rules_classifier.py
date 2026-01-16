@@ -34,7 +34,7 @@ class GenericRulesClassifier:
             keywords=['CABELEIREIRO', 'SALAO', 'BARBEARIA', 'BARBEIRO'],
             grupo='Serviços',
             subgrupo='Cabeleireiro',
-            tipo_gasto='Fixo',
+            tipo_gasto='Ajustável',
             prioridade=10
         ),
         GenericRule(
@@ -50,7 +50,7 @@ class GenericRulesClassifier:
             keywords=['NETSHOES'],
             grupo='Roupas',
             subgrupo='Roupas',
-            tipo_gasto='Ajustável - Roupas',
+            tipo_gasto='Ajustável',
             prioridade=10
         ),
         
@@ -59,42 +59,42 @@ class GenericRulesClassifier:
             keywords=['ELETROPAULO', 'ENEL', 'CPFL', 'CEMIG', 'COELBA', 'CELESC', 'ELEKTRO', 'LUZ', 'ENERGIA ELETRICA'],
             grupo='Casa',
             subgrupo='Energia',
-            tipo_gasto='Fixo',
+            tipo_gasto='Ajustável',
             prioridade=9
         ),
         GenericRule(
             keywords=['SABESP', 'SANEPAR', 'CAESB', 'CEDAE', 'COPASA', 'AGUA', 'SANEAMENTO'],
             grupo='Casa',
             subgrupo='Água',
-            tipo_gasto='Fixo',
+            tipo_gasto='Ajustável',
             prioridade=9
         ),
         GenericRule(
             keywords=['CONDOMINIO'],
             grupo='Casa',
             subgrupo='Condomínio',
-            tipo_gasto='Fixo',
+            tipo_gasto='Ajustável',
             prioridade=9
         ),
         GenericRule(
             keywords=['CLARO', 'VIVO', 'TIM', 'OI', 'TELEFONE', 'CELULAR', 'TELEFONIA'],
             grupo='Casa',
             subgrupo='Celular',
-            tipo_gasto='Fixo',
+            tipo_gasto='Ajustável',
             prioridade=9
         ),
         GenericRule(
             keywords=['NET', 'CLARO NET', 'VIVO FIBRA', 'OI FIBRA', 'INTERNET', 'BANDA LARGA', 'FIBRA OTICA'],
             grupo='Casa',
             subgrupo='Internet',
-            tipo_gasto='Fixo',
+            tipo_gasto='Ajustável',
             prioridade=9
         ),
         GenericRule(
             keywords=['GAS', 'COMGAS', 'ULTRAGAZ', 'LIQUIGAS', 'SUPERGASBRASS'],
             grupo='Casa',
             subgrupo='Gás',
-            tipo_gasto='Fixo',
+            tipo_gasto='Ajustável',
             prioridade=9
         ),
         
@@ -105,7 +105,7 @@ class GenericRulesClassifier:
                      'DOCERIA', 'CONFEITARIA', 'PADARIA'],
             grupo='Alimentação',
             subgrupo='Saídas',
-            tipo_gasto='Ajustável - Saídas',
+            tipo_gasto='Ajustável',
             prioridade=9
         ),
         
@@ -114,7 +114,7 @@ class GenericRulesClassifier:
             keywords=['IPVA', 'LICENCIAMENTO'],
             grupo='Carro',
             subgrupo='IPVA + Licenciamento',
-            tipo_gasto='Ajustável - Carro',
+            tipo_gasto='Ajustável',
             prioridade=9
         ),
         
@@ -123,14 +123,14 @@ class GenericRulesClassifier:
             keywords=['LATAM', 'GOL', 'AZUL', 'AVIANCA', 'CIA AEREA', 'PASSAGEM AEREA', 'VOO', 'AEROPORTO'],
             grupo='Viagens',
             subgrupo='Outros',
-            tipo_gasto='Ajustável - Viagens',
+            tipo_gasto='Ajustável',
             prioridade=9
         ),
         GenericRule(
             keywords=['HOTEL', 'POUSADA', 'AIRBNB', 'BOOKING', 'HOSPEDAGEM', 'RESORT', 'HOSTEL', 'ALBERGUE'],
             grupo='Viagens',
             subgrupo='Outros',
-            tipo_gasto='Ajustável - Viagens',
+            tipo_gasto='Ajustável',
             prioridade=9
         ),
         
@@ -162,7 +162,7 @@ class GenericRulesClassifier:
             keywords=['IFOOD', 'UBER EATS', 'RAPPI', 'DELIVERY', 'ENTREGA'],
             grupo='Alimentação',
             subgrupo='Pedidos para casa',
-            tipo_gasto='Ajustável - Delivery',
+            tipo_gasto='Ajustável',
             prioridade=8
         ),
         
@@ -172,7 +172,7 @@ class GenericRulesClassifier:
                      'PAODEACUCAR', 'WALMART', 'ATACADAO', 'ASSAI', 'MAKRO'],
             grupo='Alimentação',
             subgrupo='Supermercado',
-            tipo_gasto='Ajustável - Supermercado',
+            tipo_gasto='Ajustável',
             prioridade=8
         ),
         
@@ -182,28 +182,28 @@ class GenericRulesClassifier:
                      'IPIRANGA', 'BR PETROBRAS', 'ALE', 'ABASTECIMENTO'],
             grupo='Carro',
             subgrupo='Abastecimento',
-            tipo_gasto='Ajustável - Carro',
+            tipo_gasto='Ajustável',
             prioridade=8
         ),
         GenericRule(
             keywords=['DRYWASH', 'LAVA RAPIDO', 'LAVAGEM', 'LAVA JATO', 'CAR WASH', 'ESTETICA AUTOMOTIVA'],
             grupo='Carro',
             subgrupo='Limpeza',
-            tipo_gasto='Ajustável - Carro',
+            tipo_gasto='Ajustável',
             prioridade=8
         ),
         GenericRule(
             keywords=['SEM PARAR', 'CONNECTCAR', 'CONNETCAR', 'PEDAGIO'],
             grupo='Carro',
             subgrupo='Sem Parar',
-            tipo_gasto='Ajustável - Carro',
+            tipo_gasto='Ajustável',
             prioridade=8
         ),
         GenericRule(
             keywords=['SEGURO CARRO', 'SEGURO AUTO', 'PORTO SEGURO AUTO'],
             grupo='Carro',
             subgrupo='Seguro',
-            tipo_gasto='Ajustável - Carro',
+            tipo_gasto='Ajustável',
             prioridade=8
         ),
         
@@ -212,7 +212,7 @@ class GenericRulesClassifier:
             keywords=['UBER', 'CABIFY', 'TAXI'],
             grupo='Transporte',
             subgrupo='Uber',
-            tipo_gasto='Ajustável - Uber',
+            tipo_gasto='Ajustável',
             prioridade=8
         ),
         
@@ -221,56 +221,56 @@ class GenericRulesClassifier:
             keywords=['NETFLIX', 'HBO', 'PARAMOUNT', 'GLOBOPLAY', 'STREAMING'],
             grupo='Assinaturas',
             subgrupo='Outros',
-            tipo_gasto='Ajustável - Assinaturas',
+            tipo_gasto='Ajustável',
             prioridade=8
         ),
         GenericRule(
             keywords=['DISNEY PLUS', 'DISNEY+'],
             grupo='Assinaturas',
             subgrupo='Outros',
-            tipo_gasto='Ajustável - Assinaturas',
+            tipo_gasto='Ajustável',
             prioridade=8
         ),
         GenericRule(
             keywords=['SPOTIFY'],
             grupo='Assinaturas',
             subgrupo='Spotify',
-            tipo_gasto='Ajustável - Assinaturas',
+            tipo_gasto='Ajustável',
             prioridade=8
         ),
         GenericRule(
             keywords=['YOUTUBE PREMIUM', 'YOUTUBE'],
             grupo='Assinaturas',
             subgrupo='Youtube',
-            tipo_gasto='Ajustável - Assinaturas',
+            tipo_gasto='Ajustável',
             prioridade=8
         ),
         GenericRule(
             keywords=['AMAZON PRIME', 'PRIME VIDEO'],
             grupo='Assinaturas',
             subgrupo='Amazon Prime',
-            tipo_gasto='Ajustável - Assinaturas',
+            tipo_gasto='Ajustável',
             prioridade=8
         ),
         GenericRule(
             keywords=['ICLOUD', 'APPLE CLOUD'],
             grupo='Assinaturas',
             subgrupo='ICloud',
-            tipo_gasto='Ajustável - Assinaturas',
+            tipo_gasto='Ajustável',
             prioridade=8
         ),
         GenericRule(
             keywords=['PREMIERE'],
             grupo='Assinaturas',
             subgrupo='Premiere',
-            tipo_gasto='Ajustável - Assinaturas',
+            tipo_gasto='Ajustável',
             prioridade=8
         ),
         GenericRule(
             keywords=['AUDIBLE'],
             grupo='Assinaturas',
             subgrupo='Audible',
-            tipo_gasto='Ajustável - Assinaturas',
+            tipo_gasto='Ajustável',
             prioridade=8
         ),
         
@@ -289,7 +289,7 @@ class GenericRulesClassifier:
             keywords=['DECOLAR', 'MAXMILHAS', 'TURISMO', 'AGENCIA', 'CVC'],
             grupo='Viagens',
             subgrupo='Outros',
-            tipo_gasto='Ajustável - Viagens',
+            tipo_gasto='Ajustável',
             prioridade=8
         ),
         
@@ -299,7 +299,7 @@ class GenericRulesClassifier:
                      'ROUPA', 'CALCADO', 'SAPATO', 'BOUTIQUE'],
             grupo='Roupas',
             subgrupo='Roupas',
-            tipo_gasto='Ajustável - Roupas',
+            tipo_gasto='Ajustável',
             prioridade=8
         ),
         
@@ -317,7 +317,7 @@ class GenericRulesClassifier:
             keywords=['ESTACIONAMENTO', 'PARKING', 'VAGA', 'ZONA AZUL'],
             grupo='Carro',
             subgrupo='Estacionamento',
-            tipo_gasto='Ajustável - Carro',
+            tipo_gasto='Ajustável',
             prioridade=7
         ),
         
@@ -326,14 +326,14 @@ class GenericRulesClassifier:
             keywords=['ACADEMIA', 'CROSSFIT', 'FUNCIONAL', 'GYMPASS'],
             grupo='Saúde',
             subgrupo='Crossfit',
-            tipo_gasto='Ajustável - Esportes',
+            tipo_gasto='Fixo',
             prioridade=7
         ),
         GenericRule(
             keywords=['PADEL'],
             grupo='Saúde',
             subgrupo='Padel',
-            tipo_gasto='Ajustável - Esportes',
+            tipo_gasto='Fixo',
             prioridade=7
         ),
         
@@ -342,7 +342,7 @@ class GenericRulesClassifier:
             keywords=['APPLE', 'MICROSOFT', 'GOOGLE PLAY', 'APP STORE', 'SOFTWARE'],
             grupo='Tecnologia',
             subgrupo='Outros',
-            tipo_gasto='Ajustável - Tech',
+            tipo_gasto='Ajustável',
             prioridade=7
         ),
         
@@ -415,8 +415,59 @@ class GenericRulesClassifier:
             keywords=['99'],
             grupo='Transporte',
             subgrupo='Uber',
-            tipo_gasto='Ajustável - Uber',
+            tipo_gasto='Ajustável',
             prioridade=5
+        ),
+        
+        # === INVESTIMENTOS (Prioridade ALTA = 9) ===
+        GenericRule(
+            keywords=['TESOURO DIRETO', 'TESOURO SELIC', 'TESOURO IPCA', 'TESOURO PREFIXADO'],
+            grupo='Investimentos',
+            subgrupo='Tesouro Direto',
+            tipo_gasto='Investimentos',
+            prioridade=9
+        ),
+        GenericRule(
+            keywords=['CDB', 'LCI', 'LCA', 'RENDA FIXA', 'VENCIMENTO DE LCA', 'VENCIMENTO DE LCI'],
+            grupo='Investimentos',
+            subgrupo='Renda Fixa',
+            tipo_gasto='Investimentos',
+            prioridade=9
+        ),
+        GenericRule(
+            keywords=['FUNDO DE INVESTIMENTO', 'APLICACAO EM FUNDO', 'APLICACAO AUTOMATICA', 'REMUNERACAO APLICACAO'],
+            grupo='Investimentos',
+            subgrupo='Fundos',
+            tipo_gasto='Investimentos',
+            prioridade=9
+        ),
+        GenericRule(
+            keywords=['BITCOIN', 'BTC', 'ETHEREUM', 'ETH', 'CRIPTO', 'MERCADO COIN', 'MCN'],
+            grupo='Investimentos',
+            subgrupo='Criptomoedas',
+            tipo_gasto='Investimentos',
+            prioridade=9
+        ),
+        GenericRule(
+            keywords=['ACAO', 'ACOES', 'B3', 'BOVESPA', 'BOLSA DE VALORES', 'LIQUIDO DE VENCIMENTOS-RV'],
+            grupo='Investimentos',
+            subgrupo='Ações',
+            tipo_gasto='Investimentos',
+            prioridade=9
+        ),
+        GenericRule(
+            keywords=['FII', 'FUNDO IMOBILIARIO', 'QUATA EMP'],
+            grupo='Investimentos',
+            subgrupo='Fundos Imobiliários',
+            tipo_gasto='Investimentos',
+            prioridade=9
+        ),
+        GenericRule(
+            keywords=['CONTA INVESTIMENTO', 'TRANSFERENCIA ENVIADA PARA CONTA INVESTIMENTO'],
+            grupo='Investimentos',
+            subgrupo='Aplicações',
+            tipo_gasto='Investimentos',
+            prioridade=9
         ),
         
         # === PIX/TRANSFERÊNCIAS (Prioridade BAIXA = 3) ===
@@ -424,7 +475,7 @@ class GenericRulesClassifier:
             keywords=['PIX', 'TED', 'DOC', 'TRANSFERENCIA'],
             grupo='Transferência Entre Contas',
             subgrupo='Nubank',
-            tipo_gasto='Débito',
+            tipo_gasto='Transferência',
             prioridade=3
         ),
     ]

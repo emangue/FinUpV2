@@ -101,6 +101,7 @@ export default function TransactionsPage() {
     const grupo = searchParams.get('grupo')
     const subgrupo = searchParams.get('subgrupo')
     const estabelecimento = searchParams.get('estabelecimento')
+    const cartao = searchParams.get('cartao')
     
     // Se tiver múltiplos tipos, juntar com vírgula para passar no filtro
     if (tiposGasto.length > 0) {
@@ -117,14 +118,18 @@ export default function TransactionsPage() {
       initialFilters.mesInicio = `${year}-01`
       initialFilters.mesFim = `${year}-12`
     } else if (mesReferencia) {
-      // Manter formato YYYY-MM que o Select entende
-      initialFilters.mesInicio = mesReferencia
-      initialFilters.mesFim = mesReferencia
+      // mes_referencia vem no formato YYYYMM, converter para YYYY-MM
+      const ano = mesReferencia.substring(0, 4)
+      const mes = mesReferencia.substring(4, 6)
+      const mesFormatado = `${ano}-${mes}`
+      initialFilters.mesInicio = mesFormatado
+      initialFilters.mesFim = mesFormatado
     }
     
     if (grupo) initialFilters.grupo = grupo
     if (subgrupo) initialFilters.subgrupo = subgrupo
     if (estabelecimento) initialFilters.estabelecimento = estabelecimento
+    if (cartao) initialFilters.cartao = cartao
     
     if (Object.keys(initialFilters).length > 0) {
       setAppliedFilters(initialFilters)
@@ -163,8 +168,11 @@ export default function TransactionsPage() {
         } else if (type === 'Investimentos') {
           params.set('categoria_geral', 'Investimentos')
         } else if (type === 'Transferência Entre Contas') {
-          params.set('categoria_geral', 'Transferência Entre Contas')
+          params.set('categoria_geral', 'Transferência')
         }
+      } else if (filters.cartao) {
+        // Se tem filtro de cartão, sempre é Despesa
+        params.set('categoria_geral', 'Despesa')
       }
 
       // Adicionar filtros
@@ -177,6 +185,7 @@ export default function TransactionsPage() {
         tipos.forEach(tipo => params.append('tipo_gasto', tipo))
       }
       if (filters.banco) params.append('search', filters.banco)
+      if (filters.cartao) params.append('cartao', filters.cartao)
       
       // Converter mesInicio/mesFim (formato "YYYY-MM") para year e month
       if (filters.mesInicio) {
@@ -217,7 +226,7 @@ export default function TransactionsPage() {
         } else if (type === 'Investimentos') {
           params.set('categoria_geral', 'Investimentos')
         } else if (type === 'Transferência Entre Contas') {
-          params.set('categoria_geral', 'Transferência Entre Contas')
+          params.set('categoria_geral', 'Transferência')
         }
       }
 
@@ -231,6 +240,7 @@ export default function TransactionsPage() {
         tipos.forEach(tipo => params.append('tipo_gasto', tipo))
       }
       if (filters.banco) params.append('search', filters.banco) // Use search para banco
+      if (filters.cartao) params.append('cartao', filters.cartao)
       
       // Converter mesInicio/mesFim (formato "YYYY-MM") para year e month
       if (filters.mesInicio) {
@@ -276,6 +286,77 @@ export default function TransactionsPage() {
 
   const handlePageChange = (newPage: number) => {
     fetchTransactions(activeTab, newPage, appliedFilters)
+  }
+
+  const handleLimitChange = (newLimit: string) => {
+    const limit = parseInt(newLimit)
+    const newPagination = { ...pagination, limit, page: 1 }
+    setPagination(newPagination)
+    
+    // Chamar fetchTransactions com o novo limit diretamente
+    const fetchWithNewLimit = async () => {
+      try {
+        setLoading(true)
+        const params = new URLSearchParams({
+          page: '1',
+          limit: newLimit,
+        })
+
+        // Adicionar categoria geral baseada no activeTab
+        if (activeTab !== 'all') {
+          if (activeTab === 'Receita') {
+            params.set('categoria_geral', 'Receita')
+          } else if (activeTab === 'Despesa') {
+            params.set('categoria_geral', 'Despesa')
+          } else if (activeTab === 'Investimentos') {
+            params.set('categoria_geral', 'Investimentos')
+          } else if (activeTab === 'Transferência Entre Contas') {
+            params.set('categoria_geral', 'Transferência')
+          }
+        }
+
+        // Adicionar filtros à query
+        if (appliedFilters.estabelecimento) params.append('estabelecimento', appliedFilters.estabelecimento)
+        if (appliedFilters.grupo) params.append('grupo', appliedFilters.grupo)
+        if (appliedFilters.subgrupo) params.append('subgrupo', appliedFilters.subgrupo)
+        if (appliedFilters.tipoGasto) {
+          const tipos = appliedFilters.tipoGasto.split(',').map(t => t.trim()).filter(t => t)
+          tipos.forEach(tipo => params.append('tipo_gasto', tipo))
+        }
+        if (appliedFilters.banco) params.append('search', appliedFilters.banco)
+        if (appliedFilters.cartao) params.append('cartao', appliedFilters.cartao)
+        
+        if (appliedFilters.mesInicio) {
+          const [year, month] = appliedFilters.mesInicio.split('-')
+          if (year) {
+            params.append('year', year)
+            if (month && appliedFilters.mesInicio === appliedFilters.mesFim) {
+              params.append('month', month)
+            }
+          }
+        }
+
+        const response = await fetch(`/api/transactions/list?${params.toString()}`)
+        if (response.ok) {
+          const data = await response.json()
+          setTransactions(data.transactions)
+          setPagination({
+            page: data.pagination?.page || 1,
+            limit: data.pagination?.limit || limit,
+            total: data.pagination?.total || 0,
+            totalPages: data.pagination?.totalPages || 1
+          })
+        }
+      } catch (error) {
+        console.error('Erro ao buscar transações:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    
+    fetchWithNewLimit()
+    // Atualizar total filtrado também
+    fetchFilteredTotal(activeTab, appliedFilters)
   }
 
   const handleApplyFilters = (filters: FilterValues) => {
@@ -530,9 +611,29 @@ export default function TransactionsPage() {
 
                     {/* Paginação */}
                     <div className="flex items-center justify-between mt-4">
-                      <div className="text-sm text-muted-foreground">
-                        Mostrando {Math.min((pagination.page - 1) * pagination.limit + 1, pagination.total)} a{' '}
-                        {Math.min(pagination.page * pagination.limit, pagination.total)} de {pagination.total} transações
+                      <div className="flex items-center gap-4">
+                        <div className="text-sm text-muted-foreground">
+                          Mostrando {Math.min((pagination.page - 1) * pagination.limit + 1, pagination.total)} a{' '}
+                          {Math.min(pagination.page * pagination.limit, pagination.total)} de {pagination.total} transações
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-muted-foreground">Itens por página:</span>
+                          <Select 
+                            value={pagination.limit.toString()} 
+                            onValueChange={handleLimitChange}
+                          >
+                            <SelectTrigger className="w-[70px] h-8">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="10">10</SelectItem>
+                              <SelectItem value="20">20</SelectItem>
+                              <SelectItem value="30">30</SelectItem>
+                              <SelectItem value="50">50</SelectItem>
+                              <SelectItem value="100">100</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
                       <div className="flex items-center gap-2">
                         <Button

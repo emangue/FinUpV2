@@ -12,29 +12,29 @@ import {
 import { Button } from "@/components/ui/button"
 import { ArrowRight } from "lucide-react"
 
-interface TipoGastoItem {
-  tipo_gasto: string
+interface GrupoItem {
+  grupo: string
   realizado: number
   planejado: number
   percentual: number
   diferenca: number
 }
 
-interface DemaisBreakdownModalProps {
+interface GrupoBreakdownModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  tipos: TipoGastoItem[]
+  grupos: GrupoItem[]
   year: number
   month: number
 }
 
-export function DemaisBreakdownModal({
+export function GrupoBreakdownModal({
   open,
   onOpenChange,
-  tipos,
+  grupos,
   year,
   month
-}: DemaisBreakdownModalProps) {
+}: GrupoBreakdownModalProps) {
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -42,36 +42,38 @@ export function DemaisBreakdownModal({
     }).format(value)
   }
 
-  const totalRealizado = tipos.reduce((sum, item) => sum + item.realizado, 0)
-  const totalPlanejado = tipos.reduce((sum, item) => sum + item.planejado, 0)
-  const totalTransacoes = tipos.length
+  // Verificação de segurança para evitar erro
+  const gruposSeguro = grupos || []
+  const totalRealizado = gruposSeguro.reduce((sum, item) => sum + item.realizado, 0)
+  const totalPlanejado = gruposSeguro.reduce((sum, item) => sum + item.planejado, 0)
+  const totalTransacoes = gruposSeguro.length
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Detalhamento - Demais</DialogTitle>
+          <DialogTitle>Detalhamento por Grupo</DialogTitle>
           <DialogDescription>
-            Veja o detalhamento dos tipos de gasto que compõem &quot;Demais&quot;
+            Veja o detalhamento dos grupos de gasto e seus valores
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 mt-4">
-          {/* Tabela de tipos */}
+          {/* Tabela de grupos */}
           <div className="border rounded-lg overflow-hidden">
             <table className="w-full">
               <thead className="bg-muted">
                 <tr>
-                  <th className="text-left p-3 text-sm font-medium">Tipo de Gasto</th>
+                  <th className="text-left p-3 text-sm font-medium">Grupo</th>
                   <th className="text-right p-3 text-sm font-medium">Valor Realizado</th>
                   <th className="text-right p-3 text-sm font-medium">Valor Planejado</th>
                   <th className="text-center p-3 text-sm font-medium">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {tipos.map((item) => (
-                  <tr key={item.tipo_gasto} className="hover:bg-muted/50 transition-colors">
-                    <td className="p-3 text-sm font-medium">{item.tipo_gasto}</td>
+                {gruposSeguro.map((item) => (
+                  <tr key={item.grupo} className="hover:bg-muted/50 transition-colors">
+                    <td className="p-3 text-sm font-medium">{item.grupo}</td>
                     <td className="p-3 text-sm text-right font-semibold">
                       {formatCurrency(item.realizado)}
                     </td>
@@ -80,7 +82,7 @@ export function DemaisBreakdownModal({
                     </td>
                     <td className="p-3 text-center">
                       <Link
-                        href={`/transactions?year=${year}&month=${month}&tipo_gasto=${encodeURIComponent(item.tipo_gasto)}`}
+                        href={`/transactions?year=${year}&month=${month}&grupo=${encodeURIComponent(item.grupo)}`}
                         onClick={() => onOpenChange(false)}
                       >
                         <Button variant="ghost" size="sm" className="gap-2">
@@ -100,7 +102,7 @@ export function DemaisBreakdownModal({
             <div className="space-y-1">
               <p className="text-sm text-muted-foreground">Total Realizado</p>
               <p className="text-2xl font-bold">{formatCurrency(totalRealizado)}</p>
-              <p className="text-xs text-muted-foreground">Soma de {tipos.length} tipos</p>
+              <p className="text-xs text-muted-foreground">Soma de {gruposSeguro.length} grupos</p>
             </div>
             <div className="space-y-1">
               <p className="text-sm text-muted-foreground">Total Planejado</p>
@@ -142,3 +144,6 @@ export function DemaisBreakdownModal({
     </Dialog>
   )
 }
+
+// Export com nome antigo para compatibilidade
+export { GrupoBreakdownModal as DemaisBreakdownModal };

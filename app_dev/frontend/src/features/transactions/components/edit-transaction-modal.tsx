@@ -18,8 +18,18 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
-import { Plus } from "lucide-react"
+import { Plus, Trash2 } from "lucide-react"
 import { AddGroupModal } from "./add-group-modal"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 interface Transaction {
   IdTransacao: string
@@ -56,6 +66,8 @@ export function EditTransactionModal({
   const [grupos, setGrupos] = React.useState<string[]>([])
   const [subgruposPorGrupo, setSubgruposPorGrupo] = React.useState<Record<string, string[]>>({})
   const [loading, setLoading] = React.useState(false)
+  const [deleting, setDeleting] = React.useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false)
   const [addGroupOpen, setAddGroupOpen] = React.useState(false)
   const [addGroupType, setAddGroupType] = React.useState<'grupo' | 'subgrupo'>('grupo')
 
@@ -113,6 +125,32 @@ export function EditTransactionModal({
       alert('Erro ao salvar alterações')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!transaction) return
+
+    setDeleting(true)
+    try {
+      const response = await fetch(`/api/transactions/${transaction.IdTransacao}`, {
+        method: 'DELETE',
+      })
+
+      if (response.ok) {
+        onSave() // Atualiza a lista
+        onOpenChange(false) // Fecha o modal
+        setDeleteDialogOpen(false) // Fecha o dialog de confirmação
+      } else {
+        const errorData = await response.json()
+        console.error('Erro na resposta:', errorData)
+        alert('Erro ao excluir transação')
+      }
+    } catch (error) {
+      console.error('Erro ao excluir:', error)
+      alert('Erro ao excluir transação')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -248,16 +286,43 @@ export function EditTransactionModal({
             </div>
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Cancelar
+          <DialogFooter className="flex justify-between items-center sm:justify-between">
+            <Button 
+              variant="destructive" 
+              size="icon" 
+              onClick={() => setDeleteDialogOpen(true)}
+              disabled={loading || deleting}
+            >
+              <Trash2 className="h-4 w-4" />
             </Button>
-            <Button onClick={handleSave} disabled={loading}>
-              {loading ? 'Salvando...' : 'Salvar Alterações'}
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => onOpenChange(false)} disabled={deleting}>
+                Cancelar
+              </Button>
+              <Button onClick={handleSave} disabled={loading || deleting}>
+                {loading ? 'Salvando...' : 'Salvar Alterações'}
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir Transação</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir esta transação? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
+              {deleting ? 'Excluindo...' : 'Excluir'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AddGroupModal
         open={addGroupOpen}

@@ -34,17 +34,17 @@ class BudgetRepository:
             )
         ).all()
     
-    def get_by_tipo_gasto_and_month(
+    def get_by_grupo_and_month(
         self, 
         user_id: int, 
-        tipo_gasto: str, 
+        grupo: str, 
         mes_referencia: str
     ) -> Optional[BudgetPlanning]:
-        """Busca budget específico por tipo_gasto e mês"""
+        """Busca budget específico por grupo e mês"""
         return self.db.query(BudgetPlanning).filter(
             and_(
                 BudgetPlanning.user_id == user_id,
-                BudgetPlanning.tipo_gasto == tipo_gasto,
+                BudgetPlanning.grupo == grupo,
                 BudgetPlanning.mes_referencia == mes_referencia
             )
         ).first()
@@ -55,7 +55,7 @@ class BudgetRepository:
             BudgetPlanning.user_id == user_id
         ).order_by(
             BudgetPlanning.mes_referencia.desc(),
-            BudgetPlanning.tipo_gasto
+            BudgetPlanning.grupo
         ).limit(limit).all()
     
     def create(self, user_id: int, data: dict) -> BudgetPlanning:
@@ -87,13 +87,13 @@ class BudgetRepository:
     def upsert(
         self, 
         user_id: int, 
-        tipo_gasto: str, 
+        grupo: str, 
         mes_referencia: str, 
         valor_planejado: float,
         valor_medio_3_meses: float = 0.0
     ) -> BudgetPlanning:
         """Cria ou atualiza budget (insert or update)"""
-        existing = self.get_by_tipo_gasto_and_month(user_id, tipo_gasto, mes_referencia)
+        existing = self.get_by_grupo_and_month(user_id, grupo, mes_referencia)
         
         if existing:
             return self.update(existing, {
@@ -102,7 +102,7 @@ class BudgetRepository:
             })
         else:
             return self.create(user_id, {
-                "tipo_gasto": tipo_gasto,
+                "grupo": grupo,
                 "mes_referencia": mes_referencia,
                 "valor_planejado": valor_planejado,
                 "valor_medio_3_meses": valor_medio_3_meses
@@ -114,7 +114,7 @@ class BudgetRepository:
         for budget_data in budgets:
             budget = self.upsert(
                 user_id=user_id,
-                tipo_gasto=budget_data["tipo_gasto"],
+                grupo=budget_data["grupo"],
                 mes_referencia=mes_referencia,
                 valor_planejado=budget_data["valor_planejado"]
             )

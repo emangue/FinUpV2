@@ -17,6 +17,13 @@ from .schemas import (
     TransactionFilters,
     TiposGastoComMediaResponse
 )
+from .schemas_migration import (
+    MigrationPreviewRequest,
+    MigrationPreviewResponse,
+    MigrationExecuteRequest,
+    MigrationExecuteResponse,
+    GrupoSubgrupoListResponse
+)
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 
@@ -28,9 +35,25 @@ def get_tipos_gasto_com_media(
 ):
     """
     Retorna tipos de gasto únicos de Despesa com média dos últimos 3 meses
+    
+    ⚠️ DEPRECATED: Use /grupos-com-media para nova estrutura
     """
     service = TransactionService(db)
     return service.get_tipos_gasto_com_media(user_id, mes_referencia)
+
+@router.get("/grupos-com-media", response_model=TiposGastoComMediaResponse)
+def get_grupos_com_media(
+    mes_referencia: str = Query(..., description="Formato YYYY-MM"),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Retorna grupos únicos de Despesa com média dos últimos 3 meses
+    
+    ✅ Nova estrutura usando grupos em vez de tipos de gasto
+    """
+    service = TransactionService(db)
+    return service.get_grupos_com_media(user_id, mes_referencia)
 
 @router.get("/list", response_model=TransactionListResponse)
 def list_transactions(
@@ -92,6 +115,7 @@ def get_filtered_total(
     subgrupo: Optional[str] = None,
     estabelecimento: Optional[str] = None,
     search: Optional[str] = None,
+    cartao: Optional[str] = None,
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
@@ -109,7 +133,8 @@ def get_filtered_total(
         grupo=grupo,
         subgrupo=subgrupo,
         estabelecimento=estabelecimento,
-        search=search
+        search=search,
+        cartao=cartao
     )
     
     return service.get_filtered_total(user_id, filters)
@@ -161,3 +186,57 @@ def delete_transaction(
     """
     service = TransactionService(db)
     return service.delete_transaction(transaction_id, user_id)
+
+
+# ==================== ENDPOINTS DE MIGRAÇÃO EM MASSA ====================
+
+@router.get("/migration/grupos-subgrupos", response_model=GrupoSubgrupoListResponse)
+def list_grupos_subgrupos(
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Lista todos os grupos/subgrupos disponíveis para migração
+    """
+    service = TransactionService(db)
+    return service.get_grupos_subgrupos_disponiveis(user_id)
+
+
+@router.post("/migration/preview", response_model=MigrationPreviewResponse)
+def preview_migration(
+    request: MigrationPreviewRequest,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Preview de quantas transações serão impactadas pela migração
+    """
+    service = TransactionService(db)
+    return service.preview_migration(
+        user_id,
+        request.grupo_origem,
+        request.subgrupo_origem,
+        request.grupo_destino,
+        request.subgrupo_destino
+    )
+
+
+@router.post("/migration/execute", response_model=MigrationExecuteResponse)
+def execute_migration(
+    request: MigrationExecuteRequest,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Executa migração em massa de transações
+    Atualiza GRUPO, SUBGRUPO, TipoGasto, CategoriaGeral
+    Recalcula médias no budget_planning
+    """
+    service = TransactionService(db)
+    return service.execute_migration(
+        user_id,
+        request.grupo_origem,
+        request.subgrupo_origem,
+        request.grupo_destino,
+        request.subgrupo_destino
+    )

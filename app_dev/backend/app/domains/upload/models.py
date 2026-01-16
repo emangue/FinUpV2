@@ -14,7 +14,7 @@ class PreviewTransacao(Base):
     
     Campos preenchidos por fase:
     - Fase 1 (Raw): data, lancamento, valor, banco, tipo_documento, nome_cartao, nome_arquivo, data_criacao
-    - Fase 2 (Marking): IdTransacao, IdParcela, EstabelecimentoBase, ParcelaAtual, TotalParcelas, ValorPositivo
+    - Fase 2 (Marking): IdTransacao, IdParcela, EstabelecimentoBase, ParcelaAtual, TotalParcelas, ValorPositivo, TipoTransacao, Ano, Mes
     - Fase 3 (Classification): GRUPO, SUBGRUPO, TipoGasto, CategoriaGeral, origem_classificacao, padrao_buscado
     - Fase 4 (Deduplication): is_duplicate, duplicate_reason
     """
@@ -46,6 +46,9 @@ class PreviewTransacao(Base):
     ParcelaAtual = Column(Integer)  # Ex: 1
     TotalParcelas = Column(Integer)  # Ex: 12
     ValorPositivo = Column(Float)  # abs(valor)
+    TipoTransacao = Column(String)  # "Cartão de Crédito", "Despesas", "Receitas"
+    Ano = Column(Integer)  # 2025, 2026, etc
+    Mes = Column(Integer)  # 1 a 12
     
     # Fase 3: Classificação (CamelCase para compatibilidade legacy)
     GRUPO = Column(String)

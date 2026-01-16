@@ -14,6 +14,7 @@ from .normalizer import (
     intersecaoCount,
     toNumberFlexible
 )
+from .business_rules import determine_categoria_geral
 
 __all__ = [
     "fnv1a_64_hash",
@@ -27,4 +28,5 @@ __all__ = [
     "tokensValidos",
     "intersecaoCount", 
     "toNumberFlexible",
+    "determine_categoria_geral",
 ]

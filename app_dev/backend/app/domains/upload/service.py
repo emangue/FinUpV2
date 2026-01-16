@@ -3,6 +3,7 @@ Domínio Upload - Service
 Lógica de negócio com pipeline em 3 fases
 """
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from typing import List, Optional
 from fastapi import HTTPException, status, UploadFile
 from datetime import datetime
@@ -111,6 +112,18 @@ class UploadService:
             deleted = self.repository.delete_all_by_user(user_id)
             if deleted > 0:
                 logger.info(f"🗑️  Limpeza: {deleted} registros de preview removidos")
+            
+            # ========== NOVA FASE 0: REGENERAR PADRÕES ==========
+            logger.info("🔄 Fase 0: Regeneração de Base Padrões")
+            try:
+                from app.domains.upload.processors.pattern_generator import regenerar_base_padroes_completa
+                resultado = regenerar_base_padroes_completa(self.db, user_id)
+                logger.info(f"  ✅ Padrões regenerados: {resultado['total_padroes_gerados']} gerados, {resultado['criados']} criados, {resultado['atualizados']} atualizados")
+                logger.info("  🎯 Classificação usará padrões atualizados neste upload")
+            except Exception as e:
+                # NÃO bloquear upload se regeneração falhar
+                logger.warning(f"  ⚠️ Erro na regeneração: {str(e)}")
+                logger.warning("  📂 Continuando com padrões existentes...")
             
             # Gerar session_id único
             session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{user_id}"
@@ -444,6 +457,9 @@ class UploadService:
                 ParcelaAtual=None,
                 TotalParcelas=None,
                 ValorPositivo=None,
+                TipoTransacao=None,  # ✅ NOVO - Fase 2
+                Ano=None,            # ✅ NOVO - Fase 2
+                Mes=None,            # ✅ NOVO - Fase 2
                 GRUPO=None,
                 SUBGRUPO=None,
                 TipoGasto=None,
@@ -501,6 +517,9 @@ class UploadService:
                 preview.ParcelaAtual = marked.parcela_atual
                 preview.TotalParcelas = marked.total_parcelas
                 preview.ValorPositivo = marked.valor_positivo
+                preview.TipoTransacao = marked.tipo_transacao  # ✅ NOVO
+                preview.Ano = marked.ano                        # ✅ NOVO
+                preview.Mes = marked.mes                        # ✅ NOVO
                 preview.updated_at = datetime.now()
         
         self.db.commit()
@@ -540,6 +559,9 @@ class UploadService:
                 id_parcela=p.IdParcela,
                 parcela_atual=p.ParcelaAtual,
                 total_parcelas=p.TotalParcelas,
+                tipo_transacao=p.TipoTransacao,  # ✅ NOVO
+                ano=p.Ano,                        # ✅ NOVO
+                mes=p.Mes,                        # ✅ NOVO
             )
             marked_transactions.append((p.id, marked))
         
@@ -711,26 +733,29 @@ class UploadService:
                     user_id=user_id,
                     Data=item.data,
                     Estabelecimento=item.lancamento,
-                    EstabelecimentoBase=item.estabelecimento_base,
+                    EstabelecimentoBase=item.EstabelecimentoBase,  # ✅ CamelCase
                     Valor=item.valor,
-                    ValorPositivo=item.valor_positivo,
+                    ValorPositivo=item.ValorPositivo,  # ✅ CamelCase
                     MesFatura=item.mes_fatura.replace('-', '') if item.mes_fatura else None,
                     arquivo_origem=item.nome_arquivo,
                     banco_origem=item.banco,
                     NomeCartao=item.nome_cartao,
-                    IdTransacao=item.id_transacao,
-                    IdParcela=item.id_parcela,
-                    parcela_atual=item.parcela_atual,
-                    TotalParcelas=item.total_parcelas,
-                    GRUPO=item.grupo,
-                    SUBGRUPO=item.subgrupo,
-                    TipoGasto=item.tipo_gasto,
-                    CategoriaGeral=item.categoria_geral,
+                    IdTransacao=item.IdTransacao,  # ✅ CamelCase
+                    IdParcela=item.IdParcela,  # ✅ CamelCase
+                    parcela_atual=item.ParcelaAtual,  # ✅ CamelCase
+                    TotalParcelas=item.TotalParcelas,  # ✅ CamelCase
+                    GRUPO=item.GRUPO,  # ✅ CamelCase
+                    SUBGRUPO=item.SUBGRUPO,  # ✅ CamelCase
+                    TipoGasto=item.TipoGasto,  # ✅ CamelCase
+                    CategoriaGeral=item.CategoriaGeral,  # ✅ CamelCase
                     origem_classificacao=item.origem_classificacao,
                     tipodocumento=item.tipo_documento,
-                    upload_history_id=history.id,  # ✅ Vincular ao histórico
+                    TipoTransacao=item.TipoTransacao,    # ✅ CamelCase
+                    Ano=item.Ano,                        # ✅ CamelCase
+                    Mes=item.Mes,                        # ✅ CamelCase
+                    session_id=session_id,               # ✅ RASTREAMENTO
+                    upload_history_id=history.id,        # ✅ RASTREAMENTO
                     created_at=now,
-                    DataPostagem=now,
                 )
                 
                 self.db.add(nova_transacao)
@@ -752,6 +777,15 @@ class UploadService:
                 data_confirmacao=now
             )
             logger.info(f"📝 Histórico atualizado: {transacoes_criadas} importadas, {total_duplicatas} duplicadas")
+            
+            # ========== NOVA FASE 5: ATUALIZAR BASE_PARCELAS ==========
+            logger.info("🔄 Fase 5: Atualização de Base Parcelas")
+            try:
+                resultado_parcelas = self._fase5_update_base_parcelas(user_id, history.id)
+                logger.info(f"  ✅ Parcelas processadas: {resultado_parcelas['total_processadas']} | Atualizadas: {resultado_parcelas['atualizadas']} | Novas: {resultado_parcelas['novas']} | Finalizadas: {resultado_parcelas['finalizadas']}")
+            except Exception as e:
+                # NÃO bloquear confirmação se atualização falhar
+                logger.warning(f"  ⚠️ Erro na atualização de parcelas: {str(e)}")
             
             # Limpar dados de preview
             deleted = self.repository.delete_by_session_id(session_id, user_id)
@@ -869,3 +903,126 @@ class UploadService:
             "subgrupo": preview.SUBGRUPO,
             "origem_classificacao": preview.origem_classificacao
         }
+    
+    def _fase5_update_base_parcelas(self, user_id: int, upload_history_id: int) -> dict:
+        """
+        Fase 5: Atualiza base_parcelas após confirmar upload
+        
+        Lógica:
+        1. Busca transações parceladas do upload atual
+        2. Para cada IdParcela:
+           - Se existe: atualiza qtd_pagas
+           - Se não existe: cria nova entrada
+        
+        Args:
+            user_id: ID do usuário
+            upload_history_id: ID do histórico de upload
+        
+        Returns:
+            dict com contadores
+        """
+        from app.domains.transactions.models import JournalEntry, BaseParcelas
+        
+        # Buscar transações parceladas do upload atual
+        transacoes_parceladas = self.db.query(JournalEntry).filter(
+            JournalEntry.user_id == user_id,
+            JournalEntry.upload_history_id == upload_history_id,
+            JournalEntry.IdParcela.isnot(None),
+            JournalEntry.TotalParcelas > 1
+        ).all()
+        
+        if not transacoes_parceladas:
+            return {'atualizadas': 0, 'novas': 0}
+        
+        atualizadas = 0
+        novas = 0
+        finalizadas = 0
+        
+        for transacao in transacoes_parceladas:
+            # Verificar se IdParcela já existe
+            parcela_existente = self.db.query(BaseParcelas).filter(
+                BaseParcelas.user_id == user_id,
+                BaseParcelas.id_parcela == transacao.IdParcela
+            ).first()
+            
+            if parcela_existente:
+                # ATUALIZAR qtd_pagas e status se necessário
+                if transacao.parcela_atual > parcela_existente.qtd_pagas:
+                    # Atualizar quantidade de parcelas pagas
+                    parcela_existente.qtd_pagas = transacao.parcela_atual
+                    
+                    # Atualizar status baseado no progresso
+                    if transacao.parcela_atual >= transacao.TotalParcelas:
+                        parcela_existente.status = 'finalizada'
+                        status_desc = "finalizada"
+                        finalizadas += 1
+                    else:
+                        parcela_existente.status = 'ativa'
+                        status_desc = "ativa"
+                    
+                    # Atualizar data da última atualização
+                    parcela_existente.updated_at = datetime.now()
+                    
+                    atualizadas += 1
+                    logger.debug(f"  📝 Atualizada: {transacao.IdParcela} (parcela {transacao.parcela_atual}/{transacao.TotalParcelas}) → {status_desc}")
+            
+            else:
+                # INSERIR nova compra parcelada
+                # Buscar categoria_geral via grupo
+                categoria_geral = self._get_categoria_geral_from_grupo(transacao.GRUPO)
+                
+                # Determinar status inicial baseado no progresso
+                if transacao.parcela_atual >= transacao.TotalParcelas:
+                    status_inicial = 'finalizada'
+                    status_desc = "finalizada"
+                    finalizadas += 1
+                else:
+                    status_inicial = 'ativa'
+                    status_desc = "ativa"
+                
+                nova_parcela = BaseParcelas(
+                    user_id=user_id,
+                    id_parcela=transacao.IdParcela,
+                    estabelecimento_base=transacao.EstabelecimentoBase,
+                    valor_parcela=transacao.ValorPositivo,
+                    qtd_parcelas=transacao.TotalParcelas,
+                    qtd_pagas=transacao.parcela_atual,
+                    valor_total_plano=transacao.ValorPositivo * transacao.TotalParcelas,
+                    grupo_sugerido=transacao.GRUPO,
+                    subgrupo_sugerido=transacao.SUBGRUPO,
+                    tipo_gasto_sugerido=transacao.TipoGasto,
+                    categoria_geral_sugerida=categoria_geral,
+                    data_inicio=transacao.Data,
+                    status=status_inicial,
+                    created_at=datetime.now(),
+                    updated_at=datetime.now()
+                )
+                
+                self.db.add(nova_parcela)
+                novas += 1
+                logger.debug(f"  ➕ Nova parcela: {transacao.IdParcela} ({transacao.TotalParcelas}x R${transacao.ValorPositivo:.2f}) → {status_desc}")
+        
+        self.db.commit()
+        
+        return {
+            'atualizadas': atualizadas, 
+            'novas': novas,
+            'finalizadas': finalizadas,
+            'total_processadas': atualizadas + novas
+        }
+    
+    def _get_categoria_geral_from_grupo(self, grupo: str) -> str:
+        """
+        Busca CategoriaGeral correspondente ao Grupo via base_grupos_config
+        """
+        from sqlalchemy import text
+        
+        if not grupo:
+            return 'Despesa'  # Fallback padrão
+        
+        result = self.db.execute(
+            text("SELECT categoria_geral FROM base_grupos_config WHERE nome_grupo = :grupo"),
+            {"grupo": grupo}
+        ).fetchone()
+        
+        return result[0] if result else 'Despesa'

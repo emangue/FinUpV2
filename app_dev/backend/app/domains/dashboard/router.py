@@ -14,7 +14,8 @@ from .schemas import (
     DashboardMetrics, 
     ChartDataResponse, 
     CategoryExpense,
-    BudgetVsActualResponse
+    BudgetVsActualResponse,
+    CreditCardExpense
 )
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -126,13 +127,13 @@ def get_budget_vs_actual(
 def get_subgrupos_by_tipo(
     year: int = Query(..., description="Ano"),
     month: Optional[int] = Query(None, description="Mês (1-12) ou None para YTD"),
-    tipo_gasto: str = Query(..., description="Tipo de Gasto"),
+    grupo: str = Query(..., description="Grupo"),
     ytd: bool = Query(False, description="Year to Date - soma de todos os meses do ano"),
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
     """
-    Retorna subgrupos de um tipo de gasto específico com valores e percentuais.
+    Retorna subgrupos de um grupo específico com valores e percentuais.
     """
     service = DashboardService(db)
     
@@ -140,4 +141,31 @@ def get_subgrupos_by_tipo(
     if ytd:
         month = None
     
-    return service.get_subgrupos_by_tipo(user_id, year, month, tipo_gasto)
+    return service.get_subgrupos_by_tipo(user_id, year, month, grupo)
+
+
+@router.get("/credit-cards", response_model=list[CreditCardExpense])
+def get_credit_card_expenses(
+    year: int = Query(default=None, description="Ano (default: atual)"),
+    month: int = Query(default=None, description="Mês (default: None = ano todo)"),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Retorna gastos agrupados por cartão de crédito:
+    - Nome do cartão
+    - Total gasto
+    - Percentual do total
+    - Número de transações
+    
+    Se month=None, retorna soma do ano inteiro.
+    Apenas transações com NomeCartao não nulo.
+    """
+    # Usar ano atual se não informado
+    now = datetime.now()
+    year = year or now.year
+    # month pode ser None (ano todo) ou número específico
+    
+    service = DashboardService(db)
+    return service.get_credit_card_expenses(user_id, year, month)
+

@@ -178,6 +178,8 @@ class TransactionRepository:
             query = query.filter(JournalEntry.Estabelecimento.ilike(f"%{filters.estabelecimento}%"))
         if filters.search:
             query = query.filter(JournalEntry.Estabelecimento.ilike(f"%{filters.search}%"))
+        if filters.cartao:
+            query = query.filter(JournalEntry.NomeCartao == filters.cartao)
         
         result = query.scalar()
         return result or 0.0

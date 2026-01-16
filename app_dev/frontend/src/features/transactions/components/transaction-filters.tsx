@@ -34,6 +34,7 @@ export interface FilterValues {
   subgrupo?: string
   tipoGasto?: string
   banco?: string
+  cartao?: string
   mesInicio?: string
   mesFim?: string
 }
@@ -183,24 +184,11 @@ export function TransactionFilters({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value=" ">Limpar filtro</SelectItem>
-                <SelectItem value="Ajustável - Alimentação">Ajustável - Alimentação</SelectItem>
-                <SelectItem value="Ajustável - Assinaturas">Ajustável - Assinaturas</SelectItem>
-                <SelectItem value="Ajustável - Carro">Ajustável - Carro</SelectItem>
-                <SelectItem value="Ajustável - Casa">Ajustável - Casa</SelectItem>
-                <SelectItem value="Ajustável - Doações">Ajustável - Doações</SelectItem>
-                <SelectItem value="Ajustável - Presentes">Ajustável - Presentes</SelectItem>
-                <SelectItem value="Ajustável - Roupas">Ajustável - Roupas</SelectItem>
-                <SelectItem value="Ajustável - Saídas">Ajustável - Saídas</SelectItem>
-                <SelectItem value="Ajustável - Supermercado">Ajustável - Supermercado</SelectItem>
-                <SelectItem value="Ajustável - Tech">Ajustável - Tech</SelectItem>
-                <SelectItem value="Ajustável - Uber">Ajustável - Uber</SelectItem>
-                <SelectItem value="Ajustável - Viagens">Ajustável - Viagens</SelectItem>
-                <SelectItem value="Ajustável - Delivery">Ajustável - Delivery</SelectItem>
-                <SelectItem value="Ajustável - Esportes">Ajustável - Esportes</SelectItem>
                 <SelectItem value="Ajustável">Ajustável</SelectItem>
                 <SelectItem value="Fixo">Fixo</SelectItem>
-                <SelectItem value="Receita - Outras">Receita - Outras</SelectItem>
-                <SelectItem value="Receita - Salário">Receita - Salário</SelectItem>
+                <SelectItem value="Investimentos">Investimentos</SelectItem>
+                <SelectItem value="Transferência">Transferência</SelectItem>
+                <SelectItem value="Receita">Receita</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -222,6 +210,26 @@ export function TransactionFilters({
                 <SelectItem value="Mercado Pago">Mercado Pago</SelectItem>
                 <SelectItem value="Bradesco">Bradesco</SelectItem>
                 <SelectItem value="Santander">Santander</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Cartão */}
+          <div className="grid gap-2">
+            <Label htmlFor="cartao">Cartão de Crédito</Label>
+            <Select
+              value={filters.cartao || ''}
+              onValueChange={(value) => setFilters({ ...filters, cartao: value || undefined })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value=" ">Limpar filtro</SelectItem>
+                <SelectItem value="Azul">Azul</SelectItem>
+                <SelectItem value="MP">MP</SelectItem>
+                <SelectItem value="Visa Itaú">Visa Itaú</SelectItem>
+                <SelectItem value="Mastercard Itaú">Mastercard Itaú</SelectItem>
               </SelectContent>
             </Select>
           </div>

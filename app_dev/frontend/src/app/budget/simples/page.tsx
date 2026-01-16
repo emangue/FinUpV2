@@ -18,14 +18,14 @@ import Link from 'next/link';
 import { BudgetMediaDrilldownModal } from '@/features/budget/components/budget-media-drilldown-modal';
 
 interface BudgetItem {
-  tipo_gasto: string;
+  grupo: string;
   mes_referencia: string;
   valor_planejado: number;
   valor_medio_3_meses: number;
 }
 
 interface MediaHistorica {
-  [tipo_gasto: string]: number;
+  [grupo: string]: number;
 }
 
 const meses = [
@@ -43,8 +43,8 @@ const meses = [
   { value: '12', label: 'Dezembro' },
 ];
 
-// TipoGastos serão carregados dinamicamente da journal_entries
-// Apenas os tipos que pertencem a CategoriaGeral = 'Despesa'
+// Grupos serão carregados dinamicamente da journal_entries
+// Apenas os grupos que pertencem a CategoriaGeral = 'Despesa'
 
 // Função para formatar moeda brasileira
 const formatarMoeda = (valor: number): string => {
@@ -60,49 +60,49 @@ export default function BudgetSimplesPage() {
   const [selectedYear, setSelectedYear] = useState(String(currentDate.getFullYear()));
   const [budgetData, setBudgetData] = useState<Record<string, number>>({});
   const [mediaHistorica, setMediaHistorica] = useState<MediaHistorica>({});
-  const [tiposGastoDisponiveis, setTiposGastoDisponiveis] = useState<string[]>([]);
+  const [gruposDisponiveis, setGruposDisponiveis] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [drilldownOpen, setDrilldownOpen] = useState<{ tipo: string; mes: string } | null>(null);
+  const [drilldownOpen, setDrilldownOpen] = useState<{ grupo: string; mes: string } | null>(null);
 
   const mesReferencia = `${selectedYear}-${selectedMonth}`;
 
-  const loadTiposGastoComMedia = async () => {
+  const loadGruposComMedia = async () => {
     try {
       const mesReferencia = `${selectedYear}-${selectedMonth}`;
       
-      // Buscar tipos de gasto COM médias já calculadas do backend
+      // Buscar grupos COM médias já calculadas do backend
       const response = await fetch(
-        `/api/transactions/tipos-gasto-com-media?mes_referencia=${mesReferencia}`
+        `/api/transactions/grupos-com-media?mes_referencia=${mesReferencia}`
       );
 
       if (!response.ok) {
-        console.error('Erro ao buscar tipos de gasto:', response.status);
-        setTiposGastoDisponiveis([]);
+        console.error('Erro ao buscar grupos:', response.status);
+        setGruposDisponiveis([]);
         setMediaHistorica({});
         return;
       }
 
       const data = await response.json();
       
-      // Extrair tipos e médias
-      const tipos: string[] = [];
+      // Extrair grupos e médias
+      const grupos: string[] = [];
       const medias: MediaHistorica = {};
       
       data.tipos_gasto.forEach((item: any) => {
-        tipos.push(item.tipo_gasto);
+        grupos.push(item.tipo_gasto);  // Backend mantém campo 'tipo_gasto' por compatibilidade, mas agora contém grupos
         medias[item.tipo_gasto] = item.media_3_meses;
       });
       
-      console.log('Tipos de gasto carregados:', tipos.length);
+      console.log('Grupos carregados:', grupos.length);
       console.log('Médias calculadas:', Object.keys(medias).length);
       
-      setTiposGastoDisponiveis(tipos);
+      setGruposDisponiveis(grupos);
       setMediaHistorica(medias);
     } catch (error) {
-      console.error('Erro ao carregar tipos de gasto:', error);
-      setTiposGastoDisponiveis([]);
+      console.error('Erro ao carregar grupos:', error);
+      setGruposDisponiveis([]);
       setMediaHistorica({});
     }
   };
@@ -124,8 +124,8 @@ export default function BudgetSimplesPage() {
         const mediasMap: Record<string, number> = {};
         
         data.forEach((item: BudgetItem) => {
-          budgetMap[item.tipo_gasto] = item.valor_planejado;
-          mediasMap[item.tipo_gasto] = item.valor_medio_3_meses;
+          budgetMap[item.grupo] = item.valor_planejado;
+          mediasMap[item.grupo] = item.valor_medio_3_meses;
         });
         
         console.log('BudgetMap final:', budgetMap);
@@ -148,15 +148,15 @@ export default function BudgetSimplesPage() {
   };
 
   useEffect(() => {
-    loadTiposGastoComMedia();
+    loadGruposComMedia();
     loadBudget();
   }, [selectedMonth, selectedYear]);
 
-  const handleValueChange = (tipoGasto: string, value: string) => {
+  const handleValueChange = (grupo: string, value: string) => {
     const numValue = parseFloat(value) || 0;
     setBudgetData(prev => ({
       ...prev,
-      [tipoGasto]: numValue,
+      [grupo]: numValue,
     }));
   };
 
@@ -166,8 +166,8 @@ export default function BudgetSimplesPage() {
     try {
       const items = Object.entries(budgetData)
         .filter(([_, valor]) => valor > 0)
-        .map(([tipo_gasto, valor_planejado]) => ({
-          tipo_gasto,
+        .map(([grupo, valor_planejado]) => ({
+          grupo,
           valor_planejado,
         }));
 
@@ -193,24 +193,24 @@ export default function BudgetSimplesPage() {
     }
   };
 
-  const aplicarMedia = (tipoGasto: string) => {
-    const media = mediaHistorica[tipoGasto];
+  const aplicarMedia = (grupo: string) => {
+    const media = mediaHistorica[grupo];
     if (media && media > 0) {
       setBudgetData(prev => ({
         ...prev,
-        [tipoGasto]: media,
+        [grupo]: media,
       }));
     }
   };
 
   const aplicarTodasMedias = () => {
     const novosBudgets: Record<string, number> = {};
-    tiposGastoDisponiveis.forEach(tipo => {
-      const media = mediaHistorica[tipo];
+    gruposDisponiveis.forEach(grupo => {
+      const media = mediaHistorica[grupo];
       if (media && media > 0) {
-        novosBudgets[tipo] = media;
+        novosBudgets[grupo] = media;
       } else {
-        novosBudgets[tipo] = budgetData[tipo] || 0;
+        novosBudgets[grupo] = budgetData[grupo] || 0;
       }
     });
     setBudgetData(novosBudgets);
@@ -243,7 +243,7 @@ export default function BudgetSimplesPage() {
         const data = result.budgets || [];
         const budgetMap: Record<string, number> = {};
         data.forEach((item: BudgetItem) => {
-          budgetMap[item.tipo_gasto] = item.valor_planejado;
+          budgetMap[item.grupo] = item.valor_planejado;
         });
         setBudgetData(budgetMap);
         setMessage({ type: 'success', text: `Valores copiados de ${meses[prevMonth - 1].label}/${prevYear}` });
@@ -265,9 +265,9 @@ export default function BudgetSimplesPage() {
             <ArrowLeft className="h-4 w-4" />
             Voltar para Meta Geral
           </Link>
-          <h2 className="text-3xl font-bold tracking-tight">Meta por Tipo de Gasto</h2>
+          <h2 className="text-3xl font-bold tracking-tight">Meta por Grupo</h2>
           <p className="text-muted-foreground mt-2">
-            Defina metas individuais por tipo de gasto do sistema
+            Defina metas individuais por grupo do sistema
           </p>
         </div>
       </div>
@@ -354,9 +354,9 @@ export default function BudgetSimplesPage() {
 
       {loading ? (
         <div className="text-center py-8 text-muted-foreground">Carregando...</div>
-      ) : tiposGastoDisponiveis.length === 0 ? (
+      ) : gruposDisponiveis.length === 0 ? (
         <div className="text-center py-8">
-          <p className="text-muted-foreground mb-4">Nenhum tipo de gasto encontrado para este período.</p>
+          <p className="text-muted-foreground mb-4">Nenhum grupo encontrado para este período.</p>
           <p className="text-sm text-muted-foreground">Clique em "Carregar" para buscar os dados.</p>
         </div>
       ) : (
@@ -364,16 +364,16 @@ export default function BudgetSimplesPage() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle>Tipos de Gasto</CardTitle>
+                <CardTitle>Grupos</CardTitle>
                 <CardDescription>
-                  Defina o valor planejado para cada tipo de gasto
+                  Defina o valor planejado para cada grupo
                 </CardDescription>
               </div>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={aplicarTodasMedias}
-                disabled={loading || saving || tiposGastoDisponiveis.length === 0}
+                disabled={loading || saving || gruposDisponiveis.length === 0}
                 className="flex items-center gap-2"
               >
                 <Check className="h-4 w-4" />
@@ -383,17 +383,17 @@ export default function BudgetSimplesPage() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {tiposGastoDisponiveis.map(tipo => {
-                const media = mediaHistorica[tipo];
+              {gruposDisponiveis.map(grupo => {
+                const media = mediaHistorica[grupo];
                 return (
-                  <div key={tipo} className="space-y-2">
+                  <div key={grupo} className="space-y-2">
                     <div className="flex items-baseline justify-between">
-                      <Label htmlFor={tipo} className="font-medium">
-                        {tipo}
+                      <Label htmlFor={grupo} className="font-medium">
+                        {grupo}
                       </Label>
                       {media && media > 0 && (
                         <button
-                          onClick={() => setDrilldownOpen({ tipo, mes: mesReferencia })}
+                          onClick={() => setDrilldownOpen({ grupo, mes: mesReferencia })}
                           className="text-xs text-primary hover:underline cursor-pointer italic"
                           title="Clique para ver detalhamento dos 3 meses"
                         >
@@ -404,12 +404,12 @@ export default function BudgetSimplesPage() {
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-muted-foreground">R$</span>
                       <Input
-                        id={tipo}
+                        id={grupo}
                         type="number"
                         step="0.01"
                         min="0"
-                        value={budgetData[tipo] !== undefined ? budgetData[tipo] : ''}
-                        onChange={(e) => handleValueChange(tipo, e.target.value)}
+                        value={budgetData[grupo] !== undefined ? budgetData[grupo] : ''}
+                        onChange={(e) => handleValueChange(grupo, e.target.value)}
                         placeholder="0.00"
                         className="flex-1"
                       />
@@ -417,7 +417,7 @@ export default function BudgetSimplesPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => aplicarMedia(tipo)}
+                          onClick={() => aplicarMedia(grupo)}
                           disabled={loading || saving}
                           title="Aplicar média dos últimos 3 meses"
                           className="h-10 w-10 flex-shrink-0"
@@ -463,7 +463,7 @@ export default function BudgetSimplesPage() {
       <BudgetMediaDrilldownModal
         open={!!drilldownOpen}
         onOpenChange={(open) => !open && setDrilldownOpen(null)}
-        tipoGasto={drilldownOpen?.tipo || null}
+        tipoGasto={drilldownOpen?.grupo || null}
         mesReferencia={drilldownOpen?.mes || null}
       />
     </div>

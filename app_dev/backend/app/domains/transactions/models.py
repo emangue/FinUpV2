@@ -37,17 +37,22 @@ class JournalEntry(Base):
     # Identificação
     IdTransacao = Column(String, unique=True, index=True)
     IdParcela = Column(String)
+    EstabelecimentoBase = Column(String)  # ✅ Estabelecimento sem parcela XX/YY
+    parcela_atual = Column(Integer)        # ✅ Ex: 1 (de 12)
+    TotalParcelas = Column(Integer)        # ✅ Ex: 12
     
     # Origem
     arquivo_origem = Column(String)
     banco_origem = Column(String)
     tipodocumento = Column(String)
     origem_classificacao = Column(String)
+    session_id = Column(String, index=True, nullable=True)  # ✅ Rastreamento de upload
     upload_history_id = Column(Integer, ForeignKey("upload_history.id"), nullable=True, index=True)
     
     # Dados temporais
     MesFatura = Column(String)  # Formato YYYYMM
-    Ano = Column(Integer)
+    Ano = Column(Integer)       # 2025, 2026, etc
+    Mes = Column(Integer)       # ✅ NOVO: 1 a 12
     created_at = Column(DateTime)
     
     # Cartão
@@ -84,6 +89,7 @@ class BaseParcelas(Base):
     grupo_sugerido = Column(String)
     subgrupo_sugerido = Column(String)
     tipo_gasto_sugerido = Column(String)
+    categoria_geral_sugerida = Column(String)  # Novo: vem de base_grupos_config
     
     # Controle
     data_inicio = Column(String)  # Formato DD/MM/YYYY

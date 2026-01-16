@@ -12,7 +12,8 @@ from .schemas import (
     CategoryExpense, 
     ChartDataPoint,
     BudgetVsActualResponse,
-    BudgetVsActualItem
+    BudgetVsActualItem,
+    CreditCardExpense
 )
 
 
@@ -61,12 +62,24 @@ class DashboardService:
             percentual_geral=data["percentual_geral"]
         )
     
-    def get_subgrupos_by_tipo(self, user_id: int, year: int, month: int, tipo_gasto: str):
-        """Retorna subgrupos de um tipo de gasto específico"""
-        data = self.repository.get_subgrupos_by_tipo(user_id, year, month, tipo_gasto)
-        total_planejado = self.repository.get_planejado_by_tipo(user_id, year, month, tipo_gasto)
+    def get_subgrupos_by_tipo(self, user_id: int, year: int, month: int, grupo: str):
+        """Retorna subgrupos de um grupo específico"""
+        data = self.repository.get_subgrupos_by_tipo(user_id, year, month, grupo)
+        total_planejado = self.repository.get_planejado_by_tipo(user_id, year, month, grupo)
         return {
             "subgrupos": data,
             "total_realizado": sum(item["valor"] for item in data),
             "total_planejado": total_planejado
         }
+    
+    def get_credit_card_expenses(self, user_id: int, year: int, month: int = None) -> list[CreditCardExpense]:
+        """Retorna despesas por cartão de crédito
+        
+        Args:
+            user_id: ID do usuário
+            year: Ano a filtrar
+            month: Mês específico (1-12) ou None para ano inteiro
+        """
+        data = self.repository.get_credit_card_expenses(user_id, year, month)
+        return [CreditCardExpense(**expense) for expense in data]
+

@@ -104,12 +104,14 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
     setUploadError(null)
     
     try {
-      // Buscar final_cartao se cartão foi selecionado
+      // Buscar dados do cartão selecionado
       let finalCartao = ''
+      let nomeCartao = ''
       if (creditCard) {
         const selectedCard = cards.find(c => c.id.toString() === creditCard)
         if (selectedCard) {
           finalCartao = selectedCard.final_cartao || ''
+          nomeCartao = selectedCard.nome || ''  // ✅ Extrair nome do cartão
         }
       }
       
@@ -120,7 +122,7 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
       const formData = new FormData()
       formData.append('file', selectedFile)
       formData.append('banco', bank)
-      formData.append('cartao', creditCard || '')
+      formData.append('cartao', nomeCartao)  // ✅ Enviar NOME em vez de ID
       formData.append('final_cartao', finalCartao)
       formData.append('mesFatura', `${selectedYear}-${selectedMonth}`)
       formData.append('tipoDocumento', activeTab) // 'fatura' ou 'extrato'

@@ -72,6 +72,10 @@ const data = {
           title: "Despesas",
           url: "/transactions?tab=despesas",
         },
+        {
+          title: "Migrações",
+          url: "/transactions/migracoes",
+        },
       ],
     },
     {
@@ -166,6 +170,10 @@ const data = {
           title: "Despesas",
           url: "/transactions?tab=despesas",
         },
+        {
+          title: "Migrações",
+          url: "/transactions/migracoes",
+        },
       ],
     },
     {
@@ -184,6 +192,10 @@ const data = {
         {
           title: "Meta Detalhada",
           url: "/budget/detalhada",
+        },
+        {
+          title: "Planejamento",
+          url: "/budget/planning",
         },
         {
           title: "Configurações",

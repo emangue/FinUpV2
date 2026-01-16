@@ -204,20 +204,26 @@ export default function UploadPreviewPage() {
   const handleConfirm = async () => {
     setIsConfirming(true)
     try {
-      // TODO: Implementar importação definitiva
-      // Aqui você processaria os dados com IA e salvaria em journal_entries
+      console.log('Confirmando importação de', registros.length, 'registros')
       
-      console.log('Confirmar importação de', registros.length, 'registros')
-      
-      // Temporariamente, apenas deletar preview e voltar
-      await fetch(`/api/upload/preview/${sessionId}`, {
-        method: 'DELETE'
+      // Chamar endpoint de confirmação correto (session_id na URL)
+      const response = await fetch(`/api/upload/confirm/${sessionId}`, {
+        method: 'POST'
       })
       
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Erro ao confirmar importação')
+      }
+      
+      const result = await response.json()
+      console.log('✅ Importação confirmada:', result)
+      
+      // Redirecionar para transações
       router.push('/transactions')
     } catch (err) {
-      console.error('Erro ao confirmar:', err)
-      setError('Falha ao confirmar importação')
+      console.error('❌ Erro ao confirmar:', err)
+      setError(err instanceof Error ? err.message : 'Falha ao confirmar importação')
     } finally {
       setIsConfirming(false)
     }

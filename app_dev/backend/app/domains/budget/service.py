@@ -25,13 +25,13 @@ class BudgetService:
         self.repository_categoria_config = BudgetCategoriaConfigRepository(db)
         self.repository_historico = BudgetGeralHistoricoRepository(db)
     
-    def calcular_media_3_meses(self, user_id: int, tipo_gasto: str, mes_referencia: str) -> float:
+    def calcular_media_3_meses(self, user_id: int, grupo: str, mes_referencia: str) -> float:
         """
         Calcula média dos últimos 3 meses anteriores ao mes_referencia
         
         Args:
             user_id: ID do usuário
-            tipo_gasto: Tipo de gasto
+            grupo: Grupo (Casa, Cartão, etc)
             mes_referencia: Mês no formato YYYY-MM
             
         Returns:
@@ -61,9 +61,8 @@ class BudgetService:
         # Buscar transações dos 3 meses anteriores
         transacoes = self.db.query(JournalEntry).filter(
             JournalEntry.user_id == user_id,
-            JournalEntry.TipoGasto == tipo_gasto,
+            JournalEntry.GRUPO == grupo,
             JournalEntry.CategoriaGeral == 'Despesa',
-            JournalEntry.Valor < 0,  # Apenas saídas
             JournalEntry.IgnorarDashboard == 0,  # Excluir transações ignoradas
             or_(*condicoes_meses)
         ).all()
@@ -93,7 +92,7 @@ class BudgetService:
     def get_detalhamento_media(
         self, 
         user_id: int, 
-        tipo_gasto: str, 
+        grupo: str, 
         mes_referencia: str
     ):
         """
@@ -101,7 +100,7 @@ class BudgetService:
         
         Args:
             user_id: ID do usuário
-            tipo_gasto: Tipo de gasto
+            grupo: Grupo (Casa, Cartão, etc)
             mes_referencia: Mês de referência no formato YYYY-MM
             
         Returns:
@@ -141,9 +140,8 @@ class BudgetService:
         # Buscar transações dos 3 meses anteriores
         transacoes = self.db.query(JournalEntry).filter(
             JournalEntry.user_id == user_id,
-            JournalEntry.TipoGasto == tipo_gasto,
+            JournalEntry.GRUPO == grupo,
             JournalEntry.CategoriaGeral == 'Despesa',
-            JournalEntry.Valor < 0,
             JournalEntry.IgnorarDashboard == 0,  # Excluir transações ignoradas
             or_(*condicoes_meses)
         ).all()
@@ -163,6 +161,20 @@ class BudgetService:
             if t.MesFatura and t.MesFatura in detalhes_por_mes:
                 detalhes_por_mes[t.MesFatura]['transacoes'].append(t)
                 detalhes_por_mes[t.MesFatura]['total'] += abs(t.Valor)
+                
+                # Agrupar por subgrupo
+                if 'subgrupos' not in detalhes_por_mes[t.MesFatura]:
+                    detalhes_por_mes[t.MesFatura]['subgrupos'] = {}
+                
+                subgrupo_key = t.SUBGRUPO if t.SUBGRUPO else '__SEM_SUBGRUPO__'
+                if subgrupo_key not in detalhes_por_mes[t.MesFatura]['subgrupos']:
+                    detalhes_por_mes[t.MesFatura]['subgrupos'][subgrupo_key] = {
+                        'valor': 0.0,
+                        'quantidade': 0
+                    }
+                
+                detalhes_por_mes[t.MesFatura]['subgrupos'][subgrupo_key]['valor'] += abs(t.Valor)
+                detalhes_por_mes[t.MesFatura]['subgrupos'][subgrupo_key]['quantidade'] += 1
         
         # Construir lista de MesDetalhamento
         meses_detalhados = []
@@ -177,11 +189,26 @@ class BudgetService:
                 detalhes = detalhes_por_mes[mes_fatura_format]
                 mes_nome = f"{meses_nomes[mes_num]} {ano_mes}"
                 
+                # Criar lista de subgrupos
+                subgrupos_list = []
+                if 'subgrupos' in detalhes:
+                    from .schemas import SubgrupoDetalhamento
+                    for subgrupo_key, dados in detalhes['subgrupos'].items():
+                        subgrupo_nome = None if subgrupo_key == '__SEM_SUBGRUPO__' else subgrupo_key
+                        subgrupos_list.append(SubgrupoDetalhamento(
+                            subgrupo=subgrupo_nome,
+                            valor_total=round(dados['valor'], 2),
+                            quantidade_transacoes=dados['quantidade']
+                        ))
+                    # Ordenar por valor decrescente
+                    subgrupos_list.sort(key=lambda x: x.valor_total, reverse=True)
+                
                 mes_det = MesDetalhamento(
                     mes_referencia=mes_ref,
                     mes_nome=mes_nome,
                     valor_total=round(detalhes['total'], 2),
-                    quantidade_transacoes=len(detalhes['transacoes'])
+                    quantidade_transacoes=len(detalhes['transacoes']),
+                    subgrupos=subgrupos_list if subgrupos_list else None
                 )
                 meses_detalhados.append(mes_det)
                 total_geral += detalhes['total']
@@ -194,7 +221,7 @@ class BudgetService:
             media_calculada = 0.0
         
         return DetalhamentoMediaResponse(
-            tipo_gasto=tipo_gasto,
+            grupo=grupo,
             mes_planejado=mes_referencia,
             meses_considerados=meses_detalhados,
             media_calculada=round(media_calculada, 2),
@@ -228,17 +255,17 @@ class BudgetService:
     
     def create_budget(self, user_id: int, data: BudgetCreate) -> BudgetResponse:
         """Cria novo budget"""
-        # Verificar se já existe budget para este tipo_gasto/mês
+        # Verificar se já existe budget para este grupo/mês
         existing = self.repository.get_by_tipo_gasto_and_month(
             user_id, 
-            data.tipo_gasto, 
+            data.grupo,
             data.mes_referencia
         )
         
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Já existe budget para {data.tipo_gasto} em {data.mes_referencia}. Use PUT para atualizar."
+                detail=f"Já existe budget para {data.grupo} em {data.mes_referencia}. Use PUT para atualizar."
             )
         
         budget = self.repository.create(user_id, data.dict())
@@ -253,6 +280,25 @@ class BudgetService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Budget não encontrado"
             )
+        
+        # Verificar conflitos se alterar grupo ou mês
+        if data.grupo or data.mes_referencia:
+            new_grupo = data.grupo if data.grupo else budget.grupo
+            new_mes = data.mes_referencia if data.mes_referencia else budget.mes_referencia
+            
+            # Só verifica se mudou algo
+            if new_grupo != budget.grupo or new_mes != budget.mes_referencia:
+                existing = self.repository.get_by_tipo_gasto_and_month(
+                    user_id, 
+                    new_grupo,
+                    new_mes
+                )
+                
+                if existing and existing.id != budget_id:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=f"Já existe budget para {new_grupo} em {new_mes}. Use outro grupo ou mês."
+                    )
         
         updated = self.repository.update(budget, data.dict(exclude_unset=True))
         return BudgetResponse.from_orm(updated)
@@ -278,10 +324,10 @@ class BudgetService:
         """Cria ou atualiza múltiplos budgets de uma vez"""
         # Validar dados
         for budget_data in budgets:
-            if "tipo_gasto" not in budget_data or "valor_planejado" not in budget_data:
+            if "grupo" not in budget_data or "valor_planejado" not in budget_data:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Cada budget deve ter 'tipo_gasto' e 'valor_planejado'"
+                    detail="Cada budget deve ter 'grupo' e 'valor_planejado'"
                 )
             
             if budget_data["valor_planejado"] <= 0:
@@ -296,14 +342,14 @@ class BudgetService:
             # Calcular média dos 3 meses anteriores
             media = self.calcular_media_3_meses(
                 user_id=user_id,
-                tipo_gasto=budget_data["tipo_gasto"],
+                grupo=budget_data["grupo"],
                 mes_referencia=mes_referencia
             )
             
             # Upsert com média
             budget = self.repository.upsert(
                 user_id=user_id,
-                tipo_gasto=budget_data["tipo_gasto"],
+                grupo=budget_data["grupo"],
                 mes_referencia=mes_referencia,
                 valor_planejado=budget_data["valor_planejado"],
                 valor_medio_3_meses=media
@@ -585,6 +631,7 @@ class BudgetService:
             distinct(JournalEntry.TipoGasto)
         ).filter(
             JournalEntry.user_id == user_id,
+            JournalEntry.CategoriaGeral == 'Despesa',  # Apenas despesas para orçamento
             JournalEntry.TipoGasto.isnot(None),
             JournalEntry.TipoGasto != ''
         )

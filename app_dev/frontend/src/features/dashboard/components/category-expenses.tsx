@@ -54,7 +54,7 @@ const CategoryExpenses: React.FC<CategoryExpensesProps> = ({
             Valor: {formatCurrency(data?.valor || 0)}
           </p>
           <p className="text-gray-600">
-            {data?.percentual?.toFixed(1)}% da receita
+            {data?.percentual?.toFixed(1)}% das despesas
           </p>
         </div>
       );
@@ -66,7 +66,7 @@ const CategoryExpenses: React.FC<CategoryExpensesProps> = ({
     return (
       <Card>
         <CardHeader>
-          <CardTitle>% Por Categoria de Gasto em Relação à Receita</CardTitle>
+          <CardTitle>% Por Categoria de Gasto</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="h-[300px] flex items-center justify-center">
@@ -84,7 +84,7 @@ const CategoryExpenses: React.FC<CategoryExpensesProps> = ({
     return (
       <Card>
         <CardHeader>
-          <CardTitle>% Por Categoria de Gasto em Relação à Receita</CardTitle>
+          <CardTitle>% Por Categoria de Gasto</CardTitle>
         </CardHeader>
         <CardContent>
           <Badge variant="destructive" className="w-full justify-center py-4">
@@ -98,7 +98,7 @@ const CategoryExpenses: React.FC<CategoryExpensesProps> = ({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">% Por Categoria de Gasto em Relação à Receita</CardTitle>
+        <CardTitle className="text-base">% Por Categoria de Gasto (do Total)</CardTitle>
       </CardHeader>
       <CardContent>
         <ChartContainer config={chartConfig}>
@@ -123,15 +123,14 @@ const CategoryExpenses: React.FC<CategoryExpensesProps> = ({
             />
             <Bar dataKey="percentual" fill="var(--color-percentual)" radius={8}>
               <LabelList
+                dataKey="percentual"
                 position="insideTop"
                 offset={8}
                 className="fill-white/80"
                 fontSize={11}
                 fontWeight={500}
-                formatter={(value: number, entry: any) => {
-                  const valor = entry?.valor || 0;
-                  const valorEmMil = valor / 1000;
-                  return `${valorEmMil.toFixed(1)}k`;
+                formatter={(value: number) => {
+                   return `${value.toFixed(1)}%`;
                 }}
               />
             </Bar>

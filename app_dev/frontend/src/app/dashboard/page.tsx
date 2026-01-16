@@ -194,6 +194,12 @@ const DashboardPage = () => {
     fetchData(selectedYear, month);
   };
 
+  // Handler para click no gráfico
+  const handleChartMonthClick = (month: string) => {
+    setSelectedMonth(month);
+    fetchData(selectedYear, month);
+  };
+
   const fetchData = (year: string, month: string) => {
     fetchMetrics(year, month);
     fetchChartData(year, month);
@@ -242,6 +248,7 @@ const DashboardPage = () => {
             loading={loadingChart}
             error={chartError}
             selectedMonth={selectedMonth}
+            onMonthClick={handleChartMonthClick}
           />
         </div>
 
@@ -266,7 +273,7 @@ const DashboardPage = () => {
         />
 
         {/* Direita Inferior - Gastos com Cartões */}
-        <CreditCardExpenses />
+        <CreditCardExpenses year={selectedYear} month={selectedMonth} />
       </div>
 
       {/* Refresh Button com indicação de última atualização */}

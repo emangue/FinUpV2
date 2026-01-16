@@ -36,6 +36,7 @@ class BasePadroes(Base):
     grupo_sugerido = Column(Text)
     subgrupo_sugerido = Column(Text)
     tipo_gasto_sugerido = Column(Text)
+    categoria_geral_sugerida = Column(Text)  # CategoriaGeral derivada de base_grupos_config
     
     # Segmentação
     faixa_valor = Column(Text)  # Ex: "50-100", "FIXO 57.00"

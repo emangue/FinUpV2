@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 from .marker import MarkedTransaction
 from .generic_rules_classifier import GenericRulesClassifier
 from app.core.database import Base
+from app.shared.utils import determine_categoria_geral
 
 logger = logging.getLogger(__name__)
 
@@ -51,36 +52,6 @@ class CascadeClassifier:
             'nao_classificado': 0,
         }
         logger.debug(f"CascadeClassifier inicializado para user_id={user_id}")
-    
-    def _determine_categoria_geral(self, grupo: Optional[str], valor: float) -> Optional[str]:
-        """
-        Determina CategoriaGeral baseado no GRUPO e valor da transação
-        
-        Regras:
-        - Transferência Entre Contas → Transferência
-        - Investimentos → Investimentos
-        - Valor positivo → Receita
-        - Valor negativo → Despesa
-        """
-        if not grupo:
-            return None
-        
-        # Normalizar grupo para comparação
-        grupo_lower = grupo.lower().strip()
-        
-        # Regra 1: Transferência
-        if 'transferencia' in grupo_lower or 'transferência' in grupo_lower:
-            return 'Transferência'
-        
-        # Regra 2: Investimentos
-        if 'investimento' in grupo_lower:
-            return 'Investimentos'
-        
-        # Regra 3: Baseado no sinal do valor
-        if valor >= 0:
-            return 'Receita'
-        else:
-            return 'Despesa'
     
     def classify(self, marked: MarkedTransaction) -> ClassifiedTransaction:
         """
@@ -212,7 +183,10 @@ class CascadeClassifier:
                 logger.debug(f"✅ Nível 1 (Parcelas): {marked.estabelecimento_base[:30]}... (status: {parcela.status})")
                 
                 grupo = parcela.grupo_sugerido
-                categoria_geral = self._determine_categoria_geral(grupo, marked.valor)
+                # Usar categoria_geral_sugerida se disponível, senão calcular
+                categoria_geral = parcela.categoria_geral_sugerida or determine_categoria_geral(
+                    grupo, marked.valor, marked.nome_cartao
+                )
                 
                 return ClassifiedTransaction(
                     **marked.__dict__,
@@ -269,7 +243,9 @@ class CascadeClassifier:
             
             if padrao:
                 grupo = padrao.grupo_sugerido
-                categoria_geral = self._determine_categoria_geral(grupo, marked.valor)
+                categoria_geral = determine_categoria_geral(
+                    grupo, marked.valor, marked.nome_cartao
+                )
                 
                 return ClassifiedTransaction(
                     **marked.__dict__,
@@ -359,7 +335,9 @@ class CascadeClassifier:
             logger.debug(f"✅ Nível 3 (Journal): {marked.estabelecimento_base[:30]}... (inter: {candidatos[0]['inter']}, valor_ok: {candidatos[0]['valor_ok']})")
             
             grupo = escolhido.GRUPO
-            categoria_geral = self._determine_categoria_geral(grupo, marked.valor)
+            categoria_geral = determine_categoria_geral(
+                grupo, marked.valor, marked.nome_cartao
+            )
             
             return ClassifiedTransaction(
                 **marked.__dict__,
@@ -387,7 +365,9 @@ class CascadeClassifier:
                 logger.debug(f"✅ Nível 4 (Regras Genéricas): {marked.estabelecimento_base[:30]}... (prioridade: {resultado['prioridade']})")
                 
                 grupo = resultado['grupo']
-                categoria_geral = self._determine_categoria_geral(grupo, marked.valor)
+                categoria_geral = determine_categoria_geral(
+                    grupo, marked.valor, marked.nome_cartao
+                )
                 
                 return ClassifiedTransaction(
                     **marked.__dict__,

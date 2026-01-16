@@ -108,6 +108,11 @@ class MarkedTransaction(RawTransaction):
     id_parcela: Optional[str] = None        # MD5 16-char (se tem parcela)
     parcela_atual: Optional[int] = None     # Ex: 1 de 12
     total_parcelas: Optional[int] = None    # Ex: 12
+    
+    # Campos temporais e tipo
+    tipo_transacao: str = ""                # "Cartão de Crédito", "Despesas", "Receitas"
+    ano: int = 0                            # 2025, 2026, etc
+    mes: int = 0                            # 1 a 12
 
 
 class TransactionMarker:
@@ -128,6 +133,47 @@ class TransactionMarker:
         # Chave: "data|lancamento_upper|valor" → Valor: contador de ocorrências
         # Ex: "15/10/2025|PIX TRANSF EMANUEL15/10|1000.00" → 1, depois 2, depois 3, ..., N
         self.seen_transactions = {}
+    
+    def _extrair_ano_mes(self, data_str: str) -> tuple[int, int]:
+        """
+        Extrai ano e mês de data DD/MM/YYYY
+        
+        Returns:
+            (ano, mes) Ex: (2025, 12)
+        """
+        from datetime import datetime
+        try:
+            dt = datetime.strptime(data_str, '%d/%m/%Y')
+            return dt.year, dt.month
+        except ValueError as e:
+            logger.error(f"Erro ao parsear data '{data_str}': {e}")
+            # Fallback: tentar extrair manualmente
+            partes = data_str.split('/')
+            if len(partes) == 3:
+                return int(partes[2]), int(partes[1])
+            raise ValueError(f"Data inválida: {data_str}")
+    
+    def _determinar_tipo_transacao(self, nome_cartao: Optional[str], valor: float) -> str:
+        """
+        Determina tipo de transação baseado em cartão e valor
+        
+        Regras (mesma lógica atual do sistema):
+        1. Se tem cartão → "Cartão de Crédito"
+        2. Se extrato + negativo → "Despesas"
+        3. Se extrato + positivo → "Receitas"
+        
+        Returns:
+            "Cartão de Crédito" | "Despesas" | "Receitas"
+        """
+        # Regra 1: Cartão sempre primeiro
+        if nome_cartao and nome_cartao.strip():
+            return "Cartão de Crédito"
+        
+        # Regra 2 e 3: Baseado no sinal
+        if valor < 0:
+            return "Despesas"
+        else:
+            return "Receitas"
     
     def _get_sequence_for_duplicate(self, chave_unica: str) -> int:
         """
@@ -189,6 +235,12 @@ class TransactionMarker:
             valor_positivo = abs(raw.valor)
             valor_arredondado = arredondar_2_decimais(valor_positivo)
             
+            # 2b. Extrair Ano e Mês da data
+            ano, mes = self._extrair_ano_mes(raw.data)
+            
+            # 2c. Determinar TipoTransacao baseado em cartão e valor
+            tipo_transacao = self._determinar_tipo_transacao(raw.nome_cartao, raw.valor)
+            
             # 3. Detectar duplicados no arquivo e obter sequência
             # ESTRATÉGIA v4.2.1 CONDICIONAL:
             # - FATURA: Normaliza parcela ("LOJA 01/05" → "LOJA (1/5)")
@@ -242,18 +294,22 @@ class TransactionMarker:
                 nome_cartao=raw.nome_cartao,
                 final_cartao=raw.final_cartao,
                 mes_fatura=raw.mes_fatura,
-                # Novos campos
+                # Novos campos (Fase 2)
                 id_transacao=id_transacao,
                 estabelecimento_base=estabelecimento_base,
                 valor_positivo=valor_positivo,
                 id_parcela=id_parcela,
                 parcela_atual=parcela_atual,
                 total_parcelas=total_parcelas,
+                tipo_transacao=tipo_transacao,  # ✅ NOVO
+                ano=ano,                          # ✅ NOVO
+                mes=mes,                          # ✅ NOVO
             )
             
             logger.debug(
                 f"Transação marcada: {estabelecimento_base[:30]}... | "
                 f"ID: {id_transacao} | Parcela: {parcela_atual}/{total_parcelas} | "
+                f"Tipo: {tipo_transacao} | Data: {mes:02d}/{ano} | "
                 f"Valor: {valor_positivo:.2f}"
             )
             

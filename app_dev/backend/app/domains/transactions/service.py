@@ -18,6 +18,7 @@ from .schemas import (
     TiposGastoComMediaResponse,
     TipoGastoComMedia
 )
+from app.shared.utils import determine_categoria_geral
 
 class TransactionService:
     """
@@ -140,10 +141,11 @@ class TransactionService:
             if tipo_gasto:
                 transaction.TipoGasto = tipo_gasto
             
-            # Recalcular CategoriaGeral baseado no GRUPO
-            transaction.CategoriaGeral = self._determine_categoria_geral(
+            # Recalcular CategoriaGeral baseado no GRUPO e cartão
+            transaction.CategoriaGeral = determine_categoria_geral(
                 transaction.GRUPO, 
-                transaction.Valor
+                transaction.Valor,
+                transaction.NomeCartao
             )
         
         # Salvar
@@ -197,36 +199,6 @@ class TransactionService:
         # Fallback: retornar o primeiro
         return marcacoes[0].TipoGasto
     
-    def _determine_categoria_geral(self, grupo: Optional[str], valor: float) -> Optional[str]:
-        """
-        Determina CategoriaGeral baseado no GRUPO e valor da transação
-        
-        Regras:
-        - Transferência Entre Contas → Transferência
-        - Investimentos → Investimentos
-        - Valor positivo → Receita
-        - Valor negativo → Despesa
-        """
-        if not grupo:
-            return None
-        
-        # Normalizar grupo para comparação
-        grupo_lower = grupo.lower().strip()
-        
-        # Regra 1: Transferência
-        if 'transferencia' in grupo_lower or 'transferência' in grupo_lower:
-            return 'Transferência'
-        
-        # Regra 2: Investimentos
-        if 'investimento' in grupo_lower:
-            return 'Investimentos'
-        
-        # Regra 3: Baseado no sinal do valor
-        if valor >= 0:
-            return 'Receita'
-        else:
-            return 'Despesa'
-    
     def delete_transaction(
         self,
         transaction_id: str,
@@ -262,13 +234,13 @@ class TransactionService:
             "filters": filters.dict(exclude_none=True)
         }
     
-    def get_tipos_gasto_com_media(
+    def get_grupos_com_media(
         self,
         user_id: int,
         mes_referencia: str
     ) -> TiposGastoComMediaResponse:
         """
-        Retorna tipos de gasto únicos de Despesa com média PRÉ-CALCULADA da tabela budget_planning
+        Retorna grupos únicos de Despesa com média PRÉ-CALCULADA da tabela budget_planning
         
         ⚡ OTIMIZAÇÃO: Usa valores pré-calculados em vez de calcular em tempo real
         
@@ -277,7 +249,7 @@ class TransactionService:
             mes_referencia: Mês de referência no formato YYYY-MM
             
         Returns:
-            TiposGastoComMediaResponse com lista de tipos e suas médias PRÉ-CALCULADAS
+            TiposGastoComMediaResponse com lista de grupos e suas médias PRÉ-CALCULADAS
         """
         from app.domains.budget.models import BudgetPlanning
         
@@ -290,40 +262,237 @@ class TransactionService:
         
         print(f"⚡ OTIMIZADO: Encontrados {len(planning_records)} registros pré-calculados")  # Debug
         
-        # Se não encontrou médias pré-calculadas, buscar todos os tipos de gasto disponíveis
+        # Se não encontrou médias pré-calculadas, buscar todos os grupos disponíveis
         if not planning_records:
-            print(f"⚠️ AVISO: Nenhum valor pré-calculado para {mes_referencia}. Buscar tipos únicos...")
+            print(f"⚠️ AVISO: Nenhum valor pré-calculado para {mes_referencia}. Buscar grupos únicos...")
             
-            # Buscar tipos únicos de todas as transações de Despesa do usuário
-            tipos_unicos = self.repository.db.query(JournalEntry.TipoGasto).filter(
+            # Buscar grupos únicos de todas as transações de Despesa do usuário
+            grupos_unicos = self.repository.db.query(JournalEntry.GRUPO).filter(
                 JournalEntry.user_id == user_id,
                 JournalEntry.CategoriaGeral == 'Despesa',
-                JournalEntry.TipoGasto.isnot(None)
+                JournalEntry.GRUPO.isnot(None)
             ).distinct().all()
             
-            tipos_com_media = []
-            for (tipo_gasto,) in sorted(tipos_unicos):
-                tipos_com_media.append(TipoGastoComMedia(
-                    tipo_gasto=tipo_gasto,
+            grupos_com_media = []
+            for (grupo,) in sorted(grupos_unicos):
+                grupos_com_media.append(TipoGastoComMedia(
+                    tipo_gasto=grupo,  # Usando mesmo schema, mas agora é grupo
                     media_3_meses=0.0
                 ))
             
             return TiposGastoComMediaResponse(
-                tipos_gasto=tipos_com_media,
+                tipos_gasto=grupos_com_media,  # Mantém nome do schema por compatibilidade
                 mes_referencia=mes_referencia
             )
         
         # Construir resposta a partir dos valores PRÉ-CALCULADOS
-        tipos_com_media = []
-        for record in sorted(planning_records, key=lambda x: x.tipo_gasto):
-            tipos_com_media.append(TipoGastoComMedia(
-                tipo_gasto=record.tipo_gasto,
+        grupos_com_media = []
+        for record in sorted(planning_records, key=lambda x: x.grupo):
+            grupos_com_media.append(TipoGastoComMedia(
+                tipo_gasto=record.grupo,  # Usando grupo no lugar de tipo_gasto
                 media_3_meses=round(record.valor_medio_3_meses, 2)
             ))
         
-        print(f"✅ Retornando {len(tipos_com_media)} tipos de gasto com médias pré-calculadas")
+        print(f"✅ Retornando {len(grupos_com_media)} grupos com médias pré-calculadas")
         
         return TiposGastoComMediaResponse(
-            tipos_gasto=tipos_com_media,
+            tipos_gasto=grupos_com_media,  # Mantém nome do schema por compatibilidade
             mes_referencia=mes_referencia
+        )
+    
+    def get_grupos_subgrupos_disponiveis(self, user_id: int):
+        """
+        Lista todos os grupos/subgrupos únicos disponíveis no sistema
+        """
+        from .schemas_migration import GrupoSubgrupoOption, GrupoSubgrupoListResponse
+        
+        results = self.repository.db.query(
+            JournalEntry.GRUPO,
+            JournalEntry.SUBGRUPO,
+            func.count(JournalEntry.id).label('total')
+        ).filter(
+            JournalEntry.user_id == user_id
+        ).group_by(
+            JournalEntry.GRUPO,
+            JournalEntry.SUBGRUPO
+        ).order_by(
+            JournalEntry.GRUPO,
+            JournalEntry.SUBGRUPO
+        ).all()
+        
+        opcoes = [
+            GrupoSubgrupoOption(
+                grupo=r.GRUPO or "",
+                subgrupo=r.SUBGRUPO,
+                total_transacoes=r.total
+            )
+            for r in results if r.GRUPO
+        ]
+        
+        return GrupoSubgrupoListResponse(opcoes=opcoes)
+    
+    def preview_migration(self, user_id: int, grupo_origem: str, subgrupo_origem: Optional[str],
+                         grupo_destino: str, subgrupo_destino: Optional[str]):
+        """
+        Preview de quantas transações serão impactadas pela migração
+        """
+        from .schemas_migration import MigrationPreviewResponse
+        from app.domains.grupos.repository import GrupoRepository
+        
+        # Contar transações que serão migradas
+        query = self.repository.db.query(func.count(JournalEntry.id)).filter(
+            JournalEntry.user_id == user_id,
+            JournalEntry.GRUPO == grupo_origem
+        )
+        
+        if subgrupo_origem:
+            query = query.filter(JournalEntry.SUBGRUPO == subgrupo_origem)
+        else:
+            query = query.filter(JournalEntry.SUBGRUPO.is_(None))
+        
+        total = query.scalar()
+        
+        # Buscar tipo_gasto e categoria_geral do grupo destino
+        grupo_repo = GrupoRepository(self.repository.db)
+        grupo_config = grupo_repo.get_by_nome(grupo_destino)
+        
+        if not grupo_config:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Grupo destino '{grupo_destino}' não encontrado em base_grupos_config"
+            )
+        
+        return MigrationPreviewResponse(
+            total_transacoes=total,
+            grupo_origem=grupo_origem,
+            subgrupo_origem=subgrupo_origem,
+            grupo_destino=grupo_destino,
+            subgrupo_destino=subgrupo_destino,
+            tipo_gasto_destino=grupo_config.tipo_gasto_padrao,
+            categoria_geral_destino=grupo_config.categoria_geral
+        )
+    
+    def execute_migration(self, user_id: int, grupo_origem: str, subgrupo_origem: Optional[str],
+                         grupo_destino: str, subgrupo_destino: Optional[str]):
+        """
+        Executa migração em massa de transações
+        Atualiza GRUPO, SUBGRUPO, TipoGasto, CategoriaGeral
+        Recalcula médias no budget_planning
+        """
+        from .schemas_migration import MigrationExecuteResponse
+        from app.domains.grupos.repository import GrupoRepository
+        from datetime import datetime
+        from dateutil.relativedelta import relativedelta
+        
+        # Buscar configuração do grupo destino
+        grupo_repo = GrupoRepository(self.repository.db)
+        grupo_config = grupo_repo.get_by_nome(grupo_destino)
+        
+        if not grupo_config:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Grupo destino '{grupo_destino}' não encontrado em base_grupos_config"
+            )
+        
+        # Buscar transações a migrar
+        query = self.repository.db.query(JournalEntry).filter(
+            JournalEntry.user_id == user_id,
+            JournalEntry.GRUPO == grupo_origem
+        )
+        
+        if subgrupo_origem:
+            query = query.filter(JournalEntry.SUBGRUPO == subgrupo_origem)
+        else:
+            query = query.filter(JournalEntry.SUBGRUPO.is_(None))
+        
+        transacoes = query.all()
+        total_atualizadas = len(transacoes)
+        
+        # Atualizar todas as transações
+        for t in transacoes:
+            t.GRUPO = grupo_destino
+            t.SUBGRUPO = subgrupo_destino
+            t.TipoGasto = grupo_config.tipo_gasto_padrao
+            t.CategoriaGeral = grupo_config.categoria_geral
+        
+        self.repository.db.commit()
+        
+        # Recalcular médias no budget_planning para ambos os grupos
+        grupos_recalculados = []
+        
+        for grupo in [grupo_origem, grupo_destino]:
+            # Gerar lista de meses (últimos 36 meses + próximos 12)
+            data_atual = datetime.now()
+            meses = []
+            for i in range(-36, 13):
+                mes = data_atual + relativedelta(months=i)
+                meses.append(mes.strftime('%Y-%m'))
+            
+            for mes_ref in meses:
+                ano, mes = map(int, mes_ref.split('-'))
+                data_ref = datetime(ano, mes, 1)
+                
+                # Calcular 3 meses anteriores
+                mes_1 = (data_ref - relativedelta(months=1)).strftime('%Y%m')
+                mes_2 = (data_ref - relativedelta(months=2)).strftime('%Y%m')
+                mes_3 = (data_ref - relativedelta(months=3)).strftime('%Y%m')
+                
+                # Calcular média
+                result = self.repository.db.query(
+                    func.avg(
+                        func.coalesce(
+                            self.repository.db.query(func.sum(func.abs(JournalEntry.Valor)))
+                            .filter(
+                                JournalEntry.user_id == user_id,
+                                JournalEntry.GRUPO == grupo,
+                                JournalEntry.CategoriaGeral == 'Despesa',
+                                JournalEntry.MesFatura.in_([mes_1, mes_2, mes_3])
+                            )
+                            .group_by(JournalEntry.MesFatura)
+                            .subquery()
+                            .c[0],
+                            0
+                        )
+                    )
+                ).scalar()
+                
+                media = round(result or 0, 2)
+                
+                # Atualizar ou inserir no budget_planning
+                from app.domains.budget.models import BudgetPlanning
+                
+                planning = self.repository.db.query(BudgetPlanning).filter(
+                    BudgetPlanning.user_id == user_id,
+                    BudgetPlanning.grupo == grupo,
+                    BudgetPlanning.mes_referencia == mes_ref
+                ).first()
+                
+                if planning:
+                    planning.valor_medio_3_meses = media
+                    planning.valor_planejado = media
+                    planning.updated_at = datetime.now()
+                else:
+                    planning = BudgetPlanning(
+                        user_id=user_id,
+                        grupo=grupo,
+                        mes_referencia=mes_ref,
+                        valor_planejado=media,
+                        valor_medio_3_meses=media
+                    )
+                    self.repository.db.add(planning)
+            
+            grupos_recalculados.append(grupo)
+        
+        self.repository.db.commit()
+        
+        return MigrationExecuteResponse(
+            success=True,
+            total_transacoes_atualizadas=total_atualizadas,
+            grupo_origem=grupo_origem,
+            subgrupo_origem=subgrupo_origem,
+            grupo_destino=grupo_destino,
+            subgrupo_destino=subgrupo_destino,
+            tipo_gasto_destino=grupo_config.tipo_gasto_padrao,
+            categoria_geral_destino=grupo_config.categoria_geral,
+            grupos_recalculados=grupos_recalculados
         )

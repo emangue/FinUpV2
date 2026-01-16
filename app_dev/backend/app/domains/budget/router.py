@@ -102,7 +102,7 @@ def listar_tipos_gasto_disponiveis(
 
 @router.get("/budget/detalhamento-media", response_model=DetalhamentoMediaResponse, summary="Detalhamento da média dos 3 meses")
 def get_detalhamento_media(
-    tipo_gasto: str = Query(..., description="Tipo de gasto para detalhamento"),
+    grupo: str = Query(..., description="Grupo para detalhamento"),
     mes_referencia: str = Query(..., description="Mês de referência no formato YYYY-MM"),
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
@@ -110,7 +110,7 @@ def get_detalhamento_media(
     """
     Retorna detalhamento dos 3 meses anteriores que compõem a média
     
-    - **tipo_gasto**: Nome do tipo de gasto (ex: "Ajustável - Casa")
+    - **grupo**: Nome do grupo (ex: "Casa", "Cartão")
     - **mes_referencia**: Mês planejado no formato YYYY-MM (ex: "2026-01")
     
     Retorna lista com cada um dos 3 meses anteriores contendo:
@@ -121,7 +121,7 @@ def get_detalhamento_media(
     Também retorna média calculada e total geral
     """
     service = BudgetService(db)
-    return service.get_detalhamento_media(user_id, tipo_gasto, mes_referencia)
+    return service.get_detalhamento_media(user_id, grupo, mes_referencia)
 
 
 # ----- ROTAS DE BULK OPERATIONS -----

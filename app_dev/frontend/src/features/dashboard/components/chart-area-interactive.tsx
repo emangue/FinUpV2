@@ -22,6 +22,7 @@ interface ChartAreaInteractiveProps {
   loading?: boolean;
   error?: string | null;
   selectedMonth?: string; // 'all' ou '1'-'12'
+  onMonthClick?: (monthIndex: string) => void; // Callback quando clicar em um mês
 }
 
 const chartConfig = {
@@ -39,7 +40,8 @@ const ChartAreaInteractive: React.FC<ChartAreaInteractiveProps> = ({
   data = [],
   loading = false,
   error = null,
-  selectedMonth = 'all'
+  selectedMonth = 'all',
+  onMonthClick
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -64,6 +66,19 @@ const ChartAreaInteractive: React.FC<ChartAreaInteractiveProps> = ({
     // Retornar todos os dados disponíveis (12 meses)
     return data;
   }, [data]);
+
+  // Handler para click em barra
+  const handleBarClick = (data: any) => {
+    if (!onMonthClick || !data || !data.mes) return;
+    
+    // Converter nome do mês para índice (1-12)
+    const monthIndex = monthNameToIndex[data.mes];
+    if (monthIndex) {
+      // Se já está selecionado, volta para 'all', senão seleciona
+      const newSelection = selectedMonth === String(monthIndex) ? 'all' : String(monthIndex);
+      onMonthClick(newSelection);
+    }
+  };
   const formatCurrency = (value: number): string => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -126,6 +141,9 @@ const ChartAreaInteractive: React.FC<ChartAreaInteractiveProps> = ({
     <Card>
       <CardHeader>
         <CardTitle className="text-base">Receitas vs Despesas</CardTitle>
+        <p className="text-xs text-muted-foreground mt-1">
+          Apenas receitas e despesas • Exclui investimentos e transferências • Valores em milhares (k)
+        </p>
       </CardHeader>
       <CardContent>
         <div ref={scrollRef} className="overflow-auto h-[350px]">
@@ -150,7 +168,18 @@ const ChartAreaInteractive: React.FC<ChartAreaInteractiveProps> = ({
               cursor={false}
               content={<CustomTooltip />}
             />
-                <Bar dataKey="receitas" fill="var(--color-receitas)" radius={4}>
+                <Bar 
+                  dataKey="receitas" 
+                  fill="var(--color-receitas)" 
+                  radius={4}
+                  onClick={handleBarClick}
+                  style={{ cursor: onMonthClick ? 'pointer' : 'default' }}
+                  fillOpacity={(entry: ChartDataItem) => {
+                    if (selectedMonth === 'all') return 1;
+                    const monthIndex = monthNameToIndex[entry.mes];
+                    return selectedMonth === String(monthIndex) ? 1 : 0.15;
+                  }}
+                >
                   <LabelList
                     position="insideTop"
                     offset={8}
@@ -163,7 +192,18 @@ const ChartAreaInteractive: React.FC<ChartAreaInteractiveProps> = ({
                     }}
                   />
                 </Bar>
-                <Bar dataKey="despesas" fill="var(--color-despesas)" radius={4}>
+                <Bar 
+                  dataKey="despesas" 
+                  fill="var(--color-despesas)" 
+                  radius={4}
+                  onClick={handleBarClick}
+                  style={{ cursor: onMonthClick ? 'pointer' : 'default' }}
+                  fillOpacity={(entry: ChartDataItem) => {
+                    if (selectedMonth === 'all') return 1;
+                    const monthIndex = monthNameToIndex[entry.mes];
+                    return selectedMonth === String(monthIndex) ? 1 : 0.15;
+                  }}
+                >
                   <LabelList
                     position="insideTop"
                     offset={8}
