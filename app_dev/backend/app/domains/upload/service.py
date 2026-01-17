@@ -339,6 +339,32 @@ class UploadService:
         
         logger.info(f"📊 RESULTADO: {excluded_count} excluídas | {len(transactions_filtered)} mantidas (de {len(raw_transactions)} total)")
         return transactions_filtered
+    
+    def _detectar_formato(self, file_path: str) -> str:
+        """
+        Detecta formato do arquivo baseado na extensão
+        
+        Args:
+            file_path: Caminho do arquivo
+            
+        Returns:
+            Formato: 'csv', 'excel', 'pdf', 'ofx'
+            
+        Raises:
+            ValueError: Se formato não suportado
+        """
+        ext = Path(file_path).suffix.lower()
+        
+        if ext in ['.csv', '.txt']:
+            return 'csv'
+        elif ext in ['.xls', '.xlsx', '.xlsm']:
+            return 'excel'
+        elif ext == '.pdf':
+            return 'pdf'
+        elif ext == '.ofx':
+            return 'ofx'
+        else:
+            raise ValueError(f"Formato não suportado: {ext}")
 
     def _fase1_raw_processing(
         self,
@@ -361,16 +387,20 @@ class UploadService:
             Para faturas: balance_validation será None
             Para extratos: balance_validation com dados de validação
         """
+        # Detectar formato do arquivo
+        formato = self._detectar_formato(file_path)
+        logger.info(f"📎 Formato detectado: {formato}")
+        
         # Buscar processador adequado (normalização feita dentro de get_processor)
-        processor = get_processor(banco, tipo_documento)
+        processor = get_processor(banco, tipo_documento, formato)
         
         if not processor:
-            logger.warning(f"⚠️ Processador não encontrado para {banco}/{tipo_documento}")
+            logger.warning(f"⚠️ Processador não encontrado para {banco}/{tipo_documento}/{formato}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={
                     "errorCode": "UPL_004",
-                    "error": f"Processador não disponível para {banco} / {tipo_documento}"
+                    "error": f"Processador não disponível para {banco} / {tipo_documento} / {formato}"
                 }
             )
         

@@ -111,7 +111,7 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
         const selectedCard = cards.find(c => c.id.toString() === creditCard)
         if (selectedCard) {
           finalCartao = selectedCard.final_cartao || ''
-          nomeCartao = selectedCard.nome || ''  // ✅ Extrair nome do cartão
+          nomeCartao = selectedCard.nome_cartao || ''  // ✅ Extrair nome do cartão
         }
       }
       
@@ -731,11 +731,13 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
               <Button
                 type="button"
                 variant="outline"
-                className="flex-1"
+                className="flex-1 justify-start overflow-hidden"
                 onClick={() => document.getElementById("file")?.click()}
               >
-                <Upload className="mr-2 h-4 w-4" />
-                {selectedFile ? selectedFile.name : "Escolher Arquivo"}
+                <Upload className="mr-2 h-4 w-4 flex-shrink-0" />
+                <span className="truncate">
+                  {selectedFile ? selectedFile.name : "Escolher Arquivo"}
+                </span>
               </Button>
               {selectedFile && (
                 <Button

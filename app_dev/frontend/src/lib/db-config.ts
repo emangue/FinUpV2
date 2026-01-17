@@ -62,12 +62,12 @@ export function getDbPath(): string {
 export function openDatabase(options?: Database.Options) {
   const dbPath = getDbPath()
   
-  console.log('🗄️ Abrindo banco:', {
+  console.log('🗄️ Abrindo banco (ÚNICO para toda aplicação):', {
     cwd: process.cwd(),
-    relativo: DB_RELATIVE_PATH, (ÚNICO para toda aplicação):', {
     absoluto: dbPath,
     exists: fs.existsSync(dbPath),
     compartilhadoCom: 'Backend FastAPI em /app_dev/backend/database/financas_dev.db'
+  })
   return new Database(dbPath, options)
 }
 
@@ -98,9 +98,6 @@ export function checkDatabaseHealth(): { ok: boolean; path: string; error?: stri
  * Informações de debug sobre o banco
  */
 export function getDbInfo() {
-  const cwd = process.cwd()
-  const relativePath = path.join(cwd, DB_RELATIVE_PATH)
-  const absolutePath = path.resolve(relativePath)
   const absolutePath = DB_ABSOLUTE_PATH
   const exists = fs.existsSync(absolutePath)
   
@@ -109,3 +106,5 @@ export function getDbInfo() {
     exists,
     tamanho: exists ? fs.statSync(absolutePath).size : 0,
     compartilhado: 'Backend + Frontend usam o MESMO arquivo'
+  }
+}

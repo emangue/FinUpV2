@@ -24,17 +24,40 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
+import { Badge } from "@/components/ui/badge"
 
 export function NavProjects({
   projects,
+  isAdmin = false,
 }: {
   projects: {
     name: string
     url: string
     icon: LucideIcon
+    status?: 'P' | 'A' | 'D'
   }[]
+  isAdmin?: boolean
 }) {
   const { isMobile } = useSidebar()
+
+  const getStatusBadge = (status?: 'P' | 'A' | 'D') => {
+    if (!isAdmin || !status) return null
+    
+    const colors = {
+      P: 'bg-green-500/20 text-green-700 border-green-500/30',
+      A: 'bg-orange-500/20 text-orange-700 border-orange-500/30',
+      D: 'bg-purple-500/20 text-purple-700 border-purple-500/30',
+    }
+    
+    return (
+      <Badge 
+        variant="outline" 
+        className={`ml-auto text-[10px] px-1 py-0 h-4 ${colors[status]}`}
+      >
+        {status}
+      </Badge>
+    )
+  }
 
   return (
     <SidebarGroup className="group-data-[collapsible=icon]:hidden">
@@ -46,6 +69,7 @@ export function NavProjects({
               <a href={item.url}>
                 <item.icon />
                 <span>{item.name}</span>
+                {getStatusBadge(item.status)}
               </a>
             </SidebarMenuButton>
             <DropdownMenu>

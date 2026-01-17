@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head><title>Test Fetch</title></head>
+<body>
+<h1>Test API Fetch</h1>
+<div id="result"></div>
+<script>
+async function testFetch() {
+  const result = document.getElementById('result');
+  
+  try {
+    result.innerHTML = '<p>Testando /api/investimentos/resumo...</p>';
+    
+    const response = await fetch('/api/investimentos/resumo');
+    const data = await response.json();
+    
+    result.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+    
+  } catch (error) {
+    result.innerHTML = `<p style="color:red">Erro: ${error.message}</p>`;
+    console.error(error);
+  }
+}
+
+testFetch();
+</script>
+</body>
+</html>

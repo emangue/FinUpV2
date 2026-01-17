@@ -42,7 +42,7 @@ class CascadeClassifier:
     def __init__(self, db: Session, user_id: int):
         self.db = db
         self.user_id = user_id
-        self.generic_classifier = GenericRulesClassifier()  # Classificador de regras genéricas
+        self.generic_classifier = GenericRulesClassifier(db=db)  # Passa sessão do DB
         self.stats = {
             'total': 0,
             'base_parcelas': 0,

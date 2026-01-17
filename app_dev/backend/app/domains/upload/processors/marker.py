@@ -1,7 +1,12 @@
 """
-Transaction Marker - Fase 2
+Transaction Marker - Fase 2 (v4.2.3)
 Marca transações com IDs únicos (IdTransacao, IdParcela)
 Integra hasher.py e normalizer.py
+
+v4.2.3 (2026-01-16):
+- CRÍTICO: Adicionado .upper() ANTES de normalizar parcela
+- Resolve: "Ebn *vpd Travel01/10" vs "EBN *VPD TRAVEL10/10" agora geram mesmo hash
+- Normalização completa: espaços + uppercase + parcela (se fatura)
 """
 
 import logging
@@ -60,6 +65,24 @@ def extrair_parcela_do_estabelecimento(estabelecimento: str) -> Optional[dict]:
             }
     
     return None
+
+
+def normalizar_espacos(texto: str) -> str:
+    """
+    Normaliza espaços múltiplos para um único espaço
+    
+    Remove espaços extras que podem causar hashes diferentes:
+    - "PIX TRANSF  GABRIEL" → "PIX TRANSF GABRIEL"
+    - "LOJA   XYZ" → "LOJA XYZ"
+    
+    Args:
+        texto: Texto com possíveis espaços múltiplos
+        
+    Returns:
+        Texto com espaços normalizados
+    """
+    # Substituir múltiplos espaços por um único espaço
+    return re.sub(r'\s+', ' ', texto.strip())
 
 
 def normalizar_formato_parcela(estabelecimento: str) -> str:
@@ -242,20 +265,24 @@ class TransactionMarker:
             tipo_transacao = self._determinar_tipo_transacao(raw.nome_cartao, raw.valor)
             
             # 3. Detectar duplicados no arquivo e obter sequência
-            # ESTRATÉGIA v4.2.1 CONDICIONAL:
+            # ESTRATÉGIA v4.2.3 CONDICIONAL COM NORMALIZAÇÃO COMPLETA:
+            # - SEMPRE: Normaliza espaços múltiplos + UPPERCASE para evitar hashes diferentes
             # - FATURA: Normaliza parcela ("LOJA 01/05" → "LOJA (1/5)")
-            # - EXTRATO: NÃO normaliza (mantém original, pois "BA04/10" é parte do nome)
+            # - EXTRATO: NÃO normaliza parcela (mantém original, pois "BA04/10" é parte do nome)
             tipo_doc_lower = raw.tipo_documento.lower() if raw.tipo_documento else ''
             is_fatura = 'fatura' in tipo_doc_lower or 'cartao' in tipo_doc_lower or 'cartão' in tipo_doc_lower
             
+            # Sempre normalizar espaços + uppercase
+            lancamento_normalizado = normalizar_espacos(raw.lancamento).upper().strip()
+            
             if is_fatura:
                 # Fatura: normalizar formato de parcela
-                estab_normalizado = normalizar_formato_parcela(raw.lancamento)
+                estab_normalizado = normalizar_formato_parcela(lancamento_normalizado)
             else:
-                # Extrato: manter original (não confundir "BA04/10" com parcela)
-                estab_normalizado = raw.lancamento
+                # Extrato: manter apenas com espaços normalizados e uppercase
+                estab_normalizado = lancamento_normalizado
             
-            estab_hash = estab_normalizado.upper().strip()
+            estab_hash = estab_normalizado
             valor_hash = arredondar_2_decimais(raw.valor)  # VALOR EXATO (com sinal)
             
             chave_unica = f"{raw.data}|{estab_hash}|{valor_hash:.2f}"

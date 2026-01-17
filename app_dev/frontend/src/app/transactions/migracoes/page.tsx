@@ -112,7 +112,7 @@ export default function MigracoesPage() {
       setOpcoes(data.opcoes)
       
       // Extrair grupos únicos
-      const grupos = Array.from(new Set(data.opcoes.map((o: GrupoSubgrupoOption) => o.grupo)))
+      const grupos = Array.from(new Set(data.opcoes.map((o: GrupoSubgrupoOption) => o.grupo))) as string[]
       setGruposUnicos(grupos)
     } catch (error) {
       console.error("Erro ao carregar opções:", error)

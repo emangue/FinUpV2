@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import DashboardLayout from "@/components/dashboard-layout"
 import { Button } from "@/components/ui/button"
@@ -77,6 +78,14 @@ interface ClassificationSummary {
 }
 
 export default function UploadConfirmPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Carregando...</div>}>
+      <UploadConfirmPageContent />
+    </Suspense>
+  )
+}
+
+function UploadConfirmPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const fileParam = searchParams.get('file')

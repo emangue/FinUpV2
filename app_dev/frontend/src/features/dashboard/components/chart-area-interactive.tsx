@@ -174,11 +174,7 @@ const ChartAreaInteractive: React.FC<ChartAreaInteractiveProps> = ({
                   radius={4}
                   onClick={handleBarClick}
                   style={{ cursor: onMonthClick ? 'pointer' : 'default' }}
-                  fillOpacity={(entry: ChartDataItem) => {
-                    if (selectedMonth === 'all') return 1;
-                    const monthIndex = monthNameToIndex[entry.mes];
-                    return selectedMonth === String(monthIndex) ? 1 : 0.15;
-                  }}
+                  fillOpacity={0.8}
                 >
                   <LabelList
                     position="insideTop"
@@ -198,11 +194,7 @@ const ChartAreaInteractive: React.FC<ChartAreaInteractiveProps> = ({
                   radius={4}
                   onClick={handleBarClick}
                   style={{ cursor: onMonthClick ? 'pointer' : 'default' }}
-                  fillOpacity={(entry: ChartDataItem) => {
-                    if (selectedMonth === 'all') return 1;
-                    const monthIndex = monthNameToIndex[entry.mes];
-                    return selectedMonth === String(monthIndex) ? 1 : 0.15;
-                  }}
+                  fillOpacity={0.8}
                 >
                   <LabelList
                     position="insideTop"

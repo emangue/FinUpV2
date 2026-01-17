@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import DashboardLayout from "@/components/dashboard-layout"
 import { Badge } from "@/components/ui/badge"
@@ -45,7 +46,7 @@ import { Switch } from "@/components/ui/switch"
 import { TransactionFilters, FilterValues } from "@/features/transactions/components/transaction-filters"
 import { EditTransactionModal } from "@/features/transactions"
 
-interface Transaction {
+interface TransactionData {
   IdTransacao: string
   Data: string
   Estabelecimento: string
@@ -71,9 +72,17 @@ interface PaginationInfo {
 }
 
 export default function TransactionsPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Carregando...</div>}>
+      <TransactionsPageContent />
+    </Suspense>
+  )
+}
+
+function TransactionsPageContent() {
   const searchParams = useSearchParams()
   const [activeTab, setActiveTab] = React.useState("all")
-  const [transactions, setTransactions] = React.useState<Transaction[]>([])
+  const [transactions, setTransactions] = React.useState<TransactionData[]>([])
   const [pagination, setPagination] = React.useState<PaginationInfo>({
     page: 1,
     limit: 10,
@@ -86,7 +95,7 @@ export default function TransactionsPage() {
   const [appliedFilters, setAppliedFilters] = React.useState<FilterValues>({})
   const [somaTotal, setSomaTotal] = React.useState(0)
   const [editModalOpen, setEditModalOpen] = React.useState(false)
-  const [selectedTransaction, setSelectedTransaction] = React.useState<Transaction | null>(null)
+  const [selectedTransaction, setSelectedTransaction] = React.useState<TransactionData | null>(null)
   const [isInitialized, setIsInitialized] = React.useState(false)
 
   // Aplicar filtros de query params sempre que mudarem
@@ -280,6 +289,16 @@ export default function TransactionsPage() {
     }
   }
 
+  // Adapter para converter TransactionData para Transaction do modal
+  const adaptTransactionForModal = (transactionData: TransactionData | null) => {
+    if (!transactionData) return null
+    return {
+      ...transactionData,
+      Grupo: transactionData.GRUPO,
+      SubGrupo: transactionData.SUBGRUPO,
+    }
+  }
+
   const handleTabChange = (value: string) => {
     setActiveTab(value)
   }
@@ -365,12 +384,12 @@ export default function TransactionsPage() {
     fetchFilteredTotal(activeTab, filters)
   }
 
-  const handleTransactionClick = (transaction: Transaction) => {
+  const handleTransactionClick = (transaction: TransactionData) => {
     setSelectedTransaction(transaction)
     setEditModalOpen(true)
   }
 
-  const handleToggleIgnorar = async (transaction: Transaction, checked: boolean) => {
+  const handleToggleIgnorar = async (transaction: TransactionData, checked: boolean) => {
     const novoValor = checked ? 0 : 1
 
     // Atualiza otimisticamente para refletir o clique imediato
@@ -669,7 +688,7 @@ export default function TransactionsPage() {
         <EditTransactionModal
           open={editModalOpen}
           onOpenChange={setEditModalOpen}
-          transaction={selectedTransaction}
+          transaction={adaptTransactionForModal(selectedTransaction)}
           onSave={() => fetchTransactions(activeTab, pagination.page, appliedFilters)}
         />
       </div>

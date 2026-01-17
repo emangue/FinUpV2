@@ -22,6 +22,9 @@ from .domains.compatibility.router import router as compatibility_router
 from .domains.exclusoes.router import router as exclusoes_router
 from .domains.budget.router import router as budget_router
 from .domains.grupos.router import router as grupos_router
+from .domains.screen_visibility.router import router as screen_visibility_router
+from .domains.classification.router import router as classification_router
+from .domains.investimentos.router import router as investimentos_router
 
 # Cria app FastAPI
 app = FastAPI(
@@ -52,6 +55,9 @@ app.include_router(compatibility_router, prefix="/api/v1", tags=["Compatibility"
 app.include_router(exclusoes_router, prefix="/api/v1", tags=["Exclusoes"])
 app.include_router(budget_router, prefix="/api/v1", tags=["Budget"])
 app.include_router(grupos_router, prefix="/api/v1", tags=["Grupos"])
+app.include_router(screen_visibility_router, prefix="/api/v1/screens", tags=["Screen Visibility"])
+app.include_router(classification_router, prefix="/api/v1", tags=["Classification"])
+app.include_router(investimentos_router, prefix="/api/v1", tags=["Investimentos"])
 
 @app.get("/")
 def root():

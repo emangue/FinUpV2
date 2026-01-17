@@ -14,8 +14,10 @@ export async function createBank(data: BankCreate): Promise<BankCompatibility> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       bank_name: data.bank_name,
-      file_format: Object.keys(data.formats)[0], // Por enquanto, criar apenas o primeiro formato
-      status: Object.values(data.formats)[0]
+      csv_status: data.csv_status || 'TBD',
+      excel_status: data.excel_status || 'TBD',
+      pdf_status: data.pdf_status || 'TBD',
+      ofx_status: data.ofx_status || 'TBD'
     })
   })
   

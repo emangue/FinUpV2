@@ -331,6 +331,102 @@ find app_dev -name "*.db" -type f | grep -v node_modules
 
 ---
 
+### 🔍 EXPLORAÇÃO ANTES DE IMPLEMENTAÇÃO - REGRA OBRIGATÓRIA
+
+**REGRA CRÍTICA:** SEMPRE explorar domínios existentes antes de criar novas funcionalidades.
+
+**⚠️ PROBLEMA COMUM:** Criar APIs/funcionalidades duplicadas quando já existem domínios implementados.
+
+#### ✅ PROCESSO OBRIGATÓRIO ANTES DE IMPLEMENTAR:
+
+**1. 🕵️ INVESTIGAR ARQUITETURA EXISTENTE:**
+```bash
+# Verificar domínios disponíveis
+ls app_dev/backend/app/domains/
+
+# Verificar modelos existentes  
+find app_dev -name "models.py" | head -10
+
+# Verificar APIs registradas
+grep "router" app_dev/backend/app/main.py
+
+# Testar APIs existentes
+curl http://localhost:8000/api/v1/grupos/
+curl http://localhost:8000/api/v1/categories/
+```
+
+**2. 📋 CHECKLIST ANTES DE CRIAR NOVO DOMÍNIO:**
+- [ ] ✅ Verifiquei se já existe domínio relacionado?
+- [ ] ✅ Li os modelos existentes (`**/models.py`)?
+- [ ] ✅ Testei APIs existentes (`curl /api/v1/...`)?  
+- [ ] ✅ Procurei por tabelas relacionadas no banco?
+- [ ] ✅ Verifiquei se posso ESTENDER em vez de DUPLICAR?
+
+#### 🎯 EXEMPLO REAL - LIÇÃO APRENDIDA:
+
+**❌ ERRO COMETIDO:**
+- Criado `/api/v1/classification/groups-with-types` 
+- Buscou dados em `journal_entries` (dados inconsistentes)
+- Ignorou domínio `grupos` existente com `base_grupos_config`
+
+**✅ SOLUÇÃO CORRETA:**
+- Usar `/api/v1/grupos/` (domínio existente)
+- Buscar tipos em `base_grupos_config` (fonte oficial)  
+- Estender funcionalidade em vez de duplicar
+
+#### 🚫 SINAIS DE VIOLAÇÃO DESTA REGRA:
+
+**APIs duplicadas:**
+- Criar `/api/categories/new` quando `/api/categories/` já existe
+- Fazer `/api/usuarios/` quando `/api/users/` já funciona
+- Buscar dados em `journal_entries` quando existem tabelas específicas
+
+**Tabelas/modelos duplicados:**
+- Criar `NewModel` quando `ExistingModel` já resolve
+- Duplicar campos entre modelos
+- Criar tabelas temporárias quando existem oficiais
+
+**Lógica duplicada:**
+- Reescrever validações que já existem
+- Criar helpers quando já existem em `/core/` ou `/shared/`
+
+#### ⚡ COMMANDS ÚTEIS PARA EXPLORAÇÃO:
+
+```bash
+# Backend - Explorar domínios
+find app_dev/backend/app/domains -name "*.py" | head -20
+
+# Backend - Ver todas as APIs
+curl http://localhost:8000/docs | grep "/api/"
+
+# Banco - Ver todas as tabelas  
+sqlite3 app_dev/backend/database/financas_dev.db ".tables"
+
+# Banco - Ver schema de tabela específica
+sqlite3 app_dev/backend/database/financas_dev.db ".schema base_grupos_config"
+
+# Frontend - Ver componentes existentes
+find app_dev/frontend/src -name "*.tsx" | grep -v node_modules | head -20
+```
+
+#### 🎯 MANTRA OBRIGATÓRIO:
+
+> **"EXPLORE ANTES DE IMPLEMENTAR"**  
+> 1. Existe domínio relacionado?  
+> 2. Existe API similar?  
+> 3. Existe tabela oficial?  
+> 4. Posso estender em vez de duplicar?
+
+#### 🏆 BENEFÍCIOS DE SEGUIR ESTA REGRA:
+
+- ✅ **Evita duplicação** de código e APIs
+- ✅ **Mantém arquitetura limpa** e consistente
+- ✅ **Reutiliza** validações e lógicas existentes
+- ✅ **Economiza tempo** de desenvolvimento
+- ✅ **Reduz bugs** por usar código já testado
+
+---
+
 ## 🧹 LIMPEZA E ORGANIZAÇÃO - LIÇÕES APRENDIDAS
 
 ### ⚠️ ARQUIVOS QUE NÃO DEVEM EXISTIR

@@ -1,6 +1,6 @@
 """
 Registry de processadores raw
-Mapeia (banco, tipo) → função processadora
+Mapeia (banco, tipo, formato) → função processadora
 """
 
 import logging
@@ -10,22 +10,24 @@ from pathlib import Path
 import pandas as pd
 
 from .base import RawTransaction
-from .itau_fatura import process_itau_fatura
-from .itau_extrato import process_itau_extrato
-from .btg_extrato import process_btg_extrato
+from .csv.itau_fatura import process_itau_fatura as csv_itau_fatura
+from .excel.itau_extrato import process_itau_extrato
+from .excel.btg_extrato import process_btg_extrato
 
 logger = logging.getLogger(__name__)
 
 # Tipo para função processadora
 ProcessorFunc = Callable[[Path, str, str, str], List[RawTransaction]]
 
-# Registry de processadores
-PROCESSORS: dict[Tuple[str, str], ProcessorFunc] = {
-    ('itau', 'fatura'): process_itau_fatura,
-    ('itau', 'extrato'): process_itau_extrato,
-    ('btg', 'extrato'): process_btg_extrato,
-    ('btg pactual', 'extrato'): process_btg_extrato,
-    ('btg-pactual', 'extrato'): process_btg_extrato,  # Variação com hífen
+# Registry de processadores (banco, tipo, formato)
+PROCESSORS: dict[Tuple[str, str, str], ProcessorFunc] = {
+    # Itaú
+    ('itau', 'fatura', 'csv'): csv_itau_fatura,
+    ('itau', 'extrato', 'excel'): process_itau_extrato,
+    # BTG Pactual
+    ('btg', 'extrato', 'excel'): process_btg_extrato,
+    ('btg pactual', 'extrato', 'excel'): process_btg_extrato,
+    ('btg-pactual', 'extrato', 'excel'): process_btg_extrato,  # Variação com hífen
 }
 
 
@@ -52,13 +54,14 @@ def _normalize_bank_name(banco: str) -> str:
     return banco_sem_acento
 
 
-def get_processor(banco: str, tipo_documento: str) -> Optional[ProcessorFunc]:
+def get_processor(banco: str, tipo_documento: str, formato: str = None) -> Optional[ProcessorFunc]:
     """
-    Retorna o processador adequado para banco e tipo
+    Retorna o processador adequado para banco, tipo e formato
     
     Args:
         banco: Nome do banco (ex: "Itaú", "BTG Pactual")
         tipo_documento: 'fatura' ou 'extrato'
+        formato: 'csv', 'excel', 'pdf', 'ofx' (detectado automaticamente se None)
         
     Returns:
         Função processadora ou None se não encontrado
@@ -66,14 +69,24 @@ def get_processor(banco: str, tipo_documento: str) -> Optional[ProcessorFunc]:
     # Normalizar entrada
     banco_norm = _normalize_bank_name(banco)
     tipo_norm = tipo_documento.lower()
+    formato_norm = formato.lower() if formato else None
     
-    key = (banco_norm, tipo_norm)
-    processor = PROCESSORS.get(key)
+    # Tentar com formato especificado
+    if formato_norm:
+        key = (banco_norm, tipo_norm, formato_norm)
+        processor = PROCESSORS.get(key)
+        
+        if processor:
+            logger.info(f"✅ Processador encontrado: {banco_norm}/{tipo_norm}/{formato_norm}")
+            return processor
     
-    if processor:
-        logger.info(f"✅ Processador encontrado: {banco_norm}/{tipo_norm}")
-    else:
-        logger.warning(f"⚠️ Processador não encontrado: {banco_norm}/{tipo_norm}")
-        logger.info(f"📋 Processadores disponíveis: {list(PROCESSORS.keys())}")
+    # Fallback: buscar qualquer formato (retrocompatibilidade)
+    for (b, t, f), proc in PROCESSORS.items():
+        if b == banco_norm and t == tipo_norm:
+            logger.info(f"✅ Processador encontrado (fallback): {b}/{t}/{f}")
+            return proc
     
-    return processor
+    logger.warning(f"⚠️ Processador não encontrado: {banco_norm}/{tipo_norm}/{formato_norm or 'auto'}")
+    logger.info(f"📋 Processadores disponíveis: {list(PROCESSORS.keys())}")
+    
+    return None

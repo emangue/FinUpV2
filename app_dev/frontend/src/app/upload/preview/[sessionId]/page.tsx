@@ -367,7 +367,7 @@ export default function UploadPreviewPage() {
                   </h3>
                   <p className="text-sm text-amber-700 mt-1">
                     Complete a classificação antes de confirmar a importação. 
-                    {contadores.validas > 0 && ` ${contadores.validas} de ${contadores.total - contadores.duplicadas} transações já classificadas.`}
+                    {contadores.validas > 0 && ` ${contadores.validas} de ${contadores.todas - contadores.duplicadas} transações já classificadas.`}
                   </p>
                 </div>
               </div>

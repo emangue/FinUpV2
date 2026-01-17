@@ -99,8 +99,20 @@ export const API_ENDPOINTS = {
     BY_ID: (id: number) => `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/users/${id}`,
   },
   
+  // Screen Visibility
+  SCREENS: {
+    BASE: `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/screens`,
+    LIST: `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/screens/list`,
+    ADMIN_ALL: `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/screens/admin/all`,
+    BY_KEY: (key: string) => `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/screens/${key}`,
+    UPDATE: (id: number) => `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/screens/${id}`,
+  },
+  
   // Health
   HEALTH: `${API_CONFIG.BACKEND_URL}/api/health`,
+  
+  // Investimentos
+  INVESTIMENTOS: `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/investimentos`,
 } as const;
 
 // Helper para construir URL com query params

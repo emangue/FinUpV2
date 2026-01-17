@@ -18,6 +18,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { AlertCircle, CheckCircle2 } from "lucide-react"
 import {
   Select,
   SelectContent,
@@ -66,6 +68,7 @@ export default function ExclusoesPage() {
   const [exclusaoAcao, setExclusaoAcao] = React.useState('EXCLUIR')
   const [editingExclusao, setEditingExclusao] = React.useState<Exclusao | null>(null)
   const [bancos, setBancos] = React.useState<BankCompatibility[]>([])
+  const [notification, setNotification] = React.useState<{ type: 'success' | 'error', message: string } | null>(null)
 
   React.useEffect(() => {
     fetchExclusoes()
@@ -78,10 +81,15 @@ export default function ExclusoesPage() {
       const response = await fetch('/api/exclusoes')
       if (response.ok) {
         const data = await response.json()
+        console.log('Exclusões recebidas:', data)
         setExclusoes(data.exclusoes || [])
+      } else {
+        console.error('Erro ao buscar exclusões:', response.status)
+        setNotification({ type: 'error', message: `Erro ao buscar exclusões (${response.status})` })
       }
     } catch (error) {
       console.error('Erro ao buscar exclusões:', error)
+      setNotification({ type: 'error', message: 'Erro ao carregar exclusões' })
     } finally {
       setLoadingExclusoes(false)
     }
@@ -89,13 +97,19 @@ export default function ExclusoesPage() {
 
   const fetchBancos = async () => {
     try {
-      const response = await fetch('/api/compatibility/manage')
+      const response = await fetch('/api/compatibility')
       if (response.ok) {
         const data = await response.json()
-        setBancos(data)
+        console.log('Bancos recebidos:', data)
+        // API retorna { banks: [...], total: N }
+        setBancos(data.banks || [])
+      } else {
+        console.error('Erro ao buscar bancos:', response.status)
+        setNotification({ type: 'error', message: `Erro ao buscar bancos (${response.status})` })
       }
     } catch (error) {
       console.error('Erro ao buscar bancos:', error)
+      setNotification({ type: 'error', message: 'Erro ao conectar com servidor' })
     }
   }
 
@@ -134,12 +148,12 @@ export default function ExclusoesPage() {
     console.log('editingExclusao:', editingExclusao)
     
     if (!exclusaoNome.trim()) {
-      alert('Nome da transação é obrigatório')
+      setNotification({ type: 'error', message: 'Nome da transação é obrigatório' })
       return
     }
 
     if (!exclusaoTipoCartao && !exclusaoTipoExtrato) {
-      alert('Selecione pelo menos um tipo de documento')
+      setNotification({ type: 'error', message: 'Selecione pelo menos um tipo de documento' })
       return
     }
 
@@ -173,8 +187,12 @@ export default function ExclusoesPage() {
       })
 
       if (response.ok) {
+        setNotification({ type: 'success', message: `Regra ${editingExclusao ? 'atualizada' : 'adicionada'} com sucesso!` })
         fetchExclusoes()
-        setExclusaoModalOpen(false)
+        setTimeout(() => {
+          setExclusaoModalOpen(false)
+          setNotification(null)
+        }, 1500)
       } else {
         try {
           const errorData = await response.json()
@@ -183,7 +201,7 @@ export default function ExclusoesPage() {
           if (typeof errorData === 'string') {
             errorMsg = errorData
           } else if (errorData.detail) {
-            errorMsg = errorData.detail
+            errorMsg = typeof errorData.detail === 'string' ? errorData.detail : JSON.stringify(errorData.detail)
           } else if (errorData.error) {
             errorMsg = errorData.error
           } else if (errorData.message) {
@@ -191,15 +209,15 @@ export default function ExclusoesPage() {
           } else {
             errorMsg = JSON.stringify(errorData)
           }
-          alert(`Erro ao salvar: ${errorMsg}`)
+          setNotification({ type: 'error', message: `Erro ao salvar: ${errorMsg}` })
         } catch (parseError) {
-          alert(`Erro ao salvar (Status ${response.status})`)
+          setNotification({ type: 'error', message: `Erro ao salvar (Status ${response.status})` })
         }
       }
     } catch (error) {
       console.error('Erro ao salvar exclusão:', error)
       const errorMsg = error instanceof Error ? error.message : String(error)
-      alert(`Erro ao salvar exclusão: ${errorMsg}`)
+      setNotification({ type: 'error', message: `Erro ao salvar: ${errorMsg}` })
     }
   }
 
@@ -218,13 +236,15 @@ export default function ExclusoesPage() {
       })
 
       if (response.ok) {
+        setNotification({ type: 'success', message: 'Ação atualizada com sucesso!' })
         fetchExclusoes()
+        setTimeout(() => setNotification(null), 2000)
       } else {
-        alert('Erro ao atualizar ação')
+        setNotification({ type: 'error', message: 'Erro ao atualizar ação' })
       }
     } catch (error) {
       console.error('Erro ao atualizar ação:', error)
-      alert('Erro ao atualizar ação')
+      setNotification({ type: 'error', message: 'Erro ao atualizar ação' })
     }
   }
 
@@ -237,17 +257,33 @@ export default function ExclusoesPage() {
       })
 
       if (response.ok) {
+        setNotification({ type: 'success', message: 'Regra excluída com sucesso!' })
         fetchExclusoes()
+        setTimeout(() => setNotification(null), 2000)
+      } else {
+        setNotification({ type: 'error', message: 'Erro ao deletar regra' })
       }
     } catch (error) {
       console.error('Erro ao deletar exclusão:', error)
-      alert('Erro ao deletar exclusão')
+      setNotification({ type: 'error', message: 'Erro ao deletar regra' })
     }
   }
 
   return (
     <DashboardLayout>
       <div className="flex flex-1 flex-col gap-4">
+        {notification && (
+          <Alert variant={notification.type === 'error' ? 'destructive' : 'default'} className="mb-4">
+            {notification.type === 'error' ? (
+              <AlertCircle className="h-4 w-4" />
+            ) : (
+              <CheckCircle2 className="h-4 w-4" />
+            )}
+            <AlertTitle>{notification.type === 'error' ? 'Erro' : 'Sucesso'}</AlertTitle>
+            <AlertDescription>{notification.message}</AlertDescription>
+          </Alert>
+        )}
+        
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-semibold">Excluir / Ignorar</h1>
@@ -271,19 +307,29 @@ export default function ExclusoesPage() {
             </Button>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nome da Transação</TableHead>
-                  <TableHead>Banco</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Ação</TableHead>
-                  <TableHead>Descrição</TableHead>
-                  <TableHead className="w-[100px]">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {exclusoes.map((exclusao) => (
+            {loadingExclusoes ? (
+              <div className="flex items-center justify-center py-8 text-muted-foreground">
+                Carregando exclusões...
+              </div>
+            ) : exclusoes.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                <p>Nenhuma regra cadastrada</p>
+                <p className="text-sm mt-1">Clique em "Nova Regra" para adicionar</p>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nome da Transação</TableHead>
+                    <TableHead>Banco</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Ação</TableHead>
+                    <TableHead>Descrição</TableHead>
+                    <TableHead className="w-[100px]">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {exclusoes.map((exclusao) => (
                   <TableRow key={exclusao.id}>
                     <TableCell className="font-medium">{exclusao.nome_transacao}</TableCell>
                     <TableCell>{exclusao.banco || <span className="text-muted-foreground">Todos</span>}</TableCell>
@@ -341,6 +387,7 @@ export default function ExclusoesPage() {
                 ))}
               </TableBody>
             </Table>
+            )}
           </CardContent>
         </Card>
 
@@ -354,6 +401,19 @@ export default function ExclusoesPage() {
                 {editingExclusao ? 'Altere' : 'Insira'} o nome da transação a ser excluída ou ignorada
               </DialogDescription>
             </DialogHeader>
+            
+            {notification && (
+              <Alert variant={notification.type === 'error' ? 'destructive' : 'default'} className="mb-2">
+                {notification.type === 'error' ? (
+                  <AlertCircle className="h-4 w-4" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4" />
+                )}
+                <AlertTitle>{notification.type === 'error' ? 'Erro' : 'Sucesso'}</AlertTitle>
+                <AlertDescription>{notification.message}</AlertDescription>
+              </Alert>
+            )}
+            
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="exclusaoNome">Nome da Transação</Label>
