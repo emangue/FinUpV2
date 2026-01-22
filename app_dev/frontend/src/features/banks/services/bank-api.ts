@@ -1,7 +1,9 @@
+import { fetchWithAuth } from '@/core/utils/api-client'
+import { API_CONFIG } from '@/core/config/api.config'
 import { BankCompatibility, BankCreate, BankUpdate, BankResponse } from '../types'
 
 export async function fetchBanks(): Promise<BankResponse> {
-  const response = await fetch('/api/compatibility')
+  const response = await fetchWithAuth(`${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/compatibility/`)
   if (!response.ok) {
     throw new Error(`Erro ao buscar bancos: ${response.statusText}`)
   }
@@ -9,7 +11,7 @@ export async function fetchBanks(): Promise<BankResponse> {
 }
 
 export async function createBank(data: BankCreate): Promise<BankCompatibility> {
-  const response = await fetch('/api/compatibility', {
+  const response = await fetchWithAuth(`${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/compatibility/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -30,7 +32,7 @@ export async function createBank(data: BankCreate): Promise<BankCompatibility> {
 }
 
 export async function updateBank(id: number, data: { status: 'OK' | 'WIP' | 'TBD' }): Promise<BankCompatibility> {
-  const response = await fetch(`/api/compatibility/${id}`, {
+  const response = await fetchWithAuth(`${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/compatibility/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data)
@@ -45,7 +47,7 @@ export async function updateBank(id: number, data: { status: 'OK' | 'WIP' | 'TBD
 }
 
 export async function deleteBank(id: number): Promise<void> {
-  const response = await fetch(`/api/compatibility/${id}`, {
+  const response = await fetchWithAuth(`${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/compatibility/${id}`, {
     method: 'DELETE'
   })
   
