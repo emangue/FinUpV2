@@ -24,6 +24,16 @@ class UserUpdate(BaseModel):
     role: Optional[str] = None
     ativo: Optional[int] = None
 
+class ProfileUpdate(BaseModel):
+    """Schema para atualizar perfil do usuário"""
+    nome: str = Field(..., min_length=2, max_length=200)
+    email: EmailStr
+
+class PasswordChange(BaseModel):
+    """Schema para alterar senha"""
+    current_password: str = Field(..., min_length=6)
+    new_password: str = Field(..., min_length=6)
+
 class UserResponse(UserBase):
     """Schema de resposta de usuário"""
     id: int

@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { fetchWithAuth } from '@/core/utils/api-client'  // ✅ FASE 3 - Autenticação obrigatória
 import { useRouter } from "next/navigation"
 import { Upload, X, Plus } from "lucide-react"
 
@@ -131,7 +132,7 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
         formData.append('senha', password) // Senha para PDFs protegidos
       }
       
-      const response = await fetch('/api/upload/preview', {
+      const response = await fetchWithAuth('/api/upload/preview', {
         method: 'POST',
         body: formData
       })
@@ -208,7 +209,7 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
     
     try {
       // Bank já vem com nome correto (ex: "BTG Pactual")
-      const response = await fetch('/api/cards', {
+      const response = await fetchWithAuth('/api/cards', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -255,7 +256,7 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
       resetForm()
       
       // Buscar compatibilidade da API (formato matricial)
-      fetch('/api/compatibility')
+      fetchWithAuth('/api/compatibility')
         .then(res => res.json())
         .then(data => {
           console.log('🔍 Compatibilidade carregada:', data)
@@ -278,7 +279,7 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
         .catch(err => console.error('❌ Erro ao buscar compatibilidade:', err))
       
       // Buscar cartões cadastrados
-      fetch('/api/cards')
+      fetchWithAuth('/api/cards')
         .then(res => res.json())
         .then(data => {
           console.log('💳 Cartões carregados:', data)

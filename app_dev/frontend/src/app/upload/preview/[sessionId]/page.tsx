@@ -50,6 +50,7 @@ interface PreviewData {
   marcacao_ia?: string
   is_duplicate?: boolean
   duplicate_reason?: string
+  excluir?: number  // 0 = importar, 1 = não importar
 }
 
 interface Metadata {
@@ -75,6 +76,7 @@ interface GruposSubgrupos {
 }
 
 export default function UploadPreviewPage() {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1"
   const params = useParams()
   const router = useRouter()
   const sessionId = params.sessionId as string
@@ -86,26 +88,27 @@ export default function UploadPreviewPage() {
   const [isConfirming, setIsConfirming] = React.useState(false)
   const [gruposSubgrupos, setGruposSubgrupos] = React.useState<GruposSubgrupos>({ grupos: [], subgruposPorGrupo: {} })
   const [activeFilter, setActiveFilter] = React.useState<string>('todas')
+  const [expandedGroups, setExpandedGroups] = React.useState<Set<string>>(new Set())
 
   React.useEffect(() => {
     fetchPreviewData()
     fetchGruposSubgrupos()
   }, [sessionId])
 
-  // Auto-filtrar para "Não Classificadas" se houver
+  // Auto-filtrar para "Não Classificadas" APENAS no carregamento inicial
   React.useEffect(() => {
-    if (registros.length > 0) {
+    if (registros.length > 0 && activeFilter === 'todas') {
       const naoClassificadas = registros.filter(r => !r.grupo || !r.subgrupo || r.origem_classificacao === 'Não Classificado')
       if (naoClassificadas.length > 0) {
         setActiveFilter('nao_classificadas')
       }
     }
-  }, [registros])
+  }, [registros.length]) // Só dispara quando o tamanho muda (carregamento inicial)
 
   const fetchPreviewData = async () => {
     try {
       setLoading(true)
-      const response = await fetch(`/api/upload/preview/${sessionId}`)
+      const response = await fetch(`${apiUrl}/upload/preview/${sessionId}`)
       
       if (!response.ok) {
         throw new Error('Falha ao carregar dados do preview')
@@ -155,14 +158,18 @@ export default function UploadPreviewPage() {
 
   const handleGrupoChange = async (previewId: number, grupo: string) => {
     try {
-      const response = await fetch(`/api/upload/preview/${sessionId}/${previewId}?grupo=${grupo}`, {
+      const response = await fetch(`${apiUrl}/upload/preview/${sessionId}/${previewId}?grupo=${grupo}`, {
         method: 'PATCH'
       })
       
       if (response.ok) {
-        // Atualizar local
+        // Apenas atualizar grupo, NÃO mexer em origem_classificacao ainda
         setRegistros(prev => prev.map(r => 
-          r.id === previewId ? { ...r, grupo, subgrupo: undefined } : r
+          r.id === previewId ? { 
+            ...r, 
+            grupo, 
+            subgrupo: undefined
+          } : r
         ))
       }
     } catch (err) {
@@ -170,16 +177,50 @@ export default function UploadPreviewPage() {
     }
   }
 
+  // Alterar grupo em lote (todas as transações do grupo)
+  const handleGrupoChangeBatch = async (groupName: string, grupo: string) => {
+    try {
+      // Encontrar todos os IDs do grupo
+      const group = groupedTransactions.find(g => g.name === groupName)
+      if (!group) return
+      
+      const ids = group.items.map(item => item.id)
+      
+      // Atualizar todos
+      await Promise.all(ids.map(id => 
+        fetch(`${apiUrl}/upload/preview/${sessionId}/${id}?grupo=${grupo}`, {
+          method: 'PATCH'
+        })
+      ))
+      
+      // Apenas atualizar grupo, NÃO mexer em origem_classificacao ainda
+      setRegistros(prev => prev.map(r => 
+        ids.includes(r.id) ? { 
+          ...r, 
+          grupo, 
+          subgrupo: undefined
+        } : r
+      ))
+    } catch (err) {
+      console.error('Erro ao atualizar grupo em lote:', err)
+    }
+  }
+
   const handleSubgrupoChange = async (previewId: number, subgrupo: string) => {
     try {
-      const response = await fetch(`/api/upload/preview/${sessionId}/${previewId}?subgrupo=${subgrupo}`, {
+      const response = await fetch(`${apiUrl}/upload/preview/${sessionId}/${previewId}?subgrupo=${subgrupo}`, {
         method: 'PATCH'
       })
       
       if (response.ok) {
-        // Atualizar local
+        const data = await response.json()
+        // Atualizar local com origem_classificacao retornado do backend
         setRegistros(prev => prev.map(r => 
-          r.id === previewId ? { ...r, subgrupo } : r
+          r.id === previewId ? { 
+            ...r, 
+            subgrupo,
+            origem_classificacao: data.origem_classificacao || 'Manual'
+          } : r
         ))
       }
     } catch (err) {
@@ -187,10 +228,55 @@ export default function UploadPreviewPage() {
     }
   }
 
+  const handleToggleExcluir = async (previewId: number, excluir: number) => {
+    try {
+      const response = await fetch(`${apiUrl}/upload/preview/${sessionId}/${previewId}?excluir=${excluir}`, {
+        method: 'PATCH'
+      })
+      
+      if (response.ok) {
+        setRegistros(prev => prev.map(r => 
+          r.id === previewId ? { ...r, excluir } : r
+        ))
+      }
+    } catch (err) {
+      console.error('Erro ao marcar exclusão:', err)
+    }
+  }
+
+  // Alterar subgrupo em lote (todas as transações do grupo)
+  const handleSubgrupoChangeBatch = async (groupName: string, subgrupo: string) => {
+    try {
+      // Encontrar todos os IDs do grupo
+      const group = groupedTransactions.find(g => g.name === groupName)
+      if (!group) return
+      
+      const ids = group.items.map(item => item.id)
+      
+      // Atualizar todos
+      await Promise.all(ids.map(id => 
+        fetch(`${apiUrl}/upload/preview/${sessionId}/${id}?subgrupo=${subgrupo}`, {
+          method: 'PATCH'
+        })
+      ))
+      
+      // Atualizar local
+      setRegistros(prev => prev.map(r => 
+        ids.includes(r.id) ? { 
+          ...r, 
+          subgrupo,
+          origem_classificacao: 'Manual'
+        } : r
+      ))
+    } catch (err) {
+      console.error('Erro ao atualizar subgrupo em lote:', err)
+    }
+  }
+
   const handleCancel = async () => {
     try {
       // Deletar preview
-      await fetch(`/api/upload/preview/${sessionId}`, {
+      await fetch(`${apiUrl}/upload/preview/${sessionId}`, {
         method: 'DELETE'
       })
       
@@ -207,7 +293,7 @@ export default function UploadPreviewPage() {
       console.log('Confirmando importação de', registros.length, 'registros')
       
       // Chamar endpoint de confirmação correto (session_id na URL)
-      const response = await fetch(`/api/upload/confirm/${sessionId}`, {
+      const response = await fetch(`${apiUrl}/upload/confirm/${sessionId}`, {
         method: 'POST'
       })
       
@@ -236,6 +322,16 @@ export default function UploadPreviewPage() {
     }).format(value)
   }
 
+  const toggleGroup = (groupKey: string) => {
+    const newExpanded = new Set(expandedGroups)
+    if (newExpanded.has(groupKey)) {
+      newExpanded.delete(groupKey)
+    } else {
+      newExpanded.add(groupKey)
+    }
+    setExpandedGroups(newExpanded)
+  }
+
   const formatMesFatura = (mesFatura: string) => {
     // mesFatura pode vir como "202511" ou "2025-11"
     let ano: string, mes: string
@@ -262,10 +358,13 @@ export default function UploadPreviewPage() {
     const naoClassificadas = naoDuplicadas.filter(r => !r.grupo || !r.subgrupo || r.origem_classificacao === 'Não Classificado')
     const validas = naoDuplicadas.filter(r => r.grupo && r.subgrupo)
     const classificadas = naoDuplicadas.filter(r => r.grupo && r.subgrupo)
-    const baseParcelas = naoDuplicadas.filter(r => r.origem_classificacao === 'Base Parcelas')
-    const basePadroes = naoDuplicadas.filter(r => r.origem_classificacao === 'Base Padrões')
-    const journalEntries = naoDuplicadas.filter(r => r.origem_classificacao === 'Journal Entries')
-    const regrasGenericas = naoDuplicadas.filter(r => r.origem_classificacao === 'Regras Genéricas')
+    
+    // Contar por origem APENAS entre as classificadas (não duplicadas)
+    const baseParcelas = classificadas.filter(r => r.origem_classificacao === 'Base Parcelas')
+    const basePadroes = classificadas.filter(r => r.origem_classificacao === 'Base Padrões')
+    const journalEntries = classificadas.filter(r => r.origem_classificacao === 'Journal Entries')
+    const regrasGenericas = classificadas.filter(r => r.origem_classificacao === 'Regras Genéricas')
+    const manual = classificadas.filter(r => r.origem_classificacao === 'Manual')
     
     return {
       todas: registros.length,
@@ -277,7 +376,8 @@ export default function UploadPreviewPage() {
       baseParcelas: baseParcelas.length,
       basePadroes: basePadroes.length,
       journalEntries: journalEntries.length,
-      regrasGenericas: regrasGenericas.length
+      regrasGenericas: regrasGenericas.length,
+      manual: manual.length
     }
   }, [registros])
 
@@ -295,6 +395,8 @@ export default function UploadPreviewPage() {
         return registros.filter(r => !r.is_duplicate && r.origem_classificacao === 'Journal Entries')
       case 'regras_genericas':
         return registros.filter(r => !r.is_duplicate && r.origem_classificacao === 'Regras Genéricas')
+      case 'manual':
+        return registros.filter(r => !r.is_duplicate && r.origem_classificacao === 'Manual')
       case 'nao_classificadas':
         return registros.filter(r => !r.is_duplicate && (!r.grupo || !r.subgrupo || r.origem_classificacao === 'Não Classificado'))
       case 'duplicadas':
@@ -303,6 +405,31 @@ export default function UploadPreviewPage() {
         return registros
     }
   }, [registros, activeFilter])
+
+  // Agrupar transações por nome (lancamento) - DEPOIS de filteredRegistros
+  const groupedTransactions = React.useMemo(() => {
+    const groups = new Map<string, PreviewData[]>()
+    
+    filteredRegistros.forEach(registro => {
+      const key = registro.lancamento
+      if (!groups.has(key)) {
+        groups.set(key, [])
+      }
+      groups.get(key)!.push(registro)
+    })
+    
+    // Converter para array e ordenar por quantidade (maior primeiro)
+    return Array.from(groups.entries())
+      .map(([name, items]) => ({
+        name,
+        items,
+        count: items.length,
+        totalValue: items.reduce((sum, item) => sum + item.valor, 0),
+        // Usar dados do primeiro item como representante
+        representative: items[0]
+      }))
+      .sort((a, b) => b.count - a.count)
+  }, [filteredRegistros])
 
   if (loading) {
     return (
@@ -497,8 +624,8 @@ export default function UploadPreviewPage() {
             <CardTitle>Lançamentos Detectados</CardTitle>
             <CardDescription>
               {activeFilter === 'todas' 
-                ? `${registros.length} lançamentos prontos para importação`
-                : `${filteredRegistros.length} de ${registros.length} lançamentos`
+                ? `${contadores.todas} lançamentos no total`
+                : `${filteredRegistros.length} de ${contadores.todas} lançamentos`
               }
             </CardDescription>
           </CardHeader>
@@ -548,6 +675,13 @@ export default function UploadPreviewPage() {
                 Regras Genéricas ({contadores.regrasGenericas})
               </Button>
               <Button
+                variant={activeFilter === 'manual' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setActiveFilter('manual')}
+              >
+                Manual ({contadores.manual})
+              </Button>
+              <Button
                 variant={activeFilter === 'nao_classificadas' ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => setActiveFilter('nao_classificadas')}
@@ -569,6 +703,7 @@ export default function UploadPreviewPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-[50px]"></TableHead>
                     <TableHead className="w-[100px]">Data</TableHead>
                     <TableHead>Lançamento</TableHead>
                     <TableHead className="w-[180px]">Grupo</TableHead>
@@ -578,87 +713,185 @@ export default function UploadPreviewPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredRegistros.length === 0 ? (
+                  {groupedTransactions.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center text-muted-foreground">
+                      <TableCell colSpan={7} className="text-center text-muted-foreground">
                         Nenhum registro encontrado
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredRegistros.map((registro) => (
-                      <TableRow key={registro.id}>
-                        <TableCell className="font-mono text-sm">
-                          {registro.data}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-col">
-                            <span className="font-medium">{registro.lancamento}</span>
-                            <span className="text-xs text-muted-foreground">
-                              {registro.banco} • {registro.cartao}
-                            </span>
-                            {registro.marcacao_ia && (
-                              <span className="text-xs text-blue-600 mt-1">
-                                💡 {registro.marcacao_ia}
-                              </span>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Select
-                            value={registro.grupo || ''}
-                            onValueChange={(value) => handleGrupoChange(registro.id, value)}
+                    groupedTransactions.map((group) => {
+                      const isExpanded = expandedGroups.has(group.name)
+                      const rep = group.representative
+                      
+                      return (
+                        <React.Fragment key={group.name}>
+                          {/* Linha do grupo (colapsada) */}
+                          <TableRow 
+                            className="hover:bg-muted/50 font-medium"
                           >
-                            <SelectTrigger className="w-full">
-                              <SelectValue placeholder="Selecione grupo">
-                                {registro.grupo || 'Selecione grupo'}
-                              </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent>
-                              {gruposSubgrupos.grupos.map((grupo) => (
-                                <SelectItem key={grupo} value={grupo}>
-                                  {grupo}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
-                        <TableCell>
-                          <Select
-                            value={registro.subgrupo || ''}
-                            onValueChange={(value) => handleSubgrupoChange(registro.id, value)}
-                            disabled={!registro.grupo}
-                          >
-                            <SelectTrigger className="w-full">
-                              <SelectValue placeholder="Selecione subgrupo">
-                                {registro.subgrupo || 'Selecione subgrupo'}
-                              </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent>
-                              {registro.grupo && gruposSubgrupos.subgruposPorGrupo[registro.grupo]?.map((subgrupo) => (
-                                <SelectItem key={subgrupo} value={subgrupo}>
-                                  {subgrupo}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={
-                            registro.origem_classificacao === 'Manual' ? 'default' :
-                            registro.origem_classificacao === 'Base Padrões' ? 'secondary' :
-                            registro.origem_classificacao === 'Regras Genéricas' ? 'outline' :
-                            'secondary'
-                          } className="text-xs">
-                            {registro.origem_classificacao || 'N/A'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <span className={registro.valor < 0 ? "text-red-600" : "text-green-600"}>
-                            {formatCurrency(registro.valor)}
-                          </span>
-                        </TableCell>
-                      </TableRow>
-                    ))
+                            <TableCell>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="h-6 w-6 p-0"
+                                onClick={() => toggleGroup(group.name)}
+                              >
+                                {isExpanded ? '▼' : '▶'}
+                              </Button>
+                            </TableCell>
+                            <TableCell className="font-mono text-sm text-muted-foreground">
+                              {group.count > 1 ? `${group.count}×` : rep.data}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-col">
+                                <span className="font-medium">{group.name}</span>
+                                {group.count > 1 && (
+                                  <span className="text-xs text-muted-foreground">
+                                    {group.count} ocorrências
+                                  </span>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell onClick={(e) => e.stopPropagation()}>
+                              <Select
+                                value={rep.grupo || ''}
+                                onValueChange={(value) => handleGrupoChangeBatch(group.name, value)}
+                              >
+                                <SelectTrigger className="w-full">
+                                  <SelectValue placeholder="Selecione grupo">
+                                    {rep.grupo || 'Selecione grupo'}
+                                  </SelectValue>
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {gruposSubgrupos.grupos.map((grupo) => (
+                                    <SelectItem key={grupo} value={grupo}>
+                                      {grupo}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </TableCell>
+                            <TableCell onClick={(e) => e.stopPropagation()}>
+                              <Select
+                                value={rep.subgrupo || ''}
+                                onValueChange={(value) => handleSubgrupoChangeBatch(group.name, value)}
+                                disabled={!rep.grupo}
+                              >
+                                <SelectTrigger className="w-full">
+                                  <SelectValue placeholder="Selecione subgrupo">
+                                    {rep.subgrupo || 'Selecione subgrupo'}
+                                  </SelectValue>
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {rep.grupo && gruposSubgrupos.subgruposPorGrupo[rep.grupo]?.map((subgrupo) => (
+                                    <SelectItem key={subgrupo} value={subgrupo}>
+                                      {subgrupo}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="text-xs">
+                                {rep.origem_classificacao || 'N/A'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right font-mono">
+                              {formatCurrency(group.totalValue)}
+                            </TableCell>
+                          </TableRow>
+                          
+                          {/* Linhas individuais expandidas */}
+                          {isExpanded && group.items.map((registro) => (
+                            <TableRow key={registro.id} className="bg-muted/30">
+                              <TableCell></TableCell>
+                              <TableCell className="font-mono text-sm pl-8">
+                                {registro.data}
+                              </TableCell>
+                              <TableCell className="pl-8">
+                                <div className="flex flex-col">
+                                  <span className="text-sm text-muted-foreground">
+                                    {registro.banco} • {registro.cartao}
+                                  </span>
+                                  {registro.marcacao_ia && (
+                                    <span className="text-xs text-blue-600 mt-1">
+                                      💡 {registro.marcacao_ia}
+                                    </span>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell onClick={(e) => e.stopPropagation()}>
+                                <Select
+                                  value={registro.grupo || ''}
+                                  onValueChange={(value) => handleGrupoChange(registro.id, value)}
+                                >
+                                  <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Selecione grupo">
+                                      {registro.grupo || 'Selecione grupo'}
+                                    </SelectValue>
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {gruposSubgrupos.grupos.map((grupo) => (
+                                      <SelectItem key={grupo} value={grupo}>
+                                        {grupo}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </TableCell>
+                              <TableCell onClick={(e) => e.stopPropagation()}>
+                                <Select
+                                  value={registro.subgrupo || ''}
+                                  onValueChange={(value) => handleSubgrupoChange(registro.id, value)}
+                                  disabled={!registro.grupo}
+                                >
+                                  <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Selecione subgrupo">
+                                      {registro.subgrupo || 'Selecione subgrupo'}
+                                    </SelectValue>
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {registro.grupo && gruposSubgrupos.subgruposPorGrupo[registro.grupo]?.map((subgrupo) => (
+                                      <SelectItem key={subgrupo} value={subgrupo}>
+                                        {subgrupo}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant={
+                                  registro.origem_classificacao === 'Manual' ? 'default' :
+                                  registro.origem_classificacao === 'Base Padrões' ? 'secondary' :
+                                  registro.origem_classificacao === 'Regras Genéricas' ? 'outline' :
+                                  'secondary'
+                                } className="text-xs">
+                                  {registro.origem_classificacao || 'N/A'}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex items-center justify-end gap-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={registro.excluir === 1}
+                                    onChange={(e) => {
+                                      e.stopPropagation()
+                                      handleToggleExcluir(registro.id, e.target.checked ? 1 : 0)
+                                    }}
+                                    className="w-4 h-4 cursor-pointer"
+                                    title={registro.excluir === 1 ? "Marcado para NÃO importar" : "Será importado"}
+                                  />
+                                  <span className={registro.valor < 0 ? "text-red-600 font-mono" : "text-green-600 font-mono"}>
+                                    {formatCurrency(registro.valor)}
+                                  </span>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </React.Fragment>
+                      )
+                    })
                   )}
                 </TableBody>
               </Table>

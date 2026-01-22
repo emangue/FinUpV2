@@ -111,3 +111,6 @@ app/uploads_temp/
 app/static/uploads/
 app/flask_session/
 app/venv/
+# Arquivos temporários
+temp/logs/*.log
+temp/pids/*.pid

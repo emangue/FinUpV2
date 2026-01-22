@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { fetchWithAuth } from '@/core/utils/api-client';  // ✅ FASE 3 - Autenticação obrigatória
 import { useRouter } from 'next/navigation';
 import {
   Dialog,
@@ -78,7 +79,7 @@ export function BudgetMediaDrilldownModal({
         mes_referencia: mesReferencia,
       });
 
-      const response = await fetch(
+      const response = await fetchWithAuth(
         `${API_CONFIG.BACKEND_URL}/api/v1/budget/detalhamento-media?${params.toString()}`
       );
 

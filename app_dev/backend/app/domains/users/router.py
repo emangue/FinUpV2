@@ -83,3 +83,9 @@ def reset_password(
     """
     service = UserService(db)
     return service.reset_password(user_id, nova_senha)
+
+# TODO: Adicionar endpoints de perfil após completar plano de autenticação
+# @router.put("/profile") - Requer get_current_user_from_jwt
+# @router.post("/change-password") - Requer get_current_user_from_jwt
+
+

@@ -44,19 +44,19 @@ export const PortfolioOverview = React.memo(function PortfolioOverview({ resumo 
   // Memoização da configuração dos cards
   const cards = useMemo(() => [
     {
-      title: 'Total Investido',
+      title: 'Ativos',
       value: formatCurrency(calculations.totalInvestido),
       icon: Wallet,
-      description: 'Valor total aplicado',
+      description: 'Total de ativos no último mês',
     },
     {
-      title: 'Valor Atual',
+      title: 'Passivos',
       value: formatCurrency(calculations.valorAtual),
       icon: Package,
-      description: 'Patrimônio atual',
+      description: 'Total de passivos no último mês',
     },
     {
-      title: 'Rendimento Total',
+      title: 'Patrimônio Líquido',
       value: formatCurrency(calculations.rendimentoTotal),
       icon: calculations.isPositive ? TrendingUp : TrendingDown,
       description: `${calculations.rendimentoPercentual.toFixed(2)}% do total`,

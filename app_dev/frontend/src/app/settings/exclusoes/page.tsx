@@ -57,6 +57,7 @@ interface BankCompatibility {
 }
 
 export default function ExclusoesPage() {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1"
   const [exclusoes, setExclusoes] = React.useState<Exclusao[]>([])
   const [loadingExclusoes, setLoadingExclusoes] = React.useState(true)
   const [exclusaoModalOpen, setExclusaoModalOpen] = React.useState(false)
@@ -226,7 +227,7 @@ export default function ExclusoesPage() {
       const exclusao = exclusoes.find(e => e.id === id)
       if (!exclusao) return
 
-      const response = await fetch(`/api/exclusoes/${id}`, {
+      const response = await fetch(`${apiUrl}/exclusoes/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -252,7 +253,7 @@ export default function ExclusoesPage() {
     if (!confirm('Deseja realmente deletar esta regra?')) return
 
     try {
-      const response = await fetch(`/api/exclusoes/${id}`, {
+      const response = await fetch(`${apiUrl}/exclusoes/${id}`, {
         method: 'DELETE'
       })
 

@@ -2,6 +2,7 @@
 Domínio Upload - Router
 Endpoints HTTP - apenas validação e chamadas de service
 """
+from typing import List
 from fastapi import APIRouter, Depends, UploadFile, File, Form
 from sqlalchemy.orm import Session
 
@@ -57,6 +58,104 @@ async def upload_preview(
         final_cartao=final_cartao
     )
 
+@router.post("/batch", response_model=dict)
+async def upload_batch(
+    files: List[UploadFile] = File(...),
+    banco: str = Form(...),
+    tipoDocumento: str = Form("extrato"),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Recebe múltiplos arquivos e processa em lote (CONSOLIDADO em uma única sessão)
+    
+    **Parâmetros:**
+    - files: Lista de arquivos
+    - banco: Nome do banco (deve ser o mesmo para todos)
+    - tipoDocumento: 'fatura' ou 'extrato'
+    
+    **Retorna:**
+    - sessionId: ID único da sessão consolidada
+    - totalArquivos: Número de arquivos processados
+    - totalTransacoes: Número total de transações (de todos os arquivos)
+    - erros: Lista de erros (se houver)
+    """
+    import logging
+    from datetime import datetime
+    logger = logging.getLogger(__name__)
+    
+    logger.info(f"📦 Upload em lote iniciado: {len(files)} arquivos")
+    
+    service = UploadService(db)
+    resultados = []
+    erros = []
+    total_transacoes = 0
+    
+    # Gerar UMA ÚNICA session_id para todos os arquivos
+    session_id_consolidado = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{user_id}"
+    logger.info(f"🎯 Sessão consolidada: {session_id_consolidado}")
+    
+    for i, file in enumerate(files, 1):
+        try:
+            logger.info(f"  {i}/{len(files)} - Processando: {file.filename}")
+            
+            # Extrair mês da fatura do nome do arquivo se for fatura
+            # Ex: MP202501.xlsx → mesFatura = "2025-01"
+            mes_fatura = "2025-01"  # Default
+            if tipoDocumento == "fatura" and file.filename:
+                # Tentar extrair do nome do arquivo
+                import re
+                match = re.search(r'(\d{4})(\d{2})', file.filename)
+                if match:
+                    ano, mes = match.groups()
+                    mes_fatura = f"{ano}-{mes}"
+            
+            result = service.process_and_preview(
+                file=file,
+                banco=banco,
+                mes_fatura=mes_fatura,
+                user_id=user_id,
+                cartao=None,
+                tipo_documento=tipoDocumento,
+                formato="Excel",
+                final_cartao=None,
+                skip_cleanup=(i > 1),  # Limpar apenas no primeiro arquivo
+                shared_session_id=session_id_consolidado  # Usar sessão compartilhada
+            )
+            
+            resultados.append({
+                "arquivo": file.filename,
+                "totalRegistros": result.totalRegistros,
+                "success": True
+            })
+            
+            total_transacoes += result.totalRegistros
+            logger.info(f"    ✅ {result.totalRegistros} transações processadas")
+            
+        except Exception as e:
+            logger.error(f"    ❌ Erro: {str(e)}")
+            erros.append({
+                "arquivo": file.filename,
+                "erro": str(e)
+            })
+            resultados.append({
+                "arquivo": file.filename,
+                "success": False,
+                "erro": str(e)
+            })
+    
+    logger.info(f"✅ Lote concluído: {len(resultados)} arquivos, {total_transacoes} transações")
+    
+    return {
+        "success": len(erros) == 0,
+        "sessionId": session_id_consolidado,  # Sessão única consolidada
+        "totalArquivos": len(files),
+        "arquivosProcessados": len([r for r in resultados if r.get("success")]),
+        "totalTransacoes": total_transacoes,
+        "arquivos": resultados,  # Lista de arquivos processados
+        "erros": erros
+    }
+
 @router.get("/preview/{session_id}", response_model=GetPreviewResponse)
 async def get_preview_data(
     session_id: str,
@@ -99,11 +198,12 @@ async def update_preview_classification(
     preview_id: int,
     grupo: str = None,
     subgrupo: str = None,
+    excluir: int = None,
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
     """
-    Atualiza classificação (grupo/subgrupo) de um registro de preview
+    Atualiza classificação (grupo/subgrupo) ou marca exclusão de um registro de preview
     """
     service = UploadService(db)
     return service.update_preview_classification(
@@ -111,6 +211,7 @@ async def update_preview_classification(
         preview_id=preview_id,
         grupo=grupo,
         subgrupo=subgrupo,
+        excluir=excluir,
         user_id=user_id
     )
 

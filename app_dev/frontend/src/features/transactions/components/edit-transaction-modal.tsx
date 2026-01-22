@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { fetchWithAuth } from '@/core/utils/api-client'  // ✅ FASE 3 - Autenticação obrigatória
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -90,7 +91,7 @@ export function EditTransactionModal({
 
   const fetchGrupos = async () => {
     try {
-      const response = await fetch('/api/categories/grupos-subgrupos')
+      const response = await fetchWithAuth('/api/categories/grupos-subgrupos')
       if (response.ok) {
         const data = await response.json()
         setGrupos(data.grupos || [])
@@ -106,7 +107,7 @@ export function EditTransactionModal({
 
     setLoading(true)
     try {
-      const response = await fetch(`/api/transactions/update/${transaction.IdTransacao}`, {
+      const response = await fetchWithAuth(`/api/transactions/update/${transaction.IdTransacao}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ GRUPO: grupo, SUBGRUPO: subgrupo })
@@ -133,7 +134,7 @@ export function EditTransactionModal({
 
     setDeleting(true)
     try {
-      const response = await fetch(`/api/transactions/${transaction.IdTransacao}`, {
+      const response = await fetchWithAuth(`/api/transactions/${transaction.IdTransacao}`, {
         method: 'DELETE',
       })
 

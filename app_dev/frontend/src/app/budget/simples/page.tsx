@@ -55,6 +55,7 @@ const formatarMoeda = (valor: number): string => {
 };
 
 export default function BudgetSimplesPage() {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1"
   const currentDate = new Date();
   const [selectedMonth, setSelectedMonth] = useState(String(currentDate.getMonth() + 1).padStart(2, '0'));
   const [selectedYear, setSelectedYear] = useState(String(currentDate.getFullYear()));
@@ -70,29 +71,40 @@ export default function BudgetSimplesPage() {
 
   const loadGruposComMedia = async () => {
     try {
-      const mesReferencia = `${selectedYear}-${selectedMonth}`;
-      
-      // Buscar grupos COM médias já calculadas do backend
-      const response = await fetch(
-        `/api/transactions/grupos-com-media?mes_referencia=${mesReferencia}`
+      // Carregar TODOS os grupos de base_grupos_config
+      const gruposResponse = await fetch(
+        `${API_CONFIG.BACKEND_URL}/api/v1/budget/geral/grupos-disponiveis`
       );
-
-      if (!response.ok) {
-        console.error('Erro ao buscar grupos:', response.status);
+      
+      if (!gruposResponse.ok) {
+        console.error('Erro ao buscar grupos:', gruposResponse.status);
         setGruposDisponiveis([]);
         setMediaHistorica({});
         return;
       }
 
-      const data = await response.json();
+      const grupos = await gruposResponse.json();
       
-      // Extrair grupos e médias
-      const grupos: string[] = [];
+      // Buscar médias para esses grupos
+      const mesReferencia = `${selectedYear}-${selectedMonth}`;
+      const mediaResponse = await fetch(
+        `/api/transactions/grupos-com-media?mes_referencia=${mesReferencia}`
+      );
+
       const medias: MediaHistorica = {};
       
-      data.tipos_gasto.forEach((item: any) => {
-        grupos.push(item.tipo_gasto);  // Backend mantém campo 'tipo_gasto' por compatibilidade, mas agora contém grupos
-        medias[item.tipo_gasto] = item.media_3_meses;
+      if (mediaResponse.ok) {
+        const data = await mediaResponse.json();
+        data.tipos_gasto.forEach((item: any) => {
+          medias[item.tipo_gasto] = item.media_3_meses;
+        });
+      }
+      
+      // Inicializar médias com 0 para grupos sem histórico
+      grupos.forEach((grupo: string) => {
+        if (!(grupo in medias)) {
+          medias[grupo] = 0;
+        }
       });
       
       console.log('Grupos carregados:', grupos.length);
@@ -117,18 +129,21 @@ export default function BudgetSimplesPage() {
       
       if (response.ok) {
         const result = await response.json();
-        console.log('Resposta da API budget:', result);
         const data = result.budgets || [];
-        console.log('Budgets extraídos:', data);
         const budgetMap: Record<string, number> = {};
         const mediasMap: Record<string, number> = {};
         
+        // Inicializar TODOS os grupos com 0
+        gruposDisponiveis.forEach(grupo => {
+          budgetMap[grupo] = 0;
+        });
+        
+        // Sobrescrever com valores do banco
         data.forEach((item: BudgetItem) => {
           budgetMap[item.grupo] = item.valor_planejado;
           mediasMap[item.grupo] = item.valor_medio_3_meses;
         });
         
-        console.log('BudgetMap final:', budgetMap);
         setBudgetData(budgetMap);
         // Atualizar médias com valores do banco (se existirem)
         setMediaHistorica(prev => ({
@@ -136,8 +151,12 @@ export default function BudgetSimplesPage() {
           ...mediasMap
         }));
       } else {
-        console.error('Resposta não OK:', response.status);
-        setBudgetData({});
+        // Inicializar todos os grupos com 0
+        const budgetMap: Record<string, number> = {};
+        gruposDisponiveis.forEach(grupo => {
+          budgetMap[grupo] = 0;
+        });
+        setBudgetData(budgetMap);
       }
     } catch (error) {
       console.error('Erro ao carregar orçamento:', error);
@@ -171,7 +190,7 @@ export default function BudgetSimplesPage() {
           valor_planejado,
         }));
 
-      const response = await fetch(`/api/budget/bulk-upsert`, {
+      const response = await fetch(`${apiUrl}/budget/bulk-upsert`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

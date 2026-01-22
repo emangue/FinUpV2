@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { useState, useEffect } from "react"
+import { fetchWithAuth } from '@/core/utils/api-client'  // ✅ FASE 3 - Autenticação obrigatória
 import Link from "next/link"
 import {
   Dialog,
@@ -53,11 +54,13 @@ export function TipoGastoBreakdownModal({
   const fetchSubgrupos = async () => {
     try {
       setLoading(true)
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
       const url = month === 0 
-        ? `/api/dashboard/subgrupos-by-tipo?year=${year}&grupo=${encodeURIComponent(grupo)}&ytd=true`
-        : `/api/dashboard/subgrupos-by-tipo?year=${year}&month=${month}&grupo=${encodeURIComponent(grupo)}`
+        ? `${apiUrl}/dashboard/subgrupos-by-tipo?year=${year}&grupo=${encodeURIComponent(grupo)}&ytd=true`
+        : `${apiUrl}/dashboard/subgrupos-by-tipo?year=${year}&month=${month}&grupo=${encodeURIComponent(grupo)}`
       
-      const response = await fetch(url)
+      // ✅ FASE 3 - Autenticação automática
+      const response = await fetchWithAuth(url)
       if (!response.ok) throw new Error('Erro ao buscar subgrupos')
       
       const result: TipoGastoBreakdownData = await response.json()

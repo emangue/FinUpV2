@@ -24,6 +24,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Calculator, TrendingUp, Calendar, DollarSign, Save, Play, Plus, Trash2, LineChart, Info } from 'lucide-react'
 import { LineChart as RechartsLineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts'
 import { simularCenarioPersonalizado, criarCenario } from '../services/investimentos-api'
+import { apiGet } from '@/core/config/api.config'  // ✅ FASE 1 - Autenticação automática
 import type { SimulacaoCenario, ParametrosSimulacao } from '../types'
 
 interface AporteExtraordinario {
@@ -77,9 +78,9 @@ export function SimuladorCenarios() {
     const buscarPatrimonioAtual = async () => {
       try {
         setLoadingPatrimonio(true)
-        const response = await fetch('/api/investimentos/historico/ultimo')
-        if (response.ok) {
-          const data = await response.json()
+        // ✅ FASE 1 - Autenticação automática
+        const data = await apiGet<any>('/api/investimentos/historico/ultimo')
+        if (data) {
           if (data && data.valor_total) {
             // anomes vem como número (202512), converter para ano e mês
             const anomesStr = String(data.anomes)
@@ -174,8 +175,9 @@ export function SimuladorCenarios() {
       
       // Calcular mês/ano de início (mês seguinte ao patrimônio atual)
       const anomesAtual = patrimonioAtual?.mes || 202512
-      const anoAtual = Math.floor(anomesAtual / 100)
-      const mesAtual = anomesAtual % 100
+      const anomesNum = Number(anomesAtual)
+      const anoAtual = Math.floor(anomesNum / 100)
+      const mesAtual = anomesNum % 100
       
       let patrimonioAtualCalculo = patrimonioInicial
       const projecao_mensal = []
@@ -237,10 +239,16 @@ export function SimuladorCenarios() {
         total_aportes: totalAportesComInicial,  // Inclui patrimônio inicial
         total_rendimentos: totalRendimentos,
         patrimonio_medio_ponderado: patrimonioMedioPonderado,  // NOVO: para cálculo de rentabilidade
+        evolucao_mensal: [], // Placeholder para compatibilidade
         projecao_mensal: projecao_mensal
       }
       
-      setSimulacao(resultado)
+      // Adicionar projecao_mensal se não existir (compatibilidade)
+      const resultadoCompleto = {
+        ...resultado,
+        projecao_mensal: resultado.projecao_mensal || []
+      }
+      setSimulacao(resultadoCompleto)
       setSucesso('Simulação executada com sucesso!')
     } catch (err) {
       console.error('Erro ao simular cenário:', err)
@@ -305,7 +313,6 @@ export function SimuladorCenarios() {
       const taxaMensal = Math.pow(1 + parametros.taxaRendimentoAnual / 100, 1/12) - 1
       
       await criarCenario({
-        user_id: 1,  // Usuário padrão
         nome_cenario: nomeCenario,
         descricao: descricaoCenario || undefined,
         patrimonio_inicial: patrimonioAtual?.valor || 0,
@@ -516,7 +523,7 @@ export function SimuladorCenarios() {
                 <p className="text-xs text-blue-500/70 mt-2 flex items-center gap-1">
                   <Info className="h-3 w-3" />
                   Mês 1 = {(() => {
-                    const anomesAtual = patrimonioAtual.mes
+                    const anomesAtual = Number(patrimonioAtual.mes)
                     const anoAtual = Math.floor(anomesAtual / 100)
                     const mesAtual = anomesAtual % 100
                     const proximoMes = mesAtual === 12 ? 1 : mesAtual + 1
@@ -524,7 +531,7 @@ export function SimuladorCenarios() {
                     const mesesNomes = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 
                                         'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
                     return `${mesesNomes[proximoMes - 1]}/${proximoAno}`
-                  })()} • Mês 12 = Dezembro/{Math.floor(patrimonioAtual.mes / 100) + 1}
+                  })()} • Mês 12 = Dezembro/{Math.floor(Number(patrimonioAtual.mes) / 100) + 1}
                 </p>
               )}
             </div>

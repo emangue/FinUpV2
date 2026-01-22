@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { fetchWithAuth } from '@/core/utils/api-client';  // ✅ FASE 3 - Autenticação obrigatória
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -46,12 +47,14 @@ export function BudgetVsActual({ year, month, loading = false, error = null }: B
         setIsLoading(true);
         setFetchError(null);
 
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
         // Se month='all', buscar YTD (Year to Date)
         const url = month === 'all' 
-          ? `/api/dashboard/budget-vs-actual?year=${year}&ytd=true`
-          : `/api/dashboard/budget-vs-actual?year=${year}&month=${month}`;
+          ? `${apiUrl}/dashboard/budget-vs-actual?year=${year}&ytd=true`
+          : `${apiUrl}/dashboard/budget-vs-actual?year=${year}&month=${month}`;
         
-        const response = await fetch(url);
+        // ✅ FASE 3 - Autenticação automática
+        const response = await fetchWithAuth(url);
 
         if (!response.ok) {
           throw new Error(`Erro ao buscar budget vs actual: ${response.statusText}`);

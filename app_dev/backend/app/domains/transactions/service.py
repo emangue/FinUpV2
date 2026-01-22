@@ -127,26 +127,35 @@ class TransactionService:
         for field, value in update_dict.items():
             setattr(transaction, field, value)
         
+        # Se mudou GRUPO ou SUBGRUPO manualmente, marcar como Manual
+        if "GRUPO" in update_dict or "SUBGRUPO" in update_dict:
+            transaction.origem_classificacao = "Manual"
+        
         # Recalcular ValorPositivo se Valor mudou
         if "Valor" in update_dict:
             transaction.ValorPositivo = abs(transaction.Valor)
         
         # Se GRUPO ou SUBGRUPO mudaram, buscar TipoGasto na base_marcacoes
         if "GRUPO" in update_dict or "SUBGRUPO" in update_dict:
-            tipo_gasto = self._buscar_tipo_gasto_base_marcacoes(
-                transaction.GRUPO, 
-                transaction.SUBGRUPO,
-                transaction.Valor
-            )
-            if tipo_gasto:
-                transaction.TipoGasto = tipo_gasto
+            # Buscar TipoGasto e CategoriaGeral da base_grupos_config
+            if transaction.GRUPO:
+                from app.domains.grupos.models import BaseGruposConfig
+                grupo_config = self.repository.db.query(BaseGruposConfig).filter(
+                    BaseGruposConfig.nome_grupo == transaction.GRUPO
+                ).first()
+                
+                if grupo_config:
+                    transaction.TipoGasto = grupo_config.tipo_gasto_padrao
+                    transaction.CategoriaGeral = grupo_config.categoria_geral
             
-            # Recalcular CategoriaGeral baseado no GRUPO e cartão
-            transaction.CategoriaGeral = determine_categoria_geral(
-                transaction.GRUPO, 
-                transaction.Valor,
-                transaction.NomeCartao
-            )
+            # Inserir automaticamente em base_marcacoes se não existir
+            if transaction.GRUPO and transaction.SUBGRUPO and transaction.TipoGasto:
+                self._ensure_marcacao_exists(
+                    grupo=transaction.GRUPO,
+                    subgrupo=transaction.SUBGRUPO,
+                    tipo_gasto=transaction.TipoGasto,
+                    user_id=user_id
+                )
         
         # Salvar
         updated = self.repository.update(transaction)
@@ -496,3 +505,28 @@ class TransactionService:
             categoria_geral_destino=grupo_config.categoria_geral,
             grupos_recalculados=grupos_recalculados
         )
+    
+    def _ensure_marcacao_exists(self, grupo: str, subgrupo: str, tipo_gasto: str, user_id: int = None):
+        """
+        Garante que a combinação grupo+subgrupo+tipo_gasto existe em base_marcacoes
+        Se não existir, cria automaticamente
+        """
+        from app.domains.categories.models import BaseMarcacao
+        
+        # Verificar se já existe
+        existing = self.repository.db.query(BaseMarcacao).filter(
+            BaseMarcacao.GRUPO == grupo,
+            BaseMarcacao.SUBGRUPO == subgrupo,
+            BaseMarcacao.TipoGasto == tipo_gasto
+        ).first()
+        
+        if not existing:
+            # Criar nova marcação
+            nova_marcacao = BaseMarcacao(
+                GRUPO=grupo,
+                SUBGRUPO=subgrupo,
+                TipoGasto=tipo_gasto
+            )
+            self.repository.db.add(nova_marcacao)
+            self.repository.db.flush()  # Flush para garantir inserção sem commit ainda
+            print(f"➕ Nova marcação criada: {grupo} > {subgrupo} ({tipo_gasto})")

@@ -28,21 +28,33 @@ export function TeamSwitcher({
     plan: string
   }[]
 }) {
-  const { isMobile } = useSidebar()
+  const { setOpen, setOpenMobile } = useSidebar()
   const [activeTeam, setActiveTeam] = React.useState(teams[0])
+  const [dropdownOpen, setDropdownOpen] = React.useState(false)
 
   if (!activeTeam) {
     return null
   }
 
+  const handleOpenChange = (open: boolean) => {
+    setDropdownOpen(open)
+    if (open) {
+      setOpen(false)
+      setOpenMobile(false)
+    }
+    // Notificar AppSidebar sobre estado do dropdown
+    window.dispatchEvent(new CustomEvent('dropdown-state-change', { detail: { open } }))
+  }
+
   return (
     <SidebarMenu>
       <SidebarMenuItem>
-        <DropdownMenu>
+        <DropdownMenu modal={true} onOpenChange={handleOpenChange} open={dropdownOpen}>
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
               size="lg"
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+              onClick={(e) => e.stopPropagation()}
             >
               <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
                 <activeTeam.logo className="size-4" />
@@ -55,9 +67,9 @@ export function TeamSwitcher({
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
-            className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
+            className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg z-50"
             align="start"
-            side={isMobile ? "bottom" : "right"}
+            side="right"
             sideOffset={4}
           >
             <DropdownMenuLabel className="text-muted-foreground text-xs">

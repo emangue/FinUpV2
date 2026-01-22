@@ -49,12 +49,13 @@ export function DashboardInvestimentos() {
     refresh,
   } = useInvestimentos({ limit: 100 })
 
+  // Buscar histórico completo desde maio/2024 para o gráfico
   const {
     rendimentos,
     loading: loadingRendimentos,
   } = useRendimentosTimeline({
-    ano_inicio: startYear,
-    ano_fim: endYear,
+    ano_inicio: 2024,  // Início do histórico
+    ano_fim: currentYear,
   })
 
   // Calcular tipos e corretoras únicos para os filtros
@@ -191,6 +192,17 @@ export function DashboardInvestimentos() {
       {/* Resumo do Portfólio */}
       {resumo && <PortfolioOverview resumo={resumo} />}
 
+      {/* Evolução Temporal do Patrimônio - Logo após as caixas */}
+      {rendimentos.length > 0 && (
+        <EvolucaoTemporal 
+          timeline={rendimentos}
+          cenario={{
+            rendimento_mensal: 0.8,
+            aporte_mensal: 5000
+          }}
+        />
+      )}
+
       {/* Timeline de Indicadores */}
       {rendimentos.length > 0 && (
         <TimelineIndicators rendimentos={rendimentos} />
@@ -232,17 +244,6 @@ export function DashboardInvestimentos() {
         <DistribuicaoPorTipo 
           distribuicao={distribuicao}
           totalGeral={parseFloat(resumo.total_investido)}
-        />
-      )}
-
-      {/* Evolução Temporal do Patrimônio */}
-      {rendimentos.length > 0 && (
-        <EvolucaoTemporal 
-          timeline={rendimentos}
-          cenario={{
-            rendimento_mensal: 0.8,
-            aporte_mensal: 5000
-          }}
         />
       )}
 

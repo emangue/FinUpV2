@@ -1,6 +1,8 @@
 "use client"
 
 import * as React from "react"
+import { useAuth } from '@/contexts/AuthContext'
+import { useState, useEffect } from 'react'
 import {
   BarChart3,
   CreditCard,
@@ -182,6 +184,10 @@ const data = {
           url: "/settings/bancos",
         },
         {
+          title: "Regras Genéricas",
+          url: "/settings/categorias-genericas",
+        },
+        {
           title: "Backup",
           url: "/settings/backup",
         },
@@ -313,13 +319,13 @@ const data = {
           status: 'A' as const,
         },
         {
-          title: "Backup",
-          url: "/settings/backup",
+          title: "Regras Genéricas",
+          url: "/settings/categorias-genericas",
           status: 'A' as const,
         },
         {
-          title: "Categorias Genéricas",
-          url: "/settings/categorias-genericas",
+          title: "Backup",
+          url: "/settings/backup",
           status: 'A' as const,
         },
       ],
@@ -342,22 +348,55 @@ const data = {
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  // TODO: Pegar isAdmin do contexto de autenticação
-  const isAdmin = true // Temporário para demo
+  const { user } = useAuth()
+  const [isAdmin, setIsAdmin] = useState(false)
   const [screenStatuses, setScreenStatuses] = React.useState<Record<string, 'P' | 'A' | 'D'>>({})
 
+  // Atualizar isAdmin apenas no cliente para evitar hydration mismatch
+  useEffect(() => {
+    setIsAdmin(user?.role === 'admin')
+  }, [user])
+
   React.useEffect(() => {
-    // Buscar status reais da API
-    fetch('http://localhost:8000/api/v1/screens/admin/all')
-      .then(res => res.json())
-      .then((screens: any[]) => {
+    // ✅ FASE 3 - Buscar status com autenticação
+    const loadScreenStatuses = async () => {
+      try {
+        const token = localStorage.getItem('authToken')
+        if (!token) {
+          console.log('[AppSidebar] Sem token, não carregando status de telas')
+          return
+        }
+
+        const response = await fetch('http://localhost:8000/api/v1/screens/admin/all', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        })
+
+        if (!response.ok) {
+          console.error('[AppSidebar] Erro ao carregar status:', response.status)
+          return
+        }
+
+        const screens = await response.json()
+        
+        // Validar que é um array
+        if (!Array.isArray(screens)) {
+          console.error('[AppSidebar] Resposta não é um array:', screens)
+          return
+        }
+
         const statuses: Record<string, 'P' | 'A' | 'D'> = {}
         screens.forEach(screen => {
           statuses[screen.screen_key] = screen.status
         })
         setScreenStatuses(statuses)
-      })
-      .catch(err => console.error('Erro ao carregar status:', err))
+      } catch (err) {
+        console.error('[AppSidebar] Erro ao carregar status:', err)
+      }
+    }
+
+    loadScreenStatuses()
   }, [])
 
   // Função para extrair screen_key da URL
@@ -421,6 +460,29 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       status: screenStatuses[getScreenKey(subItem.url, true, item.url)] || (subItem as any).status || 'P'
     }))
   }))
+  
+  // Filtrar items baseado em admin/status
+  const filteredNavMain = navMainWithStatus
+    .filter(item => {
+      // Ocultar "Administração" completa se não for admin
+      if (item.title === 'Administração' && !isAdmin) return false
+      
+      // Se item está como 'A' (Admin) e user não é admin, ocultar
+      if (item.status === 'A' && !isAdmin) return false
+      
+      return true
+    })
+    .map(item => ({
+      ...item,
+      // Filtrar subitems também
+      items: item.items?.filter(subItem => {
+        // Ocultar subitems 'A' (Admin) se não for admin
+        if (subItem.status === 'A' && !isAdmin) return false
+        // Ocultar "Métricas" se não for admin (sempre dev/admin)
+        if (subItem.title === 'Métricas' && !isAdmin) return false
+        return true
+      })
+    }))
 
   // Atualizar projects com status da API
   const projectsWithStatus = data.projects.map(project => ({
@@ -434,11 +496,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <TeamSwitcher teams={data.teams} />
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={navMainWithStatus} isAdmin={isAdmin} />
+        <NavMain items={filteredNavMain} isAdmin={isAdmin} />
         <NavProjects projects={projectsWithStatus} isAdmin={isAdmin} />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={data.user} />
+        <NavUser />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

@@ -145,19 +145,21 @@ class DashboardRepository:
         date_filter = self._build_date_filter(year, month)
         
         # Total geral de despesas (para calcular percentual) - FILTRAR IgnorarDashboard = 0
-        total_despesas = self.db.query(
-            func.sum(func.abs(JournalEntry.Valor))
+        # Somar valores e depois aplicar abs() para evitar somar positivos e negativos separadamente
+        total_despesas_raw = self.db.query(
+            func.sum(JournalEntry.Valor)
         ).filter(
             JournalEntry.user_id == user_id,
             date_filter,
             JournalEntry.CategoriaGeral == 'Despesa',
             JournalEntry.IgnorarDashboard == 0
-        ).scalar() or 1.0  # Evita divisão por zero
+        ).scalar() or 0.0
+        total_despesas = abs(total_despesas_raw) if total_despesas_raw != 0 else 1.0  # Evita divisão por zero
         
-        # Despesas por categoria
+        # Despesas por categoria - somar primeiro, depois aplicar abs()
         results = self.db.query(
             JournalEntry.GRUPO.label('categoria'),
-            func.sum(func.abs(JournalEntry.Valor)).label('total')
+            func.sum(JournalEntry.Valor).label('total')
         ).filter(
             JournalEntry.user_id == user_id,
             date_filter,
@@ -167,14 +169,14 @@ class DashboardRepository:
         ).group_by(
             JournalEntry.GRUPO
         ).order_by(
-            func.sum(func.abs(JournalEntry.Valor)).desc()
+            func.abs(func.sum(JournalEntry.Valor)).desc()
         ).all()
         
         return [
             {
                 "categoria": row.categoria or "Sem categoria",
-                "total": float(row.total),
-                "percentual": round((float(row.total) / total_despesas) * 100, 2)
+                "total": abs(float(row.total)),  # Aplicar abs() aqui para exibir como positivo
+                "percentual": round((abs(float(row.total)) / total_despesas) * 100, 2)
             }
             for row in results
         ]
@@ -323,9 +325,9 @@ class DashboardRepository:
         # Ordenar por valor absoluto (maior primeiro) para exibição
         results = sorted(results, key=lambda x: abs(x.valor), reverse=True)
         
-        # Calcular total para percentuais (mantém valores reais para cálculo correto)
-        total = sum(r.valor for r in results)
-        total_abs = sum(abs(r.valor) for r in results)
+        # Calcular total para percentuais - somar primeiro, depois aplicar abs()
+        total = sum(r.valor for r in results)  # Soma com sinal (negativo)
+        total_abs = abs(total)  # Aplicar abs() no total final
         
         # Formatar resposta (exibe valores como positivos, mas percentual baseado no total real)
         subgrupos = []

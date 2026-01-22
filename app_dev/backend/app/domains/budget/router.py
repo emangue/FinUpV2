@@ -140,7 +140,7 @@ def bulk_upsert_budgets(
     return service.bulk_upsert_budgets(user_id, data.mes_referencia, data.budgets)
 
 
-@router.post("/budget/geral/bulk-upsert", response_model=List[BudgetResponse], summary="Criar/atualizar múltiplas metas gerais")
+@router.post("/budget/geral/bulk-upsert", response_model=List[BudgetGeralResponse], summary="Criar/atualizar múltiplas metas gerais")
 def bulk_upsert_budget_geral(
     data: BudgetGeralBulkUpsert,
     user_id: int = Depends(get_current_user_id),
@@ -186,6 +186,24 @@ def bulk_upsert_budget_geral_validado(
 
 
 # ----- ROTAS DE META GERAL -----
+@router.get("/budget/geral/grupos-disponiveis", response_model=List[str], summary="Listar grupos disponíveis")
+def list_grupos_disponiveis(
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Retorna todos os grupos disponíveis da base_grupos_config para despesas
+    Útil para popular dropdowns de seleção
+    """
+    from app.domains.grupos.models import BaseGruposConfig
+    
+    grupos = db.query(BaseGruposConfig.nome_grupo).filter(
+        BaseGruposConfig.categoria_geral == 'Despesa'
+    ).order_by(BaseGruposConfig.nome_grupo).all()
+    
+    return [g[0] for g in grupos]
+
+
 @router.get("/budget/geral", response_model=BudgetGeralListResponse, summary="Listar metas gerais")
 def list_budget_geral(
     mes_referencia: str = Query(None, description="Filtrar por mês (formato YYYY-MM)"),

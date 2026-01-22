@@ -15,18 +15,18 @@ kill_tree() {
 }
 
 # Parar via PIDs (mata processo pai E filhos)
-if [ -f backend.pid ]; then
-    PID=$(cat backend.pid)
+if [ -f temp/pids/backend.pid ]; then
+    PID=$(cat temp/pids/backend.pid)
     kill_tree $PID
     echo "✅ Backend parado (PID: $PID + filhos)"
-    rm backend.pid
+    rm temp/pids/backend.pid
 fi
 
-if [ -f frontend.pid ]; then
-    PID=$(cat frontend.pid)
+if [ -f temp/pids/frontend.pid ]; then
+    PID=$(cat temp/pids/frontend.pid)
     kill_tree $PID
     echo "✅ Frontend parado (PID: $PID + filhos)"
-    rm frontend.pid
+    rm temp/pids/frontend.pid
 fi
 
 # Garantir que portas estão livres (mata processos órfãos)

@@ -55,6 +55,7 @@ interface GrupoFormData {
 }
 
 export default function GestaoGrupos() {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1"
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -180,7 +181,7 @@ export default function GestaoGrupos() {
       setError(null);
       setSuccess(null);
 
-      const response = await fetch(`/api/grupos/${grupoToDelete.id}`, {
+      const response = await fetch(`${apiUrl}/grupos/${grupoToDelete.id}`, {
         method: 'DELETE',
       });
 

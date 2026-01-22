@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { fetchWithAuth } from '@/core/utils/api-client';
 import {
   ChartAreaInteractive,
   DateFilters,
@@ -46,10 +47,61 @@ const DashboardPage = () => {
   const [chartError, setChartError] = useState<string | null>(null);
   const [categoriesError, setCategoriesError] = useState<string | null>(null);
   
-  // Estados de filtros
-  const [selectedYear, setSelectedYear] = useState('2025');
-  const [selectedMonth, setSelectedMonth] = useState('all');
+  // Estados de filtros - Detectar último mês automaticamente
+  const [selectedYear, setSelectedYear] = useState('2025'); // Usar 2025 onde há dados
+  const [selectedMonth, setSelectedMonth] = useState('12'); // Último mês com dados
+  const [chartDataYear, setChartDataYear] = useState('2026'); // Ano dos dados do gráfico
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+
+  // Função para detectar último mês com dados
+  const getLastMonthWithData = (data: ChartDataItem[]): { year: string; month: string } => {
+    if (!data || data.length === 0) {
+      return { year: '2026', month: '01' };
+    }
+    
+    // Mapear meses para números
+    const monthMap: { [key: string]: string } = {
+      'Jan': '01', 'Fev': '02', 'Mar': '03', 'Abr': '04', 'Mai': '05', 'Jun': '06',
+      'Jul': '07', 'Ago': '08', 'Set': '09', 'Out': '10', 'Nov': '11', 'Dez': '12'
+    };
+    
+    // Criar array ordenado por data para encontrar o mais recente
+    const dataWithDates = data.map((item, index) => {
+      let year = chartDataYear;
+      let month = monthMap[item.mes];
+      
+      // Se começamos de 2026 e temos 12 meses, os primeiros meses são de 2025
+      if (chartDataYear === '2026') {
+        // Jan na posição 0-1: 2025, Jan na posição 10-11: 2026
+        if (item.mes === 'Jan' && index < 2) {
+          year = '2025';
+        } else if (index < 2) {
+          year = '2025';
+        }
+      }
+      
+      return {
+        ...item,
+        year,
+        month,
+        sortKey: `${year}${month}`, // Para ordenação
+        hasData: item.receitas > 0 || item.despesas > 0
+      };
+    });
+    
+    // Encontrar último mês com dados
+    const monthsWithData = dataWithDates
+      .filter(item => item.hasData)
+      .sort((a, b) => b.sortKey.localeCompare(a.sortKey)); // Ordenar por data desc
+    
+    if (monthsWithData.length > 0) {
+      const lastMonth = monthsWithData[0];
+      return { year: lastMonth.year, month: lastMonth.month };
+    }
+    
+    return { year: '2026', month: '01' };
+  };
 
   // Dados mock para desenvolvimento
   const mockMetrics: Metrics = {
@@ -75,6 +127,7 @@ const DashboardPage = () => {
       setLoadingMetrics(true);
       setMetricsError(null);
       
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
       // Se month='all', não enviar parâmetro month (backend retorna ano todo)
       const params = new URLSearchParams({ 
         year: year
@@ -84,7 +137,7 @@ const DashboardPage = () => {
         params.append('month', month);
       }
       
-      const response = await fetch(`/api/dashboard/metrics?${params}`);
+      const response = await fetchWithAuth(`${apiUrl}/dashboard/metrics?${params}`);
       
       if (!response.ok) {
         throw new Error(`Erro ao buscar métricas: ${response.statusText}`);
@@ -113,6 +166,7 @@ const DashboardPage = () => {
       setLoadingChart(true);
       setChartError(null);
       
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
       // Buscar 12 meses de histórico até o mês selecionado (ou último mês se 'all')
       const targetMonth = month === 'all' ? '12' : month;
       
@@ -120,7 +174,7 @@ const DashboardPage = () => {
         year: year,
         month: targetMonth
       });
-      const response = await fetch(`/api/dashboard/chart-data?${params}`);
+      const response = await fetchWithAuth(`${apiUrl}/dashboard/chart-data?${params}`);
       
       if (!response.ok) {
         throw new Error(`Erro ao buscar dados do gráfico: ${response.statusText}`);
@@ -136,6 +190,21 @@ const DashboardPage = () => {
       }));
       
       setChartData(formattedData);
+      setChartDataYear(year); // Armazenar o ano dos dados do gráfico
+      
+      // Se é carregamento inicial, detectar último mês com dados
+      if (isInitialLoad && formattedData.length > 0) {
+        const lastData = getLastMonthWithData(formattedData);
+        if (lastData.month !== selectedMonth || lastData.year !== selectedYear) {
+          setSelectedMonth(lastData.month);
+          setSelectedYear(lastData.year); // Atualizar também o ano se detectado diferente
+          // Recarregar dados com o ano e mês corretos, mas evitar loop
+          setTimeout(() => {
+            fetchMetrics(lastData.year, lastData.month);
+            fetchCategoryData(lastData.year, lastData.month);
+          }, 100);
+        }
+      }
       
     } catch (error) {
       console.error('Error fetching chart data:', error);
@@ -150,6 +219,7 @@ const DashboardPage = () => {
       setLoadingCategories(true);
       setCategoriesError(null);
       
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
       // Se month='all', não enviar parâmetro month (backend retorna ano todo)
       const params = new URLSearchParams({ 
         year: year
@@ -159,7 +229,7 @@ const DashboardPage = () => {
         params.append('month', month);
       }
       
-      const response = await fetch(`/api/dashboard/categories?${params}`);
+      const response = await fetchWithAuth(`${apiUrl}/dashboard/categories?${params}`);
       
       if (!response.ok) {
         throw new Error(`Erro ao buscar dados de categorias: ${response.statusText}`);
@@ -194,10 +264,14 @@ const DashboardPage = () => {
     fetchData(selectedYear, month);
   };
 
-  // Handler para click no gráfico
+  // Handler para click no gráfico - usar ano dos dados, não ano selecionado atual
   const handleChartMonthClick = (month: string) => {
+    // Usar o ano dos dados do gráfico, não o ano selecionado atual
+    const yearToUse = chartDataYear;
+    
     setSelectedMonth(month);
-    fetchData(selectedYear, month);
+    setSelectedYear(yearToUse); // Atualizar também o ano selecionado
+    fetchData(yearToUse, month);
   };
 
   const fetchData = (year: string, month: string) => {
@@ -207,9 +281,14 @@ const DashboardPage = () => {
     setLastUpdate(new Date());
   };
 
+  // Carregar dados no mount inicial - começar com janeiro 2026 e detectar último mês
   useEffect(() => {
-    fetchData(selectedYear, selectedMonth);
-  }, []);
+    if (isInitialLoad) {
+      // Iniciar com janeiro 2026 como estimativa, será ajustado após carregar dados
+      fetchData(selectedYear, '01'); // Começar com janeiro do ano atual
+      setIsInitialLoad(false);
+    }
+  }, [isInitialLoad]);
 
   return (
     <DashboardLayout>

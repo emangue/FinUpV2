@@ -380,8 +380,10 @@ class BudgetService:
         user_id: int, 
         mes_referencia: str, 
         budgets: List[dict]
-    ) -> List[BudgetResponse]:
+    ) -> List['BudgetGeralResponse']:
         """Cria ou atualiza múltiplos budgets gerais de uma vez"""
+        from .schemas import BudgetGeralResponse
+        
         # Validar dados
         for budget_data in budgets:
             if "categoria_geral" not in budget_data or "valor_planejado" not in budget_data:
@@ -390,14 +392,15 @@ class BudgetService:
                     detail="Cada budget geral deve ter 'categoria_geral' e 'valor_planejado'"
                 )
             
-            if budget_data["valor_planejado"] <= 0:
+            # Permitir valores zero (grupos sem orçamento definido)
+            if budget_data["valor_planejado"] < 0:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="valor_planejado deve ser maior que zero"
+                    detail="valor_planejado não pode ser negativo"
                 )
         
         result = self.repository_geral.bulk_upsert(user_id, mes_referencia, budgets)
-        return [BudgetResponse.from_orm(b) for b in result]
+        return [BudgetGeralResponse.from_orm(b) for b in result]
     
     # ===== MÉTODOS PARA CONFIGURAÇÃO DE CATEGORIAS =====
     

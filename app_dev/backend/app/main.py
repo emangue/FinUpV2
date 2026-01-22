@@ -12,6 +12,7 @@ from .core.database import engine, Base
 from .domains.upload.history_models import UploadHistory  # CRITICAL: importar antes dos routers
 
 # Domínios isolados (arquitetura DDD)
+from .domains.auth.router import router as auth_router
 from .domains.transactions.router import router as transactions_router
 from .domains.users.router import router as users_router
 from .domains.categories.router import router as categories_router
@@ -45,6 +46,7 @@ app.add_middleware(
 )
 
 # Routers Modularizados (arquitetura DDD - Domain-Driven Design)
+app.include_router(auth_router, prefix="/api/v1", tags=["Authentication"])
 app.include_router(transactions_router, prefix="/api/v1", tags=["Transactions"])
 app.include_router(users_router, prefix="/api/v1", tags=["Users"])
 app.include_router(categories_router, prefix="/api/v1", tags=["Categories"])

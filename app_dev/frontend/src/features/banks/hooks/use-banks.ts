@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from 'react'
+import { fetchWithAuth } from '@/core/utils/api-client'  // ✅ FASE 3 - Autenticação obrigatória
 import { BankCompatibility, BankCreate, BankUpdate } from '../types'
 import * as bankApi from '../services/bank-api'
 
@@ -38,7 +39,7 @@ export function useBanks() {
 
   const updateBank = useCallback(async (id: number, data: BankUpdate) => {
     try {
-      const response = await fetch(`/api/compatibility/${id}`, {
+      const response = await fetchWithAuth(`/api/compatibility/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)

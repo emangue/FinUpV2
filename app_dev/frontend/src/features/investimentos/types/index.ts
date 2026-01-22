@@ -126,7 +126,15 @@ export interface SimulacaoCenario {
   patrimonio_final: number
   total_aportes: number
   total_rendimentos: number
+  patrimonio_medio_ponderado: number
   evolucao_mensal: EvolucaoMensal[]
+  projecao_mensal?: Array<{
+    mes: number
+    mes_real: number
+    ano_real: number
+    patrimonio: number
+    aportes_acumulados: number
+  }>
 }
 
 export interface DistribuicaoTipo {

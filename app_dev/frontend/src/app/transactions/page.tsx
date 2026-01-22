@@ -3,6 +3,7 @@
 import * as React from "react"
 import { Suspense } from "react"
 import { useSearchParams } from "next/navigation"
+import { fetchWithAuth } from "@/core/utils/api-client"
 import DashboardLayout from "@/components/dashboard-layout"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -80,6 +81,7 @@ export default function TransactionsPage() {
 }
 
 function TransactionsPageContent() {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'
   const searchParams = useSearchParams()
   const [activeTab, setActiveTab] = React.useState("all")
   const [transactions, setTransactions] = React.useState<TransactionData[]>([])
@@ -208,7 +210,7 @@ function TransactionsPageContent() {
         }
       }
 
-      const response = await fetch(`/api/transactions/filtered-total?${params.toString()}`)
+      const response = await fetchWithAuth(`${apiUrl}/transactions/filtered-total?${params.toString()}`)
       if (response.ok) {
         const data = await response.json()
         setSomaTotal(data.total || 0)
@@ -263,7 +265,7 @@ function TransactionsPageContent() {
         }
       }
 
-      const response = await fetch(`/api/transactions/list?${params.toString()}`)
+      const response = await fetchWithAuth(`${apiUrl}/transactions/list?${params.toString()}`)
       
       if (response.ok) {
         const data = await response.json()
@@ -355,7 +357,7 @@ function TransactionsPageContent() {
           }
         }
 
-        const response = await fetch(`/api/transactions/list?${params.toString()}`)
+        const response = await fetchWithAuth(`${apiUrl}/transactions/list?${params.toString()}`)
         if (response.ok) {
           const data = await response.json()
           setTransactions(data.transactions)
@@ -400,7 +402,7 @@ function TransactionsPageContent() {
     ))
 
     try {
-      const response = await fetch(`/api/transactions/update/${encodeURIComponent(transaction.IdTransacao)}`, {
+      const response = await fetchWithAuth(`${apiUrl}/transactions/update/${encodeURIComponent(transaction.IdTransacao)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ IgnorarDashboard: novoValor })

@@ -3,7 +3,12 @@
  * 
  * ⚠️ ATENÇÃO: Este é o ÚNICO lugar onde URLs de backend devem ser definidas
  * Qualquer mudança de URL do backend deve ser feita APENAS aqui
+ * 
+ * 🔐 FASE 1 - Isolamento de Dados:
+ * Todas as chamadas de API agora DEVEM usar fetchWithAuth() para enviar token JWT
  */
+
+import { fetchWithAuth, fetchJsonWithAuth } from '@/core/utils/api-client'
 
 const isProduction = process.env.NODE_ENV === 'production';
 const isDevelopment = !isProduction;
@@ -135,3 +140,81 @@ export function buildUrl(base: string, params?: Record<string, any>): string {
 // Helper para validar se está no cliente ou servidor
 export const isClient = typeof window !== 'undefined';
 export const isServer = !isClient;
+
+// ============================================================================
+// 🔐 HELPERS COM AUTENTICAÇÃO AUTOMÁTICA (FASE 1)
+// ============================================================================
+
+/**
+ * Faz GET request com autenticação automática
+ * 
+ * @param url - URL completa do endpoint
+ * @returns Promise com dados parseados
+ * 
+ * @example
+ * ```typescript
+ * const resumo = await apiGet<PortfolioResumo>(API_ENDPOINTS.INVESTIMENTOS.RESUMO)
+ * ```
+ */
+export async function apiGet<T>(url: string): Promise<T> {
+  return fetchJsonWithAuth<T>(url, { method: 'GET' })
+}
+
+/**
+ * Faz POST request com autenticação automática
+ * 
+ * @param url - URL completa do endpoint
+ * @param data - Dados para enviar no body
+ * @returns Promise com dados parseados
+ * 
+ * @example
+ * ```typescript
+ * const result = await apiPost('/api/v1/transactions', { 
+ *   Estabelecimento: 'Teste',
+ *   Valor: 100 
+ * })
+ * ```
+ */
+export async function apiPost<T>(url: string, data: any): Promise<T> {
+  return fetchJsonWithAuth<T>(url, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
+/**
+ * Faz PATCH request com autenticação automática
+ * 
+ * @param url - URL completa do endpoint
+ * @param data - Dados para atualizar
+ * @returns Promise com dados parseados
+ */
+export async function apiPatch<T>(url: string, data: any): Promise<T> {
+  return fetchJsonWithAuth<T>(url, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  })
+}
+
+/**
+ * Faz DELETE request com autenticação automática
+ * 
+ * @param url - URL completa do endpoint
+ * @returns Promise com dados parseados
+ */
+export async function apiDelete<T>(url: string): Promise<T> {
+  return fetchJsonWithAuth<T>(url, { method: 'DELETE' })
+}
+
+/**
+ * Export da função base para casos customizados
+ * 
+ * @example
+ * ```typescript
+ * const response = await apiFetch('/api/custom', {
+ *   method: 'PUT',
+ *   body: JSON.stringify({ custom: 'data' })
+ * })
+ * ```
+ */
+export const apiFetch = fetchWithAuth

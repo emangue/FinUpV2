@@ -10,26 +10,28 @@ const protectedPaths = ['/dashboard', '/transactions', '/upload', '/settings'];
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // ⚠️ BYPASS TEMPORÁRIO: Autenticação desabilitada para desenvolvimento
-  // TODO: Reativar verificação de autenticação após correção dos problemas
-  
   // Verificar se é uma rota protegida
   const isProtectedPath = protectedPaths.some(path => pathname.startsWith(path));
   const isPublicPath = publicPaths.some(path => pathname.startsWith(path));
 
-  // TEMPORÁRIO: Sempre permitir acesso (bypass de autenticação)
-  return NextResponse.next();
-
-  /* CÓDIGO ORIGINAL (REATIVAR DEPOIS):
+  // Se for rota protegida, verificar autenticação
   if (isProtectedPath) {
-    // No middleware do Next.js não temos acesso ao localStorage
-    // A verificação real será feita no cliente
+    // Verificar token no cookie
+    const token = request.cookies.get('auth_token')?.value;
+    
+    if (!token) {
+      // Sem token → redirecionar para login
+      const loginUrl = new URL('/login', request.url);
+      loginUrl.searchParams.set('redirect', pathname);
+      return NextResponse.redirect(loginUrl);
+    }
+    
+    // Token existe → permitir acesso
     return NextResponse.next();
   }
 
   // Permitir acesso a rotas públicas e assets
   return NextResponse.next();
-  */
 }
 
 export const config = {

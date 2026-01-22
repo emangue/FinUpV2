@@ -75,18 +75,18 @@ fi
 cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev
 source venv/bin/activate
 cd backend
-nohup python run.py > ../../backend.log 2>&1 &
+nohup python run.py > ../../temp/logs/backend.log 2>&1 &
 BACKEND_PID=$!
-echo $BACKEND_PID > ../../backend.pid
+echo $BACKEND_PID > ../../temp/pids/backend.pid
 cd ../..
 
 sleep 3
 
 # Frontend (porta 3000)
 cd app_dev/frontend
-nohup npm run dev > ../../frontend.log 2>&1 &
+nohup npm run dev > ../../temp/logs/frontend.log 2>&1 &
 FRONTEND_PID=$!
-echo $FRONTEND_PID > ../../frontend.pid
+echo $FRONTEND_PID > ../../temp/pids/frontend.pid
 cd ../..
 
 sleep 2
@@ -113,8 +113,8 @@ else
 fi
 echo ""
 echo "📋 Logs:"
-echo "   tail -f backend.log"
-echo "   tail -f frontend.log"
+echo "   tail -f temp/logs/backend.log"
+echo "   tail -f temp/logs/frontend.log"
 echo ""
-echo "🛑 Para parar: ./quick_stop.sh"
+echo "🛑 Para parar: ./scripts/deploy/quick_stop.sh"
 

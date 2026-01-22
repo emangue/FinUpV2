@@ -1,8 +1,11 @@
 /**
  * API Service para Investimentos
+ * 
+ * 🔐 FASE 1 - Isolamento de Dados:
+ * Agora usa fetchWithAuth() para enviar token JWT automaticamente
  */
 
-import { API_CONFIG } from '@/core/config/api.config'
+import { apiGet, apiPost, apiPatch, apiDelete } from '@/core/config/api.config'
 import type {
   InvestimentoPortfolio,
   PortfolioResumo,
@@ -36,89 +39,39 @@ export async function getInvestimentos(
   if (filters?.limit) params.append('limit', String(filters.limit))
 
   const url = `${BASE_URL}?${params.toString()}`
-  const response = await fetch(url)
-  
-  if (!response.ok) {
-    throw new Error('Erro ao buscar investimentos')
-  }
-  
-  return response.json()
+  return apiGet<InvestimentoPortfolio[]>(url)
 }
 
 export async function getInvestimento(id: number): Promise<InvestimentoPortfolio> {
-  const response = await fetch(`${BASE_URL}/${id}`)
-  
-  if (!response.ok) {
-    throw new Error('Erro ao buscar investimento')
-  }
-  
-  return response.json()
+  return apiGet<InvestimentoPortfolio>(`${BASE_URL}/${id}`)
 }
 
 export async function createInvestimento(
   data: CreateInvestimentoForm
 ): Promise<InvestimentoPortfolio> {
-  const response = await fetch(BASE_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  })
-  
-  if (!response.ok) {
-    throw new Error('Erro ao criar investimento')
-  }
-  
-  return response.json()
+  return apiPost<InvestimentoPortfolio>(BASE_URL, data)
 }
 
 export async function updateInvestimento(
   id: number,
   data: Partial<CreateInvestimentoForm>
 ): Promise<InvestimentoPortfolio> {
-  const response = await fetch(`${BASE_URL}/${id}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  })
-  
-  if (!response.ok) {
-    throw new Error('Erro ao atualizar investimento')
-  }
-  
-  return response.json()
+  return apiPatch<InvestimentoPortfolio>(`${BASE_URL}/${id}`, data)
 }
 
 export async function deleteInvestimento(id: number): Promise<void> {
-  const response = await fetch(`${BASE_URL}/${id}`, {
-    method: 'DELETE',
-  })
-  
-  if (!response.ok) {
-    throw new Error('Erro ao deletar investimento')
-  }
+  await apiDelete<void>(`${BASE_URL}/${id}`)
 }
 
 /**
  * Portfolio Analytics
  */
 export async function getPortfolioResumo(): Promise<PortfolioResumo> {
-  const response = await fetch(`${BASE_URL}/resumo`)
-  
-  if (!response.ok) {
-    throw new Error('Erro ao buscar resumo do portfólio')
-  }
-  
-  return response.json()
+  return apiGet<PortfolioResumo>(`${BASE_URL}/resumo`)
 }
 
 export async function getDistribuicaoPorTipo(): Promise<DistribuicaoTipo[]> {
-  const response = await fetch(`${BASE_URL}/distribuicao-tipo`)
-  
-  if (!response.ok) {
-    throw new Error('Erro ao buscar distribuição por tipo')
-  }
-  
-  return response.json()
+  return apiGet<DistribuicaoTipo[]>(`${BASE_URL}/distribuicao-tipo`)
 }
 
 /**
@@ -134,13 +87,7 @@ export async function getHistoricoInvestimento(
   if (filters?.ano_fim) params.append('ano_fim', String(filters.ano_fim))
 
   const url = `${BASE_URL}/${investimentoId}/historico?${params.toString()}`
-  const response = await fetch(url)
-  
-  if (!response.ok) {
-    throw new Error('Erro ao buscar histórico')
-  }
-  
-  return response.json()
+  return apiGet<InvestimentoHistorico[]>(url)
 }
 
 export async function getRendimentosTimeline(
@@ -152,13 +99,7 @@ export async function getRendimentosTimeline(
   })
 
   const url = `${BASE_URL}/timeline/rendimentos?${params.toString()}`
-  const response = await fetch(url)
-  
-  if (!response.ok) {
-    throw new Error('Erro ao buscar timeline de rendimentos')
-  }
-  
-  return response.json()
+  return apiGet<RendimentoMensal[]>(url)
 }
 
 /**
@@ -169,41 +110,17 @@ export async function getCenarios(ativo?: boolean): Promise<InvestimentoCenario[
   if (ativo !== undefined) params.append('ativo', String(ativo))
 
   const url = `${BASE_URL}/cenarios?${params.toString()}`
-  const response = await fetch(url)
-  
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}))
-    throw new Error(errorData.detail || errorData.message || 'Erro ao criar cenário')
-  }
-  
-  return response.json()
+  return apiGet<InvestimentoCenario[]>(url)
 }
 
 export async function createCenario(
   data: CreateCenarioForm
 ): Promise<InvestimentoCenario> {
-  const response = await fetch(`${BASE_URL}/cenarios`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  })
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}))
-    throw new Error(errorData.detail || errorData.message || 'Erro ao criar cenário')
-  }
-
-  return response.json()
+  return apiPost<InvestimentoCenario>(`${BASE_URL}/cenarios`, data)
 }
 
 export async function simularCenario(cenarioId: number): Promise<SimulacaoCompleta> {
-  const response = await fetch(`${BASE_URL}/cenarios/${cenarioId}/simular`)
-  
-  if (!response.ok) {
-    throw new Error('Erro ao simular cenário')
-  }
-  
-  return response.json()
+  return apiGet<SimulacaoCompleta>(`${BASE_URL}/cenarios/${cenarioId}/simular`)
 }
 
 /**
@@ -219,14 +136,24 @@ export async function simularCenarioPersonalizado(
   
   let patrimonio = 0
   const projecao = []
+  const hoje = new Date()
+  const mesAtual = hoje.getMonth() + 1
+  const anoAtual = hoje.getFullYear()
   
   for (let mes = 1; mes <= periodoMeses; mes++) {
     patrimonio = (patrimonio + aporteMensal) * (1 + taxaMensal)
+    
+    // Calcular mês/ano real da projeção
+    const mesesTotais = (anoAtual * 12 + mesAtual - 1) + mes
+    const mes_real = (mesesTotais % 12) + 1
+    const ano_real = Math.floor(mesesTotais / 12)
+    
     projecao.push({
       mes,
+      mes_real,
+      ano_real,
       patrimonio: Math.round(patrimonio * 100) / 100,
-      aportes_acumulados: aporteMensal * mes,
-      rendimentos_acumulados: patrimonio - (aporteMensal * mes)
+      aportes_acumulados: aporteMensal * mes
     })
   }
   
@@ -238,7 +165,8 @@ export async function simularCenarioPersonalizado(
     patrimonio_final: Math.round(patrimonio * 100) / 100,
     total_aportes: totalAportes,
     total_rendimentos: Math.round(totalRendimentos * 100) / 100,
-    rentabilidade_percentual: totalAportes > 0 ? (totalRendimentos / totalAportes) * 100 : 0,
+    patrimonio_medio_ponderado: 0, // Placeholder
+    evolucao_mensal: [],
     projecao_mensal: projecao
   }
 }
@@ -254,42 +182,22 @@ export async function criarCenario(data: {
   aporte_mensal: number
   periodo_meses: number
 }): Promise<any> {
-  const response = await fetch(`${BASE_URL}/cenarios`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  })
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}))
-    throw new Error(errorData.detail || errorData.message || 'Erro ao criar cenário')
-  }
-
-  return response.json()
+  // ✅ FASE 1 - Autenticação automática via apiPost
+  return apiPost<any>(`${BASE_URL}/cenarios`, data)
 }
 
 /**
  * Lista cenários salvos
  */
 export async function listarCenarios(ativo: boolean = true): Promise<any[]> {
-  const response = await fetch(`${BASE_URL}/cenarios?ativo=${ativo}`)
-
-  if (!response.ok) {
-    throw new Error('Erro ao listar cenários')
-  }
-
-  return response.json()
+  // ✅ FASE 1 - Autenticação automática via apiGet
+  return apiGet<any[]>(`${BASE_URL}/cenarios?ativo=${ativo}`)
 }
 
 /**
  * Simula cenário salvo no banco
  */
 export async function simularCenarioSalvo(cenarioId: number): Promise<any> {
-  const response = await fetch(`${BASE_URL}/cenarios/${cenarioId}/simular`)
-
-  if (!response.ok) {
-    throw new Error('Erro ao simular cenário salvo')
-  }
-
-  return response.json()
+  // ✅ FASE 1 - Autenticação automática via apiGet
+  return apiGet<any>(`${BASE_URL}/cenarios/${cenarioId}/simular`)
 }

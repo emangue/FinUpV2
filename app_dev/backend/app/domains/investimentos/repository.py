@@ -49,9 +49,29 @@ class InvestimentoRepository:
         skip: int = 0,
         limit: int = 100
     ) -> List[InvestimentoPortfolio]:
-        """Lista investimentos com filtros"""
+        """Lista investimentos com filtros - retorna apenas produtos com histórico no último mês"""
+        # Descobrir qual é o último mês disponível
+        ultimo_mes = self.db.query(
+            func.max(InvestimentoHistorico.anomes)
+        ).filter(
+            InvestimentoHistorico.investimento_id.in_(
+                self.db.query(InvestimentoPortfolio.id).filter(
+                    InvestimentoPortfolio.user_id == user_id
+                )
+            )
+        ).scalar()
+        
+        if not ultimo_mes:
+            return []
+        
+        # Buscar investimentos que têm histórico no último mês
         query = self.db.query(InvestimentoPortfolio).filter(
-            InvestimentoPortfolio.user_id == user_id
+            InvestimentoPortfolio.user_id == user_id,
+            InvestimentoPortfolio.id.in_(
+                self.db.query(InvestimentoHistorico.investimento_id).filter(
+                    InvestimentoHistorico.anomes == ultimo_mes
+                )
+            )
         )
 
         if tipo_investimento:
@@ -206,27 +226,83 @@ class InvestimentoRepository:
     # ============================================================================
 
     def get_portfolio_resumo(self, user_id: int) -> Dict[str, Any]:
-        """Retorna resumo consolidado do portfólio"""
-        investimentos = self.list_all(user_id, ativo=True)
-
-        total_investido = sum(
-            inv.valor_total_inicial or Decimal('0') for inv in investimentos
-        )
-
-        # Pegar último valor de cada investimento
-        valores_atuais = []
-        for inv in investimentos:
-            ultimo = self.db.query(InvestimentoHistorico).filter(
-                InvestimentoHistorico.investimento_id == inv.id
-            ).order_by(desc(InvestimentoHistorico.anomes)).first()
-
-            if ultimo and ultimo.valor_total:
-                valores_atuais.append(ultimo.valor_total)
-            elif inv.valor_total_inicial:
-                valores_atuais.append(inv.valor_total_inicial)
-
-        valor_atual = sum(valores_atuais) if valores_atuais else Decimal('0')
-        rendimento_total = valor_atual - total_investido
+        """
+        Retorna resumo consolidado do portfólio baseado no ÚLTIMO MÊS disponível
+        
+        Total Investido = Soma de ATIVOS do último mês
+        Valor Atual = Soma de PASSIVOS do último mês (valores negativos)
+        Rendimento Total = PATRIMÔNIO LÍQUIDO (Ativos + Passivos)
+        Produtos Ativos = Quantidade de produtos com histórico no último mês
+        """
+        # Descobrir qual é o último mês disponível
+        ultimo_mes = self.db.query(
+            func.max(InvestimentoHistorico.anomes)
+        ).filter(
+            InvestimentoHistorico.investimento_id.in_(
+                self.db.query(InvestimentoPortfolio.id).filter(
+                    InvestimentoPortfolio.user_id == user_id
+                )
+            )
+        ).scalar()
+        
+        if not ultimo_mes:
+            # Sem histórico - retornar zeros
+            return {
+                'total_investido': Decimal('0'),
+                'valor_atual': Decimal('0'),
+                'rendimento_total': Decimal('0'),
+                'rendimento_percentual': 0.0,
+                'quantidade_produtos': 0,
+                'produtos_ativos': 0
+            }
+        
+        # Buscar valores do último mês agrupados por classe_ativo
+        resultado = self.db.query(
+            InvestimentoPortfolio.classe_ativo,
+            func.count(InvestimentoHistorico.id).label('quantidade'),
+            func.sum(InvestimentoHistorico.valor_total).label('total')
+        ).join(
+            InvestimentoHistorico,
+            InvestimentoHistorico.investimento_id == InvestimentoPortfolio.id
+        ).filter(
+            InvestimentoPortfolio.user_id == user_id,
+            InvestimentoHistorico.anomes == ultimo_mes
+        ).group_by(
+            InvestimentoPortfolio.classe_ativo
+        ).all()
+        
+        # Separar ativos e passivos
+        total_ativos = Decimal('0')
+        total_passivos = Decimal('0')
+        quantidade_total = 0
+        
+        for row in resultado:
+            classe = row.classe_ativo
+            valor = row.total or Decimal('0')
+            quantidade_total += row.quantidade
+            
+            if classe == 'Ativo':
+                total_ativos += valor
+            elif classe == 'Passivo':
+                total_passivos += valor
+        
+        # Patrimônio Líquido = Ativos + Passivos (passivos já são negativos)
+        patrimonio_liquido = total_ativos + total_passivos
+        
+        # Calcular percentual (se houver ativos)
+        percentual = 0.0
+        if total_ativos > 0:
+            # Rendimento = quanto o patrimônio cresceu em relação aos ativos
+            percentual = float((patrimonio_liquido / total_ativos) * 100)
+        
+        return {
+            'total_investido': total_ativos,  # Soma de Ativos
+            'valor_atual': total_passivos,     # Soma de Passivos (negativos)
+            'rendimento_total': patrimonio_liquido,  # Patrimônio Líquido
+            'rendimento_percentual': percentual,
+            'quantidade_produtos': quantidade_total,
+            'produtos_ativos': quantidade_total  # Produtos com histórico no último mês
+        }
 
         return {
             'total_investido': total_investido,
@@ -238,14 +314,32 @@ class InvestimentoRepository:
         }
 
     def get_rendimento_por_tipo(self, user_id: int) -> List[Dict[str, Any]]:
-        """Retorna rendimento agrupado por tipo de investimento"""
+        """Retorna rendimento agrupado por tipo de investimento baseado no último mês"""
+        # Descobrir qual é o último mês disponível
+        ultimo_mes = self.db.query(
+            func.max(InvestimentoHistorico.anomes)
+        ).filter(
+            InvestimentoHistorico.investimento_id.in_(
+                self.db.query(InvestimentoPortfolio.id).filter(
+                    InvestimentoPortfolio.user_id == user_id
+                )
+            )
+        ).scalar()
+        
+        if not ultimo_mes:
+            return []
+        
+        # Buscar valores do último mês agrupados por tipo_investimento
         results = self.db.query(
             InvestimentoPortfolio.tipo_investimento,
-            func.count(InvestimentoPortfolio.id).label('quantidade'),
-            func.sum(InvestimentoPortfolio.valor_total_inicial).label('total_investido')
+            func.count(InvestimentoHistorico.id).label('quantidade'),
+            func.sum(InvestimentoHistorico.valor_total).label('total_investido')
+        ).join(
+            InvestimentoHistorico,
+            InvestimentoHistorico.investimento_id == InvestimentoPortfolio.id
         ).filter(
             InvestimentoPortfolio.user_id == user_id,
-            InvestimentoPortfolio.ativo == True
+            InvestimentoHistorico.anomes == ultimo_mes
         ).group_by(
             InvestimentoPortfolio.tipo_investimento
         ).all()

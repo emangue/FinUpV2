@@ -6,7 +6,6 @@ from sqlalchemy.orm import Session
 from typing import Optional, List
 from fastapi import HTTPException, status
 from datetime import datetime
-import hashlib
 
 from .repository import UserRepository
 from .models import User
@@ -14,12 +13,11 @@ from .schemas import (
     UserCreate,
     UserUpdate,
     UserResponse,
-    UserListResponse
+    UserListResponse,
+    ProfileUpdate,
+    PasswordChange
 )
-
-def hash_password(password: str) -> str:
-    """Hash de senha usando SHA256"""
-    return hashlib.sha256(password.encode()).hexdigest()
+from ..auth.password_utils import hash_password, verify_password  # bcrypt
 
 class UserService:
     """
@@ -188,3 +186,79 @@ class UserService:
         
         self.repository.update(user)
         return {"message": "Senha alterada com sucesso"}
+    
+    def update_profile(
+        self,
+        user_id: int,
+        profile_data: ProfileUpdate
+    ) -> UserResponse:
+        """
+        Atualiza perfil do usuário autenticado
+        
+        Lógica de negócio:
+        - Usuário só pode alterar seu próprio perfil
+        - Valida se email não está em uso por outro usuário
+        
+        Raises:
+            HTTPException: Se usuário não encontrado ou email duplicado
+        """
+        user = self.repository.get_by_id(user_id)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Usuário não encontrado"
+            )
+        
+        # Verificar se email já está em uso por outro usuário
+        if profile_data.email != user.email:
+            if self.repository.email_exists(profile_data.email, user_id):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Email '{profile_data.email}' já está cadastrado"
+                )
+        
+        # Atualizar campos
+        user.nome = profile_data.nome
+        user.email = profile_data.email
+        user.updated_at = datetime.now()
+        
+        updated = self.repository.update(user)
+        return UserResponse.from_orm(updated)
+    
+    def change_password(
+        self,
+        user_id: int,
+        password_data: PasswordChange
+    ) -> dict:
+        """
+        Altera a senha do usuário autenticado
+        
+        Lógica de negócio:
+        - Verifica se senha atual está correta
+        - Hash da nova senha
+        - Atualiza timestamp
+        
+        Raises:
+            HTTPException: Se usuário não encontrado ou senha atual incorreta
+        """
+        user = self.repository.get_by_id(user_id)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Usuário não encontrado"
+            )
+        
+        # Verificar senha atual
+        if not verify_password(password_data.current_password, user.password_hash):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Senha atual incorreta"
+            )
+        
+        # Atualizar senha
+        user.password_hash = hash_password(password_data.new_password)
+        user.updated_at = datetime.now()
+        
+        self.repository.update(user)
+        return {"message": "Senha alterada com sucesso"}
+

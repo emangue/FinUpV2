@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
+import { fetchWithAuth } from "@/core/utils/api-client"
 import DashboardLayout from "@/components/dashboard-layout"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -123,7 +124,7 @@ export default function CategoriasGenericasPage() {
   const loadRules = async () => {
     try {
       setLoading(true)
-      const response = await fetch(`${API_BASE}/rules`)
+      const response = await fetchWithAuth(`${API_BASE}/rules`)
       if (!response.ok) throw new Error('Erro ao carregar regras')
       const data = await response.json()
       setRules(data)
@@ -138,7 +139,7 @@ export default function CategoriasGenericasPage() {
 
   const loadStats = async () => {
     try {
-      const response = await fetch(`${API_BASE}/stats`)
+      const response = await fetchWithAuth(`${API_BASE}/stats`)
       if (!response.ok) throw new Error('Erro ao carregar estatísticas')
       const data = await response.json()
       setStats(data)
@@ -150,7 +151,7 @@ export default function CategoriasGenericasPage() {
   const loadGrupoOptions = async () => {
     try {
       // Busca combinações grupo/subgrupo das transações com seus tipos de gasto
-      const response = await fetch(`${API_BASE}/groups-with-types`)
+      const response = await fetchWithAuth(`${API_BASE}/groups-with-types`)
       if (!response.ok) throw new Error('Erro ao carregar grupos')
       const data = await response.json()
       setGrupoOptions(data.opcoes || [])
@@ -171,7 +172,7 @@ export default function CategoriasGenericasPage() {
         tipo_gasto: matchingOption?.tipo_gasto || 'Ajustável' // fallback
       }
       
-      const response = await fetch(`${API_BASE}/rules`, {
+      const response = await fetchWithAuth(`${API_BASE}/rules`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(finalData)
@@ -194,7 +195,7 @@ export default function CategoriasGenericasPage() {
 
   const updateRule = async (id: number, data: Partial<GenericRuleCreate>) => {
     try {
-      const response = await fetch(`${API_BASE}/rules/${id}`, {
+      const response = await fetchWithAuth(`${API_BASE}/rules/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
@@ -215,7 +216,7 @@ export default function CategoriasGenericasPage() {
     if (!confirm('Tem certeza que deseja deletar esta regra?')) return
     
     try {
-      const response = await fetch(`${API_BASE}/rules/${id}`, {
+      const response = await fetchWithAuth(`${API_BASE}/rules/${id}`, {
         method: 'DELETE'
       })
       if (!response.ok) throw new Error('Erro ao deletar regra')
@@ -229,7 +230,7 @@ export default function CategoriasGenericasPage() {
 
   const testRule = async (text: string) => {
     try {
-      const response = await fetch(`${API_BASE}/rules/test`, {
+      const response = await fetchWithAuth(`${API_BASE}/rules/test`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ texto: text })
@@ -247,7 +248,7 @@ export default function CategoriasGenericasPage() {
     if (!confirm('Importar regras hardcoded? Isso pode sobrescrever regras existentes.')) return
     
     try {
-      const response = await fetch(`${API_BASE}/rules/import`, {
+      const response = await fetchWithAuth(`${API_BASE}/rules/import`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sobrescrever_existentes: false })

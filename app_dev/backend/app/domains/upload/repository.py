@@ -104,6 +104,12 @@ class UploadRepository:
             UploadHistory.user_id == user_id
         ).first()
     
+    def get_history_by_session(self, session_id: str) -> Optional[UploadHistory]:
+        """Busca histórico por session_id (sem filtro de user)"""
+        return self.db.query(UploadHistory).filter(
+            UploadHistory.session_id == session_id
+        ).first()
+    
     def list_upload_history(
         self,
         user_id: int,

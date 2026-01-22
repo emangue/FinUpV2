@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from 'react'
+import { fetchWithAuth } from '@/core/utils/api-client'
 import DashboardLayout from '@/components/dashboard-layout'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -170,7 +171,7 @@ export default function ScreenVisibilityPage() {
   const fetchScreens = async () => {
     try {
       setLoading(true)
-      const response = await fetch(API_ENDPOINTS.SCREENS.ADMIN_ALL)
+      const response = await fetchWithAuth(API_ENDPOINTS.SCREENS.ADMIN_ALL)
       if (!response.ok) throw new Error('Erro ao carregar telas')
       const data = await response.json()
       
@@ -250,7 +251,7 @@ export default function ScreenVisibilityPage() {
       const promises = validChanges.map(([screenKey, status]) => {
         const screen = screenStatuses.get(screenKey)!
         
-        return fetch(API_ENDPOINTS.SCREENS.UPDATE(screen.id), {
+        return fetchWithAuth(API_ENDPOINTS.SCREENS.UPDATE(screen.id), {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status }),

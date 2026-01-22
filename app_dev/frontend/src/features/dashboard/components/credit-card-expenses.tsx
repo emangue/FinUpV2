@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CreditCard } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { API_CONFIG } from '@/core/config/api.config';
+import { fetchWithAuth } from '@/core/utils/api-client';  // ✅ FASE 3 - Autenticação obrigatória
 
 interface CreditCardData {
   cartao: string;
@@ -49,7 +50,8 @@ const CreditCardExpenses: React.FC<CreditCardExpensesProps> = ({
         params.append('month', month);
       }
 
-      const response = await fetch(
+      // ✅ FASE 3 - Autenticação automática
+      const response = await fetchWithAuth(
         `${API_CONFIG.BACKEND_URL}/api/v1/dashboard/credit-cards?${params.toString()}`
       );
 

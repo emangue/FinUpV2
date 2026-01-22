@@ -54,7 +54,9 @@ class UploadService:
         cartao: str = None,
         final_cartao: str = None,
         tipo_documento: str = "fatura",
-        formato: str = "csv"
+        formato: str = "csv",
+        skip_cleanup: bool = False,
+        shared_session_id: str = None
     ) -> UploadPreviewResponse:
         """
         Processa arquivo em 3 fases com salvamento incremental
@@ -108,41 +110,51 @@ class UploadService:
         history_record = None
         
         try:
-            # SEMPRE limpar preview do usuário ANTES de processar
-            deleted = self.repository.delete_all_by_user(user_id)
-            if deleted > 0:
-                logger.info(f"🗑️  Limpeza: {deleted} registros de preview removidos")
+            # Limpar preview do usuário ANTES de processar (exceto em batch)
+            if not skip_cleanup:
+                deleted = self.repository.delete_all_by_user(user_id)
+                if deleted > 0:
+                    logger.info(f"🗑️  Limpeza: {deleted} registros de preview removidos")
+            else:
+                logger.info(f"⏭️  Pulando limpeza (modo batch)")
             
             # ========== NOVA FASE 0: REGENERAR PADRÕES ==========
-            logger.info("🔄 Fase 0: Regeneração de Base Padrões")
-            try:
-                from app.domains.upload.processors.pattern_generator import regenerar_base_padroes_completa
-                resultado = regenerar_base_padroes_completa(self.db, user_id)
-                logger.info(f"  ✅ Padrões regenerados: {resultado['total_padroes_gerados']} gerados, {resultado['criados']} criados, {resultado['atualizados']} atualizados")
-                logger.info("  🎯 Classificação usará padrões atualizados neste upload")
-            except Exception as e:
-                # NÃO bloquear upload se regeneração falhar
-                logger.warning(f"  ⚠️ Erro na regeneração: {str(e)}")
-                logger.warning("  📂 Continuando com padrões existentes...")
+            # Só regenerar padrões no primeiro arquivo do lote
+            if not skip_cleanup:
+                logger.info("🔄 Fase 0: Regeneração de Base Padrões")
+                try:
+                    from app.domains.upload.processors.pattern_generator import regenerar_base_padroes_completa
+                    resultado = regenerar_base_padroes_completa(self.db, user_id)
+                    logger.info(f"  ✅ Padrões regenerados: {resultado['total_padroes_gerados']} gerados, {resultado['criados']} criados, {resultado['atualizados']} atualizados")
+                    logger.info("  🎯 Classificação usará padrões atualizados neste upload")
+                except Exception as e:
+                    # NÃO bloquear upload se regeneração falhar
+                    logger.warning(f"  ⚠️ Erro na regeneração: {str(e)}")
+                    logger.warning("  📂 Continuando com padrões existentes...")
             
-            # Gerar session_id único
-            session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{user_id}"
+            # Usar session_id compartilhado (batch) ou gerar único
+            session_id = shared_session_id or f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{user_id}"
             
-            # Criar registro de histórico com status='processing'
-            history_record = UploadHistory(
-                user_id=user_id,
-                session_id=session_id,
-                banco=banco,
-                tipo_documento=tipo_documento,
-                nome_arquivo=file.filename,
-                nome_cartao=cartao,
-                final_cartao=final_cartao,
-                mes_fatura=mes_fatura,
-                status='processing',
-                data_upload=datetime.now()
-            )
-            history_record = self.repository.create_upload_history(history_record)
-            logger.info(f"📝 Histórico criado: ID {history_record.id}")
+            # Criar ou buscar registro de histórico
+            history_record = self.repository.get_history_by_session(session_id)
+            if not history_record:
+                # Criar novo registro de histórico com status='processing'
+                history_record = UploadHistory(
+                    user_id=user_id,
+                    session_id=session_id,
+                    banco=banco,
+                    tipo_documento=tipo_documento,
+                    nome_arquivo=file.filename,
+                    nome_cartao=cartao,
+                    final_cartao=final_cartao,
+                    mes_fatura=mes_fatura,
+                    status='processing',
+                    data_upload=datetime.now()
+                )
+                history_record = self.repository.create_upload_history(history_record)
+                logger.info(f"📝 Histórico criado: ID {history_record.id}")
+            else:
+                logger.info(f"📝 Reutilizando histórico existente: ID {history_record.id}")
             
             # Salvar arquivo temporariamente
             with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{file.filename}") as tmp:
@@ -737,11 +749,12 @@ class UploadService:
                 detail={"errorCode": "UPL_008", "error": "Histórico de upload não encontrado"}
             )
         
-        # Buscar dados de preview (filtrar não-duplicatas)
+        # Buscar dados de preview (filtrar não-duplicatas e não-excluídos)
         previews = self.db.query(PreviewTransacao).filter(
             PreviewTransacao.session_id == session_id,
             PreviewTransacao.user_id == user_id,
-            PreviewTransacao.is_duplicate == False
+            PreviewTransacao.is_duplicate == False,
+            PreviewTransacao.excluir == 0
         ).all()
         
         if not previews:
@@ -893,10 +906,12 @@ class UploadService:
         preview_id: int,
         grupo: Optional[str],
         subgrupo: Optional[str],
+        excluir: Optional[int],
         user_id: int
     ):
         """
-        Atualiza classificação manual (grupo/subgrupo) de um registro de preview
+        Atualiza classificação manual (grupo/subgrupo) ou marca exclusão de um registro de preview
+        Busca automaticamente TipoGasto e CategoriaGeral da base_grupos_config
         """
         logger.info(f"📝 Atualizando classificação manual: preview_id={preview_id}, grupo={grupo}, subgrupo={subgrupo}")
         
@@ -916,12 +931,40 @@ class UploadService:
         # Atualizar campos
         if grupo is not None:
             preview.GRUPO = grupo
+            
+            # Buscar TipoGasto e CategoriaGeral da base_grupos_config
+            from app.domains.grupos.models import BaseGruposConfig
+            grupo_config = self.db.query(BaseGruposConfig).filter(
+                BaseGruposConfig.nome_grupo == grupo
+            ).first()
+            
+            if grupo_config:
+                preview.TipoGasto = grupo_config.tipo_gasto_padrao
+                preview.CategoriaGeral = grupo_config.categoria_geral
+                logger.info(f"  ✅ Aplicado da base_grupos_config: TipoGasto={grupo_config.tipo_gasto_padrao}, CategoriaGeral={grupo_config.categoria_geral}")
+            else:
+                logger.warning(f"  ⚠️ Grupo '{grupo}' não encontrado em base_grupos_config")
+        
         if subgrupo is not None:
             preview.SUBGRUPO = subgrupo
+        
+        # Atualizar flag de exclusão
+        if excluir is not None:
+            preview.excluir = excluir
+            logger.info(f"  {'🗑️ Marcado para exclusão' if excluir == 1 else '✅ Desmarcado exclusão'}")
         
         # Atualizar origem se foi modificado manualmente
         if grupo or subgrupo:
             preview.origem_classificacao = 'Manual'
+        
+        # Inserir automaticamente em base_marcacoes se não existir
+        if grupo and subgrupo and preview.TipoGasto:
+            self._ensure_marcacao_exists(
+                grupo=grupo,
+                subgrupo=subgrupo,
+                tipo_gasto=preview.TipoGasto,
+                user_id=user_id
+            )
         
         self.db.commit()
         self.db.refresh(preview)
@@ -931,8 +974,36 @@ class UploadService:
             "preview_id": preview_id,
             "grupo": preview.GRUPO,
             "subgrupo": preview.SUBGRUPO,
+            "tipo_gasto": preview.TipoGasto,
+            "categoria_geral": preview.CategoriaGeral,
             "origem_classificacao": preview.origem_classificacao
         }
+    
+    def _ensure_marcacao_exists(self, grupo: str, subgrupo: str, tipo_gasto: str, user_id: int = None):
+        """
+        Garante que a combinação grupo+subgrupo+tipo_gasto existe em base_marcacoes
+        Se não existir, cria automaticamente
+        """
+        from app.domains.categories.models import BaseMarcacao
+        
+        # Verificar se já existe
+        existing = self.db.query(BaseMarcacao).filter(
+            BaseMarcacao.GRUPO == grupo,
+            BaseMarcacao.SUBGRUPO == subgrupo,
+            BaseMarcacao.TipoGasto == tipo_gasto
+        ).first()
+        
+        if not existing:
+            # Criar nova marcação
+            nova_marcacao = BaseMarcacao(
+                GRUPO=grupo,
+                SUBGRUPO=subgrupo,
+                TipoGasto=tipo_gasto
+            )
+            self.db.add(nova_marcacao)
+            logger.info(f"  ➕ Nova marcação criada em base_marcacoes: {grupo} > {subgrupo} ({tipo_gasto})")
+        else:
+            logger.debug(f"  ✓ Marcação já existe em base_marcacoes: {grupo} > {subgrupo}")
     
     def _fase5_update_base_parcelas(self, user_id: int, upload_history_id: int) -> dict:
         """

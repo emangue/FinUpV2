@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.shared.dependencies import get_current_user_id
+from app.shared.dependencies import get_current_user_id, get_current_user_id
 from .service import InvestimentoService
 from . import schemas
 

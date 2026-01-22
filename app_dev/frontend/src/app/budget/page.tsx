@@ -22,16 +22,6 @@ interface BudgetItem {
   valor_planejado: number;
 }
 
-// Categorias gerais do orçamento
-const categoriasGerais = [
-  'Casa',
-  'Cartão de Crédito',
-  'Doações',
-  'Saúde',
-  'Viagens',
-  'Outros',
-];
-
 const meses = [
   { value: '01', label: 'Janeiro' },
   { value: '02', label: 'Fevereiro' },
@@ -52,18 +42,50 @@ export default function BudgetPage() {
   const [selectedMonth, setSelectedMonth] = useState(String(currentDate.getMonth() + 1).padStart(2, '0'));
   const [selectedYear, setSelectedYear] = useState(String(currentDate.getFullYear()));
   const [budgetData, setBudgetData] = useState<Record<string, number>>({});
+  const [categoriasGerais, setCategoriasGerais] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const mesReferencia = `${selectedYear}-${selectedMonth}`;
 
-  // Carregar dados do orçamento
+  // Carregar grupos disponíveis
   useEffect(() => {
-    loadBudget();
+    loadGruposDisponiveis();
+  }, []);
+
+  // Carregar dados do orçamento quando mudar mês/ano
+  useEffect(() => {
+    if (categoriasGerais.length > 0) {
+      loadBudget();
+    }
   }, [selectedMonth, selectedYear]);
 
-  const loadBudget = async () => {
+  const loadGruposDisponiveis = async () => {
+    try {
+      const response = await fetch(
+        `${API_CONFIG.BACKEND_URL}/api/v1/budget/geral/grupos-disponiveis`
+      );
+      
+      if (response.ok) {
+        const grupos = await response.json();
+        console.log('Grupos carregados da API:', grupos.length, grupos);
+        setCategoriasGerais(grupos);
+        // Carregar budget logo após receber grupos
+        if (grupos.length > 0) {
+          await loadBudgetWithGroups(grupos);
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao carregar grupos disponíveis:', error);
+      // Fallback para lista mínima
+      const fallbackGrupos = ['Casa', 'Viagens', 'Saúde', 'Alimentação', 'Outros'];
+      setCategoriasGerais(fallbackGrupos);
+      await loadBudgetWithGroups(fallbackGrupos);
+    }
+  };
+
+  const loadBudgetWithGroups = async (grupos: string[]) => {
     setLoading(true);
     setMessage(null);
     try {
@@ -75,13 +97,26 @@ export default function BudgetPage() {
         const result = await response.json();
         const data = result.budgets || [];
         const budgetMap: Record<string, number> = {};
+        
+        // Inicializar TODOS os grupos com 0
+        grupos.forEach(grupo => {
+          budgetMap[grupo] = 0;
+        });
+        
+        // Sobrescrever com valores do banco
         data.forEach((item: BudgetItem) => {
           budgetMap[item.categoria_geral] = item.valor_planejado;
         });
+        
+        console.log('Budget carregado:', Object.keys(budgetMap).length, 'grupos');
         setBudgetData(budgetMap);
       } else {
-        // Se não houver dados, inicializar com zeros
-        setBudgetData({});
+        // Se não houver dados, inicializar com zeros para todos os grupos
+        const budgetMap: Record<string, number> = {};
+        grupos.forEach(grupo => {
+          budgetMap[grupo] = 0;
+        });
+        setBudgetData(budgetMap);
       }
     } catch (error) {
       console.error('Erro ao carregar orçamento:', error);
@@ -89,6 +124,11 @@ export default function BudgetPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadBudget = async () => {
+    if (categoriasGerais.length === 0) return;
+    await loadBudgetWithGroups(categoriasGerais);
   };
 
   const handleValueChange = (categoria: string, value: string) => {
@@ -104,7 +144,6 @@ export default function BudgetPage() {
     setMessage(null);
     try {
       const items = Object.entries(budgetData)
-        .filter(([_, valor]) => valor > 0)
         .map(([categoria_geral, valor_planejado]) => ({
           categoria_geral,
           valor_planejado,

@@ -53,6 +53,7 @@ interface BankCompatibility {
 }
 
 export default function CartoesPage() {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1"
   const [cartoes, setCartoes] = React.useState<Cartao[]>([])
   const [loadingCartoes, setLoadingCartoes] = React.useState(true)
   const [cartaoModalOpen, setCartaoModalOpen] = React.useState(false)
@@ -182,7 +183,7 @@ export default function CartoesPage() {
     if (!confirm('Deseja realmente deletar este cartão?')) return
 
     try {
-      const response = await fetch(`/api/cartoes/${id}`, {
+      const response = await fetch(`${apiUrl}/cartoes/${id}`, {
         method: 'DELETE'
       })
 

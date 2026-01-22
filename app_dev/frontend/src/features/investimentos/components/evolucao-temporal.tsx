@@ -47,6 +47,7 @@ export function EvolucaoTemporal({ timeline, cenario }: EvolucaoTemporalProps) {
     const rendimentoMensal = cenario?.rendimento_mensal || 0.8 // 0.8% padrão
     const aporteMensal = cenario?.aporte_mensal || 5000 // R$ 5.000 padrão
 
+    // Começar com o patrimônio real de maio/24 (primeiro mês)
     let patrimonioProjetadoAnterior = sorted.length > 0 ? parseFloat(sorted[0].patrimonio_final) : 0
 
     return sorted.map((item, index) => {
@@ -55,13 +56,16 @@ export function EvolucaoTemporal({ timeline, cenario }: EvolucaoTemporalProps) {
       // Cálculo da projeção: saldo anterior + (saldo anterior * rendimento%) + aporte
       let patrimonioProjetado: number
       if (index === 0) {
-        patrimonioProjetado = patrimonioReal // Primeiro mês = real
+        // Primeiro mês = patrimônio real inicial
+        patrimonioProjetado = patrimonioReal
       } else {
+        // Meses seguintes: aplicar rendimento + aporte sobre o valor projetado anterior
         patrimonioProjetado = patrimonioProjetadoAnterior + 
                              (patrimonioProjetadoAnterior * (rendimentoMensal / 100)) + 
                              aporteMensal
-        patrimonioProjetadoAnterior = patrimonioProjetado
       }
+      
+      patrimonioProjetadoAnterior = patrimonioProjetado
 
       return {
         mes: item.anomes,
@@ -109,16 +113,24 @@ export function EvolucaoTemporal({ timeline, cenario }: EvolucaoTemporalProps) {
     return 100 - ((valor - minValor) / range * 100)
   }
 
+  // Constantes para dimensões do gráfico
+  const GRAPH_PADDING_LEFT = 80 // Espaço para legendas do eixo Y
+  const GRAPH_PADDING_RIGHT = 20
+  const GRAPH_PADDING_BOTTOM = 30 // Espaço para labels do eixo X
+  const GRAPH_WIDTH = 1000
+  const GRAPH_HEIGHT = 300
+  const GRAPH_TOTAL_HEIGHT = GRAPH_HEIGHT + GRAPH_PADDING_BOTTOM
+  const GRAPH_AREA_WIDTH = GRAPH_WIDTH - GRAPH_PADDING_LEFT - GRAPH_PADDING_RIGHT
+
   // Gerar path SVG para linha
   const gerarPath = (dataKey: 'patrimonioReal' | 'patrimonioProjetado'): string => {
     if (dadosFiltrados.length === 0) return ''
 
-    const width = 100 // Percentual
-    const step = width / (dadosFiltrados.length - 1 || 1)
+    const step = GRAPH_AREA_WIDTH / (dadosFiltrados.length - 1 || 1)
 
     const pontos = dadosFiltrados.map((d, i) => {
-      const x = i * step
-      const y = calcularPosicaoY(d[dataKey])
+      const x = GRAPH_PADDING_LEFT + (i * step)
+      const y = (calcularPosicaoY(d[dataKey]) / 100) * GRAPH_HEIGHT
       return `${x},${y}`
     })
 
@@ -133,6 +145,17 @@ export function EvolucaoTemporal({ timeline, cenario }: EvolucaoTemporalProps) {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
     }).format(value)
+  }
+
+  // Formatar valores em K/M para labels do eixo
+  const formatAxisValue = (value: number): string => {
+    const absValue = Math.abs(value)
+    if (absValue >= 1000000) {
+      return `R$ ${(value / 1000000).toFixed(1)}M`
+    } else if (absValue >= 1000) {
+      return `R$ ${(value / 1000).toFixed(0)}k`
+    }
+    return `R$ ${value.toFixed(0)}`
   }
 
   // Calcular variação percentual
@@ -235,11 +258,11 @@ export function EvolucaoTemporal({ timeline, cenario }: EvolucaoTemporalProps) {
           <div className="flex flex-col">
             <span className="text-sm text-muted-foreground">Real vs. Projetado</span>
             <div className="flex items-center gap-2">
-              <span className={`text-2xl font-bold ${diferenca >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {diferenca >= 0 ? '+' : ''}{formatCurrency(diferenca)}
+              <span className={`text-2xl font-bold ${diferenca >= 0 ? 'text-red-600' : 'text-green-600'}`}>
+                {diferenca >= 0 ? '-' : '+'}{formatCurrency(Math.abs(diferenca))}
               </span>
-              <Badge variant={diferenca >= 0 ? 'default' : 'secondary'}>
-                {diferenca >= 0 ? '+' : ''}{diferencaPercentual.toFixed(2)}%
+              <Badge variant={diferenca >= 0 ? 'secondary' : 'default'}>
+                {diferenca >= 0 ? '-' : '+'}{Math.abs(diferencaPercentual).toFixed(2)}%
               </Badge>
             </div>
           </div>
@@ -248,41 +271,51 @@ export function EvolucaoTemporal({ timeline, cenario }: EvolucaoTemporalProps) {
 
       <CardContent>
         {/* Gráfico SVG */}
-        <div className="relative h-[300px] w-full">
+        <div className="relative h-[320px] w-full pb-8">
           {/* Grid de fundo */}
-          <svg className="absolute inset-0 w-full h-full">
+          <svg 
+            className="absolute inset-0 w-full h-full" 
+            viewBox={`0 0 ${GRAPH_WIDTH} ${GRAPH_TOTAL_HEIGHT}`}
+            preserveAspectRatio="xMidYMid meet"
+          >
             <defs>
               <pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse">
                 <path d="M 10 0 L 0 0 0 10" fill="none" stroke="#e5e7eb" strokeWidth="0.5"/>
               </pattern>
             </defs>
-            <rect width="100%" height="100%" fill="url(#grid)" />
+            <rect x={GRAPH_PADDING_LEFT} width={GRAPH_AREA_WIDTH} height="100%" fill="url(#grid)" />
 
             {/* Linhas horizontais de referência */}
-            {[0, 25, 50, 75, 100].map(percent => (
-              <g key={percent}>
-                <line
-                  x1="0"
-                  y1={`${percent}%`}
-                  x2="100%"
-                  y2={`${percent}%`}
-                  stroke="#d1d5db"
-                  strokeWidth="1"
-                  strokeDasharray="4"
-                />
-                <text
-                  x="4"
-                  y={`${percent}%`}
-                  dy="-4"
-                  fontSize="10"
-                  fill="#6b7280"
-                >
-                  {formatCurrency(maxValor - (range * percent / 100))}
-                </text>
-              </g>
-            ))}
+            {[0, 25, 50, 75, 100].map(percent => {
+              const y = (percent / 100) * GRAPH_HEIGHT
+              const valor = maxValor - (range * percent / 100)
+              return (
+                <g key={percent}>
+                  <line
+                    x1={GRAPH_PADDING_LEFT}
+                    y1={y}
+                    x2={GRAPH_WIDTH - GRAPH_PADDING_RIGHT}
+                    y2={y}
+                    stroke="#d1d5db"
+                    strokeWidth="1"
+                    strokeDasharray="4"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                  <text
+                    x={GRAPH_PADDING_LEFT - 8}
+                    y={y}
+                    dy="4"
+                    fontSize="11"
+                    fill="#6b7280"
+                    textAnchor="end"
+                  >
+                    {formatAxisValue(valor)}
+                  </text>
+                </g>
+              )
+            })}
 
-            {/* Linha Real (azul) */}
+            {/* Linha Real (azul sólida) */}
             <path
               d={gerarPath('patrimonioReal')}
               fill="none"
@@ -291,51 +324,114 @@ export function EvolucaoTemporal({ timeline, cenario }: EvolucaoTemporalProps) {
               vectorEffect="non-scaling-stroke"
             />
 
-            {/* Linha Projetada (verde tracejada) */}
-            <path
-              d={gerarPath('patrimonioProjetado')}
-              fill="none"
-              stroke="#16a34a"
-              strokeWidth="2"
-              strokeDasharray="6 4"
-              vectorEffect="non-scaling-stroke"
-            />
-
-            {/* Pontos na linha real */}
+            {/* Pontos azuis na linha real com labels */}
             {dadosFiltrados.map((d, i) => {
-              const width = 100
-              const step = width / (dadosFiltrados.length - 1 || 1)
-              const x = i * step
-              const y = calcularPosicaoY(d.patrimonioReal)
+              const step = GRAPH_AREA_WIDTH / (dadosFiltrados.length - 1 || 1)
+              const x = GRAPH_PADDING_LEFT + (i * step)
+              const y = (calcularPosicaoY(d.patrimonioReal) / 100) * GRAPH_HEIGHT
+
+              // Mostrar label a cada 2 pontos para não poluir
+              const totalPontos = dadosFiltrados.length
+              let intervaloLabel = 2
+              if (totalPontos > 15) intervaloLabel = 3
+              if (totalPontos > 20) intervaloLabel = 4
+              const showLabel = i % intervaloLabel === 0 || i === dadosFiltrados.length - 1
 
               return (
-                <circle
-                  key={d.mes}
-                  cx={`${x}%`}
-                  cy={`${y}%`}
-                  r="4"
-                  fill="#2563eb"
-                  stroke="white"
-                  strokeWidth="2"
-                />
+                <g key={`real-${d.mes}`}>
+                  <circle
+                    cx={x}
+                    cy={y}
+                    r="3"
+                    fill="#2563eb"
+                    stroke="white"
+                    strokeWidth="2"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                  {showLabel && (
+                    <text
+                      x={x}
+                      y={y - 10}
+                      fontSize="10"
+                      fill="#2563eb"
+                      fontWeight="600"
+                      textAnchor="middle"
+                    >
+                      {formatAxisValue(d.patrimonioReal)}
+                    </text>
+                  )}
+                </g>
+              )
+            })}
+
+            {/* Pontos verdes na projeção com labels */}
+            {dadosFiltrados.map((d, i) => {
+              const step = GRAPH_AREA_WIDTH / (dadosFiltrados.length - 1 || 1)
+              const x = GRAPH_PADDING_LEFT + (i * step)
+              const y = (calcularPosicaoY(d.patrimonioProjetado) / 100) * GRAPH_HEIGHT
+
+              // Mostrar label a cada 2 pontos
+              const totalPontos = dadosFiltrados.length
+              let intervaloLabel = 2
+              if (totalPontos > 15) intervaloLabel = 3
+              if (totalPontos > 20) intervaloLabel = 4
+              const showLabel = i % intervaloLabel === 0 || i === dadosFiltrados.length - 1
+
+              return (
+                <g key={`proj-${d.mes}`}>
+                  <circle
+                    cx={x}
+                    cy={y}
+                    r="4"
+                    fill="#16a34a"
+                    stroke="white"
+                    strokeWidth="2"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                  {showLabel && (
+                    <text
+                      x={x}
+                      y={y - 10}
+                      fontSize="10"
+                      fill="#16a34a"
+                      fontWeight="600"
+                      textAnchor="middle"
+                    >
+                      {formatAxisValue(d.patrimonioProjetado)}
+                    </text>
+                  )}
+                </g>
+              )
+            })}
+            {/* Labels de mês no eixo X (dentro do SVG) */}
+            {dadosFiltrados.map((d, i) => {
+              // Calcular quantos labels mostrar baseado no tamanho
+              const totalPontos = dadosFiltrados.length
+              let intervalo = 1
+              if (totalPontos > 12) intervalo = Math.ceil(totalPontos / 8)
+              else if (totalPontos > 6) intervalo = 2
+              
+              const showLabel = i % intervalo === 0 || i === dadosFiltrados.length - 1
+              
+              if (!showLabel) return null
+              
+              const step = GRAPH_AREA_WIDTH / (dadosFiltrados.length - 1 || 1)
+              const x = GRAPH_PADDING_LEFT + (i * step)
+              
+              return (
+                <text
+                  key={`label-${d.mes}`}
+                  x={x}
+                  y={GRAPH_HEIGHT + 20}
+                  fontSize="11"
+                  fill="#6b7280"
+                  textAnchor="middle"
+                >
+                  {d.mesFormatado}
+                </text>
               )
             })}
           </svg>
-
-          {/* Labels de mês no eixo X */}
-          <div className="absolute bottom-0 left-0 right-0 flex justify-between px-2 text-xs text-muted-foreground">
-            {dadosFiltrados.map((d, i) => {
-              // Mostrar apenas alguns labels para evitar sobreposição
-              const showLabel = dadosFiltrados.length <= 6 || i % Math.ceil(dadosFiltrados.length / 6) === 0 || i === dadosFiltrados.length - 1
-              
-              return showLabel ? (
-                <span key={d.mes} className="flex items-center gap-1">
-                  <Calendar className="h-3 w-3" />
-                  {d.mesFormatado}
-                </span>
-              ) : null
-            })}
-          </div>
         </div>
 
         {/* Legenda */}
@@ -345,7 +441,11 @@ export function EvolucaoTemporal({ timeline, cenario }: EvolucaoTemporalProps) {
             <span className="text-sm text-muted-foreground">Patrimônio Real</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-8 h-0.5 bg-green-600 border-t-2 border-dashed border-green-600" />
+            <div className="flex gap-1">
+              <div className="w-1.5 h-1.5 rounded-full bg-green-600" />
+              <div className="w-1.5 h-1.5 rounded-full bg-green-600" />
+              <div className="w-1.5 h-1.5 rounded-full bg-green-600" />
+            </div>
             <span className="text-sm text-muted-foreground">
               Patrimônio Projetado ({cenario?.rendimento_mensal || 0.8}% a.m. + {formatCurrency(cenario?.aporte_mensal || 5000)}/mês)
             </span>

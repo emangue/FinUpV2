@@ -2,7 +2,100 @@
 
 ## ⚠️ REGRAS CRÍTICAS - SEMPRE SEGUIR
 
-### 🔄 GESTÃO AUTOMÁTICA DE VERSÃO DA PASTA (REGRA OBRIGATÓRIA)
+### � ESTRUTURA DE PASTAS - REGRA OBRIGATÓRIA (NOVA ORGANIZAÇÃO 22/01/2026)
+
+**REGRA CRÍTICA:** SEMPRE respeitar a estrutura organizada do projeto ao criar novos arquivos.
+
+**✅ ESTRUTURA OFICIAL:**
+```
+ProjetoFinancasV5/
+├── 📚 docs/                    # TODA documentação
+│   ├── architecture/           # Arquitetura, modularidade, performance
+│   ├── deploy/                # Deploy, servidores, VPS
+│   ├── features/              # Features, autenticação, marcações
+│   └── planning/              # Sprints, TODOs, relatórios
+│
+├── 🔧 scripts/                 # TODOS os scripts
+│   ├── database/              # Migrations, fixes, populações
+│   ├── deploy/                # quick_start, quick_stop, backup_daily, audit
+│   ├── maintenance/           # Limpeza, reorganização, pausas
+│   ├── migration/             # Migrações de dados, copiar usuários
+│   └── testing/               # Testes standalone, validações
+│
+├── 🗂️ temp/                    # Arquivos TEMPORÁRIOS (ignorados no git)
+│   ├── logs/                  # backend.log, frontend.log
+│   └── pids/                  # backend.pid, frontend.pid
+│
+├── 📱 app_dev/                 # Aplicação (backend + frontend)
+├── 📂 _arquivos_historicos/    # Histórico e backups
+└── 📖 README.md               # Documentação principal
+```
+
+**🎯 REGRAS OBRIGATÓRIAS AO CRIAR ARQUIVOS:**
+
+1. **Documentação (.md):**
+   - ✅ SEMPRE em `docs/`
+   - Deploy/VPS → `docs/deploy/`
+   - Arquitetura/DB → `docs/architecture/`
+   - Features/Planos → `docs/features/`
+   - Sprints/TODOs → `docs/planning/`
+   - ❌ NUNCA criar `.md` na raiz
+
+2. **Scripts (.py, .sh):**
+   - ✅ SEMPRE em `scripts/`
+   - Migrations/fixes DB → `scripts/database/`
+   - Start/stop/backup → `scripts/deploy/`
+   - Limpeza/manutenção → `scripts/maintenance/`
+   - Testes → `scripts/testing/`
+   - ❌ NUNCA criar scripts na raiz
+
+3. **Arquivos Temporários:**
+   - ✅ SEMPRE em `temp/`
+   - Logs → `temp/logs/` (backend.log, frontend.log)
+   - PIDs → `temp/pids/` (backend.pid, frontend.pid)
+   - ❌ NUNCA criar `.log` ou `.pid` na raiz
+   - ⚠️ `temp/` está no `.gitignore`
+
+4. **Aplicação:**
+   - ✅ Backend → `app_dev/backend/`
+   - ✅ Frontend → `app_dev/frontend/`
+   - ❌ NUNCA misturar com docs/scripts
+
+**🚫 PROIBIÇÕES ABSOLUTAS:**
+
+```bash
+# ❌ NUNCA FAZER ISSO:
+touch STATUS_DEPLOY.md              # Criar .md na raiz
+touch fix_something.py              # Criar script na raiz
+echo "log" > backend.log            # Criar log na raiz
+echo "123" > backend.pid            # Criar PID na raiz
+
+# ✅ SEMPRE FAZER ASSIM:
+touch docs/deploy/STATUS_DEPLOY.md
+touch scripts/database/fix_something.py
+echo "log" > temp/logs/backend.log
+echo "123" > temp/pids/backend.pid
+```
+
+**📋 Checklist Antes de Criar Arquivo:**
+
+- [ ] ✅ É documentação? → Vai em `docs/`
+- [ ] ✅ É script? → Vai em `scripts/`
+- [ ] ✅ É log/PID? → Vai em `temp/`
+- [ ] ✅ É código de aplicação? → Vai em `app_dev/`
+- [ ] ✅ Path está correto e categorizado?
+
+**🔍 VALIDAÇÃO:**
+
+Se o usuário reportar "arquivos na raiz", SEMPRE:
+1. Verificar: `ls -1 | grep -E "\.(md|py|sh|log|pid)$"`
+2. Mover para local correto: `mv arquivo.md docs/categoria/`
+3. Atualizar referências em scripts
+4. Confirmar: `ls -1 | wc -l` (deve ter ~12 itens na raiz)
+
+---
+
+### �🔄 GESTÃO AUTOMÁTICA DE VERSÃO DA PASTA (REGRA OBRIGATÓRIA)
 
 **Quando o usuário renomear a pasta do projeto (ex: V5 → V6), você DEVE atualizar todas as referências automaticamente.**
 
@@ -1685,5 +1778,517 @@ python init_db.py
 - ✅ Garantir rastreabilidade completa
 - ✅ Proteger código em produção
 - ✅ Permitir trabalho incremental seguro
+
+**Sempre que começar a trabalhar no projeto, leia este arquivo primeiro!** 🎯
+
+---
+
+## 🗄️ MIGRATIONS E ALEMBIC - REGRA OBRIGATÓRIA (IMPLEMENTADO 22/01/2026)
+
+### ✅ Alembic Configurado e Operacional
+
+**Path:** `app_dev/backend/migrations/`
+
+**Alembic está configurado para:**
+- ✅ Auto-detectar todos os modelos SQLAlchemy
+- ✅ Suportar SQLite (dev) e PostgreSQL (prod)
+- ✅ Gerar migrations com `--autogenerate`
+- ✅ Sincronizar schema entre ambientes
+
+### 🔄 Workflow de Migrations - SEMPRE SEGUIR
+
+**1. Modificar Modelo:**
+```python
+# app_dev/backend/app/domains/transactions/models.py
+class JournalEntry(Base):
+    # Adicionar novo campo
+    nova_coluna: str = Column(String, nullable=True)
+```
+
+**2. Gerar Migration:**
+```bash
+cd app_dev/backend
+source ../../.venv/bin/activate
+alembic revision --autogenerate -m "adiciona_nova_coluna_journal"
+```
+
+**3. Revisar Migration Gerada:**
+```bash
+# Verificar arquivo criado em migrations/versions/
+ls -lrt migrations/versions/
+
+# Editar se necessário (adicionar defaults, validações, etc)
+```
+
+**4. Aplicar Migration:**
+```bash
+# Local (dev)
+alembic upgrade head
+
+# Produção (via SSH)
+ssh user@servidor "cd /var/www/finup/app_dev/backend && alembic upgrade head"
+```
+
+**5. Validar:**
+```bash
+# Verificar migration aplicada
+alembic current
+
+# Ver histórico
+alembic history
+```
+
+### 🚫 NUNCA Modificar Schema Manualmente
+
+**❌ PROIBIDO:**
+```sql
+-- NUNCA fazer isso diretamente no banco!
+ALTER TABLE journal_entries ADD COLUMN nova_coluna TEXT;
+```
+
+**✅ SEMPRE:**
+1. Modificar modelo Python
+2. Gerar migration com Alembic
+3. Aplicar migration
+4. Commitar código + migration file
+
+### 📋 Comandos Alembic Úteis
+
+```bash
+# Ver migration atual
+alembic current
+
+# Ver histórico de migrations
+alembic history --verbose
+
+# Downgrade (reverter)
+alembic downgrade -1  # Volta 1 migration
+alembic downgrade <revision>  # Volta para revision específica
+
+# Upgrade para versão específica
+alembic upgrade <revision>
+
+# Ver SQL da migration (sem executar)
+alembic upgrade head --sql
+
+# Criar migration vazia (para dados)
+alembic revision -m "popular_dados_iniciais"
+```
+
+### 🔧 Migrations de Dados (Data Migrations)
+
+**Para popular/modificar dados (não schema):**
+
+```python
+# migrations/versions/XXXX_popular_dados.py
+def upgrade():
+    op.execute("""
+        INSERT INTO base_marcacoes (nome, categoria) 
+        VALUES ('Novo Grupo', 'Despesa')
+    """)
+
+def downgrade():
+    op.execute("""
+        DELETE FROM base_marcacoes WHERE nome = 'Novo Grupo'
+    """)
+```
+
+---
+
+## 🔄 AMBIENTE ESPELHO - POSTGRESQL LOCAL (IMPLEMENTADO 22/01/2026)
+
+### 🎯 Por Que Usar PostgreSQL Local?
+
+**Vantagens de ambiente espelho:**
+- ✅ **100% paridade** com produção
+- ✅ **Detecta bugs** antes do deploy
+- ✅ **Testa migrations** com segurança
+- ✅ **Valida tipos** PostgreSQL vs SQLite
+- ✅ **Performance real** de queries
+
+**Desvantagens (menores):**
+- ⚠️ Setup inicial (instalar PostgreSQL)
+- ⚠️ Consumo de recursos (vs SQLite)
+- ⚠️ Complexidade de troubleshooting
+
+**Conclusão:** SEMPRE use PostgreSQL local para desenvolvimento sério.
+
+### 📦 Setup PostgreSQL Local
+
+**Opção 1: Postgres.app (macOS - recomendado):**
+```bash
+# Download de https://postgresapp.com
+# Arraste para /Applications
+# Inicie o app → crie server → pronto!
+```
+
+**Opção 2: Docker (multiplataforma):**
+```bash
+# docker-compose.yml na raiz do projeto
+version: '3.8'
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: finup_user
+      POSTGRES_PASSWORD: sua_senha_dev
+      POSTGRES_DB: finup_db_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
+
+# Iniciar
+docker-compose up -d postgres
+
+# Parar
+docker-compose down
+```
+
+**Opção 3: Homebrew (macOS):**
+```bash
+brew install postgresql@16
+brew services start postgresql@16
+
+# Criar database
+createdb finup_db_dev
+psql finup_db_dev -c "CREATE USER finup_user WITH PASSWORD 'sua_senha_dev';"
+psql finup_db_dev -c "GRANT ALL PRIVILEGES ON DATABASE finup_db_dev TO finup_user;"
+```
+
+### 🔧 Configurar Aplicação para PostgreSQL
+
+**1. Criar `.env` no backend:**
+```bash
+# app_dev/backend/.env
+DATABASE_URL=postgresql://finup_user:sua_senha_dev@localhost:5432/finup_db_dev
+```
+
+**2. Aplicar migrations:**
+```bash
+cd app_dev/backend
+source ../../.venv/bin/activate
+alembic upgrade head
+```
+
+**3. Migrar dados do SQLite:**
+```bash
+python scripts/migration/sqlite_to_postgres.py \
+  --source sqlite:///path/to/financas_dev.db \
+  --target postgresql://finup_user:senha@localhost/finup_db_dev
+```
+
+**4. Validar:**
+```bash
+# Backend deve iniciar normalmente
+./scripts/deploy/quick_start.sh
+
+# Verificar logs
+tail -f temp/logs/backend.log
+```
+
+### 🔄 Alternar Entre SQLite e PostgreSQL
+
+**SQLite (rápido para testes):**
+```bash
+# Remover/renomear .env
+mv app_dev/backend/.env app_dev/backend/.env.postgres
+# Reiniciar
+./scripts/deploy/quick_stop.sh && ./scripts/deploy/quick_start.sh
+```
+
+**PostgreSQL (paridade prod):**
+```bash
+# Restaurar .env
+mv app_dev/backend/.env.postgres app_dev/backend/.env
+# Reiniciar
+./scripts/deploy/quick_stop.sh && ./scripts/deploy/quick_start.sh
+```
+
+---
+
+## 🛡️ SAFE DEPLOY PROCESS - OBRIGATÓRIO ANTES DE PROD (IMPLEMENTADO 22/01/2026)
+
+### 🎯 Comando Único de Validação
+
+**SEMPRE executar antes de fazer deploy:**
+
+```bash
+./scripts/deploy/safe_deploy.sh
+```
+
+**O script valida automaticamente:**
+1. ✅ **Git** - Sem mudanças uncommitted, branch correta
+2. ✅ **Migrations** - Pendentes são detectadas e podem ser aplicadas
+3. ✅ **Backend** - Dependências, .env, startup test
+4. ✅ **Frontend** - node_modules, build test
+5. ✅ **Backup** - Backup automático do banco
+6. ✅ **Paridade** - Schemas dev vs prod (se PostgreSQL)
+7. ✅ **Changelog** - Atualização automática
+8. ✅ **Confirmação** - Push automático opcional
+
+### 🚨 Se Alguma Validação Falhar
+
+O script **para imediatamente** e mostra o erro:
+
+```bash
+❌ Backend não inicia corretamente!
+   Erro: ModuleNotFoundError: No module named 'psycopg2'
+   Execute: pip install -r requirements.txt
+```
+
+**NUNCA pule validações** - elas existem para evitar deploy quebrado.
+
+### 🚀 Workflow Completo de Deploy
+
+```bash
+# 1. Fazer mudanças no código
+# 2. Commitar
+git add .
+git commit -m "feat: adiciona nova funcionalidade X"
+
+# 3. Validar TUDO
+./scripts/deploy/safe_deploy.sh
+
+# 4. Se tudo OK, push automático
+# (ou manual: git push origin main)
+
+# 5. No servidor (SSH)
+ssh user@servidor
+cd /var/www/finup
+git pull origin main
+
+# 6. Aplicar migrations
+cd app_dev/backend
+source venv/bin/activate
+alembic upgrade head
+
+# 7. Restart serviços
+systemctl restart finup-backend finup-frontend
+
+# 8. Verificar logs
+journalctl -u finup-backend -f
+journalctl -u finup-frontend -f
+
+# 9. Testar endpoints
+curl https://meufinup.com.br/api/health
+```
+
+### 📋 Checklist Manual (se script não disponível)
+
+- [ ] ✅ Git: mudanças commitadas
+- [ ] ✅ Migrations: `alembic current` mostra última
+- [ ] ✅ Backend: `python -c "from app.main import app"`
+- [ ] ✅ Frontend: `npm run build` sem erros
+- [ ] ✅ Backup: `./scripts/deploy/backup_daily.sh`
+- [ ] ✅ Tests: rodar testes (se existirem)
+- [ ] ✅ Changelog: atualizado
+- [ ] ✅ Push: `git push origin main`
+
+---
+
+## 📝 CHANGELOG AUTOMÁTICO - HISTÓRIA DO APP (IMPLEMENTADO 22/01/2026)
+
+### 🎯 Geração Automática de CHANGELOG.md
+
+**Script:** `scripts/deploy/generate_changelog.sh`
+
+**Gera automaticamente baseado em commits git:**
+- ✨ Features (palavras: feat, add, novo)
+- 🐛 Fixes (palavras: fix, corrige, resolve)
+- 🔧 Refatoração (palavras: refactor, melhora, otimiza)
+- 📚 Documentação (palavras: docs, doc, readme)
+
+### 🔄 Uso
+
+**Manual:**
+```bash
+# Gerar para próxima versão (auto-incrementa patch)
+./scripts/deploy/generate_changelog.sh
+
+# Gerar para versão específica
+./scripts/deploy/generate_changelog.sh --version 2.1.0
+```
+
+**Automático (via safe_deploy.sh):**
+```bash
+# Changelog é gerado automaticamente no deploy
+./scripts/deploy/safe_deploy.sh
+```
+
+### 📋 Formato do CHANGELOG.md
+
+```markdown
+# 📝 Changelog - Sistema FinUp
+
+Todas as mudanças notáveis do projeto serão documentadas neste arquivo.
+
+## [v1.2.0] - 2026-01-22
+
+### ✨ Novas Funcionalidades
+- feat: adiciona suporte a PostgreSQL (abc123)
+- add: implementa Alembic para migrations (def456)
+
+### 🐛 Correções
+- fix: corrige erro de autenticação no middleware (ghi789)
+
+### 🔧 Melhorias e Refatoração
+- refactor: otimiza queries do dashboard (jkl012)
+
+### 📚 Documentação
+- docs: atualiza copilot-instructions com migrations (mno345)
+
+---
+
+## [v1.1.0] - 2026-01-15
+...
+```
+
+### 🏷️ Criar Tag Git Após Changelog
+
+```bash
+# Após gerar changelog
+git tag -a v1.2.0 -m "Release v1.2.0"
+git push origin v1.2.0
+
+# Próximo changelog será gerado a partir desta tag
+```
+
+### 🎯 Padrões de Commit Recomendados
+
+Use prefixos para categorização automática:
+
+```bash
+git commit -m "feat: nova funcionalidade X"       # Features
+git commit -m "fix: corrige bug Y"                # Fixes
+git commit -m "refactor: melhora performance Z"   # Refatoração
+git commit -m "docs: atualiza README"             # Documentação
+git commit -m "chore: atualiza dependências"      # Outros
+```
+
+---
+
+## 🔍 VALIDAÇÃO DE PARIDADE DEV-PROD (IMPLEMENTADO 22/01/2026)
+
+### 🎯 Script de Validação
+
+**Path:** `scripts/testing/validate_parity.py`
+
+**Compara:**
+- ✅ Schemas de tabelas (colunas, tipos, constraints)
+- ✅ Contagens de registros
+- ✅ Índices e foreign keys
+- ✅ Tipos de dados PostgreSQL
+
+### 🔄 Uso
+
+**Configurar produção:**
+```bash
+# Adicionar ao .env
+PROD_DATABASE_URL=postgresql://finup_user:senha@servidor/finup_db
+```
+
+**Executar validação:**
+```bash
+python scripts/testing/validate_parity.py
+```
+
+**Output esperado:**
+```
+═══════════════════════════════════════════════════════════
+✅ VALIDAÇÃO DE PARIDADE DEV-PROD
+═══════════════════════════════════════════════════════════
+
+🔍 Comparando schemas das tabelas...
+  Tabelas apenas em LOCAL: 0
+  Tabelas apenas em PROD:  0
+  Tabelas comuns:          21
+
+📊 Comparando contagens de registros...
+Tabela                                    Local       Prod     Status
+─────────────────────────────────────────────────────────────────
+journal_entries                            2631       2631     ✅ OK
+users                                         4          4     ✅ OK
+base_marcacoes                               45         45     ✅ OK
+...
+
+✅ PARIDADE 100% - Ambientes idênticos!
+```
+
+### 🚨 Se Divergências Forem Detectadas
+
+```bash
+⚠️  Tabelas APENAS em PROD: ['nova_tabela']
+⚠️  Diferenças de colunas:
+  journal_entries:
+    Apenas em PROD: {'nova_coluna'}
+```
+
+**Ações:**
+1. Gerar migration para adicionar tabela/coluna em LOCAL
+2. Aplicar migration: `alembic upgrade head`
+3. Validar novamente: `python scripts/testing/validate_parity.py`
+
+### 📋 Integração com Safe Deploy
+
+O `safe_deploy.sh` **automaticamente** executa validação de paridade:
+- Se ambientes divergem → aviso + opção de continuar
+- Se paridade OK → deploy prossegue
+
+---
+
+## 🎯 REGRAS FINAIS DE DEPLOY - NUNCA PULAR
+
+### ✅ Antes de Qualquer Deploy em Produção
+
+1. **Commitar tudo:**
+   ```bash
+   git status  # Deve estar limpo
+   ```
+
+2. **Rodar safe deploy:**
+   ```bash
+   ./scripts/deploy/safe_deploy.sh
+   ```
+
+3. **Verificar changelog:**
+   ```bash
+   cat CHANGELOG.md | head -30
+   ```
+
+4. **Fazer backup:**
+   ```bash
+   ./scripts/deploy/backup_daily.sh
+   ```
+
+5. **Push e deploy:**
+   ```bash
+   git push origin main
+   # SSH no servidor e fazer pull + migrations + restart
+   ```
+
+### 🚫 NUNCA Fazer em Produção
+
+- ❌ Modificar banco direto (sempre usar Alembic)
+- ❌ Deploy sem testar localmente
+- ❌ Deploy sem backup
+- ❌ Deploy com mudanças uncommitted
+- ❌ Deploy sem validar paridade
+- ❌ Deploy sem atualizar changelog
+
+### ✅ SEMPRE Fazer
+
+- ✅ Usar PostgreSQL local para dev sério
+- ✅ Gerar migrations para mudanças de schema
+- ✅ Rodar `safe_deploy.sh` antes de push
+- ✅ Validar paridade dev-prod
+- ✅ Criar tags git para releases
+- ✅ Manter changelog atualizado
+- ✅ Testar migrations em dev antes de prod
+
+---
 
 **Sempre que começar a trabalhar no projeto, leia este arquivo primeiro!** 🎯

@@ -58,6 +58,7 @@ class PreviewTransacao(Base):
     origem_classificacao = Column(String)  # Base Parcelas, Base Padrões, etc
     padrao_buscado = Column(String)  # Debug: padrão montado usado na busca
     MarcacaoIA = Column(String)  # Sugestão da base_marcacoes (sempre preenchido)
+    excluir = Column(Integer, default=0)  # 0 = importar, 1 = não importar
     
     # Fase 4: Deduplicação (futura)
     is_duplicate = Column(Boolean, default=False)

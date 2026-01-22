@@ -13,19 +13,126 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { User, Mail, Lock } from "lucide-react"
+import { useAuth } from "@/contexts/AuthContext"
+import { useRouter } from "next/navigation"
 
 export default function ProfilePage() {
-  const [nome, setNome] = React.useState("Emanuel")
-  const [email, setEmail] = React.useState("usuario@email.com")
+  const { user, token, isAuthenticated, loadUser } = useAuth()
+  const router = useRouter()
+  
+  const [nome, setNome] = React.useState("")
+  const [email, setEmail] = React.useState("")
   const [saving, setSaving] = React.useState(false)
+  
+  // Campos de senha
+  const [currentPassword, setCurrentPassword] = React.useState("")
+  const [newPassword, setNewPassword] = React.useState("")
+  const [confirmPassword, setConfirmPassword] = React.useState("")
+  const [changingPassword, setChangingPassword] = React.useState(false)
+
+  // Carregar dados do usuário quando autenticado
+  React.useEffect(() => {
+    // TODO: Descomentar após implementar endpoints de perfil
+    // if (!isAuthenticated) {
+    //   router.push('/login')
+    //   return
+    // }
+    
+    if (user) {
+      setNome(user.nome)
+      setEmail(user.email)
+    } else {
+      // Fallback: dados mockados enquanto não há autenticação obrigatória
+      setNome("Emanuel")
+      setEmail("usuario@email.com")
+    }
+  }, [user, isAuthenticated, router])
 
   const handleSave = async () => {
+    if (!token) {
+      alert("Você precisa estar logado para atualizar o perfil")
+      return
+    }
+
     setSaving(true)
-    // TODO: Implementar API call para salvar perfil
-    setTimeout(() => {
-      setSaving(false)
+    try {
+      const response = await fetch('/api/auth/profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ nome, email }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.detail || 'Erro ao atualizar perfil')
+      }
+
+      // Recarregar dados do usuário
+      await loadUser()
       alert("Perfil atualizado com sucesso!")
-    }, 1000)
+    } catch (error) {
+      console.error('Erro ao salvar perfil:', error)
+      alert(error instanceof Error ? error.message : 'Erro ao atualizar perfil')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleChangePassword = async () => {
+    if (!token) {
+      alert("Você precisa estar logado para alterar a senha")
+      return
+    }
+
+    // Validar senhas
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      alert("Preencha todos os campos de senha")
+      return
+    }
+
+    if (newPassword !== confirmPassword) {
+      alert("Nova senha e confirmação não coincidem")
+      return
+    }
+
+    if (newPassword.length < 6) {
+      alert("Nova senha deve ter pelo menos 6 caracteres")
+      return
+    }
+
+    setChangingPassword(true)
+    try {
+      const response = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          current_password: currentPassword,
+          new_password: newPassword,
+        }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.detail || 'Erro ao alterar senha')
+      }
+
+      // Limpar campos
+      setCurrentPassword("")
+      setNewPassword("")
+      setConfirmPassword("")
+      alert("Senha alterada com sucesso!")
+    } catch (error) {
+      console.error('Erro ao alterar senha:', error)
+      alert(error instanceof Error ? error.message : 'Erro ao alterar senha')
+    } finally {
+      setChangingPassword(false)
+    }
   }
 
   return (
@@ -92,6 +199,8 @@ export default function ProfilePage() {
                   id="current-password"
                   type="password"
                   placeholder="Digite sua senha atual"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
                 />
               </div>
               <div className="space-y-2">
@@ -100,6 +209,8 @@ export default function ProfilePage() {
                   id="new-password"
                   type="password"
                   placeholder="Digite sua nova senha"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
                 />
               </div>
               <div className="space-y-2">
@@ -108,10 +219,16 @@ export default function ProfilePage() {
                   id="confirm-password"
                   type="password"
                   placeholder="Confirme sua nova senha"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
                 />
               </div>
-              <Button variant="outline">
-                Alterar Senha
+              <Button 
+                variant="outline" 
+                onClick={handleChangePassword}
+                disabled={changingPassword}
+              >
+                {changingPassword ? "Alterando..." : "Alterar Senha"}
               </Button>
             </CardContent>
           </Card>

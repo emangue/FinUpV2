@@ -13,21 +13,42 @@ from .base import RawTransaction
 from .csv.itau_fatura import process_itau_fatura as csv_itau_fatura
 from .excel.itau_extrato import process_itau_extrato
 from .excel.btg_extrato import process_btg_extrato
+from .excel.mercadopago_extrato import process_mercadopago_extrato
+from .pdf.itau_extrato_pdf import process_itau_extrato_pdf
+from .pdf.itau_fatura_pdf import process_itau_fatura_pdf
+from .pdf.mercadopago_extrato_pdf import process_mercadopago_extrato_pdf
 
 logger = logging.getLogger(__name__)
 
 # Tipo para função processadora
 ProcessorFunc = Callable[[Path, str, str, str], List[RawTransaction]]
 
+# Wrappers para processadores PDF que retornam Tuple[List, BalanceValidation]
+# Precisam ser convertidos para retornar apenas List[RawTransaction]
+def _wrap_extrato_pdf(processor_func):
+    """Wrapper para extratos PDF que retornam (transactions, balance)"""
+    def wrapper(file_path: Path, nome_arquivo: str, nome_cartao: str = None, final_cartao: str = None):
+        transactions, balance = processor_func(file_path, nome_arquivo, nome_cartao, final_cartao)
+        logger.info(f"📊 Validação de saldo: {balance.is_valid} (diferença: R$ {balance.diferenca:.2f})")
+        return transactions
+    return wrapper
+
 # Registry de processadores (banco, tipo, formato)
 PROCESSORS: dict[Tuple[str, str, str], ProcessorFunc] = {
     # Itaú
     ('itau', 'fatura', 'csv'): csv_itau_fatura,
     ('itau', 'extrato', 'excel'): process_itau_extrato,
+    ('itau', 'extrato', 'pdf'): _wrap_extrato_pdf(process_itau_extrato_pdf),
+    ('itau', 'fatura', 'pdf'): process_itau_fatura_pdf,
     # BTG Pactual
     ('btg', 'extrato', 'excel'): process_btg_extrato,
     ('btg pactual', 'extrato', 'excel'): process_btg_extrato,
     ('btg-pactual', 'extrato', 'excel'): process_btg_extrato,  # Variação com hífen
+    # Mercado Pago
+    ('mercado pago', 'extrato', 'excel'): process_mercadopago_extrato,
+    ('mercadopago', 'extrato', 'excel'): process_mercadopago_extrato,  # Variação sem espaço
+    ('mercado pago', 'extrato', 'pdf'): _wrap_extrato_pdf(process_mercadopago_extrato_pdf),
+    ('mercadopago', 'extrato', 'pdf'): _wrap_extrato_pdf(process_mercadopago_extrato_pdf),
 }
 
 

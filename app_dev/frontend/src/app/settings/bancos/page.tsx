@@ -12,6 +12,7 @@ import {
 import { useBanks, BanksTable, StatusType } from "@/features/banks"
 
 export default function BancosPage() {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1"
   const { banks, loading, error, fetchBanks } = useBanks()
   const [updateStatus, setUpdateStatus] = React.useState<string | null>(null)
 
@@ -31,7 +32,7 @@ export default function BancosPage() {
       }
 
       // Atualizar via API
-      const response = await fetch(`/api/compatibility/${id}`, {
+      const response = await fetch(`${apiUrl}/compatibility/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ [fieldName]: newStatus })

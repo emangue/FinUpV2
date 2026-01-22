@@ -90,6 +90,17 @@ async function handleProxy(
       }
     });
     
+    // 🔐 ADICIONAR TOKEN JWT AUTOMATICAMENTE
+    // Se a requisição já tem Authorization, manter (prioridade do cliente)
+    // Senão, tentar pegar do cookie 'token' (para SSR) ou será enviado pelo cliente
+    if (!headers.has('authorization')) {
+      const tokenCookie = request.cookies.get('token');
+      if (tokenCookie?.value) {
+        headers.set('Authorization', `Bearer ${tokenCookie.value}`);
+        console.log('[Proxy] Added token from cookie');
+      }
+    }
+    
     // Preparar body se for POST/PUT/PATCH
     let body: any = undefined;
     if (['POST', 'PUT', 'PATCH'].includes(method)) {

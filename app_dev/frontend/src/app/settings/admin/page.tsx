@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { fetchWithAuth } from "@/core/utils/api-client"
 import DashboardLayout from "@/components/dashboard-layout"
 import { Button } from "@/components/ui/button"
 import {
@@ -47,6 +48,7 @@ interface Usuario {
 }
 
 export default function AdminPage() {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'
   const [usuarios, setUsuarios] = React.useState<Usuario[]>([])
   const [loading, setLoading] = React.useState(true)
   const [modalOpen, setModalOpen] = React.useState(false)
@@ -67,7 +69,7 @@ export default function AdminPage() {
   const fetchUsuarios = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/users')
+      const response = await fetchWithAuth(`${apiUrl}/users`)
       if (response.ok) {
         const data = await response.json()
         setUsuarios(data.users || [])
