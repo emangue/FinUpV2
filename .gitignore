@@ -20,6 +20,10 @@ wheels/
 .installed.cfg
 *.egg
 
+# Backups e reorganizações
+_backup_*
+_arquivos_historicos/
+
 # Virtual Environment
 venv/
 env/
