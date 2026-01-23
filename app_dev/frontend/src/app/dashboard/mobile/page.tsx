@@ -131,11 +131,11 @@ export default function DashboardMobilePage() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background pb-20">
       {/* Header fixo com hamburger */}
       <MobileHeader />
 
-      {/* Conteúdo com padding top para compensar header fixo */}
+      {/* Conteúdo com padding top para compensar header fixo e padding bottom para bottom nav */}
       <div className="pt-16 pb-6 px-4 space-y-4">
         {/* Navegação de meses */}
         <MonthTabs
