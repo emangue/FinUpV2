@@ -169,20 +169,24 @@ export function MetricCards({
 
         {/* Conteúdo expansível do gráfico */}
         {isChartExpanded && (
-          <div className="px-4 pb-4 border-t">
+          <div className="px-4 pb-4 border-t bg-background">
             {chartLoading ? (
               <div className="h-64 bg-gray-200 animate-pulse rounded-lg mt-4" />
             ) : chartError ? (
               <div className="py-4 text-center">
                 <p className="text-sm text-red-600">{chartError}</p>
               </div>
-            ) : (
+            ) : chartData && chartData.length > 0 ? (
               <div className="mt-4 max-h-[60vh] overflow-auto">
                 <ChartAreaInteractive
                   data={chartData}
                   selectedMonth={selectedMonth}
                   onMonthClick={onChartMonthClick}
                 />
+              </div>
+            ) : (
+              <div className="py-8 text-center">
+                <p className="text-sm text-muted-foreground">Nenhum dado disponível para exibir</p>
               </div>
             )}
           </div>
