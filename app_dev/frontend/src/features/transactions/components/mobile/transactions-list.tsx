@@ -5,12 +5,12 @@ import { ptBR } from 'date-fns/locale'
 import { Card } from '@/components/ui/card'
 
 interface Transaction {
-  id: string
-  data: string
-  lancamento?: string
-  grupo?: string
-  valor: number
-  tipo: string
+  id: number
+  Data: string
+  Estabelecimento?: string
+  GRUPO?: string
+  Valor: number
+  TipoTransacao: string
 }
 
 interface TransactionsListProps {
@@ -54,7 +54,7 @@ function groupByDate(transactions: Transaction[]) {
   const groups: { [key: string]: Transaction[] } = {}
   
   transactions.forEach(transaction => {
-    const date = transaction.data
+    const date = transaction.Data
     if (!groups[date]) {
       groups[date] = []
     }
@@ -162,8 +162,8 @@ export function TransactionsList({ transactions, loading, error }: TransactionsL
           {/* Lista de transações do dia */}
           <div className="space-y-2">
             {groupedTransactions[date].map((transaction) => {
-              const isReceita = transaction.tipo === 'Receita'
-              const emoji = getEmojiForCategory(transaction.grupo)
+              const isReceita = transaction.TipoTransacao?.toLowerCase().includes('receita')
+              const emoji = getEmojiForCategory(transaction.GRUPO)
               
               return (
                 <Card key={transaction.id} className="p-4 hover:shadow-md transition-shadow">
@@ -178,10 +178,10 @@ export function TransactionsList({ transactions, loading, error }: TransactionsL
                     {/* Info */}
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-gray-900 truncate">
-                        {transaction.grupo || 'Sem categoria'}
+                        {transaction.GRUPO || 'Sem categoria'}
                       </p>
                       <p className="text-sm text-gray-500 truncate">
-                        {transaction.lancamento || 'Sem descrição'}
+                        {transaction.Estabelecimento || 'Sem descrição'}
                       </p>
                     </div>
 
@@ -190,7 +190,7 @@ export function TransactionsList({ transactions, loading, error }: TransactionsL
                       isReceita ? 'text-green-600' : 'text-red-600'
                     }`}>
                       {isReceita ? '+ ' : '- '}
-                      {formatCurrency(transaction.valor)}
+                      {formatCurrency(transaction.Valor)}
                     </div>
                   </div>
                 </Card>

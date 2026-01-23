@@ -7,12 +7,12 @@ import { MonthFilterMobile } from '@/features/transactions/components/mobile/mon
 import { TransactionsList } from '@/features/transactions/components/mobile/transactions-list'
 
 interface Transaction {
-  id: string
-  data: string
-  lancamento?: string
-  grupo?: string
-  valor: number
-  tipo: string
+  id: number
+  Data: string
+  Estabelecimento?: string
+  GRUPO?: string
+  Valor: number
+  TipoTransacao: string
 }
 
 export default function TransactionsMobilePage() {
