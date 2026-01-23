@@ -131,12 +131,12 @@ export default function DashboardMobilePage() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-background pb-20">
+    <div className="min-h-screen bg-background pb-20 overflow-x-hidden">
       {/* Header fixo com hamburger */}
       <MobileHeader />
 
       {/* Conteúdo com padding top para compensar header fixo e padding bottom para bottom nav */}
-      <div className="pt-16 pb-6 px-4 space-y-4">
+      <div className="pt-16 pb-6 px-4 space-y-4 max-w-full">
         {/* Navegação de meses */}
         <MonthTabs
           selectedYear={selectedYear}

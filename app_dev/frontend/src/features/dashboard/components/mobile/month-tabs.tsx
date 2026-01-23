@@ -81,7 +81,7 @@ export function MonthTabs({ selectedYear, selectedMonth, onMonthChange }: MonthT
         {showLeftArrow && (
           <button
             onClick={() => scroll('left')}
-            className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white shadow-md rounded-full p-1 hover:bg-gray-100"
+            className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white/90 backdrop-blur-sm shadow-md rounded-full p-1 hover:bg-gray-100"
           >
             <ChevronLeft className="h-4 w-4 text-gray-600" />
           </button>
@@ -91,7 +91,7 @@ export function MonthTabs({ selectedYear, selectedMonth, onMonthChange }: MonthT
         <div
           ref={scrollRef}
           onScroll={checkScroll}
-          className="flex gap-2 overflow-x-auto scrollbar-hide scroll-smooth px-8"
+          className="flex gap-2 overflow-x-auto scrollbar-hide scroll-smooth"
         >
           {months.map((month) => {
             const isSelected = selectedMonth === month.value && selectedYear === month.year
@@ -118,7 +118,7 @@ export function MonthTabs({ selectedYear, selectedMonth, onMonthChange }: MonthT
         {showRightArrow && (
           <button
             onClick={() => scroll('right')}
-            className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white shadow-md rounded-full p-1 hover:bg-gray-100"
+            className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white/90 backdrop-blur-sm shadow-md rounded-full p-1 hover:bg-gray-100"
           >
             <ChevronRight className="h-4 w-4 text-gray-600" />
           </button>
