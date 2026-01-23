@@ -9,8 +9,8 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from app.core.database import get_db
-from app.shared.dependencies import get_current_user_id
 from .service import AuthService
+from .jwt_utils import extract_user_id_from_token
 from .schemas import LoginRequest, TokenResponse, UserLoginResponse, LogoutRequest, ProfileUpdateRequest, PasswordChangeRequest
 from .jwt_utils import extract_user_id_from_token
 
@@ -46,14 +46,22 @@ def login(
 @router.get("/me", response_model=UserLoginResponse)
 def get_current_user(
     db: Session = Depends(get_db),
-    user_id: int = Depends(get_current_user_id)
+    authorization: Optional[str] = Header(None)
 ):
     """
     Retorna dados do usuário autenticado
     
     Requer token JWT válido no header Authorization
     """
-    # ✅ CORRIGIDO: user_id agora vem do JWT token
+    # ✅ CORRIGIDO: Extrai user_id do JWT sem import circular
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Token de autenticação não fornecido")
+    
+    token = authorization.replace("Bearer ", "")
+    user_id = extract_user_id_from_token(token)
+    
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Token válido mas sem user_id")
     
     service = AuthService(db)
     return service.get_current_user(user_id)
