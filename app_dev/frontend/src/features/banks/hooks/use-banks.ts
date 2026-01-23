@@ -39,7 +39,7 @@ export function useBanks() {
 
   const updateBank = useCallback(async (id: number, data: BankUpdate) => {
     try {
-      const response = await fetchWithAuth(`/api/compatibility/${id}`, {
+      const response = await fetchWithAuth(`/api/v1/compatibility/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)

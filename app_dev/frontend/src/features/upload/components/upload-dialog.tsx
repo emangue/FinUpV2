@@ -209,7 +209,7 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
     
     try {
       // Bank já vem com nome correto (ex: "BTG Pactual")
-      const response = await fetchWithAuth('/api/cards', {
+      const response = await fetchWithAuth('/api/v1/cards', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -256,7 +256,7 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
       resetForm()
       
       // Buscar compatibilidade da API (formato matricial)
-      fetchWithAuth('/api/compatibility')
+      fetchWithAuth('/api/v1/compatibility')
         .then(res => res.json())
         .then(data => {
           console.log('🔍 Compatibilidade carregada:', data)
@@ -279,7 +279,7 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
         .catch(err => console.error('❌ Erro ao buscar compatibilidade:', err))
       
       // Buscar cartões cadastrados
-      fetchWithAuth('/api/cards')
+      fetchWithAuth('/api/v1/cards')
         .then(res => res.json())
         .then(data => {
           console.log('💳 Cartões carregados:', data)

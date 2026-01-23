@@ -71,7 +71,7 @@ export default function CartoesPage() {
   const fetchCartoes = async () => {
     try {
       setLoadingCartoes(true)
-      const response = await fetch('/api/cards')
+      const response = await fetch('/api/v1/cards')
       if (response.ok) {
         const data = await response.json()
         setCartoes(data.cards || [])
@@ -85,7 +85,7 @@ export default function CartoesPage() {
 
   const fetchBancos = async () => {
     try {
-      const response = await fetch('/api/compatibility/manage')
+      const response = await fetch('/api/v1/compatibility/manage')
       if (response.ok) {
         const data = await response.json()
         setBancos(data)

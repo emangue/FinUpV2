@@ -56,7 +56,7 @@ export default function ProfilePage() {
 
     setSaving(true)
     try {
-      const response = await fetch('/api/auth/profile', {
+      const response = await fetch('/api/v1/auth/profile', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -105,7 +105,7 @@ export default function ProfilePage() {
 
     setChangingPassword(true)
     try {
-      const response = await fetch('/api/auth/change-password', {
+      const response = await fetch('/api/v1/auth/change-password', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -146,7 +146,7 @@ export default function UploadPreviewPage() {
 
   const fetchGruposSubgrupos = async () => {
     try {
-      const response = await fetch('/api/categories/grupos-subgrupos')
+      const response = await fetch('/api/v1/categories/grupos-subgrupos')
       if (response.ok) {
         const data = await response.json()
         setGruposSubgrupos(data)

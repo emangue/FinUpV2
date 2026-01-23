@@ -98,7 +98,7 @@ export default function ExclusoesPage() {
 
   const fetchBancos = async () => {
     try {
-      const response = await fetch('/api/compatibility')
+      const response = await fetch('/api/v1/compatibility')
       if (response.ok) {
         const data = await response.json()
         console.log('Bancos recebidos:', data)
