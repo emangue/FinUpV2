@@ -95,10 +95,16 @@ def migrate_with_fixes():
         # Verificar quais colunas existem primeiro
         cursor_sqlite.execute("PRAGMA table_info(generic_classification_rules)")
         colunas = [row[1] for row in cursor_sqlite.fetchall()]
-        print(f"  Colunas encontradas: {', '.join(colunas)}")
+        print(f"  Colunas SQLite: {', '.join(colunas)}")
         
-        # Usar * e pegar todas as colunas
-        cursor_sqlite.execute("SELECT * FROM generic_classification_rules ORDER BY id")
+        # Colunas do PRAGMA: id, nome_regra, descricao, keywords, grupo, subgrupo, tipo_gasto, prioridade, 
+        # ativo, case_sensitive, match_completo, created_at, updated_at, created_by, total_matches, last_match_at
+        cursor_sqlite.execute("""
+            SELECT id, nome_regra, descricao, keywords, grupo, subgrupo, tipo_gasto, prioridade,
+                   ativo, case_sensitive, match_completo, created_at, updated_at, created_by,
+                   total_matches, last_match_at
+            FROM generic_classification_rules ORDER BY id
+        """)
         rows = cursor_sqlite.fetchall()
         
         if not rows:
@@ -106,55 +112,72 @@ def migrate_with_fixes():
         else:
             cursor_pg.execute("TRUNCATE TABLE generic_classification_rules RESTART IDENTITY CASCADE")
             
-            # Assumir que as colunas são nesta ordem (ajustar se necessário)
+            success_count = 0
             for row in rows:
                 try:
-                    # Tentar com as colunas que encontramos
-                    if len(row) >= 12:
-                        cursor_pg.execute("""
-                            INSERT INTO generic_classification_rules 
-                            (id, pattern, tipo_documento, categoria_geral, grupo, subgrupo, tipo_gasto, ordem,
-                             ativo, aplicar_automatico, case_sensitive, created_at)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        """, (
-                            row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7],
-                            bool(row[8]) if row[8] is not None else False, 
-                            bool(row[9]) if row[9] is not None else False, 
-                            bool(row[10]) if row[10] is not None else False, 
-                            row[11]
-                        ))
+                    cursor_pg.execute("""
+                        INSERT INTO generic_classification_rules 
+                        (id, nome_regra, descricao, keywords, grupo, subgrupo, tipo_gasto, prioridade,
+                         ativo, case_sensitive, match_completo, created_at, updated_at, created_by,
+                         total_matches, last_match_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """, (
+                        row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7],
+                        bool(row[8]) if row[8] is not None else True,
+                        bool(row[9]) if row[9] is not None else False,
+                        bool(row[10]) if row[10] is not None else False,
+                        row[11], row[12], row[13], row[14], row[15]
+                    ))
+                    success_count += 1
+                    pg_conn.commit()  # Commit individual para evitar transaction aborted
                 except Exception as e:
-                    print(f"  ⚠️  Erro na linha {row[0]}: {e}")
-                    print(f"  Row data: {row}")
+                    print(f"  ⚠️  Erro na regra {row[0]}: {e}")
+                    pg_conn.rollback()
                     continue
             
-            pg_conn.commit()
-            print(f"  ✅ {len(rows)} regras migradas\n")
+            print(f"  ✅ {success_count}/{len(rows)} regras migradas\n")
         
         # 4. investimentos_cenarios
         print("📋 Corrigindo investimentos_cenarios...")
-        cursor_sqlite.execute("""
-            SELECT id, user_id, nome, descricao, ativo, valor_inicial, rentabilidade_anual_esperada,
-                   anos_projecao, aporte_mensal_estimado, data_criacao, data_atualizacao
-            FROM investimentos_cenarios ORDER BY id
-        """)
+        # Verificar colunas do SQLite
+        cursor_sqlite.execute("PRAGMA table_info(investimentos_cenarios)")
+        colunas = [row[1] for row in cursor_sqlite.fetchall()]
+        print(f"  Colunas SQLite: {', '.join(colunas)}")
+        
+        cursor_sqlite.execute("SELECT * FROM investimentos_cenarios ORDER BY id")
         rows = cursor_sqlite.fetchall()
         
-        cursor_pg.execute("TRUNCATE TABLE investimentos_cenarios RESTART IDENTITY CASCADE")
-        
-        for row in rows:
-            cursor_pg.execute("""
-                INSERT INTO investimentos_cenarios 
-                (id, user_id, nome, descricao, ativo, valor_inicial, rentabilidade_anual_esperada,
-                 anos_projecao, aporte_mensal_estimado, data_criacao, data_atualizacao)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """, (
-                row[0], row[1], row[2], row[3], bool(row[4]), row[5], row[6],
-                row[7], row[8], row[9], row[10]
-            ))
-        
-        pg_conn.commit()
-        print(f"  ✅ {len(rows)} cenários migrados\n")
+        if not rows:
+            print(f"  ⏭️  Tabela vazia, pulando...\n")
+        else:
+            cursor_pg.execute("TRUNCATE TABLE investimentos_cenarios RESTART IDENTITY CASCADE")
+            
+            success_count = 0
+            for row in rows:
+                try:
+                    # Mapear conforme colunas reais encontradas
+                    # Assumindo típico: id, user_id, nome, descricao, ativo, ...
+                    cursor_pg.execute("""
+                        INSERT INTO investimentos_cenarios 
+                        (id, user_id, nome, descricao, ativo, valor_inicial, rentabilidade_anual_esperada,
+                         anos_projecao, aporte_mensal_estimado, data_criacao, data_atualizacao)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """, (
+                        row[0], row[1], row[2], row[3] if len(row) > 3 else None, 
+                        bool(row[4]) if len(row) > 4 and row[4] is not None else True,
+                        row[5] if len(row) > 5 else None, row[6] if len(row) > 6 else None,
+                        row[7] if len(row) > 7 else None, row[8] if len(row) > 8 else None,
+                        row[9] if len(row) > 9 else None, row[10] if len(row) > 10 else None
+                    ))
+                    success_count += 1
+                    pg_conn.commit()
+                except Exception as e:
+                    print(f"  ⚠️  Erro no cenário {row[0] if row else 'unknown'}: {e}")
+                    print(f"     Row ({len(row)} cols): {row[:5]}...")  # Mostrar primeiras 5 colunas
+                    pg_conn.rollback()
+                    continue
+            
+            print(f"  ✅ {success_count}/{len(rows)} cenários migrados\n")
         
         # 5. investimentos_portfolio
         print("📋 Corrigindo investimentos_portfolio...")
