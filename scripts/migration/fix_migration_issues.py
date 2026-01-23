@@ -25,22 +25,20 @@ def migrate_with_fixes():
     cursor_pg = pg_conn.cursor()
     
     try:
-        # 1. base_marcacoes - Mapeamento correto de colunas (COM ASPAS!)
+        # 1. base_marcacoes - Usar índices numéricos (não nomes!)
         print("📋 Corrigindo base_marcacoes...")
-        cursor_sqlite.execute("SELECT * FROM base_marcacoes")
+        cursor_sqlite.execute("SELECT id, GRUPO, SUBGRUPO, TipoGasto, CategoriaGeral FROM base_marcacoes ORDER BY id")
         rows = cursor_sqlite.fetchall()
         
         cursor_pg.execute("TRUNCATE TABLE base_marcacoes RESTART IDENTITY CASCADE")
         
         for row in rows:
-            # PostgreSQL precisa de aspas duplas para case-sensitive!
+            # row é tupla: (id, GRUPO, SUBGRUPO, TipoGasto, CategoriaGeral)
             cursor_pg.execute("""
                 INSERT INTO base_marcacoes 
                 (id, "GRUPO", "SUBGRUPO", "TipoGasto", "CategoriaGeral")
                 VALUES (%s, %s, %s, %s, %s)
-            """, (
-                row['id'], row['GRUPO'], row['SUBGRUPO'], row['TipoGasto'], row['CategoriaGeral']
-            ))
+            """, (row[0], row[1], row[2], row[3], row[4]))
         
         pg_conn.commit()
         print(f"  ✅ {len(rows)} registros migrados\n")
@@ -123,32 +121,36 @@ def migrate_with_fixes():
             """, batch, page_size=500)
             pg_conn.commit()
         
-        # 3. generic_classification_rules - Converter integer para boolean
+        # 3. generic_classification_rules - Usar índices + converter boolean
         print("📋 Corrigindo generic_classification_rules...")
-        cursor_sqlite.execute("SELECT * FROM generic_classification_rules")
+        cursor_sqlite.execute("""
+            SELECT id, pattern, tipo_documento, categoria_geral, grupo, subgrupo, tipo_gasto, 
+                   ordem, ativo, aplicar_automatico, case_sensitive, created_at
+            FROM generic_classification_rules ORDER BY id
+        """)
         rows = cursor_sqlite.fetchall()
         
         cursor_pg.execute("TRUNCATE TABLE generic_classification_rules RESTART IDENTITY CASCADE")
         
         for row in rows:
+            # row: (id, pattern, tipo_doc, cat_geral, grupo, subgrupo, tipo_gasto, ordem, ativo, aplicar_auto, case_sens, created)
             cursor_pg.execute("""
                 INSERT INTO generic_classification_rules 
                 (id, pattern, tipo_documento, categoria_geral, grupo, subgrupo, tipo_gasto, ordem,
                  ativo, aplicar_automatico, case_sensitive, created_at)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
-                row['id'], row['pattern'], row['tipo_documento'], row['categoria_geral'],
-                row['grupo'], row['subgrupo'], row['tipo_gasto'], row['ordem'],
-                bool(row['ativo']), bool(row['aplicar_automatico']),
-                bool(row['case_sensitive']), row['created_at']
+                row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7],
+                bool(row[8]), bool(row[9]), bool(row[10]), row[11]
             ))
         
-        pg_conn.commit()
-        print(f"  ✅ {len(rows)} regras migradas\n")
-        
-        # 4. investimentos_cenarios - Converter integer para boolean
+        pg_conn.commit()Usar índices + converter boolean
         print("📋 Corrigindo investimentos_cenarios...")
-        cursor_sqlite.execute("SELECT * FROM investimentos_cenarios")
+        cursor_sqlite.execute("""
+            SELECT id, user_id, nome, descricao, ativo, valor_inicial, rentabilidade_anual_esperada,
+                   anos_projecao, aporte_mensal_estimado, data_criacao, data_atualizacao
+            FROM investimentos_cenarios ORDER BY id
+        """)
         rows = cursor_sqlite.fetchall()
         
         cursor_pg.execute("TRUNCATE TABLE investimentos_cenarios RESTART IDENTITY CASCADE")
@@ -160,18 +162,23 @@ def migrate_with_fixes():
                  anos_projecao, aporte_mensal_estimado, data_criacao, data_atualizacao)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
-                row['id'], row['user_id'], row['nome'], row['descricao'],
+                row[0], row[1], row[2], row[3], bool(row[4]), row[5], row[6],
+                row[7], row[8], row[9], row[10['descricao'],
                 bool(row['ativo']), row['valor_inicial'], row['rentabilidade_anual_esperada'],
                 row['anos_projecao'], row['aporte_mensal_estimado'],
                 row['data_criacao'], row['data_atualizacao']
             ))
         
         pg_conn.commit()
-        print(f"  ✅ {len(rows)} cenários migrados\n")
-        
-        # 5. investimentos_portfolio - Converter integer para boolean
+        print(f"  ✅ {len(rows)} cenárioUsar índices + converter boolean
         print("📋 Corrigindo investimentos_portfolio...")
-        cursor_sqlite.execute("SELECT * FROM investimentos_portfolio")
+        cursor_sqlite.execute("""
+            SELECT id, user_id, nome_ativo, tipo_ativo, valor_atual, quantidade, preco_medio,
+                   data_aquisicao, data_venda, rentabilidade, valor_inicial, valor_investido,
+                   ativo, data_criacao, data_atualizacao, instituicao, ticker, categoria,
+                   objetivo_alocacao, notas
+            FROM investimentos_portfolio ORDER BY id
+        """)
         rows = cursor_sqlite.fetchall()
         
         cursor_pg.execute("TRUNCATE TABLE investimentos_portfolio RESTART IDENTITY CASCADE")
@@ -185,21 +192,19 @@ def migrate_with_fixes():
                  objetivo_alocacao, notas)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
-                row['id'], row['user_id'], row['nome_ativo'], row['tipo_ativo'],
-                row['valor_atual'], row['quantidade'], row['preco_medio'],
-                row['data_aquisicao'], row['data_venda'], row['rentabilidade'],
-                row['valor_inicial'], row['valor_investido'],
-                bool(row['ativo']), row['data_criacao'], row['data_atualizacao'],
+                row[0], row[1], row[2], row[3], row[4], row[5], row[6],
+                row[7], row[8], row[9], row[10], row[11],
+                bool(row[12]), row[13], row[14], row[15], row[16], row[17],
+                row[18], row[19'], row['data_atualizacao'],
                 row['instituicao'], row['ticker'], row['categoria'],
                 row['objetivo_alocacao'], row['notas']
-            ))
-        
-        pg_conn.commit()
-        print(f"  ✅ {len(rows)} investimentos migrados\n")
-        
-        # 6. investimentos_historico - Depende de portfolio
+            ))Usar índices
         print("📋 Corrigindo investimentos_historico...")
-        cursor_sqlite.execute("SELECT * FROM investimentos_historico")
+        cursor_sqlite.execute("""
+            SELECT id, investimento_id, data_registro, valor, quantidade, operacao, observacoes,
+                   rentabilidade_periodo, data_criacao
+            FROM investimentos_historico ORDER BY id
+        """)
         rows = cursor_sqlite.fetchall()
         
         cursor_pg.execute("TRUNCATE TABLE investimentos_historico RESTART IDENTITY CASCADE")
@@ -210,18 +215,19 @@ def migrate_with_fixes():
                 (id, investimento_id, data_registro, valor, quantidade, operacao, observacoes,
                  rentabilidade_periodo, data_criacao)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8]    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 row['id'], row['investimento_id'], row['data_registro'], row['valor'],
                 row['quantidade'], row['operacao'], row['observacoes'],
                 row['rentabilidade_periodo'], row['data_criacao']
             ))
         
-        pg_conn.commit()
-        print(f"  ✅ {len(rows)} registros de histórico migrados\n")
-        
-        # 7. investimentos_aportes_extraordinarios - Depende de cenarios
+        pg_conn.commit()Usar índices
         print("📋 Corrigindo investimentos_aportes_extraordinarios...")
-        cursor_sqlite.execute("SELECT * FROM investimentos_aportes_extraordinarios")
+        cursor_sqlite.execute("""
+            SELECT id, cenario_id, data_prevista, valor, descricao, data_criacao
+            FROM investimentos_aportes_extraordinarios ORDER BY id
+        """)
         rows = cursor_sqlite.fetchall()
         
         cursor_pg.execute("TRUNCATE TABLE investimentos_aportes_extraordinarios RESTART IDENTITY CASCADE")
@@ -231,7 +237,7 @@ def migrate_with_fixes():
                 INSERT INTO investimentos_aportes_extraordinarios 
                 (id, cenario_id, data_prevista, valor, descricao, data_criacao)
                 VALUES (%s, %s, %s, %s, %s, %s)
-            """, (
+            """, (row[0], row[1], row[2], row[3], row[4], row[5]""", (
                 row['id'], row['cenario_id'], row['data_prevista'], row['valor'],
                 row['descricao'], row['data_criacao']
             ))
