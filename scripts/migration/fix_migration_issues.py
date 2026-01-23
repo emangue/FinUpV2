@@ -25,7 +25,7 @@ def migrate_with_fixes():
     cursor_pg = pg_conn.cursor()
     
     try:
-        # 1. base_marcacoes - Mapeamento correto de colunas
+        # 1. base_marcacoes - Mapeamento correto de colunas (COM ASPAS!)
         print("📋 Corrigindo base_marcacoes...")
         cursor_sqlite.execute("SELECT * FROM base_marcacoes")
         rows = cursor_sqlite.fetchall()
@@ -33,11 +33,10 @@ def migrate_with_fixes():
         cursor_pg.execute("TRUNCATE TABLE base_marcacoes RESTART IDENTITY CASCADE")
         
         for row in rows:
-            # SQLite: id, GRUPO, SUBGRUPO, TipoGasto, CategoriaGeral
-            # PostgreSQL: id, grupo, subgrupo, tipogasto, categoriageral (minúsculo)
+            # PostgreSQL precisa de aspas duplas para case-sensitive!
             cursor_pg.execute("""
                 INSERT INTO base_marcacoes 
-                (id, grupo, subgrupo, tipogasto, categoriageral)
+                (id, "GRUPO", "SUBGRUPO", "TipoGasto", "CategoriaGeral")
                 VALUES (%s, %s, %s, %s, %s)
             """, (
                 row['id'], row['GRUPO'], row['SUBGRUPO'], row['TipoGasto'], row['CategoriaGeral']
@@ -123,8 +122,6 @@ def migrate_with_fixes():
                         %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, batch, page_size=500)
             pg_conn.commit()
-        
-        print(f"  ✅ {count} transações migradas\n")
         
         # 3. generic_classification_rules - Converter integer para boolean
         print("📋 Corrigindo generic_classification_rules...")
