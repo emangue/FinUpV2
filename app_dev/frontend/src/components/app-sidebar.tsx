@@ -54,6 +54,10 @@ const data = {
           url: "/dashboard",
         },
         {
+          title: "Visão Mobile",
+          url: "/dashboard/mobile",
+        },
+        {
           title: "Métricas",
           url: "/dashboard/metrics",
         },
