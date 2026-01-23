@@ -2,6 +2,79 @@
 
 Todas as mudanças notáveis do projeto serão documentadas neste arquivo.
 
+## [v1.1.0] - 2026-01-22 - 🚀 Deploy Produção & Migração Completa
+
+### 🎯 Marcos Principais
+- **DEPLOY PRODUÇÃO COMPLETO** - Sistema 100% operacional em meufinup.com.br
+- **MIGRAÇÃO DATABASE** - SQLite → PostgreSQL (11.521 registros migrados)
+- **7.738 TRANSAÇÕES** migrando com sucesso para produção
+
+### ✨ Deploy e Infraestrutura
+- feat(deploy): Deploy completo em produção com HTTPS (meufinup.com.br)
+- feat(deploy): Configuração systemd para backend (finup-backend) e frontend (finup-frontend)
+- feat(deploy): Scripts quick_start.sh e quick_stop.sh para gerenciamento rápido
+- feat(deploy): Backup diário automático em backups_daily/ (mantém 7 dias)
+- feat(deploy): Auditoria de segurança e otimizações de permissões
+
+### 🔄 Migração SQLite → PostgreSQL
+- feat(migration): Script completo migrate_sqlite_to_postgres.py (26 tabelas, 290 linhas)
+- feat(migration): Script fix_migration_v2.py com correções de schema (349 linhas)
+- feat(migration): Suporte a schemas case-sensitive PostgreSQL (colunas com aspas duplas)
+- feat(migration): Conversão automática integer→boolean para campos ativo/flags
+- feat(migration): PRAGMA table_info para descoberta dinâmica de colunas
+- feat(migration): Commit individual por linha (evita transaction aborted)
+- feat(migration): Migração bem-sucedida de:
+  - ✅ journal_entries: 7.738 transações
+  - ✅ base_marcacoes: 405 grupos
+  - ✅ generic_classification_rules: 55 regras
+  - ✅ investimentos_portfolio: 626 ativos
+  - ✅ investimentos_historico: 626 registros mensais
+  - ✅ investimentos_cenarios: 6 cenários
+  - ✅ investimentos_aportes_extraordinarios: 12 aportes
+  - ✅ 16 outras tabelas de configuração: 2.654 registros
+
+### 🐛 Correções de Schema PostgreSQL
+- fix(migration): Mapeamento correto de colunas case-sensitive (Data, GRUPO, SUBGRUPO)
+- fix(migration): generic_classification_rules usa nome_regra (não pattern)
+- fix(migration): investimentos_portfolio usa nome_produto, balance_id, corretora
+- fix(migration): investimentos_cenarios usa nome_cenario, patrimonio_inicial, rendimento_mensal_pct
+- fix(migration): investimentos_historico usa ano, mes, anomes, data_referencia
+- fix(migration): investimentos_aportes_extraordinarios usa mes_referencia (não data_prevista)
+- fix(backend): Conexão PostgreSQL com psycopg2 configurada
+- fix(backend): DATABASE_URL em .env para produção
+
+### 🔧 Frontend - Correções de API
+- fix(frontend): Todas as rotas usam /api/v1/ prefix correto
+- fix(frontend): fetchWithAuth() implementado em todas as páginas
+- fix(frontend): Tokens JWT funcionando (localStorage + headers Authorization)
+- fix(frontend): Proxy genérico [...proxy] substituindo rotas individuais
+- fix(frontend): URLs centralizadas em API_CONFIG.BACKEND_URL
+- fix(frontend): Dashboard, transações, settings funcionando 100%
+
+### 🏗️ Arquitetura e Organização
+- refactor: Reorganização de pastas - docs/, scripts/, temp/
+- refactor: Scripts de database em scripts/database/
+- refactor: Scripts de deploy em scripts/deploy/
+- refactor: Scripts de migração em scripts/migration/
+- refactor: Logs e PIDs em temp/ (ignorados no git)
+- cleanup: Remove script obsoleto fix_migration_issues.py
+
+### 📚 Documentação
+- docs: INSTRUCOES_MIGRACAO_FINAL.md com processo completo
+- docs: Copilot instructions atualizadas com regras de organização
+- docs: Mapeamento de estrutura de pastas obrigatória
+- docs: Guias de troubleshooting e rollback
+
+### ✅ Validações e Testes
+- test: Backend rodando em porta 8000 (2 workers Uvicorn)
+- test: Frontend rodando em porta 3000 (Next.js 16.1.1)
+- test: PostgreSQL aceitando conexões localhost:5432
+- test: Dashboard mostrando 7.738 transações corretamente
+- test: Admin pages mostrando dados (bancos, screens, categorias)
+- test: Upload, classificações, exclusões funcionando
+
+---
+
 ## [v1.0.0] - 2026-01-22
 
 ### ✨ Novas Funcionalidades
