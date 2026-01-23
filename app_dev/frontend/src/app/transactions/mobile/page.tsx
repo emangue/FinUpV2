@@ -34,7 +34,11 @@ export default function TransactionsMobilePage() {
         ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1` 
         : 'http://localhost:8000/api/v1'
       
-      const params = new URLSearchParams({ year, month })
+      const params = new URLSearchParams({ 
+        year, 
+        month,
+        limit: '100'
+      })
       
       if (type !== 'all') {
         params.append('tipo', type === 'receitas' ? 'Receita' : 'Despesa')
