@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { fetchWithAuth } from '@/core/utils/api-client';
 import { Plus, Pencil, Trash2, AlertTriangle } from 'lucide-react';
 import DashboardLayout from '@/components/dashboard-layout';
 import { Button } from '@/components/ui/button';
