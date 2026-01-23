@@ -47,7 +47,7 @@ export function BudgetVsActual({ year, month, loading = false, error = null }: B
         setIsLoading(true);
         setFetchError(null);
 
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+        const apiUrl = process.env.NEXT_PUBLIC_BACKEND_URL ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1` : 'http://localhost:8000/api/v1';
         // Se month='all', buscar YTD (Year to Date)
         const url = month === 'all' 
           ? `${apiUrl}/dashboard/budget-vs-actual?year=${year}&ytd=true`

@@ -127,7 +127,7 @@ const DashboardPage = () => {
       setLoadingMetrics(true);
       setMetricsError(null);
       
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+      const apiUrl = process.env.NEXT_PUBLIC_BACKEND_URL ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1` : 'http://localhost:8000/api/v1';
       // Se month='all', não enviar parâmetro month (backend retorna ano todo)
       const params = new URLSearchParams({ 
         year: year
@@ -166,7 +166,7 @@ const DashboardPage = () => {
       setLoadingChart(true);
       setChartError(null);
       
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+      const apiUrl = process.env.NEXT_PUBLIC_BACKEND_URL ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1` : 'http://localhost:8000/api/v1';
       // Buscar 12 meses de histórico até o mês selecionado (ou último mês se 'all')
       const targetMonth = month === 'all' ? '12' : month;
       
@@ -219,7 +219,7 @@ const DashboardPage = () => {
       setLoadingCategories(true);
       setCategoriesError(null);
       
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+      const apiUrl = process.env.NEXT_PUBLIC_BACKEND_URL ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1` : 'http://localhost:8000/api/v1';
       // Se month='all', não enviar parâmetro month (backend retorna ano todo)
       const params = new URLSearchParams({ 
         year: year

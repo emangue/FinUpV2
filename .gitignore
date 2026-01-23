@@ -89,6 +89,10 @@ _csvs_historico/
 .env.test.local
 .env.production.local
 
+# SSH credentials (NUNCA commitar)
+.ssh_password
+.server_password
+
 # Backup files
 *.bak
 *.backup

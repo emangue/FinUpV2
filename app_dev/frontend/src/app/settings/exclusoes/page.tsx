@@ -57,7 +57,7 @@ interface BankCompatibility {
 }
 
 export default function ExclusoesPage() {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1"
+  const apiUrl = process.env.NEXT_PUBLIC_BACKEND_URL ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1` : "http://localhost:8000/api/v1"
   const [exclusoes, setExclusoes] = React.useState<Exclusao[]>([])
   const [loadingExclusoes, setLoadingExclusoes] = React.useState(true)
   const [exclusaoModalOpen, setExclusaoModalOpen] = React.useState(false)

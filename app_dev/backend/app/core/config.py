@@ -25,13 +25,17 @@ class Settings(BaseSettings):
     # Backend FastAPI e Frontend Next.js SEMPRE usam este arquivo
     DATABASE_PATH: Path = Path("/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/backend/database/financas_dev.db")
     
-    # PostgreSQL - Lido de variável de ambiente
+    # PostgreSQL - Lido de variável de ambiente (Pydantic preenche automaticamente)
     # Formato: postgresql://user:password@host:port/database
     # Exemplo: postgresql://finup_user:senha@localhost:5432/finup_db_dev
-    DATABASE_URL: str = os.getenv(
-        "DATABASE_URL",
-        f"sqlite:///{DATABASE_PATH}"  # Fallback para SQLite
-    )
+    # Se não houver .env, usa SQLite como fallback
+    DATABASE_URL: str = ""
+    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Se DATABASE_URL não foi fornecido, usa SQLite
+        if not self.DATABASE_URL:
+            self.DATABASE_URL = f"sqlite:///{self.DATABASE_PATH}"
     
     @property
     def is_postgres(self) -> bool:

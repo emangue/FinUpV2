@@ -6,10 +6,17 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from .config import settings
 
-# Cria engine (usa o banco financas_dev.db que já existe)
+# Cria engine - usa DATABASE_URL (suporta SQLite e PostgreSQL)
+# SQLite: sqlite:///path/to/database.db
+# PostgreSQL: postgresql://user:pass@host:port/dbname
+connect_args = {}
+if not settings.is_postgres:
+    # SQLite precisa do check_same_thread=False
+    connect_args = {"check_same_thread": False}
+
 engine = create_engine(
-    f"sqlite:///{settings.DATABASE_PATH}",
-    connect_args={"check_same_thread": False},
+    settings.DATABASE_URL,
+    connect_args=connect_args,
     echo=settings.DEBUG
 )
 

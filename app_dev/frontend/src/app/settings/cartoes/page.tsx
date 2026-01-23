@@ -53,7 +53,7 @@ interface BankCompatibility {
 }
 
 export default function CartoesPage() {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1"
+  const apiUrl = process.env.NEXT_PUBLIC_BACKEND_URL ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1` : "http://localhost:8000/api/v1"
   const [cartoes, setCartoes] = React.useState<Cartao[]>([])
   const [loadingCartoes, setLoadingCartoes] = React.useState(true)
   const [cartaoModalOpen, setCartaoModalOpen] = React.useState(false)

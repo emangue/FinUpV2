@@ -367,7 +367,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           return
         }
 
-        const response = await fetch('http://localhost:8000/api/v1/screens/admin/all', {
+        const apiUrl = process.env.NEXT_PUBLIC_BACKEND_URL ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1` : 'http://localhost:8000/api/v1';
+        const response = await fetch(`${apiUrl}/screens/admin/all`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }

@@ -54,7 +54,7 @@ export function TipoGastoBreakdownModal({
   const fetchSubgrupos = async () => {
     try {
       setLoading(true)
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+      const apiUrl = process.env.NEXT_PUBLIC_BACKEND_URL ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1` : 'http://localhost:8000/api/v1';
       const url = month === 0 
         ? `${apiUrl}/dashboard/subgrupos-by-tipo?year=${year}&grupo=${encodeURIComponent(grupo)}&ytd=true`
         : `${apiUrl}/dashboard/subgrupos-by-tipo?year=${year}&month=${month}&grupo=${encodeURIComponent(grupo)}`
