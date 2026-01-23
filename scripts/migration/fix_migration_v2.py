@@ -144,7 +144,13 @@ def migrate_with_fixes():
         colunas = [row[1] for row in cursor_sqlite.fetchall()]
         print(f"  Colunas SQLite: {', '.join(colunas)}")
         
-        cursor_sqlite.execute("SELECT * FROM investimentos_cenarios ORDER BY id")
+        # Schema SQLite: id, user_id, nome_cenario, descricao, ativo, patrimonio_inicial, rendimento_mensal_pct, aporte_mensal, periodo_meses, created_at, updated_at
+        # Schema PostgreSQL: id, user_id, nome_cenario, descricao, ativo, patrimonio_inicial, rendimento_mensal_pct, aporte_mensal, periodo_meses, created_at, updated_at
+        cursor_sqlite.execute("""
+            SELECT id, user_id, nome_cenario, descricao, ativo, patrimonio_inicial, 
+                   rendimento_mensal_pct, aporte_mensal, periodo_meses, created_at, updated_at
+            FROM investimentos_cenarios ORDER BY id
+        """)
         rows = cursor_sqlite.fetchall()
         
         if not rows:
@@ -155,25 +161,21 @@ def migrate_with_fixes():
             success_count = 0
             for row in rows:
                 try:
-                    # Mapear conforme colunas reais encontradas
-                    # Assumindo típico: id, user_id, nome, descricao, ativo, ...
                     cursor_pg.execute("""
                         INSERT INTO investimentos_cenarios 
-                        (id, user_id, nome, descricao, ativo, valor_inicial, rentabilidade_anual_esperada,
-                         anos_projecao, aporte_mensal_estimado, data_criacao, data_atualizacao)
+                        (id, user_id, nome_cenario, descricao, ativo, patrimonio_inicial, 
+                         rendimento_mensal_pct, aporte_mensal, periodo_meses, created_at, updated_at)
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """, (
-                        row[0], row[1], row[2], row[3] if len(row) > 3 else None, 
-                        bool(row[4]) if len(row) > 4 and row[4] is not None else True,
-                        row[5] if len(row) > 5 else None, row[6] if len(row) > 6 else None,
-                        row[7] if len(row) > 7 else None, row[8] if len(row) > 8 else None,
-                        row[9] if len(row) > 9 else None, row[10] if len(row) > 10 else None
+                        row[0], row[1], row[2], row[3], 
+                        bool(row[4]) if row[4] is not None else True,
+                        row[5], row[6], row[7], row[8], row[9], row[10]
                     ))
                     success_count += 1
                     pg_conn.commit()
                 except Exception as e:
                     print(f"  ⚠️  Erro no cenário {row[0] if row else 'unknown'}: {e}")
-                    print(f"     Row ({len(row)} cols): {row[:5]}...")  # Mostrar primeiras 5 colunas
+                    print(f"     Row: {row}")
                     pg_conn.rollback()
                     continue
             
@@ -181,53 +183,93 @@ def migrate_with_fixes():
         
         # 5. investimentos_portfolio
         print("📋 Corrigindo investimentos_portfolio...")
+        # Verificar colunas SQLite
+        cursor_sqlite.execute("PRAGMA table_info(investimentos_portfolio)")
+        colunas = [row[1] for row in cursor_sqlite.fetchall()]
+        print(f"  Colunas SQLite: {', '.join(colunas)}")
+        
+        # Schema PostgreSQL: id, user_id, balance_id, nome_produto, corretora, ano, anomes, tipo_investimento,
+        #                   classe_ativo, emissor, percentual_cdi, data_aplicacao, data_vencimento,
+        #                   quantidade, valor_unitario_inicial, valor_total_inicial, ativo, created_at, updated_at
         cursor_sqlite.execute("""
-            SELECT id, user_id, nome_ativo, tipo_ativo, valor_atual, quantidade, preco_medio,
-                   data_aquisicao, data_venda, rentabilidade, valor_inicial, valor_investido,
-                   ativo, data_criacao, data_atualizacao, instituicao, ticker, categoria,
-                   objetivo_alocacao, notas
+            SELECT id, user_id, balance_id, nome_produto, corretora, ano, anomes, tipo_investimento,
+                   classe_ativo, emissor, percentual_cdi, data_aplicacao, data_vencimento,
+                   quantidade, valor_unitario_inicial, valor_total_inicial, ativo, created_at, updated_at
             FROM investimentos_portfolio ORDER BY id
         """)
         rows = cursor_sqlite.fetchall()
         
-        cursor_pg.execute("TRUNCATE TABLE investimentos_portfolio RESTART IDENTITY CASCADE")
-        
-        for row in rows:
-            cursor_pg.execute("""
-                INSERT INTO investimentos_portfolio 
-                (id, user_id, nome_ativo, tipo_ativo, valor_atual, quantidade, preco_medio,
-                 data_aquisicao, data_venda, rentabilidade, valor_inicial, valor_investido,
-                 ativo, data_criacao, data_atualizacao, instituicao, ticker, categoria,
-                 objetivo_alocacao, notas)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """, (
-                row[0], row[1], row[2], row[3], row[4], row[5], row[6],
-                row[7], row[8], row[9], row[10], row[11],
-                bool(row[12]), row[13], row[14], row[15], row[16], row[17],
-                row[18], row[19]
-            ))
-        
-        pg_conn.commit()
-        print(f"  ✅ {len(rows)} investimentos migrados\n")
+        if not rows:
+            print(f"  ⏭️  Tabela vazia, pulando...\n")
+        else:
+            cursor_pg.execute("TRUNCATE TABLE investimentos_portfolio RESTART IDENTITY CASCADE")
+            
+            success_count = 0
+            for row in rows:
+                try:
+                    cursor_pg.execute("""
+                        INSERT INTO investimentos_portfolio 
+                        (id, user_id, balance_id, nome_produto, corretora, ano, anomes, tipo_investimento,
+                         classe_ativo, emissor, percentual_cdi, data_aplicacao, data_vencimento,
+                         quantidade, valor_unitario_inicial, valor_total_inicial, ativo, created_at, updated_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """, (
+                        row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7],
+                        row[8], row[9], row[10], row[11], row[12],
+                        row[13], row[14], row[15],
+                        bool(row[16]) if row[16] is not None else True,
+                        row[17], row[18]
+                    ))
+                    success_count += 1
+                    pg_conn.commit()
+                except Exception as e:
+                    print(f"  ⚠️  Erro no investimento {row[0] if row else 'unknown'}: {e}")
+                    print(f"     Row: {row[:5]}...")
+                    pg_conn.rollback()
+                    continue
+            
+            print(f"  ✅ {success_count}/{len(rows)} investimentos migrados\n")
         
         # 6. investimentos_historico
         print("📋 Corrigindo investimentos_historico...")
+        # Verificar colunas SQLite
+        cursor_sqlite.execute("PRAGMA table_info(investimentos_historico)")
+        colunas = [row[1] for row in cursor_sqlite.fetchall()]
+        print(f"  Colunas SQLite: {', '.join(colunas)}")
+        
+        # Schema PostgreSQL: id, investimento_id, ano, mes, anomes, data_referencia,
+        #                   quantidade, valor_unitario, valor_total, aporte_mes,
+        #                   rendimento_mes, rendimento_acumulado, created_at, updated_at
         cursor_sqlite.execute("""
-            SELECT id, investimento_id, data_registro, valor, quantidade, operacao, observacoes,
-                   rentabilidade_periodo, data_criacao
+            SELECT id, investimento_id, ano, mes, anomes, data_referencia,
+                   quantidade, valor_unitario, valor_total, aporte_mes,
+                   rendimento_mes, rendimento_acumulado, created_at, updated_at
             FROM investimentos_historico ORDER BY id
         """)
         rows = cursor_sqlite.fetchall()
         
-        cursor_pg.execute("TRUNCATE TABLE investimentos_historico RESTART IDENTITY CASCADE")
-        
-        for row in rows:
-            cursor_pg.execute("""
-                INSERT INTO investimentos_historico 
-                (id, investimento_id, data_registro, valor, quantidade, operacao, observacoes,
-                 rentabilidade_periodo, data_criacao)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """, (row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8]))
+        if not rows:
+            print(f"  ⏭️  Tabela vazia, pulando...\n")
+        else:
+            cursor_pg.execute("TRUNCATE TABLE investimentos_historico RESTART IDENTITY CASCADE")
+            
+            success_count = 0
+            for row in rows:
+                try:
+                    cursor_pg.execute("""
+                        INSERT INTO investimentos_historico 
+                        (id, investimento_id, ano, mes, anomes, data_referencia,
+                         quantidade, valor_unitario, valor_total, aporte_mes,
+                         rendimento_mes, rendimento_acumulado, created_at, updated_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """, (row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], 
+                          row[8], row[9], row[10], row[11], row[12], row[13]))
+                    success_count += 1
+                    pg_conn.commit()
+                except Exception as e:
+                    print(f"  ⚠️  Erro no histórico {row[0] if row else 'unknown'}: {e}")
+                    pg_conn.rollback()
+                    continue
         
         pg_conn.commit()
         print(f"  ✅ {len(rows)} registros de histórico migrados\n")
