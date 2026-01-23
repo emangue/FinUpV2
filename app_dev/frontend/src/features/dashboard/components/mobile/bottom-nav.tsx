@@ -17,8 +17,8 @@ export function BottomNav() {
     {
       label: 'Transações',
       icon: Receipt,
-      path: '/transactions',
-      active: pathname === '/transactions'
+      path: '/transactions/mobile',
+      active: pathname === '/transactions/mobile'
     },
     {
       label: 'Metas',
