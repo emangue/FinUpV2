@@ -92,28 +92,44 @@ def migrate_with_fixes():
         
         # 3. generic_classification_rules
         print("📋 Corrigindo generic_classification_rules...")
-        cursor_sqlite.execute("""
-            SELECT id, pattern, tipo_documento, categoria_geral, grupo, subgrupo, tipo_gasto, 
-                   ordem, ativo, aplicar_automatico, case_sensitive, created_at
-            FROM generic_classification_rules ORDER BY id
-        """)
+        # Verificar quais colunas existem primeiro
+        cursor_sqlite.execute("PRAGMA table_info(generic_classification_rules)")
+        colunas = [row[1] for row in cursor_sqlite.fetchall()]
+        print(f"  Colunas encontradas: {', '.join(colunas)}")
+        
+        # Usar * e pegar todas as colunas
+        cursor_sqlite.execute("SELECT * FROM generic_classification_rules ORDER BY id")
         rows = cursor_sqlite.fetchall()
         
-        cursor_pg.execute("TRUNCATE TABLE generic_classification_rules RESTART IDENTITY CASCADE")
-        
-        for row in rows:
-            cursor_pg.execute("""
-                INSERT INTO generic_classification_rules 
-                (id, pattern, tipo_documento, categoria_geral, grupo, subgrupo, tipo_gasto, ordem,
-                 ativo, aplicar_automatico, case_sensitive, created_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """, (
-                row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7],
-                bool(row[8]), bool(row[9]), bool(row[10]), row[11]
-            ))
-        
-        pg_conn.commit()
-        print(f"  ✅ {len(rows)} regras migradas\n")
+        if not rows:
+            print(f"  ⏭️  Tabela vazia, pulando...\n")
+        else:
+            cursor_pg.execute("TRUNCATE TABLE generic_classification_rules RESTART IDENTITY CASCADE")
+            
+            # Assumir que as colunas são nesta ordem (ajustar se necessário)
+            for row in rows:
+                try:
+                    # Tentar com as colunas que encontramos
+                    if len(row) >= 12:
+                        cursor_pg.execute("""
+                            INSERT INTO generic_classification_rules 
+                            (id, pattern, tipo_documento, categoria_geral, grupo, subgrupo, tipo_gasto, ordem,
+                             ativo, aplicar_automatico, case_sensitive, created_at)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        """, (
+                            row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7],
+                            bool(row[8]) if row[8] is not None else False, 
+                            bool(row[9]) if row[9] is not None else False, 
+                            bool(row[10]) if row[10] is not None else False, 
+                            row[11]
+                        ))
+                except Exception as e:
+                    print(f"  ⚠️  Erro na linha {row[0]}: {e}")
+                    print(f"  Row data: {row}")
+                    continue
+            
+            pg_conn.commit()
+            print(f"  ✅ {len(rows)} regras migradas\n")
         
         # 4. investimentos_cenarios
         print("📋 Corrigindo investimentos_cenarios...")
