@@ -276,23 +276,39 @@ def migrate_with_fixes():
         
         # 7. investimentos_aportes_extraordinarios
         print("📋 Corrigindo investimentos_aportes_extraordinarios...")
+        # Verificar colunas SQLite
+        cursor_sqlite.execute("PRAGMA table_info(investimentos_aportes_extraordinarios)")
+        colunas = [row[1] for row in cursor_sqlite.fetchall()]
+        print(f"  Colunas SQLite: {', '.join(colunas)}")
+        
+        # Schema PostgreSQL: id, cenario_id, mes_referencia, valor, descricao, created_at
         cursor_sqlite.execute("""
-            SELECT id, cenario_id, data_prevista, valor, descricao, data_criacao
+            SELECT id, cenario_id, mes_referencia, valor, descricao, created_at
             FROM investimentos_aportes_extraordinarios ORDER BY id
         """)
         rows = cursor_sqlite.fetchall()
         
-        cursor_pg.execute("TRUNCATE TABLE investimentos_aportes_extraordinarios RESTART IDENTITY CASCADE")
-        
-        for row in rows:
-            cursor_pg.execute("""
-                INSERT INTO investimentos_aportes_extraordinarios 
-                (id, cenario_id, data_prevista, valor, descricao, data_criacao)
-                VALUES (%s, %s, %s, %s, %s, %s)
-            """, (row[0], row[1], row[2], row[3], row[4], row[5]))
-        
-        pg_conn.commit()
-        print(f"  ✅ {len(rows)} aportes migrados\n")
+        if not rows:
+            print(f"  ⏭️  Tabela vazia, pulando...\n")
+        else:
+            cursor_pg.execute("TRUNCATE TABLE investimentos_aportes_extraordinarios RESTART IDENTITY CASCADE")
+            
+            success_count = 0
+            for row in rows:
+                try:
+                    cursor_pg.execute("""
+                        INSERT INTO investimentos_aportes_extraordinarios 
+                        (id, cenario_id, mes_referencia, valor, descricao, created_at)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                    """, (row[0], row[1], row[2], row[3], row[4], row[5]))
+                    success_count += 1
+                    pg_conn.commit()
+                except Exception as e:
+                    print(f"  ⚠️  Erro no aporte {row[0] if row else 'unknown'}: {e}")
+                    pg_conn.rollback()
+                    continue
+            
+            print(f"  ✅ {success_count}/{len(rows)} aportes migrados\n")
         
         # Resetar sequences
         print("🔄 Resetando sequences...")
