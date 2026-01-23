@@ -33,6 +33,70 @@
    nano /var/www/finup/app/config.py  # NÃO!
    ```
 
+---
+
+### 🔑 ACESSO SSH - CONFIGURAÇÃO CRÍTICA (IMPLEMENTADO 23/01/2026)
+
+**DOCUMENTAÇÃO COMPLETA:** [`docs/deploy/SSH_ACCESS.md`](docs/deploy/SSH_ACCESS.md)
+
+**ACESSO RÁPIDO:**
+```bash
+ssh minha-vps-hostinger
+```
+
+**DADOS DO SERVIDOR:**
+- **IP:** 148.230.78.91 
+- **User:** root
+- **Chave:** ~/.ssh/id_ed25519 (ED25519)
+- **Senha backup:** vywjib-fUqfow-2bohjiA1#
+
+**🚨 SE SSH FALHAR:**
+```bash
+# 1. Tentar com senha
+ssh -o PreferredAuthentications=password root@148.230.78.91
+
+# 2. Verificar chave
+ssh -vv minha-vps-hostinger
+
+# 3. Readicionar chave no servidor
+echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAID2giK86YuhwkQ9eLcDzOXNRYN4C/kjtCHZi/J5vXEMk vscode-copilot" >> ~/.ssh/authorized_keys
+```
+
+**COMANDOS CRÍTICOS NO SERVIDOR:**
+```bash
+# Status dos serviços
+systemctl status finup-backend finup-frontend
+
+# Logs em tempo real  
+journalctl -u finup-backend -f
+
+# Health check
+curl -s localhost:8000/api/health
+
+# Navegar para projeto
+cd /var/www/finup
+```
+
+**VS CODE REMOTE SSH:**
+- **Command Palette:** `Remote-SSH: Connect to Host...`
+- **Host:** `minha-vps-hostinger`
+- **Path:** `/var/www/finup`
+
+**⚠️ NUNCA PERDER ACESSO SSH:** Sempre manter configuração funcionando para investigações!
+
+**🔍 VALIDAÇÃO RÁPIDA ANTES DE TRABALHAR:**
+```bash
+./scripts/deploy/validate_server_access.sh
+```
+Este script verifica automaticamente:
+- ✅ SSH conecta sem problemas
+- ✅ Serviços finup ativos
+- ✅ Health check funcionando
+- ✅ Git local/servidor sincronizados
+- ✅ VS Code Remote pronto
+
+---
+
 2. **Instalar dependências só no servidor:**
    ```bash
    # ❌ ERRADO - requirements.txt fica desatualizado
@@ -2409,37 +2473,49 @@ mv app_dev/backend/.env.postgres app_dev/backend/.env
 
 ---
 
-## 🛡️ SAFE DEPLOY PROCESS - OBRIGATÓRIO ANTES DE PROD (IMPLEMENTADO 22/01/2026)
+## 🛡️ SAFE DEPLOY PROCESS - OBRIGATÓRIO ANTES DE PROD (IMPLEMENTADO 23/01/2026)
 
-### 🎯 Comando Único de Validação
+**DOCUMENTAÇÃO COMPLETA:** [`docs/deploy/DEPLOY_PROCESS.md`](docs/deploy/DEPLOY_PROCESS.md)
 
-**SEMPRE executar antes de fazer deploy:**
+### 🚀 Comandos de Deploy Disponíveis
 
 ```bash
-./scripts/deploy/safe_deploy.sh
+# 1. Deploy rápido (após commit+push)
+./scripts/deploy/quick_deploy.sh
+
+# 2. Deploy seguro com validações completas
+./scripts/deploy/deploy_safe_v2.sh
+
+# 3. Deploy com migrations
+./scripts/deploy/deploy_safe_v2.sh --with-migrations
+
+# 4. Guia e comandos úteis
+./scripts/deploy/deploy_help.sh
 ```
 
-**O script valida automaticamente:**
-1. ✅ **Git** - Sem mudanças uncommitted, branch correta
-2. ✅ **Migrations** - Pendentes são detectadas e podem ser aplicadas
-3. ✅ **Backend** - Dependências, .env, startup test
-4. ✅ **Frontend** - node_modules, build test
-5. ✅ **Backup** - Backup automático do banco
-6. ✅ **Paridade** - Schemas dev vs prod (se PostgreSQL)
-7. ✅ **Changelog** - Atualização automática
-8. ✅ **Confirmação** - Push automático opcional
+### 🎯 Validações Automáticas
+
+**Todos os scripts validam automaticamente:**
+1. ✅ **Git** - Status limpo, sem uncommitted changes
+2. ✅ **Sincronização** - Local igual ao GitHub (push realizado)
+3. ✅ **Sintaxe** - Python sem erros de sintaxe
+4. ✅ **Backup** - Backup automático do banco antes deploy
+5. ✅ **Health** - API respondendo após deploy
+6. ✅ **Autenticação** - Endpoints protegidos funcionando
+7. ✅ **SSH** - Conexão com servidor operacional
 
 ### 🚨 Se Alguma Validação Falhar
 
-O script **para imediatamente** e mostra o erro:
+Os scripts **param imediatamente** e mostram o erro:
 
 ```bash
-❌ Backend não inicia corretamente!
-   Erro: ModuleNotFoundError: No module named 'psycopg2'
-   Execute: pip install -r requirements.txt
+❌ Há mudanças não commitadas!
+💡 Commit suas mudanças primeiro:
+   git add .
+   git commit -m 'sua mensagem'
 ```
 
-**NUNCA pule validações** - elas existem para evitar deploy quebrado.
+**NUNCA pule validações** - elas previnem deploy quebrado e perda de sincronização!
 
 ### 🚀 Workflow Completo de Deploy
 
