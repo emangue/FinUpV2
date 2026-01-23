@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { fetchWithAuth } from "@/core/utils/api-client"
 import DashboardLayout from "@/components/dashboard-layout"
 import { Button } from "@/components/ui/button"
 import {
@@ -79,7 +80,7 @@ export default function ExclusoesPage() {
   const fetchExclusoes = async () => {
     try {
       setLoadingExclusoes(true)
-      const response = await fetch('/api/v1/exclusoes')
+      const response = await fetchWithAuth('/api/v1/exclusoes')
       if (response.ok) {
         const data = await response.json()
         console.log('Exclusões recebidas:', data)
@@ -98,7 +99,7 @@ export default function ExclusoesPage() {
 
   const fetchBancos = async () => {
     try {
-      const response = await fetch('/api/v1/compatibility')
+      const response = await fetchWithAuth('/api/v1/compatibility')
       if (response.ok) {
         const data = await response.json()
         console.log('Bancos recebidos:', data)

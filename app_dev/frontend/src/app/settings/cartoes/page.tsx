@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { fetchWithAuth } from "@/core/utils/api-client"
 import DashboardLayout from "@/components/dashboard-layout"
 import { Button } from "@/components/ui/button"
 import {
@@ -71,7 +72,7 @@ export default function CartoesPage() {
   const fetchCartoes = async () => {
     try {
       setLoadingCartoes(true)
-      const response = await fetch('/api/v1/cards')
+      const response = await fetchWithAuth('/api/v1/cards')
       if (response.ok) {
         const data = await response.json()
         setCartoes(data.cards || [])
@@ -85,7 +86,7 @@ export default function CartoesPage() {
 
   const fetchBancos = async () => {
     try {
-      const response = await fetch('/api/v1/compatibility/manage')
+      const response = await fetchWithAuth('/api/v1/compatibility/manage')
       if (response.ok) {
         const data = await response.json()
         setBancos(data)
@@ -138,7 +139,7 @@ export default function CartoesPage() {
       console.log('URL:', url)
       console.log('Method:', method)
       
-      const response = await fetch(url, {
+      const response = await fetchWithAuth(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -183,7 +184,7 @@ export default function CartoesPage() {
     if (!confirm('Deseja realmente deletar este cartão?')) return
 
     try {
-      const response = await fetch(`${apiUrl}/cards/${id}`, {
+      const response = await fetchWithAuth(`${apiUrl}/cards/${id}`, {
         method: 'DELETE'
       })
 
