@@ -1,8 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { TrendingUp, TrendingDown, Activity, ChevronDown, ChevronUp } from 'lucide-react'
+import { TrendingUp, TrendingDown, Activity, ChevronDown, ChevronUp, Upload } from 'lucide-react'
 import { Card } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { useRouter } from 'next/navigation'
 import ChartAreaInteractive from '../chart-area-interactive'
 
 interface Metrics {
@@ -40,6 +42,7 @@ export function MetricCards({
   onChartMonthClick 
 }: MetricCardsProps) {
   const [isChartExpanded, setIsChartExpanded] = useState(false)
+  const router = useRouter()
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -102,34 +105,45 @@ export function MetricCards({
         </div>
       </Card>
 
-      {/* Grid 2 colunas - Receitas e Despesas */}
-      <div className="grid grid-cols-2 gap-3">
-        {/* Card Receitas */}
-        <Card className="p-4 border shadow-sm">
-          <div className="flex items-center gap-2 mb-2">
-            <TrendingUp className="h-4 w-4 text-green-600" />
-            <span className="text-xs font-medium text-muted-foreground">
-              Receitas
-            </span>
+      {/* Card unificado - Receitas e Despesas + Botão Importar */}
+      <Card className="p-4 border shadow-sm">
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          {/* Receitas */}
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <TrendingUp className="h-4 w-4 text-green-600" />
+              <span className="text-xs font-medium text-muted-foreground">
+                Receitas
+              </span>
+            </div>
+            <p className="text-xl font-bold text-green-700">
+              {formatCurrency(metrics.totalReceitas)}
+            </p>
           </div>
-          <p className="text-xl font-bold text-green-700">
-            {formatCurrency(metrics.totalReceitas)}
-          </p>
-        </Card>
 
-        {/* Card Despesas */}
-        <Card className="p-4 border shadow-sm">
-          <div className="flex items-center gap-2 mb-2">
-            <TrendingDown className="h-4 w-4 text-red-600" />
-            <span className="text-xs font-medium text-muted-foreground">
-              Despesas
-            </span>
+          {/* Despesas */}
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <TrendingDown className="h-4 w-4 text-red-600" />
+              <span className="text-xs font-medium text-muted-foreground">
+                Despesas
+              </span>
+            </div>
+            <p className="text-xl font-bold text-red-700">
+              {formatCurrency(metrics.totalDespesas)}
+            </p>
           </div>
-          <p className="text-xl font-bold text-red-700">
-            {formatCurrency(metrics.totalDespesas)}
-          </p>
-        </Card>
-      </div>
+        </div>
+
+        {/* Botão Importar */}
+        <Button
+          onClick={() => router.push('/upload')}
+          className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
+        >
+          <Upload className="h-4 w-4 mr-2" />
+          Importar Arquivo
+        </Button>
+      </Card>
 
       {/* Gráfico histórico colapsável integrado */}
       <Card className="border shadow-sm overflow-hidden">
