@@ -82,8 +82,8 @@ export const API_ENDPOINTS = {
   
   // Cards (Cartões)
   CARDS: {
-    BASE: `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/cartoes`,
-    BY_ID: (id: number) => `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/cartoes/${id}`,
+    BASE: `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/cards`,
+    BY_ID: (id: number) => `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/cards/${id}`,
   },
   
   // Exclusões

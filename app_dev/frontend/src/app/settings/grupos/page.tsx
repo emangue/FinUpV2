@@ -86,7 +86,7 @@ export default function GestaoGrupos() {
   const loadGrupos = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/grupos');
+      const response = await fetch('/api/v1/grupos');
       if (!response.ok) throw new Error('Erro ao carregar grupos');
       const data = await response.json();
       setGrupos(data.grupos || []);
@@ -99,7 +99,7 @@ export default function GestaoGrupos() {
 
   const loadOpcoes = async () => {
     try {
-      const response = await fetch('/api/grupos/opcoes');
+      const response = await fetch('/api/v1/grupos/opcoes');
       if (!response.ok) throw new Error('Erro ao carregar opções');
       const data = await response.json();
       setTiposGasto(data.tipos_gasto || []);
@@ -144,8 +144,8 @@ export default function GestaoGrupos() {
       setSuccess(null);
 
       const url = editingGrupo
-        ? `/api/grupos/${editingGrupo.id}`
-        : '/api/grupos/';
+        ? `/api/v1/grupos/${editingGrupo.id}`
+        : '/api/v1/grupos/';
 
       const method = editingGrupo ? 'PUT' : 'POST';
 

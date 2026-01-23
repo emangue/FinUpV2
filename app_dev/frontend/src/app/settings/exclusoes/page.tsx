@@ -79,7 +79,7 @@ export default function ExclusoesPage() {
   const fetchExclusoes = async () => {
     try {
       setLoadingExclusoes(true)
-      const response = await fetch('/api/exclusoes')
+      const response = await fetch('/api/v1/exclusoes')
       if (response.ok) {
         const data = await response.json()
         console.log('Exclusões recebidas:', data)
