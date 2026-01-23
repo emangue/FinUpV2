@@ -2,6 +2,181 @@
 
 ## ⚠️ REGRAS CRÍTICAS - SEMPRE SEGUIR
 
+### 🔐 SEGURANÇA - REGRAS INVIOLÁVEIS (IMPLEMENTADO 22/01/2026)
+
+**REGRA CRÍTICA:** NUNCA commitar credenciais, secrets ou dados sensíveis no código.
+
+**🔴 PROIBIÇÕES ABSOLUTAS:**
+
+1. **JWT Secrets:**
+   ```python
+   # ❌ NUNCA fazer isso
+   JWT_SECRET_KEY = "meu-secret-fixo"
+   JWT_SECRET = "abc123"
+   
+   # ✅ SEMPRE usar variável de ambiente
+   JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "fallback-apenas-dev")
+   ```
+
+2. **Senhas de Banco:**
+   ```python
+   # ❌ NUNCA hardcoded
+   DATABASE_URL = "postgresql://user:senha123@localhost/db"
+   
+   # ✅ SEMPRE em .env
+   DATABASE_URL: str = os.getenv("DATABASE_URL")
+   ```
+
+3. **API Keys e Tokens:**
+   ```python
+   # ❌ NUNCA no código
+   API_KEY = "sk_live_abc123"
+   
+   # ✅ SEMPRE em .env
+   API_KEY: str = os.getenv("API_KEY")
+   ```
+
+**✅ PADRÃO OBRIGATÓRIO:**
+
+```python
+# app/core/config.py
+from pydantic_settings import BaseSettings
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=True
+    )
+    
+    # ✅ Secrets vêm do .env
+    JWT_SECRET_KEY: str
+    DATABASE_URL: str
+    
+    # ✅ Valores padrão apenas para desenvolvimento
+    DEBUG: bool = False  # False em produção!
+    
+settings = Settings()
+```
+
+**📋 .env (NUNCA commitado no git):**
+```bash
+# /app_dev/backend/.env (chmod 600)
+JWT_SECRET_KEY=<gerado_com_secrets.token_hex(32)>
+DATABASE_URL=postgresql://user:<senha_forte>@localhost/db
+BACKEND_CORS_ORIGINS=https://dominio.com.br
+DEBUG=false
+```
+
+**🔒 Geração de Secrets Fortes:**
+```bash
+# JWT Secret (64 chars hex = 256 bits)
+python3 -c "import secrets; print(secrets.token_hex(32))"
+
+# Senha PostgreSQL (43 chars base64 = ~32 bytes)
+openssl rand -base64 32
+
+# API Key (URL-safe, 64 chars)
+python3 -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+**⚠️ Checklist Antes de Commitar:**
+- [ ] ❌ Nenhum secret/password no código?
+- [ ] ✅ Todos os secrets em .env?
+- [ ] ✅ .env está no .gitignore?
+- [ ] ✅ Valores padrão são seguros (não produção)?
+- [ ] ✅ DEBUG=false em produção?
+
+**🛡️ Rate Limiting Obrigatório:**
+
+```python
+# app/main.py - Rate limiting global
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+
+limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# app/domains/auth/router.py - Rate limiting específico
+@router.post("/login")
+@limiter.limit("5/minute")  # Anti brute-force
+def login(request: Request, ...):
+    pass
+```
+
+**🌐 CORS Específico (NUNCA "*"):**
+
+```python
+# ❌ ERRADO - Aceita qualquer origem
+allow_origins=["*"]
+
+# ⚠️ PERIGOSO - Muito permissivo
+allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "*"]
+
+# ✅ CORRETO - Apenas origem específica
+BACKEND_CORS_ORIGINS: str = "https://meudominio.com.br"
+# Ou lista específica:
+BACKEND_CORS_ORIGINS: list[str] = [
+    "https://meudominio.com.br",
+    "https://app.meudominio.com.br"
+]
+```
+
+**🔥 Firewall (UFW) em Produção:**
+
+```bash
+# Bloquear tudo, permitir apenas necessário
+ufw default deny incoming
+ufw default allow outgoing
+ufw allow 22/tcp    # SSH
+ufw allow 80/tcp    # HTTP redirect
+ufw allow 443/tcp   # HTTPS
+ufw enable
+
+# ❌ NUNCA expor portas internas:
+# 8000 (backend) - apenas localhost
+# 5432 (postgres) - apenas localhost
+```
+
+**📊 Monitoramento de Segurança:**
+
+```bash
+# Logs de autenticação
+journalctl -u backend | grep -E "401|403|login|auth"
+
+# Tentativas de brute force
+journalctl -u backend | grep "429" | wc -l  # Rate limit hits
+
+# Conexões PostgreSQL
+sudo -u postgres psql -c "SELECT * FROM pg_stat_activity;"
+```
+
+**🔄 Rotação de Secrets:**
+
+```bash
+# JWT Secret: A cada 6 meses
+NEW_JWT=$(python3 -c "import secrets; print(secrets.token_hex(32))")
+sed -i "s/JWT_SECRET_KEY=.*/JWT_SECRET_KEY=$NEW_JWT/" .env
+
+# Senha PostgreSQL: A cada 3 meses
+NEW_PASS=$(openssl rand -base64 32)
+sudo -u postgres psql -c "ALTER USER user WITH PASSWORD '$NEW_PASS';"
+```
+
+**📋 Auditoria de Segurança (Mensal):**
+- [ ] Secrets não estão no código/git?
+- [ ] .env tem permissões 600 (apenas root)?
+- [ ] Firewall UFW ativo?
+- [ ] Rate limiting funcionando?
+- [ ] CORS específico (não "*")?
+- [ ] DEBUG=false em produção?
+- [ ] HTTPS ativo com certificado válido?
+- [ ] Fail2Ban instalado e ativo?
+- [ ] Backups criptografados?
+- [ ] Logs não contêm senhas/tokens?
+
+---
+
 ### � ESTRUTURA DE PASTAS - REGRA OBRIGATÓRIA (NOVA ORGANIZAÇÃO 22/01/2026)
 
 **REGRA CRÍTICA:** SEMPRE respeitar a estrutura organizada do projeto ao criar novos arquivos.

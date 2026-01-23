@@ -2,9 +2,11 @@
 Router do domínio Auth.
 Endpoints FastAPI isolados aqui.
 """
-from fastapi import APIRouter, Depends, HTTPException, status, Header
+from fastapi import APIRouter, Depends, HTTPException, status, Header, Request
 from sqlalchemy.orm import Session
 from typing import Optional
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from app.core.database import get_db
 from .service import AuthService
@@ -13,15 +15,20 @@ from .jwt_utils import extract_user_id_from_token
 
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+limiter = Limiter(key_func=get_remote_address)
 
 
 @router.post("/login", response_model=TokenResponse)
+@limiter.limit("5/minute")  # Máximo 5 tentativas de login por minuto
 def login(
+    request: Request,
     credentials: LoginRequest,
     db: Session = Depends(get_db)
 ):
     """
     Autentica usuário e retorna token JWT
+    
+    **Rate Limit:** 5 tentativas por minuto (proteção contra brute force)
     
     - **email**: Email do usuário
     - **password**: Senha do usuário
