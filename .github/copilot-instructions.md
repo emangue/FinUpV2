@@ -2,7 +2,137 @@
 
 ## ⚠️ REGRAS CRÍTICAS - SEMPRE SEGUIR
 
-### 🔐 SEGURANÇA - REGRAS INVIOLÁVEIS (IMPLEMENTADO 22/01/2026)
+### � SINCRONIZAÇÃO GIT - REGRA FUNDAMENTAL (IMPLEMENTADO 22/01/2026)
+
+**FLUXO OBRIGATÓRIO:** Local → Git → Servidor (NUNCA modificar servidor diretamente!)
+
+**REGRA CRÍTICA:** TODAS as mudanças de código devem seguir este fluxo:
+
+```bash
+# ✅ FLUXO CORRETO
+1. Modificar código LOCALMENTE
+2. Testar localmente (SQLite dev)
+3. git add + commit + push
+4. SSH no servidor → git pull
+5. Reiniciar serviços no servidor
+
+# ❌ ERRADO - NUNCA fazer isso!
+1. SSH no servidor
+2. Editar arquivo diretamente (vim/nano)
+3. Reiniciar serviço
+# Problema: mudança não está no git, local fica desatualizado
+```
+
+**🔴 PROIBIÇÕES ABSOLUTAS:**
+
+1. **Editar código diretamente no servidor:**
+   ```bash
+   # ❌ NUNCA fazer
+   ssh root@servidor
+   vim /var/www/finup/app/main.py  # NÃO!
+   nano /var/www/finup/app/config.py  # NÃO!
+   ```
+
+2. **Instalar dependências só no servidor:**
+   ```bash
+   # ❌ ERRADO - requirements.txt fica desatualizado
+   ssh root@servidor
+   pip install nova_biblioteca  # NÃO sem atualizar requirements.txt no git!
+   
+   # ✅ CORRETO
+   # Local: adicionar ao requirements.txt
+   # git add requirements.txt && git commit && git push
+   # Servidor: git pull && pip install -r requirements.txt
+   ```
+
+3. **Commitar dados sensíveis:**
+   ```bash
+   # ❌ NUNCA commitar
+   - .env (senhas, secrets)
+   - *.db (bancos de dados)
+   - *.log (logs podem ter tokens)
+   - uploads/ (arquivos de usuários)
+   - backups/ (podem ter dados sensíveis)
+   ```
+
+**✅ VALIDAÇÃO OBRIGATÓRIA ANTES DE CADA SESSÃO:**
+
+```bash
+# 1. Verificar sincronização local ↔️ servidor
+ssh root@servidor "cd /var/www/finup && git log --oneline -1"
+git log --oneline -1
+# Devem ser iguais!
+
+# 2. Verificar mudanças não commitadas
+git status --short
+# Deve estar limpo ou só arquivos ignorados
+
+# 3. Verificar se servidor tem mudanças locais
+ssh root@servidor "cd /var/www/finup && git status --short"
+# Deve estar limpo!
+
+# 4. Se servidor tiver mudanças não-commitadas: PROBLEMA!
+# Significa que alguém editou diretamente no servidor
+# Ação: revisar mudanças, commitar do servidor se necessário, ou descartar
+```
+
+**📋 Checklist de Sincronização:**
+
+- [ ] ✅ Código local e servidor no mesmo commit?
+- [ ] ✅ Nenhuma mudança não-commitada no servidor?
+- [ ] ✅ requirements.txt sincronizado?
+- [ ] ✅ .gitignore protege dados sensíveis (.env, *.db, *.log)?
+- [ ] ✅ Nenhum secret/password no git?
+- [ ] ✅ Servidor só recebe atualizações via `git pull`?
+
+**🔍 Auditoria de Dados Sensíveis no Git:**
+
+```bash
+# Verificar se .env ou secrets foram commitados alguma vez
+git log --all --full-history -- '**/.env*' '**/*secret*'
+# Deve retornar vazio!
+
+# Procurar por senhas hardcoded no código
+grep -r "password.*=.*['\"]" app_dev --include="*.py" | grep -v "os.getenv\|settings\."
+# Deve retornar vazio!
+
+# Verificar .gitignore protege arquivos sensíveis
+cat .gitignore | grep -E "(\.env|\.db|\.log|secrets|password)"
+# Deve mostrar proteções
+```
+
+**🚨 Se Encontrar Dados Sensíveis no Git:**
+
+```bash
+# 1. PARAR IMEDIATAMENTE
+# 2. Remover do commit mais recente (se ainda não foi pushed)
+git reset HEAD~1
+git add arquivo_corrigido
+git commit -m "..."
+
+# 3. Se já foi pushed: usar git-filter-repo (complexo!)
+# Melhor prevenir usando checklist acima
+
+# 4. Trocar TODOS os secrets expostos
+python3 -c "import secrets; print(secrets.token_hex(32))"  # Novo JWT
+openssl rand -base64 32  # Nova senha PostgreSQL
+```
+
+**🎯 MANTRA OBRIGATÓRIO:**
+
+> **"LOCAL → GIT → SERVIDOR"**  
+> 1. Codar local  
+> 2. Testar local  
+> 3. Commitar no git  
+> 4. Push para GitHub  
+> 5. Pull no servidor  
+> 6. Reiniciar serviços  
+> 
+> **NUNCA pular etapas! NUNCA editar servidor diretamente!**
+
+---
+
+### �🔐 SEGURANÇA - REGRAS INVIOLÁVEIS (IMPLEMENTADO 22/01/2026)
 
 **REGRA CRÍTICA:** NUNCA commitar credenciais, secrets ou dados sensíveis no código.
 
