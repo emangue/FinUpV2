@@ -10,6 +10,7 @@ from .core.database import engine, Base
 
 # Import models para SQLAlchemy resolver relationships
 from .domains.upload.history_models import UploadHistory  # CRITICAL: importar antes dos routers
+from .domains.compatibility.models import BankFormatCompatibility  # CRITICAL: importar para SQLAlchemy encontrar tabela
 
 # Domínios isolados (arquitetura DDD)
 from .domains.auth.router import router as auth_router
