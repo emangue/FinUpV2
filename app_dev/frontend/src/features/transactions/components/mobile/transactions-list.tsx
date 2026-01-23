@@ -167,7 +167,7 @@ export function TransactionsList({ transactions, loading, error }: TransactionsL
               
               return (
                 <Card key={transaction.id} className="p-3 hover:shadow-md transition-shadow">
-                  <div className="flex items-start gap-3">
+                  <div className="flex items-start gap-2">
                     {/* Emoji/Ícone */}
                     <div className={`h-10 w-10 flex-shrink-0 rounded-full flex items-center justify-center text-xl ${
                       isReceita ? 'bg-green-100' : 'bg-red-100'
@@ -175,26 +175,24 @@ export function TransactionsList({ transactions, loading, error }: TransactionsL
                       {emoji}
                     </div>
 
-                    {/* Info + Valor */}
-                    <div className="flex-1 min-w-0">
+                    {/* Info + Valor - Layout em coluna para mobile */}
+                    <div className="flex-1 min-w-0 space-y-1">
+                      {/* Linha 1: Grupo + Valor */}
                       <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-sm text-gray-900 truncate">
-                            {transaction.GRUPO || 'Sem categoria'}
-                          </p>
-                          <p className="text-xs text-gray-500 truncate mt-0.5">
-                            {transaction.Estabelecimento || 'Sem descrição'}
-                          </p>
-                        </div>
-                        
-                        {/* Valor */}
-                        <div className={`text-right font-bold text-sm flex-shrink-0 ${
+                        <p className="font-semibold text-sm text-gray-900 leading-tight flex-1 min-w-0">
+                          {transaction.GRUPO || 'Sem categoria'}
+                        </p>
+                        <span className={`font-bold text-sm whitespace-nowrap ${
                           isReceita ? 'text-green-600' : 'text-red-600'
                         }`}>
-                          {isReceita ? '+ ' : '- '}
-                          {formatCurrency(transaction.Valor)}
-                        </div>
+                          {isReceita ? '+' : '-'} {formatCurrency(transaction.Valor)}
+                        </span>
                       </div>
+                      
+                      {/* Linha 2: Estabelecimento */}
+                      <p className="text-xs text-gray-500 truncate">
+                        {transaction.Estabelecimento || 'Sem descrição'}
+                      </p>
                     </div>
                   </div>
                 </Card>
