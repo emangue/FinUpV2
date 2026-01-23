@@ -1,59 +1,31 @@
 'use client';
 
-import { useRouter, usePathname } from 'next/navigation';
+/**
+ * Re-export do AuthContext para compatibilidade
+ * Este hook agora usa o AuthContext oficial em vez do bypass
+ */
 
-interface User {
-  id: number;
-  email: string;
-  name: string;
-  role: string;
-}
+import { useAuth as useAuthContext } from '@/contexts/AuthContext';
+import { useRouter, usePathname } from 'next/navigation';
+import { useEffect } from 'react';
 
 export function useAuth(redirectIfNotAuth = true) {
   const router = useRouter();
   const pathname = usePathname();
-  
-  // ⚠️ BYPASS COMPLETO: Retornar usuário imediatamente sem checks
-  // TODO: Reativar verificação de autenticação após correção
-  const user: User = {
-    id: 1,
-    email: 'admin@financas.com',
-    name: 'Administrator',
-    role: 'admin'
-  };
+  const authContext = useAuthContext();
 
-  return { 
-    user, 
-    loading: false, 
-    isAuthenticated: true 
-  };
-  
-  /* CÓDIGO ORIGINAL (REATIVAR DEPOIS):
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-
+  // Redirect para login se não autenticado (apenas se solicitado)
   useEffect(() => {
-    const checkAuth = () => {
-      const authenticated = isAuthenticated();
-      
-      if (!authenticated) {
-        setUser(null);
-        setLoading(false);
-        
-        if (redirectIfNotAuth && pathname !== '/login') {
-          router.replace('/login');
-        }
-        return;
-      }
+    if (redirectIfNotAuth && !authContext.loading && !authContext.isAuthenticated && pathname !== '/login') {
+      router.replace('/login');
+    }
+  }, [authContext.isAuthenticated, authContext.loading, redirectIfNotAuth, pathname, router]);
 
-      const currentUser = getCurrentUser();
-      setUser(currentUser);
-      setLoading(false);
-    };
-
-    checkAuth();
-  }, [router, pathname, redirectIfNotAuth]);
-
-  return { user, loading, isAuthenticated: !!user };
-  */
+  return {
+    user: authContext.user,
+    loading: authContext.loading,
+    isAuthenticated: authContext.isAuthenticated,
+    login: authContext.login,
+    logout: authContext.logout,
+  };
 }
