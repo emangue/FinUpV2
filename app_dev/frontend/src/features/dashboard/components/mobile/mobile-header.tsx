@@ -22,7 +22,7 @@ export function MobileHeader() {
           </h1>
           {user && (
             <p className="text-xs text-gray-500">
-              Olá, {user.name || user.email}
+              Olá, {user.nome || user.email}
             </p>
           )}
         </div>
