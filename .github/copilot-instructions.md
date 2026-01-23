@@ -1890,7 +1890,7 @@ cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5 && ./scripts/deploy/
 
 **Conta Admin Principal (ATIVA):**
 - **Email:** admin@financas.com
-- **Senha:** (verificar com desenvolvedor)
+- **Senha:** cahriZqonby8
 - **ID:** 1
 - **Role:** admin
 - **Status:** ✅ ATIVA
@@ -2172,7 +2172,33 @@ cd app_dev && source venv/bin/activate && python run.py
 - **API Docs:** http://localhost:8000/docs
 - **Health:** http://localhost:8000/api/health
 
-**Login padrão:** admin@email.com / admin123
+**Login padrão:** admin@financas.com / cahriZqonby8
+
+### 🗄️ BANCOS DE DADOS - LOCAL VS SERVIDOR (CRÍTICO)
+
+**NUNCA confundir os ambientes - são bancos completamente diferentes!**
+
+**Local (Desenvolvimento):**
+- **Tipo:** SQLite
+- **Path:** `/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/backend/database/financas_dev.db`
+- **Usuário Admin:** admin@financas.com / cahriZqonby8
+- **Acesso:** Direto via Python/SQLAlchemy
+
+**Servidor (Produção - Hostinger VPS):**
+- **Tipo:** PostgreSQL
+- **Host:** 127.0.0.1:5432
+- **Database:** finup_db
+- **User:** finup_user
+- **Password:** FinUp2026SecurePass
+- **Usuário Admin:** admin@financas.com / cahriZqonby8
+- **Connection String:** postgresql://finup_user:FinUp2026SecurePass@127.0.0.1:5432/finup_db
+
+**⚠️ CUIDADOS:**
+- Scripts de migração devem detectar ambiente automaticamente
+- NUNCA fazer queries diretas cross-ambiente
+- Backup do servidor: PostgreSQL dump
+- Backup local: cópia do arquivo .db
+- Senhas admin SINCRONIZADAS entre ambientes
 
 ### 🔄 Restart Automático Após Modificações
 

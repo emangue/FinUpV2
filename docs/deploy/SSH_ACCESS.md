@@ -269,3 +269,39 @@ ssh minha-vps-hostinger 'journalctl -u finup-backend -f'
 ```
 
 **🔥 IMPORTANTE:** Sempre manter acesso SSH funcionando para investigações e deploys!
+
+---
+
+## 🔐 CREDENCIAIS DO SISTEMA
+
+**Aplicação Web (Frontend):**
+- **Email:** admin@financas.com
+- **Senha:** cahriZqonby8
+
+## 🗄️ BANCOS DE DADOS
+
+### Local (SQLite)
+```bash
+# Path do banco
+/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/backend/database/financas_dev.db
+
+# Query exemplo
+sqlite3 app_dev/backend/database/financas_dev.db "SELECT email FROM users;"
+```
+
+### Servidor (PostgreSQL)
+```bash
+# Conectar via SSH
+ssh minha-vps-hostinger
+
+# Query no PostgreSQL
+PGPASSWORD='FinUp2026SecurePass' psql -h 127.0.0.1 -U finup_user -d finup_db -c "SELECT email FROM users;"
+
+# Connection string completa
+postgresql://finup_user:FinUp2026SecurePass@127.0.0.1:5432/finup_db
+```
+
+**⚠️ CRÍTICO:** 
+- **Local usa SQLite** - arquivo único
+- **Servidor usa PostgreSQL** - banco estruturado
+- **Credenciais admin sincronizadas** entre ambientes
