@@ -2,15 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from app.core.database import get_db
+from app.shared.dependencies import get_current_user_id  # 🔒 Usa função segura com JWT
 from .schemas import ExclusaoCreate, ExclusaoUpdate, ExclusaoResponse
 from .service import ExclusaoService
 
 router = APIRouter(prefix="/exclusoes", tags=["exclusoes"])
 
-
-def get_current_user_id():
-    """Mock - retorna user_id fixo para desenvolvimento"""
-    return 1
+# 🔴 REMOVIDA função mock que retornava user_id=1 hardcoded (INSEGURO!)
+# ✅ Agora usa get_current_user_id() do shared.dependencies (extrai do JWT)
 
 
 @router.get("/", response_model=dict)
