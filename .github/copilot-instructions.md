@@ -1731,27 +1731,86 @@ tail -30 backend.log | grep -i error
 
 ---
 
-## �🚀 Iniciar/Parar Servidores (PROCESSO OTIMIZADO)
+## 🐍 PYTHON VIRTUAL ENVIRONMENT - REGRA OBRIGATÓRIA (23/01/2026)
+
+**REGRA CRÍTICA:** Existem 2 venvs no projeto. SEMPRE usar o correto!
+
+### ✅ venv OFICIAL (SEMPRE usar este)
+
+**Path:** `/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/venv`
+
+**Usado por:**
+- ✅ `quick_start.sh` - Backend em execução
+- ✅ `quick_stop.sh` - Parar backend
+- ✅ Servidor de produção (`/var/www/finup/app_dev/venv`)
+- ✅ Scripts Python que importam `from app.*`
+
+**Ativar:**
+```bash
+cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev
+source venv/bin/activate
+```
+
+### ⚠️ .venv (raiz) - Uso limitado
+
+**Path:** `/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/.venv`
+
+**Usado por:**
+- ⚠️ Scripts standalone que NÃO importam backend
+- ⚠️ Ferramentas de validação/testes
+
+**Problema:** Confusão ao rodar scripts Python que importam módulos do backend.
+
+**Solução:** SEMPRE usar `app_dev/venv` quando em dúvida.
+
+### 🚫 PROIBIÇÕES
+
+```bash
+# ❌ ERRADO - Vai usar .venv da raiz e dar erro de import
+cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5
+source .venv/bin/activate
+python app_dev/backend/run.py  # ModuleNotFoundError!
+
+# ✅ CORRETO - Usa app_dev/venv
+cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev
+source venv/bin/activate
+cd backend && python run.py  # OK!
+
+# ✅ OU usar quick_start.sh (RECOMENDADO)
+./scripts/deploy/quick_start.sh
+```
+
+### 📋 Checklist ao Rodar Scripts Python
+
+- [ ] ✅ Script importa `from app.*`? → Usar `app_dev/venv`
+- [ ] ✅ Script roda backend? → Usar `app_dev/venv`
+- [ ] ✅ Script é standalone? → Pode usar `.venv` raiz
+- [ ] ✅ Quando em dúvida? → Usar `app_dev/venv` (mais seguro)
+
+---
+
+## 🚀 Iniciar/Parar Servidores (PROCESSO OTIMIZADO)
 
 ### ⚡ COMANDO ÚNICO - Quando usuário pedir "ligar servidores"
 
 **SEMPRE usar este comando único:**
 
 ```bash
-cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5 && chmod +x quick_start.sh && ./quick_start.sh
+cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5 && chmod +x scripts/deploy/quick_start.sh && ./scripts/deploy/quick_start.sh
 ```
 
 **O que faz automaticamente:**
 - ✅ Limpa portas 8000 e 3000
-- ✅ Inicia Backend FastAPI (porta 8000) com venv
+- ✅ Usa `app_dev/venv` correto automaticamente
+- ✅ Inicia Backend FastAPI (porta 8000)
 - ✅ Inicia Frontend Next.js (porta 3000)
-- ✅ Roda em background com logs
+- ✅ Roda em background com logs em `temp/logs/`
 - ✅ Salva PIDs para controle
 
 **Parar servidores:**
 
 ```bash
-cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5 && chmod +x quick_stop.sh && ./quick_stop.sh
+cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5 && ./scripts/deploy/quick_stop.sh
 ```
 
 ### URLs de Acesso
@@ -1761,7 +1820,42 @@ cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5 && chmod +x quick_st
 - **API Docs:** http://localhost:8000/docs
 - **Health:** http://localhost:8000/api/health
 
-**Login padrão:** admin@email.com / admin123
+### 🔐 Contas de Teste (Atualizado 23/01/2026)
+
+**⚠️ IMPORTANTE:** Sistema tinha 2 contas admin (causava confusão). Use script de limpeza se necessário.
+
+**Conta Admin Principal (ATIVA):**
+- **Email:** admin@financas.com
+- **Senha:** (verificar com desenvolvedor)
+- **ID:** 1
+- **Role:** admin
+- **Status:** ✅ ATIVA
+
+**Conta de Teste (usuário comum):**
+- **Email:** teste@email.com
+- **Senha:** teste123
+- **ID:** 4
+- **Role:** user
+- **Status:** ✅ ATIVA
+
+**⚠️ Conta Admin Duplicada (INATIVA - considerar limpar):**
+- **Email:** admin@email.com
+- **ID:** 3
+- **Role:** admin → considerar mudar para 'user'
+- **Status:** ❌ INATIVA (não pode fazer login)
+- **Problema:** Retorna erro "Usuário desativado" ao tentar login
+- **Solução:** Usar script de limpeza abaixo
+
+**Para limpar/reorganizar contas:**
+```bash
+cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5
+python scripts/maintenance/cleanup_usuarios_duplicados.py
+
+# Opções disponíveis:
+# 1. Deletar admin@email.com (RECOMENDADO se não tem transações)
+# 2. Mudar role para 'user' (manter inativo)
+# 3. Ativar e mudar para 'user' (usar para testes adicionais)
+```
 
 ### 🔄 Restart Automático Após Modificações
 
@@ -1775,17 +1869,17 @@ cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5 && chmod +x quick_st
 **Comando completo de restart:**
 
 ```bash
-cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5 && ./quick_stop.sh && ./quick_start.sh
+cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5 && ./scripts/deploy/quick_stop.sh && sleep 2 && ./scripts/deploy/quick_start.sh
 ```
 
 ### 📋 Monitoramento de Logs
 
 ```bash
 # Backend
-tail -f /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/backend.log
+tail -f /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/temp/logs/backend.log
 
-# Frontend
-tail -f /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/frontend.log
+# Frontend  
+tail -f /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/temp/logs/frontend.log
 ```
 
 ### 🚨 Troubleshooting Rápido
