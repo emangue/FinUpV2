@@ -166,31 +166,35 @@ export function TransactionsList({ transactions, loading, error }: TransactionsL
               const emoji = getEmojiForCategory(transaction.GRUPO)
               
               return (
-                <Card key={transaction.id} className="p-4 hover:shadow-md transition-shadow">
-                  <div className="flex items-center gap-3">
+                <Card key={transaction.id} className="p-3 hover:shadow-md transition-shadow">
+                  <div className="flex items-start gap-3">
                     {/* Emoji/Ícone */}
-                    <div className={`h-12 w-12 rounded-full flex items-center justify-center text-2xl ${
+                    <div className={`h-10 w-10 flex-shrink-0 rounded-full flex items-center justify-center text-xl ${
                       isReceita ? 'bg-green-100' : 'bg-red-100'
                     }`}>
                       {emoji}
                     </div>
 
-                    {/* Info */}
+                    {/* Info + Valor */}
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-900 truncate">
-                        {transaction.GRUPO || 'Sem categoria'}
-                      </p>
-                      <p className="text-sm text-gray-500 truncate">
-                        {transaction.Estabelecimento || 'Sem descrição'}
-                      </p>
-                    </div>
-
-                    {/* Valor */}
-                    <div className={`text-right font-bold ${
-                      isReceita ? 'text-green-600' : 'text-red-600'
-                    }`}>
-                      {isReceita ? '+ ' : '- '}
-                      {formatCurrency(transaction.Valor)}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-sm text-gray-900 truncate">
+                            {transaction.GRUPO || 'Sem categoria'}
+                          </p>
+                          <p className="text-xs text-gray-500 truncate mt-0.5">
+                            {transaction.Estabelecimento || 'Sem descrição'}
+                          </p>
+                        </div>
+                        
+                        {/* Valor */}
+                        <div className={`text-right font-bold text-sm flex-shrink-0 ${
+                          isReceita ? 'text-green-600' : 'text-red-600'
+                        }`}>
+                          {isReceita ? '+ ' : '- '}
+                          {formatCurrency(transaction.Valor)}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </Card>
