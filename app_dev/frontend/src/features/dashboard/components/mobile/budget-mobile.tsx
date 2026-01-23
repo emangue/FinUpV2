@@ -129,7 +129,7 @@ export function BudgetMobile({ year, month }: BudgetMobileProps) {
   }
 
   return (
-    <Card className="rounded-2xl shadow-md">
+    <Card className="rounded-2xl shadow-md w-full max-w-full">
       {/* Header com título */}
       <CardHeader className="pb-3">
         <CardTitle className="text-base">Realizado vs Planejado</CardTitle>
@@ -138,9 +138,9 @@ export function BudgetMobile({ year, month }: BudgetMobileProps) {
         </p>
       </CardHeader>
 
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4 w-full">
         {/* Total geral - SEMPRE VISÍVEL */}
-        <div className="bg-muted/50 p-4 rounded-lg border">
+        <div className="bg-muted/50 p-4 rounded-lg border w-full max-w-full">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium">Total Geral</span>
             <span className={`text-xs font-semibold px-2 py-1 rounded-full ${

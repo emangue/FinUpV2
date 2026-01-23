@@ -81,9 +81,9 @@ export function MetricCards({
   const saldoPositivo = metrics.saldoAtual >= 0
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 w-full">
       {/* Card grande - Saldo/Realizado */}
-      <Card className="p-6 border shadow-sm">
+      <Card className="p-6 border shadow-sm w-full max-w-full">
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm font-medium text-muted-foreground">
             Realizado no período
@@ -106,7 +106,7 @@ export function MetricCards({
       </Card>
 
       {/* Card unificado - Receitas e Despesas + Botão Importar */}
-      <Card className="p-4 border shadow-sm">
+      <Card className="p-4 border shadow-sm w-full max-w-full">
         <div className="grid grid-cols-2 gap-4 mb-4">
           {/* Receitas */}
           <div>
@@ -146,7 +146,7 @@ export function MetricCards({
       </Card>
 
       {/* Gráfico histórico colapsável integrado */}
-      <Card className="border shadow-sm overflow-hidden">
+      <Card className="border shadow-sm overflow-hidden w-full max-w-full">
         {/* Header do gráfico com botão de expansão */}
         <button
           onClick={() => setIsChartExpanded(!isChartExpanded)}
