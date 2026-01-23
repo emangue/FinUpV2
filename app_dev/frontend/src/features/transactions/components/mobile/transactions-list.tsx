@@ -7,8 +7,8 @@ import { Card } from '@/components/ui/card'
 interface Transaction {
   id: string
   data: string
-  lancamento: string
-  grupo: string
+  lancamento?: string
+  grupo?: string
   valor: number
   tipo: string
 }
@@ -20,7 +20,7 @@ interface TransactionsListProps {
 }
 
 // Helper para emoji por categoria
-function getEmojiForCategory(categoria: string): string {
+function getEmojiForCategory(categoria: string | undefined): string {
   const emojiMap: { [key: string]: string } = {
     'Alimentação': '🍔',
     'Supermercado': '🛒',
@@ -37,6 +37,9 @@ function getEmojiForCategory(categoria: string): string {
     'Salário': '💵',
     'Outros': '📦',
   }
+  
+  // Verificar se categoria existe
+  if (!categoria) return '💳'
   
   // Buscar por match parcial
   const key = Object.keys(emojiMap).find(k => 
@@ -175,10 +178,10 @@ export function TransactionsList({ transactions, loading, error }: TransactionsL
                     {/* Info */}
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-gray-900 truncate">
-                        {transaction.grupo}
+                        {transaction.grupo || 'Sem categoria'}
                       </p>
                       <p className="text-sm text-gray-500 truncate">
-                        {transaction.lancamento}
+                        {transaction.lancamento || 'Sem descrição'}
                       </p>
                     </div>
 

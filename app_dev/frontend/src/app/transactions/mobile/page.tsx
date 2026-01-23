@@ -9,8 +9,8 @@ import { TransactionsList } from '@/features/transactions/components/mobile/tran
 interface Transaction {
   id: string
   data: string
-  lancamento: string
-  grupo: string
+  lancamento?: string
+  grupo?: string
   valor: number
   tipo: string
 }
