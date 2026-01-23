@@ -162,7 +162,7 @@ export function AddGroupModal({
           return
         }
 
-        const response = await fetchWithAuth('/api/categories', {
+        const response = await fetchWithAuth('/api/v1/categories', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

@@ -2,7 +2,7 @@ import { fetchWithAuth } from '@/core/utils/api-client';  // ✅ FASE 3 - Autent
 import { Category, CategoryCreate, CategoryUpdate, CategoryResponse } from '../types'
 
 export async function fetchCategories(): Promise<CategoryResponse> {
-  const response = await fetchWithAuth('/api/categories')
+  const response = await fetchWithAuth('/api/v1/categories')
   if (!response.ok) {
     throw new Error(`Erro ao buscar categorias: ${response.statusText}`)
   }
@@ -10,7 +10,7 @@ export async function fetchCategories(): Promise<CategoryResponse> {
 }
 
 export async function createCategory(data: CategoryCreate): Promise<Category> {
-  const response = await fetchWithAuth('/api/categories', {
+  const response = await fetchWithAuth('/api/v1/categories', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data)
@@ -24,7 +24,7 @@ export async function createCategory(data: CategoryCreate): Promise<Category> {
 }
 
 export async function updateCategory(id: number, data: CategoryUpdate): Promise<Category> {
-  const response = await fetchWithAuth(`/api/categories/${id}`, {
+  const response = await fetchWithAuth(`/api/v1/categories/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data)
@@ -38,7 +38,7 @@ export async function updateCategory(id: number, data: CategoryUpdate): Promise<
 }
 
 export async function deleteCategory(id: number): Promise<void> {
-  const response = await fetchWithAuth(`/api/categories/${id}`, {
+  const response = await fetchWithAuth(`/api/v1/categories/${id}`, {
     method: 'DELETE'
   })
   
