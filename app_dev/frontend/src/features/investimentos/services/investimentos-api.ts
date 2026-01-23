@@ -22,8 +22,8 @@ import type {
   SimulacaoCenario,
 } from '../types'
 
-// Usar proxy do Next.js - ele já adiciona /api/v1
-const BASE_URL = `/api/investimentos`
+// URL completa para investimentos
+const BASE_URL = `/api/v1/investimentos`
 
 /**
  * Portfolio Endpoints

@@ -276,7 +276,9 @@ ssh minha-vps-hostinger 'journalctl -u finup-backend -f'
 
 **Aplicação Web (Frontend):**
 - **Email:** admin@financas.com
-- **Senha:** cahriZqonby8
+- **Senha:** [CONFIGURAR VIA VARIÁVEL DE AMBIENTE]
+
+**⚠️ SEGURANÇA:** Senhas não devem ser commitadas no git!
 
 ## 🗄️ BANCOS DE DADOS
 
