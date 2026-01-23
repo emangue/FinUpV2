@@ -34,11 +34,7 @@ export default function TransactionsMobilePage() {
         ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1` 
         : 'http://localhost:8000/api/v1'
       
-      const params = new URLSearchParams({ 
-        year,
-        month,
-        limit: '100'
-      })
+      const params = new URLSearchParams({ year, month })
       
       if (type !== 'all') {
         params.append('tipo', type === 'receitas' ? 'Receita' : 'Despesa')
@@ -51,7 +47,7 @@ export default function TransactionsMobilePage() {
       }
       
       const data = await response.json()
-      setTransactions(data.items || [])
+      setTransactions(data.transactions || [])
       
     } catch (error) {
       console.error('Error fetching transactions:', error)

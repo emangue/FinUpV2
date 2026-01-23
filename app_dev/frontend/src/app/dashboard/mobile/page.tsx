@@ -49,7 +49,7 @@ export default function DashboardMobilePage() {
       
       const params = new URLSearchParams({ year })
       if (month !== 'all') {
-        params.append('month', month)
+        params.append('month', String(parseInt(month))) // Remove zero à esquerda
       }
       
       const response = await fetchWithAuth(`${apiUrl}/dashboard/metrics?${params}`)
