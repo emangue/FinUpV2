@@ -29,6 +29,11 @@ venv/
 env/
 ENV/
 
+# Credenciais de Deploy (NUNCA commitar!)
+.env.deploy
+.env.server
+*.deploy
+
 # Database
 *.db
 *.sqlite3
