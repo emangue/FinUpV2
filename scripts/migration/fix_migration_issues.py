@@ -33,69 +33,98 @@ def migrate_with_fixes():
         cursor_pg.execute("TRUNCATE TABLE base_marcacoes RESTART IDENTITY CASCADE")
         
         for row in rows:
-            # SQLite usa GRUPO/SUBGRUPO (maiúsculo), PostgreSQL usa grupo/subgrupo (minúsculo)
+            # SQLite: id, GRUPO, SUBGRUPO, TipoGasto, CategoriaGeral
+            # PostgreSQL: id, grupo, subgrupo, tipogasto, categoriageral (minúsculo)
             cursor_pg.execute("""
                 INSERT INTO base_marcacoes 
-                (id, grupo, subgrupo, tipogasto, destino, status, mesano, usuario, observacoes, 
-                 ordem, favorito, cor, icone)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                (id, grupo, subgrupo, tipogasto, categoriageral)
+                VALUES (%s, %s, %s, %s, %s)
             """, (
-                row['id'], row['GRUPO'], row['SUBGRUPO'], row['TipoGasto'], row['Destino'],
-                row['Status'], row['MesAno'], row['Usuario'], row['Observacoes'],
-                row['Ordem'], row['Favorito'], row['Cor'], row['Icone']
+                row['id'], row['GRUPO'], row['SUBGRUPO'], row['TipoGasto'], row['CategoriaGeral']
             ))
         
         pg_conn.commit()
         print(f"  ✅ {len(rows)} registros migrados\n")
         
-        # 2. journal_entries - Mapeamento correto de colunas
+        # 2. journal_entries - Migrar TODAS as 29 colunas do SQLite
         print("📋 Corrigindo journal_entries...")
         cursor_sqlite.execute("SELECT * FROM journal_entries")
         
         cursor_pg.execute("TRUNCATE TABLE journal_entries RESTART IDENTITY CASCADE")
         
         batch = []
+        count = 0
         for row in cursor_sqlite:
-            # SQLite usa Data (maiúsculo), PostgreSQL usa data (minúsculo)
+            count += 1
+            # SQLite tem 29 colunas (índices 0-28):
+            # 0:id, 1:user_id, 2:Data, 3:Estabelecimento, 4:Valor, 5:ValorPositivo, 6:TipoTransacao,
+            # 7:TipoGasto, 8:GRUPO, 9:SUBGRUPO, 10:IdTransacao, 11:IdParcela, 12:MesFatura, 13:Ano,
+            # 14:arquivo_origem, 15:banco_origem, 16:tipodocumento, 17:origem_classificacao,
+            # 18:IgnorarDashboard, 19:created_at, 20:NomeCartao, 21:CategoriaGeral,
+            # 22:upload_history_id, 23:categoria_orcamento_id, 24:session_id, 25:Mes,
+            # 26:EstabelecimentoBase, 27:parcela_atual, 28:TotalParcelas
+            
             batch.append((
-                row['id'], row['user_id'], row['Data'], row['Estabelecimento'],
-                row['Valor'], row['CategoriaGeral'], row['Lancamento'],
-                row['TipoDocumento'], row['ArquivoOrigem'], row['MesFatura'],
-                row['Grupo'], row['Subgrupo'], row['TipoGasto'], row['Destino'],
-                row['IgnorarDashboard'], row['Ano'], row['Mes'], row['IdTransacao'],
-                row['SequenciaHash'], row['MarcadoParaExclusao'], row['DataProcessamento'],
-                row['MesReferencia'], row['GrupoAlteradoManualmente'], row['Observacoes'],
-                row['hash_mp']
+                row[0],   # id
+                row[1],   # user_id
+                row[2],   # Data
+                row[3],   # Estabelecimento
+                row[4],   # Valor
+                row[5],   # ValorPositivo
+                row[6],   # TipoTransacao
+                row[7],   # TipoGasto
+                row[8],   # GRUPO
+                row[9],   # SUBGRUPO
+                row[10],  # IdTransacao
+                row[11],  # IdParcela
+                row[12],  # MesFatura
+                row[13],  # Ano
+                row[14],  # arquivo_origem
+                row[15],  # banco_origem
+                row[16],  # tipodocumento
+                row[17],  # origem_classificacao
+                row[18],  # IgnorarDashboard
+                row[19],  # created_at
+                row[20],  # NomeCartao
+                row[21],  # CategoriaGeral
+                row[22],  # upload_history_id
+                row[23],  # categoria_orcamento_id
+                row[24],  # session_id
+                row[25],  # Mes
+                row[26],  # EstabelecimentoBase
+                row[27],  # parcela_atual
+                row[28],  # TotalParcelas
             ))
             
-            if len(batch) >= 1000:
+            if len(batch) >= 500:
                 psycopg2.extras.execute_batch(cursor_pg, """
                     INSERT INTO journal_entries 
-                    (id, user_id, data, estabelecimento, valor, categoriageral, lancamento,
-                     tipodocumento, arquivoorigem, mesfatura, grupo, subgrupo, tipogasto, destino,
-                     ignorardashboard, ano, mes, idtransacao, sequenciahash, marcadoparaexclusao,
-                     dataprocessamento, mesreferencia, grupoalteradomanualmente, observacoes, hash_mp)
+                    (id, user_id, "Data", "Estabelecimento", "Valor", "ValorPositivo", "TipoTransacao",
+                     "TipoGasto", "GRUPO", "SUBGRUPO", "IdTransacao", "IdParcela", "MesFatura", "Ano",
+                     arquivo_origem, banco_origem, tipodocumento, origem_classificacao,
+                     "IgnorarDashboard", created_at, "NomeCartao", "CategoriaGeral", upload_history_id,
+                     categoria_orcamento_id, session_id, "Mes", "EstabelecimentoBase", parcela_atual, "TotalParcelas")
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                            %s, %s, %s, %s, %s, %s, %s)
-                """, batch, page_size=1000)
+                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, batch, page_size=500)
                 pg_conn.commit()
+                print(f"    → {count} registros...", end='\r')
                 batch = []
         
         if batch:
             psycopg2.extras.execute_batch(cursor_pg, """
                 INSERT INTO journal_entries 
-                (id, user_id, data, estabelecimento, valor, categoriageral, lancamento,
-                 tipodocumento, arquivoorigem, mesfatura, grupo, subgrupo, tipogasto, destino,
-                 ignorardashboard, ano, mes, idtransacao, sequenciahash, marcadoparaexclusao,
-                 dataprocessamento, mesreferencia, grupoalteradomanualmente, observacoes, hash_mp)
+                (id, user_id, "Data", "Estabelecimento", "Valor", "ValorPositivo", "TipoTransacao",
+                 "TipoGasto", "GRUPO", "SUBGRUPO", "IdTransacao", "IdParcela", "MesFatura", "Ano",
+                 arquivo_origem, banco_origem, tipodocumento, origem_classificacao,
+                 "IgnorarDashboard", created_at, "NomeCartao", "CategoriaGeral", upload_history_id,
+                 categoria_orcamento_id, session_id, "Mes", "EstabelecimentoBase", parcela_atual, "TotalParcelas")
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, %s, %s, %s)
-            """, batch, page_size=1000)
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, batch, page_size=500)
             pg_conn.commit()
         
-        cursor_sqlite.execute("SELECT COUNT(*) FROM journal_entries")
-        total = cursor_sqlite.fetchone()[0]
-        print(f"  ✅ {total} transações migradas\n")
+        print(f"  ✅ {count} transações migradas\n")
         
         # 3. generic_classification_rules - Converter integer para boolean
         print("📋 Corrigindo generic_classification_rules...")
