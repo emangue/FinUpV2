@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react"
 import { fetchWithAuth } from "@/core/utils/api-client"
+import { API_CONFIG } from "@/core/config/api.config"
 import DashboardLayout from "@/components/dashboard-layout"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -70,7 +71,7 @@ interface Stats {
   }>
 }
 
-const API_BASE = "http://localhost:8000/api/v1/classification"
+const API_BASE = `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/classification`
 
 interface GrupoSubgrupoOption {
   grupo: string

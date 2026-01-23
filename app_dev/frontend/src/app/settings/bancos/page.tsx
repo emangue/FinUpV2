@@ -1,6 +1,8 @@
 "use client"
 
 import * as React from "react"
+import { fetchWithAuth } from "@/core/utils/api-client"
+import { API_CONFIG } from "@/core/config/api.config"
 import DashboardLayout from "@/components/dashboard-layout"
 import {
   Card,
@@ -12,7 +14,6 @@ import {
 import { useBanks, BanksTable, StatusType } from "@/features/banks"
 
 export default function BancosPage() {
-  const apiUrl = process.env.NEXT_PUBLIC_BACKEND_URL ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1` : "http://localhost:8000/api/v1"
   const { banks, loading, error, fetchBanks } = useBanks()
   const [updateStatus, setUpdateStatus] = React.useState<string | null>(null)
 
@@ -32,7 +33,7 @@ export default function BancosPage() {
       }
 
       // Atualizar via API
-      const response = await fetch(`${apiUrl}/compatibility/${id}`, {
+      const response = await fetchWithAuth(`${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/compatibility/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ [fieldName]: newStatus })
