@@ -9,6 +9,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from app.core.database import get_db
+from app.shared.dependencies import get_current_user_id
 from .service import AuthService
 from .schemas import LoginRequest, TokenResponse, UserLoginResponse, LogoutRequest, ProfileUpdateRequest, PasswordChangeRequest
 from .jwt_utils import extract_user_id_from_token
@@ -45,16 +46,14 @@ def login(
 @router.get("/me", response_model=UserLoginResponse)
 def get_current_user(
     db: Session = Depends(get_db),
-    # TODO: Adicionar dependência de get_current_user_id após Fase 1
+    user_id: int = Depends(get_current_user_id)
 ):
     """
     Retorna dados do usuário autenticado
     
     Requer token JWT válido no header Authorization
     """
-    # Temporário: usar user_id=1 hardcoded
-    # Após Fase 1, usar: user_id: int = Depends(get_current_user_id)
-    user_id = 1
+    # ✅ CORRIGIDO: user_id agora vem do JWT token
     
     service = AuthService(db)
     return service.get_current_user(user_id)
