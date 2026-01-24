@@ -138,10 +138,20 @@ export function DashboardInvestimentosMobile() {
           <EvolucaoTemporal timeline={rendimentos} cenario={{ rendimento_mensal: 0.8, aporte_mensal: 0 }} />
         )}
         {distribuicao && <DistribuicaoChart distribuicao={distribuicao} />}
-        <DistribuicaoPorTipo investimentos={filteredInvestimentos} />
-        <VisaoPorCorretora investimentos={filteredInvestimentos} />
+        {distribuicao && resumo && (
+          <DistribuicaoPorTipo 
+            distribuicao={distribuicao}
+            totalGeral={parseFloat(resumo.total_investido)}
+          />
+        )}
+        {resumo && (
+          <VisaoPorCorretora 
+            investimentos={filteredInvestimentos}
+            totalGeral={parseFloat(resumo.total_investido)}
+          />
+        )}
         {/* Indicadores de linha do tempo */}
-        <TimelineIndicators investimentos={filteredInvestimentos} />
+        <TimelineIndicators rendimentos={rendimentos} />
         {/* TODO: Cards de investimentos, botões, etc. */}
       </div>
       <BottomNav />
