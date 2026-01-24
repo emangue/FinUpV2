@@ -135,7 +135,7 @@ export function DashboardInvestimentosMobile() {
         {resumo && <PortfolioOverview resumo={resumo} />}
         {/* Gráficos principais */}
         {rendimentos.length > 0 && (
-          <EvolucaoTemporal timeline={rendimentos} cenario={{ rendimento_mensal: 0.8 }} />
+          <EvolucaoTemporal timeline={rendimentos} cenario={{ rendimento_mensal: 0.8, aporte_mensal: 0 }} />
         )}
         {distribuicao && <DistribuicaoChart distribuicao={distribuicao} />}
         <DistribuicaoPorTipo investimentos={filteredInvestimentos} />
