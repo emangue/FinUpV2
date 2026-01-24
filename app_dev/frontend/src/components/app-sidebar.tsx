@@ -3,12 +3,14 @@
 import * as React from "react"
 import { useAuth } from '@/contexts/AuthContext'
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   BarChart3,
   CreditCard,
   DollarSign,
   Home,
   LineChart,
+  LogOut,
   PieChart,
   Settings,
   Shield,
@@ -27,6 +29,9 @@ import {
   SidebarFooter,
   SidebarHeader,
   SidebarRail,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
 } from "@/components/ui/sidebar"
 
 // Data para sidebar financeira
@@ -353,8 +358,18 @@ const data = {
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { user } = useAuth()
+  const router = useRouter()
   const [isAdmin, setIsAdmin] = useState(false)
   const [screenStatuses, setScreenStatuses] = React.useState<Record<string, 'P' | 'A' | 'D'>>({})
+
+  const handleLogout = () => {
+    // Limpar dados de autenticação
+    localStorage.removeItem('authToken')
+    localStorage.removeItem('user')
+    
+    // Redirecionar para login
+    router.push('/login')
+  }
 
   // Atualizar isAdmin apenas no cliente para evitar hydration mismatch
   useEffect(() => {
@@ -505,6 +520,21 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavProjects projects={projectsWithStatus} isAdmin={isAdmin} />
       </SidebarContent>
       <SidebarFooter>
+        {/* Botão de Logout */}
+        {user && (
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                size="lg"
+                onClick={handleLogout}
+                className="hover:bg-red-50 hover:text-red-600 text-red-600"
+              >
+                <LogOut className="h-4 w-4" />
+                <span>Sair</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        )}
         <NavUser />
       </SidebarFooter>
       <SidebarRail />
