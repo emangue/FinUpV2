@@ -25,8 +25,8 @@ export async function fetchWithAuth(
   url: string,
   options: RequestInit = {}
 ): Promise<Response> {
-  // Buscar token do localStorage (salvo no login) - apenas no cliente
-  const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null
+  // Buscar token do localStorage (salvo no login)
+  const token = localStorage.getItem('authToken')
   
   // 🐛 DEBUG TEMPORÁRIO - Remover após validar
   console.log('[api-client] fetchWithAuth chamado:', {
@@ -99,7 +99,6 @@ export async function fetchJsonWithAuth<T>(
  * @returns true se token existe no localStorage
  */
 export function isAuthenticated(): boolean {
-  if (typeof window === 'undefined') return false
   const token = localStorage.getItem('authToken')
   return !!token
 }
@@ -108,7 +107,6 @@ export function isAuthenticated(): boolean {
  * Remove token do localStorage (logout)
  */
 export function clearAuth(): void {
-  if (typeof window === 'undefined') return
   localStorage.removeItem('authToken')
 }
 
@@ -118,6 +116,5 @@ export function clearAuth(): void {
  * @param token - Token JWT retornado do backend
  */
 export function setAuthToken(token: string): void {
-  if (typeof window === 'undefined') return
   localStorage.setItem('authToken', token)
 }
