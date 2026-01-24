@@ -22,6 +22,7 @@ import { PeriodFilter } from '../period-filter'
 import { BottomNav } from '@/features/dashboard/components/mobile/bottom-nav'
 
 export function DashboardInvestimentosMobile() {
+  const [addModalOpen, setAddModalOpen] = useState(false)
   // TODO: Adaptação mobile dos estados e filtros
   const currentYear = new Date().getFullYear()
   const currentMonth = new Date().getMonth() + 1
@@ -98,7 +99,7 @@ export function DashboardInvestimentosMobile() {
   }
   // Empty
   if (investimentos.length === 0) {
-    return <EmptyInvestimentos />
+    return <EmptyInvestimentos onAdd={() => setAddModalOpen(true)} />
   }
   const hasFilters = searchTerm || selectedType !== 'all' || selectedCorretora !== 'all'
   if (hasFilters && filteredInvestimentos.length === 0) {
