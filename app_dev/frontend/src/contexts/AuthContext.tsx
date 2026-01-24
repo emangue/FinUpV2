@@ -38,6 +38,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Carregar token do localStorage ao montar
   useEffect(() => {
+    // Verificar se estamos no cliente antes de acessar localStorage
+    if (typeof window === 'undefined') return
+
     const storedToken = localStorage.getItem('authToken')
     if (storedToken) {
       setToken(storedToken)

@@ -9,6 +9,7 @@ const TOKEN_KEY = 'authToken'
 
 export function saveToken(token: string): void {
   try {
+    if (typeof window === 'undefined') return
     localStorage.setItem(TOKEN_KEY, token)
   } catch (error) {
     console.error('Erro ao salvar token:', error)
@@ -17,6 +18,7 @@ export function saveToken(token: string): void {
 
 export function getToken(): string | null {
   try {
+    if (typeof window === 'undefined') return null
     return localStorage.getItem(TOKEN_KEY)
   } catch (error) {
     console.error('Erro ao recuperar token:', error)
@@ -26,6 +28,7 @@ export function getToken(): string | null {
 
 export function removeToken(): void {
   try {
+    if (typeof window === 'undefined') return
     localStorage.removeItem(TOKEN_KEY)
   } catch (error) {
     console.error('Erro ao remover token:', error)

@@ -363,6 +363,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [screenStatuses, setScreenStatuses] = React.useState<Record<string, 'P' | 'A' | 'D'>>({})
 
   const handleLogout = () => {
+    // Verificar se estamos no cliente antes de acessar localStorage
+    if (typeof window === 'undefined') return
+
     // Limpar dados de autenticação
     localStorage.removeItem('authToken')
     localStorage.removeItem('user')
@@ -380,6 +383,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     // ✅ FASE 3 - Buscar status com autenticação
     const loadScreenStatuses = async () => {
       try {
+        // Verificar se estamos no cliente antes de acessar localStorage
+        if (typeof window === 'undefined') return
+
         const token = localStorage.getItem('authToken')
         if (!token) {
           console.log('[AppSidebar] Sem token, não carregando status de telas')
