@@ -127,6 +127,10 @@ const data = {
           title: "Dashboard",
           url: "/investimentos",
         },
+        {
+          title: "Dashboard Mobile",
+          url: "/investimentos/mobile",
+        },
       ],
     },
     {
@@ -486,16 +490,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       status: screenStatuses[getScreenKey(subItem.url, true, item.url)] || (subItem as any).status || 'P'
     }))
   }))
-  
+
   // Filtrar items baseado em admin/status
   const filteredNavMain = navMainWithStatus
     .filter(item => {
       // Ocultar "Administração" completa se não for admin
       if (item.title === 'Administração' && !isAdmin) return false
-      
       // Se item está como 'A' (Admin) e user não é admin, ocultar
       if (item.status === 'A' && !isAdmin) return false
-      
       return true
     })
     .map(item => ({
