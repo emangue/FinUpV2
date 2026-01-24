@@ -137,12 +137,14 @@ export default function DashboardMobilePage() {
 
       {/* Conteúdo com padding top para compensar header fixo e padding bottom para bottom nav */}
       <div className="pt-16 pb-6 px-4 space-y-4 max-w-full">
-        {/* Navegação de meses */}
-        <MonthTabs
-          selectedYear={selectedYear}
-          selectedMonth={selectedMonth}
-          onMonthChange={handleMonthChange}
-        />
+        {/* Container isolado para MonthTabs com scroll horizontal */}
+        <div className="overflow-x-auto scrollbar-hide">
+          <MonthTabs
+            selectedYear={selectedYear}
+            selectedMonth={selectedMonth}
+            onMonthChange={handleMonthChange}
+          />
+        </div>
 
         {/* Cards de métricas com gráfico integrado */}
         <MetricCards
