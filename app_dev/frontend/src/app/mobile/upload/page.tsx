@@ -1,22 +1,18 @@
 'use client';
 
 /**
- * Upload Mobile - Página de Upload (Protótipo V2)
+ * Upload Mobile - Página de Upload (Protótipo V2 + APIs Reais)
  * 
- * Design do protótipo com:
- * - Seleção de instituição financeira
- * - Seleção de cartão (para faturas)
- * - Período da fatura
- * - Formato do arquivo
- * - Upload de arquivo
- * 
- * TODO: Conectar com APIs reais
+ * Conectado com backend:
+ * - useBanks → GET /api/v1/compatibility/banks
+ * - useCreditCards → GET /api/v1/cards
+ * - useUpload → POST /api/v1/upload
  */
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { TabType, FileFormat } from '@/features/upload/types';
-import { banks, creditCards, months, years, fileFormats } from '@/features/upload/mocks/mockUploadData';
+import { months, years, fileFormats } from '@/features/upload/mocks/mockUploadData';
 import { 
   BankSelector, 
   CardSelector, 
@@ -25,9 +21,17 @@ import {
   FileInput, 
   TabBar 
 } from '@/features/upload/components';
+import { useBanks, useCreditCards, useUpload } from '@/features/upload/hooks';
 
 export default function UploadPage() {
   const router = useRouter();
+  
+  // Hooks para dados reais
+  const { banks, loading: loadingBanks } = useBanks();
+  const { cards, loading: loadingCards } = useCreditCards();
+  const { upload, uploading, progress } = useUpload();
+  
+  // Form state
   const [activeTab, setActiveTab] = useState<TabType>('fatura');
   const [selectedBank, setSelectedBank] = useState('');
   const [selectedCard, setSelectedCard] = useState('');
@@ -35,10 +39,12 @@ export default function UploadPage() {
   const [selectedMonth, setSelectedMonth] = useState('Fevereiro');
   const [selectedFormat, setSelectedFormat] = useState<FileFormat>('csv');
   const [fileName, setFileName] = useState('Nenhum...');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   const handleFileChange = (file: File | null) => {
     if (file) {
       setFileName(file.name);
+      setSelectedFile(file);
     }
   };
 
@@ -46,7 +52,8 @@ export default function UploadPage() {
     alert('Funcionalidade de adicionar cartão será implementada em breve');
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    // Validações
     if (!selectedBank) {
       alert('Por favor, selecione uma instituição financeira');
       return;
@@ -55,13 +62,25 @@ export default function UploadPage() {
       alert('Por favor, selecione um cartão de crédito');
       return;
     }
-    if (fileName === 'Nenhum...') {
+    if (!selectedFile) {
       alert('Por favor, selecione um arquivo');
       return;
     }
     
-    // TODO: Conectar com API real
-    alert('Arquivo sendo processado...');
+    try {
+      await upload({
+        file: selectedFile,
+        banco: selectedBank,
+        tipo: activeTab,
+        cartaoId: activeTab === 'fatura' ? selectedCard : undefined,
+        mes: activeTab === 'fatura' ? selectedMonth : undefined,
+        ano: activeTab === 'fatura' ? selectedYear : undefined,
+        formato: selectedFormat
+      });
+      // Redirecionamento automático após upload
+    } catch (error) {
+      alert('Erro ao fazer upload. Por favor, tente novamente.');
+    }
   };
 
   return (
@@ -88,32 +107,42 @@ export default function UploadPage() {
         </div>
         
         {/* Main Content */}
-        <div className="bg-white px-6 py-6">
+        <div className="bg-white px-6 py-6 rounded-b-3xl">
           
           {/* Tabs */}
-        <TabBar 
-          activeTab={activeTab}
-          onChange={setActiveTab}
-        />
+          <TabBar 
+            activeTab={activeTab}
+            onChange={setActiveTab}
+          />
+          
           {/* Instituição Financeira */}
-        <BankSelector 
-          banks={banks}
-          value={selectedBank}
-          onChange={setSelectedBank}
-          required
-        />
+          {loadingBanks ? (
+            <div className="mb-6 text-center text-gray-500">Carregando bancos...</div>
+          ) : (
+            <BankSelector 
+              banks={banks}
+              value={selectedBank}
+              onChange={setSelectedBank}
+              required
+            />
+          )}
+          
           {/* Cartão de Crédito (apenas para Fatura) */}
           {activeTab === 'fatura' && (
             <>
-              <CardSelector 
-                cards={creditCards}
-                value={selectedCard}
-                onChange={setSelectedCard}
-                onAddNew={handleAddCard}
-                required
-              />
+              {loadingCards ? (
+                <div className="mb-6 text-center text-gray-500">Carregando cartões...</div>
+              ) : (
+                <CardSelector 
+                  cards={cards}
+                  value={selectedCard}
+                  onChange={setSelectedCard}
+                  onAddNew={handleAddCard}
+                  required
+                />
+              )}
           
-              {/* Período da Fatura (apenas para Fatura) */}
+              {/* Período da Fatura */}
               <MonthYearPicker 
                 months={months}
                 years={years}
@@ -139,13 +168,30 @@ export default function UploadPage() {
             onChange={handleFileChange}
           />
           
+          {/* Progress Bar */}
+          {uploading && (
+            <div className="mb-6">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-gray-700">Fazendo upload...</span>
+                <span className="text-sm font-bold text-gray-900">{progress}%</span>
+              </div>
+              <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-gray-900 transition-all duration-300"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+            </div>
+          )}
+
           {/* Botão Importar */}
           <div className="pt-4 pb-6">
             <button 
               onClick={handleSubmit}
-              className="w-full py-4 bg-gray-900 hover:bg-gray-800 text-white text-sm font-bold rounded-xl transition-colors shadow-lg"
+              disabled={uploading || loadingBanks || (activeTab === 'fatura' && loadingCards)}
+              className="w-full py-4 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-400 disabled:cursor-not-allowed text-white text-sm font-bold rounded-xl transition-colors shadow-lg"
             >
-              Importar Arquivo
+              {uploading ? 'Enviando...' : 'Importar Arquivo'}
             </button>
           </div>
           
@@ -154,3 +200,4 @@ export default function UploadPage() {
     </div>
   );
 }
+
