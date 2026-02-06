@@ -29,6 +29,198 @@ class TransactionService:
     def __init__(self, db: Session):
         self.repository = TransactionRepository(db)
     
+    def get_grupo_breakdown(self, user_id: int, grupo: str, year: int, month: int) -> dict:
+        """
+        Retorna breakdown de subgrupos de um grupo específico com valores agregados
+        
+        Args:
+            user_id: ID do usuário
+            grupo: Nome do grupo (ex: "Cartão de Crédito")
+            year: Ano
+            month: Mês
+            
+        Returns:
+            dict com grupo, total, e lista de subgrupos com valores e percentuais
+        """
+        from sqlalchemy import func
+        
+        # Formatar MesFatura (YYYYMM)
+        mes_fatura = f"{year}{str(month).zfill(2)}"
+        
+        # Query: agregar por subgrupo
+        results = self.repository.db.query(
+            JournalEntry.SUBGRUPO,
+            func.sum(JournalEntry.Valor).label('total'),
+            func.count(JournalEntry.IdTransacao).label('quantidade')
+        ).filter(
+            JournalEntry.user_id == user_id,
+            JournalEntry.GRUPO == grupo,
+            JournalEntry.MesFatura == mes_fatura,
+            JournalEntry.CategoriaGeral == 'Despesa',
+            JournalEntry.IgnorarDashboard == 0
+        ).group_by(
+            JournalEntry.SUBGRUPO
+        ).order_by(
+            func.sum(JournalEntry.Valor).desc()
+        ).all()
+        
+        # Calcular total geral
+        total_geral = sum(r.total for r in results)
+        
+        # Formatar resposta
+        subgrupos = [
+            {
+                "subgrupo": r.SUBGRUPO or "Sem subgrupo",
+                "valor": float(r.total),
+                "percentual": round((float(r.total) / total_geral * 100), 2) if total_geral > 0 else 0,
+                "quantidade_transacoes": r.quantidade
+            }
+            for r in results
+        ]
+        
+        return {
+            "grupo": grupo,
+            "total": float(total_geral),
+            "subgrupos": subgrupos
+        }
+    
+    def get_all_grupos_breakdown(self, user_id: int, data_inicio: str, data_fim: str) -> dict:
+        """
+        Retorna breakdown de gastos por grupo em um período
+        
+        Args:
+            user_id: ID do usuário
+            data_inicio: Data início (YYYY-MM-DD)
+            data_fim: Data fim (YYYY-MM-DD)
+            
+        Returns:
+            dict com grupos: {grupo: {total, transacoes}}
+        """
+        from sqlalchemy import func
+        from datetime import datetime
+        
+        # Converter strings de data para datetime
+        try:
+            dt_inicio = datetime.strptime(data_inicio, '%Y-%m-%d')
+            dt_fim = datetime.strptime(data_fim, '%Y-%m-%d')
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Formato de data inválido. Use YYYY-MM-DD")
+        
+        # Converter para MesFatura (YYYYMM)
+        mes_fatura_inicio = dt_inicio.strftime('%Y%m')
+        mes_fatura_fim = dt_fim.strftime('%Y%m')
+        
+        # Query: agregar por grupo
+        results = self.repository.db.query(
+            JournalEntry.GRUPO,
+            func.sum(JournalEntry.Valor).label('total'),
+            func.count(JournalEntry.IdTransacao).label('quantidade')
+        ).filter(
+            JournalEntry.user_id == user_id,
+            JournalEntry.MesFatura >= mes_fatura_inicio,
+            JournalEntry.MesFatura <= mes_fatura_fim,
+            JournalEntry.CategoriaGeral == 'Despesa',
+            JournalEntry.IgnorarDashboard == 0,
+            JournalEntry.GRUPO.isnot(None)
+        ).group_by(JournalEntry.GRUPO).all()
+        
+        # Montar dict de grupos
+        grupos = {}
+        for row in results:
+            if row.GRUPO:
+                grupos[row.GRUPO] = {
+                    "total": abs(float(row.total)),
+                    "transacoes": row.quantidade
+                }
+        
+        return {
+            "grupos": grupos,
+            "periodo": {
+                "data_inicio": data_inicio,
+                "data_fim": data_fim
+            }
+        }
+    
+    def get_receitas_despesas(self, user_id: int, data_inicio: str, data_fim: str) -> dict:
+        """
+        Retorna total de receitas, despesas e investimentos em um período
+        
+        Args:
+            user_id: ID do usuário
+            data_inicio: Data início (YYYY-MM-DD)
+            data_fim: Data fim (YYYY-MM-DD)
+            
+        Returns:
+            dict com receitas, despesas, investimentos e saldo
+        """
+        from sqlalchemy import func
+        from datetime import datetime
+        
+        # Converter strings de data para datetime
+        try:
+            dt_inicio = datetime.strptime(data_inicio, '%Y-%m-%d')
+            dt_fim = datetime.strptime(data_fim, '%Y-%m-%d')
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Formato de data inválido. Use YYYY-MM-DD")
+        
+        # Converter para MesFatura (YYYYMM)
+        mes_fatura_inicio = dt_inicio.strftime('%Y%m')
+        mes_fatura_fim = dt_fim.strftime('%Y%m')
+        
+        # Buscar receitas
+        receitas_result = self.repository.db.query(
+            func.sum(JournalEntry.ValorPositivo).label('total')
+        ).filter(
+            JournalEntry.user_id == user_id,
+            JournalEntry.MesFatura >= mes_fatura_inicio,
+            JournalEntry.MesFatura <= mes_fatura_fim,
+            JournalEntry.CategoriaGeral == 'Receita',
+            JournalEntry.IgnorarDashboard == 0
+        ).scalar()
+        
+        # Buscar despesas
+        despesas_result = self.repository.db.query(
+            func.sum(JournalEntry.Valor).label('total')
+        ).filter(
+            JournalEntry.user_id == user_id,
+            JournalEntry.MesFatura >= mes_fatura_inicio,
+            JournalEntry.MesFatura <= mes_fatura_fim,
+            JournalEntry.CategoriaGeral == 'Despesa',
+            JournalEntry.IgnorarDashboard == 0
+        ).scalar()
+        
+        # Buscar investimentos
+        # Valores negativos = aplicações (saídas)
+        # Valores positivos = resgates (entradas)
+        # Multiplicar por -1 para mostrar total investido como positivo
+        investimentos_result = self.repository.db.query(
+            func.sum(JournalEntry.Valor).label('total')
+        ).filter(
+            JournalEntry.user_id == user_id,
+            JournalEntry.MesFatura >= mes_fatura_inicio,
+            JournalEntry.MesFatura <= mes_fatura_fim,
+            JournalEntry.CategoriaGeral == 'Investimentos',
+            JournalEntry.IgnorarDashboard == 0
+        ).scalar()
+        
+        receitas = float(receitas_result or 0)
+        despesas = abs(float(despesas_result or 0))
+        investimentos = abs(float(investimentos_result or 0))  # * -1 já está nos valores, só precisamos do abs()
+        saldo = receitas - despesas  # Investimentos NÃO entram no saldo (mostrados separadamente)
+        
+        return {
+            "receitas": receitas,
+            "despesas": despesas,
+            "investimentos": investimentos,
+            "saldo": saldo,
+            "periodo": {
+                "data_inicio": data_inicio,
+                "data_fim": data_fim
+            }
+        }
+    
+    
+    
     def get_transaction(self, transaction_id: str, user_id: int) -> TransactionResponse:
         """
         Busca uma transação por ID

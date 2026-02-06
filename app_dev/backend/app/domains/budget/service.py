@@ -25,6 +25,211 @@ class BudgetService:
         self.repository_categoria_config = BudgetCategoriaConfigRepository(db)
         self.repository_historico = BudgetGeralHistoricoRepository(db)
     
+    def copy_budget_to_year(
+        self,
+        user_id: int,
+        mes_origem: str,
+        ano_destino: int,
+        substituir_existentes: bool
+    ) -> dict:
+        """
+        Copia metas de mes_origem para todos os meses de ano_destino
+        
+        Args:
+            user_id: ID do usuário
+            mes_origem: Mês de origem no formato YYYY-MM
+            ano_destino: Ano de destino (ex: 2026)
+            substituir_existentes: Se deve sobrescrever metas existentes
+            
+        Returns:
+            dict com sucesso, meses_criados, metas_copiadas, mensagem
+        """
+        from .models import BudgetGeral
+        
+        # 1. Buscar metas do mês de origem
+        metas_origem = self.db.query(BudgetGeral).filter(
+            BudgetGeral.user_id == user_id,
+            BudgetGeral.mes_referencia == mes_origem
+        ).all()
+        
+        if not metas_origem:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Nenhuma meta encontrada para {mes_origem}"
+            )
+        
+        # 2. Gerar lista de meses do ano
+        meses_ano = [f"{ano_destino}-{str(m).zfill(2)}" for m in range(1, 13)]
+        
+        # 3. Para cada mês, copiar ou atualizar metas
+        meses_criados = 0
+        metas_copiadas = 0
+        
+        for mes_destino in meses_ano:
+            if mes_destino == mes_origem:
+                continue  # Pular mês de origem
+            
+            for meta_origem in metas_origem:
+                # Verificar se já existe
+                meta_existente = self.db.query(BudgetGeral).filter(
+                    BudgetGeral.user_id == user_id,
+                    BudgetGeral.categoria_geral == meta_origem.categoria_geral,
+                    BudgetGeral.mes_referencia == mes_destino
+                ).first()
+                
+                if meta_existente and not substituir_existentes:
+                    continue  # Pular se já existe e não deve substituir
+                
+                if meta_existente:
+                    # Atualizar
+                    meta_existente.valor_planejado = meta_origem.valor_planejado
+                else:
+                    # Criar nova
+                    nova_meta = BudgetGeral(
+                        user_id=user_id,
+                        categoria_geral=meta_origem.categoria_geral,
+                        mes_referencia=mes_destino,
+                        valor_planejado=meta_origem.valor_planejado
+                    )
+                    self.db.add(nova_meta)
+                    meses_criados += 1
+                
+                metas_copiadas += 1
+        
+        self.db.commit()
+        
+        return {
+            "sucesso": True,
+            "meses_criados": meses_criados,
+            "metas_copiadas": metas_copiadas,
+            "mensagem": f"Metas copiadas de {mes_origem} para {meses_criados} meses de {ano_destino}"
+        }
+    
+    def get_budget_planning(self, user_id: int, mes_referencia: str) -> dict:
+        """
+        Lista metas de budget planning (campo grupo)
+        
+        Args:
+            user_id: ID do usuário
+            mes_referencia: Mês no formato YYYY-MM
+            
+        Returns:
+            dict com mes_referencia e lista de budgets
+        """
+        from .models import BudgetPlanning
+        
+        budgets = self.db.query(BudgetPlanning).filter(
+            BudgetPlanning.user_id == user_id,
+            BudgetPlanning.mes_referencia == mes_referencia
+        ).all()
+        
+        # Calcular valor realizado para cada grupo
+        resultado = []
+        for budget in budgets:
+            valor_realizado = self._calcular_valor_realizado_grupo(
+                user_id, budget.grupo, mes_referencia
+            )
+            percentual = (valor_realizado / budget.valor_planejado * 100) if budget.valor_planejado > 0 else 0
+            
+            resultado.append({
+                "id": budget.id,
+                "grupo": budget.grupo,
+                "valor_planejado": float(budget.valor_planejado),
+                "valor_realizado": float(valor_realizado),
+                "percentual": round(percentual, 2)
+            })
+        
+        return {
+            "mes_referencia": mes_referencia,
+            "budgets": resultado
+        }
+    
+    def bulk_upsert_budget_planning(
+        self, 
+        user_id: int, 
+        mes_referencia: str, 
+        budgets: List[dict]
+    ) -> List[dict]:
+        """
+        Cria ou atualiza múltiplas metas de planning
+        
+        Args:
+            user_id: ID do usuário
+            mes_referencia: Mês no formato YYYY-MM
+            budgets: Lista de dicts com grupo e valor_planejado
+            
+        Returns:
+            Lista de budgets criados/atualizados
+        """
+        from .models import BudgetPlanning
+        
+        resultado = []
+        for budget_data in budgets:
+            grupo = budget_data["grupo"]
+            valor_planejado = budget_data["valor_planejado"]
+            
+            # Verificar se já existe
+            budget_existente = self.db.query(BudgetPlanning).filter(
+                BudgetPlanning.user_id == user_id,
+                BudgetPlanning.grupo == grupo,
+                BudgetPlanning.mes_referencia == mes_referencia
+            ).first()
+            
+            if budget_existente:
+                # Atualizar
+                budget_existente.valor_planejado = valor_planejado
+                self.db.flush()
+                resultado.append({
+                    "id": budget_existente.id,
+                    "grupo": budget_existente.grupo,
+                    "mes_referencia": budget_existente.mes_referencia,
+                    "valor_planejado": float(budget_existente.valor_planejado)
+                })
+            else:
+                # Criar novo
+                novo_budget = BudgetPlanning(
+                    user_id=user_id,
+                    grupo=grupo,
+                    mes_referencia=mes_referencia,
+                    valor_planejado=valor_planejado
+                )
+                self.db.add(novo_budget)
+                self.db.flush()
+                resultado.append({
+                    "id": novo_budget.id,
+                    "grupo": novo_budget.grupo,
+                    "mes_referencia": novo_budget.mes_referencia,
+                    "valor_planejado": float(novo_budget.valor_planejado)
+                })
+        
+        self.db.commit()
+        return resultado
+    
+    def _calcular_valor_realizado_grupo(self, user_id: int, grupo: str, mes_referencia: str) -> float:
+        """
+        Calcula valor realizado de um grupo em um mês
+        
+        Args:
+            user_id: ID do usuário
+            grupo: Nome do grupo
+            mes_referencia: Mês no formato YYYY-MM
+            
+        Returns:
+            Valor realizado (float)
+        """
+        ano, mes = mes_referencia.split('-')
+        mes_fatura = f"{ano}{mes}"  # YYYYMM
+        
+        total = self.db.query(func.sum(JournalEntry.Valor)).filter(
+            JournalEntry.user_id == user_id,
+            JournalEntry.GRUPO == grupo,
+            JournalEntry.MesFatura == mes_fatura,
+            JournalEntry.CategoriaGeral == 'Despesa',
+            JournalEntry.IgnorarDashboard == 0
+        ).scalar()
+        
+        return float(total) if total else 0.0
+    
     def calcular_media_3_meses(self, user_id: int, grupo: str, mes_referencia: str) -> float:
         """
         Calcula média dos últimos 3 meses anteriores ao mes_referencia

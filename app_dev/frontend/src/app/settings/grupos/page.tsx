@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { fetchWithAuth } from '@/core/utils/api-client';
+import { API_CONFIG } from '@/core/config/api.config';
 import { Plus, Pencil, Trash2, AlertTriangle } from 'lucide-react';
 import DashboardLayout from '@/components/dashboard-layout';
 import { Button } from '@/components/ui/button';
@@ -56,7 +57,9 @@ interface GrupoFormData {
 }
 
 export default function GestaoGrupos() {
-  const apiUrl = process.env.NEXT_PUBLIC_BACKEND_URL ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1` : "http://localhost:8000/api/v1"
+  // URL base completa usando config centralizado
+  const BASE_URL = `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/grupos`;
+  
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -87,7 +90,7 @@ export default function GestaoGrupos() {
   const loadGrupos = async () => {
     try {
       setLoading(true);
-      const response = await fetchWithAuth('/api/v1/grupos');
+      const response = await fetchWithAuth(BASE_URL);
       if (!response.ok) throw new Error('Erro ao carregar grupos');
       const data = await response.json();
       setGrupos(data.grupos || []);
@@ -100,7 +103,7 @@ export default function GestaoGrupos() {
 
   const loadOpcoes = async () => {
     try {
-      const response = await fetchWithAuth('/api/v1/grupos/opcoes');
+      const response = await fetchWithAuth(`${BASE_URL}/opcoes`);
       if (!response.ok) throw new Error('Erro ao carregar opções');
       const data = await response.json();
       setTiposGasto(data.tipos_gasto || []);
@@ -145,8 +148,8 @@ export default function GestaoGrupos() {
       setSuccess(null);
 
       const url = editingGrupo
-        ? `/api/v1/grupos/${editingGrupo.id}`
-        : '/api/v1/grupos/';
+        ? `${BASE_URL}/${editingGrupo.id}`
+        : BASE_URL;
 
       const method = editingGrupo ? 'PUT' : 'POST';
 

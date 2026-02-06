@@ -127,3 +127,4 @@ app/venv/
 # Arquivos temporários
 temp/logs/*.log
 temp/pids/*.pid
+export-to-main-project/*/node_modules/

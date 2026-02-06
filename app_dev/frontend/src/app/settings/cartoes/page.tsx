@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { fetchWithAuth } from "@/core/utils/api-client"
+import { API_CONFIG } from "@/core/config/api.config"
 import DashboardLayout from "@/components/dashboard-layout"
 import { Button } from "@/components/ui/button"
 import {
@@ -54,7 +55,10 @@ interface BankCompatibility {
 }
 
 export default function CartoesPage() {
-  const apiUrl = process.env.NEXT_PUBLIC_BACKEND_URL ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1` : "http://localhost:8000/api/v1"
+  // URLs completas usando config centralizado
+  const BASE_URL_CARDS = `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/cards`
+  const BASE_URL_COMPATIBILITY = `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/compatibility/manage`
+  
   const [cartoes, setCartoes] = React.useState<Cartao[]>([])
   const [loadingCartoes, setLoadingCartoes] = React.useState(true)
   const [cartaoModalOpen, setCartaoModalOpen] = React.useState(false)
@@ -72,7 +76,7 @@ export default function CartoesPage() {
   const fetchCartoes = async () => {
     try {
       setLoadingCartoes(true)
-      const response = await fetchWithAuth('/api/v1/cards')
+      const response = await fetchWithAuth(BASE_URL_CARDS)
       if (response.ok) {
         const data = await response.json()
         setCartoes(data.cards || [])
@@ -86,7 +90,7 @@ export default function CartoesPage() {
 
   const fetchBancos = async () => {
     try {
-      const response = await fetchWithAuth('/api/v1/compatibility/manage')
+      const response = await fetchWithAuth(BASE_URL_COMPATIBILITY)
       if (response.ok) {
         const data = await response.json()
         setBancos(data)

@@ -1,5 +1,80 @@
 # 🤖 Instruções GitHub Copilot - Sistema Modular de Finanças v5
 
+## 📋 WORKFLOW OBRIGATÓRIO - WAY OF WORKING (WoW)
+
+**REGRA CRÍTICA:** SEMPRE seguir processo de 5 fases antes de implementar qualquer feature:
+
+```
+1. PRD → 2. TECH SPEC → 3. SPRINT → 4. DEPLOY → 5. POST-MORTEM
+```
+
+### **🚫 PROIBIDO: Codificar sem PRD e TECH SPEC completos!**
+
+### **Processo Obrigatório:**
+
+#### **Fase 1 - PRD (Product Requirements)**
+📁 **Criar:** `/docs/features/[nome]/01-PRD/PRD.md`  
+📋 **Template:** `/docs/templates/TEMPLATE_PRD.md`  
+✅ **Validar:** Aprovação stakeholder ANTES de prosseguir
+
+**Checklist:**
+- [ ] Problema e objetivos claros
+- [ ] User stories com acceptance criteria
+- [ ] Wireframes/mockups incluídos
+- [ ] Escopo definido (incluído/excluído)
+- [ ] ✅ **Stakeholder aprovou** (BLOQUEANTE!)
+
+---
+
+#### **Fase 2 - TECH SPEC (Technical Specification)**
+📁 **Criar:** `/docs/features/[nome]/02-TECH_SPEC/TECH_SPEC.md`  
+📋 **Template:** `/docs/templates/TEMPLATE_TECH_SPEC.md`  
+✅ **Validar:** Código copy-paste ready (≥80%)
+
+**Checklist:**
+- [ ] Arquitetura definida (diagrama)
+- [ ] Componentes com código completo
+- [ ] APIs especificadas (request/response + curl)
+- [ ] DAG (Dependency Graph) - ordem de implementação
+- [ ] Database schema + migrations Alembic
+- [ ] Testing strategy (cobertura ≥80%)
+
+---
+
+#### **Fase 3 - SPRINT (Execution)**
+📁 **Criar:** `SPRINTX_COMPLETE.md` ao finalizar cada sprint  
+📋 **Template:** `/docs/templates/TEMPLATE_SPRINT.md`  
+🐛 **Bugs:** Documentar em `FIX_*.md` (Template: `/docs/templates/TEMPLATE_FIX.md`)
+
+**Workflow Diário:**
+- Manhã: Review ontem, escolher item do DAG
+- Tarde: Implementar, testar, documentar
+- Noite: Commitar, atualizar CHANGELOG, criar FIX_*.md se bugs
+
+---
+
+#### **Fase 4 - DEPLOY (Release)**
+📁 **Criar:** `/docs/features/[nome]/03-DEPLOY/DEPLOY_CHECKLIST.md`  
+📋 **Template:** `/docs/templates/TEMPLATE_DEPLOY.md` (250+ itens)  
+✅ **Validar:** Backup criado, testes passando, smoke tests OK
+
+---
+
+#### **Fase 5 - POST-MORTEM (Retrospective)**
+📁 **Criar:** `POST_MORTEM.md` em até 48h após deploy  
+📋 **Template:** `/docs/templates/TEMPLATE_POST_MORTEM.md`  
+✅ **Validar:** 3-5 ações de melhoria identificadas
+
+---
+
+### **📚 Referências:**
+- **Processo Completo:** `/docs/WOW.md`
+- **Exemplo Benchmark:** `/docs/features/mobile-v1/` (85% perfeito)
+- **Análise Crítica:** `/docs/ANALISE_MOBILE_V1_BENCHMARK.md`
+- **Templates:** `/docs/templates/` (PRD, TECH_SPEC, SPRINT, FIX)
+
+---
+
 ## ⚠️ REGRAS CRÍTICAS - SEMPRE SEGUIR
 
 ### � SINCRONIZAÇÃO GIT - REGRA FUNDAMENTAL (IMPLEMENTADO 22/01/2026)

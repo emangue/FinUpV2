@@ -186,6 +186,82 @@ def bulk_upsert_budget_geral_validado(
 
 
 # ----- ROTAS DE META GERAL -----
+@router.post("/budget/geral/copy-to-year", summary="Copiar metas para ano inteiro")
+def copy_budget_to_year(
+    data: dict,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Copia metas de um mês para todos os meses de um ano
+    
+    Body:
+    - mes_origem: str (YYYY-MM) - Mês de origem das metas
+    - ano_destino: int - Ano de destino (ex: 2026)
+    - substituir_existentes: bool - Se deve sobrescrever metas existentes
+    
+    Returns:
+    - sucesso: bool
+    - meses_criados: int
+    - metas_copiadas: int
+    - mensagem: str
+    """
+    service = BudgetService(db)
+    return service.copy_budget_to_year(
+        user_id=user_id,
+        mes_origem=data["mes_origem"],
+        ano_destino=data["ano_destino"],
+        substituir_existentes=data.get("substituir_existentes", False)
+    )
+
+
+@router.get("/budget/planning", summary="Listar metas de planning (grupos)")
+def get_budget_planning(
+    mes_referencia: str = Query(..., description="Mês de referência no formato YYYY-MM"),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Lista metas de budget planning (tabela budget_planning, campo grupo)
+    
+    Diferente de /budget/geral (categoria_geral), este endpoint usa grupos:
+    - Alimentação, Moradia, Transporte, etc.
+    
+    Query params:
+    - mes_referencia: str (YYYY-MM)
+    
+    Returns:
+    - mes_referencia: str
+    - budgets: List[{grupo, valor_planejado, valor_realizado, percentual}]
+    """
+    service = BudgetService(db)
+    return service.get_budget_planning(user_id, mes_referencia)
+
+
+@router.post("/budget/planning/bulk-upsert", summary="Criar/atualizar múltiplas metas planning")
+def bulk_upsert_budget_planning(
+    data: dict,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Cria ou atualiza múltiplas metas de planning de uma vez
+    
+    Body:
+    - mes_referencia: str (YYYY-MM)
+    - budgets: List[{grupo, valor_planejado}]
+    
+    Returns:
+    - List[{id, grupo, mes_referencia, valor_planejado}]
+    """
+    service = BudgetService(db)
+    return service.bulk_upsert_budget_planning(
+        user_id, 
+        data["mes_referencia"], 
+        data["budgets"]
+    )
+
+
 @router.get("/budget/geral/grupos-disponiveis", response_model=List[str], summary="Listar grupos disponíveis")
 def list_grupos_disponiveis(
     user_id: int = Depends(get_current_user_id),

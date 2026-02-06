@@ -36,10 +36,13 @@ if [ ! -z "$BACKEND_ORPHANS" ]; then
     echo "🧹 Limpos $(echo $BACKEND_ORPHANS | wc -w | xargs) processos órfãos na porta 8000"
 fi
 
-FRONTEND_ORPHANS=$(lsof -ti:3000 2>/dev/null)
-if [ ! -z "$FRONTEND_ORPHANS" ]; then
-    echo "$FRONTEND_ORPHANS" | xargs kill -9 2>/dev/null
-    echo "🧹 Limpos $(echo $FRONTEND_ORPHANS | wc -w | xargs) processos órfãos na porta 3000"
-fi
+# Frontend: limpar portas 3000-3005 (Next.js pode usar portas alternativas)
+for PORT in 3000 3001 3002 3003 3004 3005; do
+    FRONTEND_ORPHANS=$(lsof -ti:$PORT 2>/dev/null)
+    if [ ! -z "$FRONTEND_ORPHANS" ]; then
+        echo "$FRONTEND_ORPHANS" | xargs kill -9 2>/dev/null
+        echo "🧹 Limpos $(echo $FRONTEND_ORPHANS | wc -w | xargs) processos órfãos na porta $PORT"
+    fi
+done
 
-echo "✅ Portas 8000 e 3000 liberadas"
+echo "✅ Portas 8000 e 3000-3005 liberadas"

@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { fetchWithAuth } from "@/core/utils/api-client"
+import { API_CONFIG } from "@/core/config/api.config"
 import DashboardLayout from "@/components/dashboard-layout"
 import { Button } from "@/components/ui/button"
 import {
@@ -58,7 +59,10 @@ interface BankCompatibility {
 }
 
 export default function ExclusoesPage() {
-  const apiUrl = process.env.NEXT_PUBLIC_BACKEND_URL ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1` : "http://localhost:8000/api/v1"
+  // URLs completas usando config centralizado
+  const BASE_URL_EXCLUSOES = `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/exclusoes`
+  const BASE_URL_COMPATIBILITY = `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/compatibility`
+  
   const [exclusoes, setExclusoes] = React.useState<Exclusao[]>([])
   const [loadingExclusoes, setLoadingExclusoes] = React.useState(true)
   const [exclusaoModalOpen, setExclusaoModalOpen] = React.useState(false)
@@ -80,7 +84,7 @@ export default function ExclusoesPage() {
   const fetchExclusoes = async () => {
     try {
       setLoadingExclusoes(true)
-      const response = await fetchWithAuth('/api/v1/exclusoes')
+      const response = await fetchWithAuth(BASE_URL_EXCLUSOES)
       if (response.ok) {
         const data = await response.json()
         console.log('Exclusões recebidas:', data)
@@ -99,7 +103,7 @@ export default function ExclusoesPage() {
 
   const fetchBancos = async () => {
     try {
-      const response = await fetchWithAuth('/api/v1/compatibility')
+      const response = await fetchWithAuth(BASE_URL_COMPATIBILITY)
       if (response.ok) {
         const data = await response.json()
         console.log('Bancos recebidos:', data)

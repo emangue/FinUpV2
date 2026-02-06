@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { fetchWithAuth } from '@/core/utils/api-client'  // ✅ FASE 3 - Autenticação obrigatória
+import { API_CONFIG } from '@/core/config/api.config'
 import { useRouter } from "next/navigation"
 import { Upload, X, Plus } from "lucide-react"
 
@@ -54,6 +55,11 @@ interface Card {
 }
 
 export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDialogProps) {
+  // URLs completas usando config centralizado (fetchWithAuth espera URL completa)
+  const BASE_URL_CARDS = `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/cards`
+  const BASE_URL_COMPATIBILITY = `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/compatibility`
+  const BASE_URL_UPLOAD_PREVIEW = `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/upload/preview`
+  
   const router = useRouter()
   const currentDate = new Date()
   const [selectedYear, setSelectedYear] = React.useState<string>(currentDate.getFullYear().toString())
@@ -132,7 +138,7 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
         formData.append('senha', password) // Senha para PDFs protegidos
       }
       
-      const response = await fetchWithAuth('/api/upload/preview', {
+      const response = await fetchWithAuth(BASE_URL_UPLOAD_PREVIEW, {
         method: 'POST',
         body: formData
       })
@@ -209,7 +215,7 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
     
     try {
       // Bank já vem com nome correto (ex: "BTG Pactual")
-      const response = await fetchWithAuth('/api/v1/cards', {
+      const response = await fetchWithAuth(BASE_URL_CARDS, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -256,7 +262,7 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
       resetForm()
       
       // Buscar compatibilidade da API (formato matricial)
-      fetchWithAuth('/api/v1/compatibility')
+      fetchWithAuth(BASE_URL_COMPATIBILITY)
         .then(res => res.json())
         .then(data => {
           console.log('🔍 Compatibilidade carregada:', data)
@@ -279,7 +285,7 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
         .catch(err => console.error('❌ Erro ao buscar compatibilidade:', err))
       
       // Buscar cartões cadastrados
-      fetchWithAuth('/api/v1/cards')
+      fetchWithAuth(BASE_URL_CARDS)
         .then(res => res.json())
         .then(data => {
           console.log('💳 Cartões carregados:', data)

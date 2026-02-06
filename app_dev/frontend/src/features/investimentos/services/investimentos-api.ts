@@ -5,7 +5,7 @@
  * Agora usa fetchWithAuth() para enviar token JWT automaticamente
  */
 
-import { apiGet, apiPost, apiPatch, apiDelete } from '@/core/config/api.config'
+import { apiGet, apiPost, apiPatch, apiDelete, API_ENDPOINTS } from '@/core/config/api.config'
 import type {
   InvestimentoPortfolio,
   PortfolioResumo,
@@ -22,8 +22,8 @@ import type {
   SimulacaoCenario,
 } from '../types'
 
-// URL completa para investimentos
-const BASE_URL = `/api/v1/investimentos`
+// Usar a URL do config centralizado
+const BASE_URL = API_ENDPOINTS.INVESTIMENTOS
 
 /**
  * Portfolio Endpoints

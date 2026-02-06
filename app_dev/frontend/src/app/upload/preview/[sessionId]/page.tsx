@@ -5,6 +5,8 @@ import { useParams, useRouter } from "next/navigation"
 import { ArrowLeft, Check, X, FileText } from "lucide-react"
 import { format as formatDate } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { fetchWithAuth } from "@/core/utils/api-client"
+import { API_CONFIG } from "@/core/config/api.config"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -76,7 +78,11 @@ interface GruposSubgrupos {
 }
 
 export default function UploadPreviewPage() {
-  const apiUrl = process.env.NEXT_PUBLIC_BACKEND_URL ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1` : "http://localhost:8000/api/v1"
+  // URLs completas usando config centralizado
+  const BASE_URL_UPLOAD_PREVIEW = `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/upload/preview`
+  const BASE_URL_UPLOAD_CONFIRM = `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/upload/confirm`
+  const BASE_URL_CATEGORIES = `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/categories`
+  
   const params = useParams()
   const router = useRouter()
   const sessionId = params.sessionId as string
@@ -108,7 +114,7 @@ export default function UploadPreviewPage() {
   const fetchPreviewData = async () => {
     try {
       setLoading(true)
-      const response = await fetch(`${apiUrl}/upload/preview/${sessionId}`)
+      const response = await fetchWithAuth(`${BASE_URL_UPLOAD_PREVIEW}/${sessionId}`)
       
       if (!response.ok) {
         throw new Error('Falha ao carregar dados do preview')
@@ -146,7 +152,7 @@ export default function UploadPreviewPage() {
 
   const fetchGruposSubgrupos = async () => {
     try {
-      const response = await fetch('/api/v1/categories/grupos-subgrupos')
+      const response = await fetchWithAuth(`${BASE_URL_CATEGORIES}/grupos-subgrupos`)
       if (response.ok) {
         const data = await response.json()
         setGruposSubgrupos(data)
@@ -158,7 +164,7 @@ export default function UploadPreviewPage() {
 
   const handleGrupoChange = async (previewId: number, grupo: string) => {
     try {
-      const response = await fetch(`${apiUrl}/upload/preview/${sessionId}/${previewId}?grupo=${grupo}`, {
+      const response = await fetchWithAuth(`${BASE_URL_UPLOAD_PREVIEW}/${sessionId}/${previewId}?grupo=${grupo}`, {
         method: 'PATCH'
       })
       
@@ -188,7 +194,7 @@ export default function UploadPreviewPage() {
       
       // Atualizar todos
       await Promise.all(ids.map(id => 
-        fetch(`${apiUrl}/upload/preview/${sessionId}/${id}?grupo=${grupo}`, {
+        fetchWithAuth(`${BASE_URL_UPLOAD_PREVIEW}/${sessionId}/${id}?grupo=${grupo}`, {
           method: 'PATCH'
         })
       ))
@@ -208,7 +214,7 @@ export default function UploadPreviewPage() {
 
   const handleSubgrupoChange = async (previewId: number, subgrupo: string) => {
     try {
-      const response = await fetch(`${apiUrl}/upload/preview/${sessionId}/${previewId}?subgrupo=${subgrupo}`, {
+      const response = await fetchWithAuth(`${BASE_URL_UPLOAD_PREVIEW}/${sessionId}/${previewId}?subgrupo=${subgrupo}`, {
         method: 'PATCH'
       })
       
@@ -230,7 +236,7 @@ export default function UploadPreviewPage() {
 
   const handleToggleExcluir = async (previewId: number, excluir: number) => {
     try {
-      const response = await fetch(`${apiUrl}/upload/preview/${sessionId}/${previewId}?excluir=${excluir}`, {
+      const response = await fetchWithAuth(`${BASE_URL_UPLOAD_PREVIEW}/${sessionId}/${previewId}?excluir=${excluir}`, {
         method: 'PATCH'
       })
       
@@ -255,7 +261,7 @@ export default function UploadPreviewPage() {
       
       // Atualizar todos
       await Promise.all(ids.map(id => 
-        fetch(`${apiUrl}/upload/preview/${sessionId}/${id}?subgrupo=${subgrupo}`, {
+        fetchWithAuth(`${BASE_URL_UPLOAD_PREVIEW}/${sessionId}/${id}?subgrupo=${subgrupo}`, {
           method: 'PATCH'
         })
       ))
@@ -276,7 +282,7 @@ export default function UploadPreviewPage() {
   const handleCancel = async () => {
     try {
       // Deletar preview
-      await fetch(`${apiUrl}/upload/preview/${sessionId}`, {
+      await fetchWithAuth(`${BASE_URL_UPLOAD_PREVIEW}/${sessionId}`, {
         method: 'DELETE'
       })
       
@@ -293,7 +299,7 @@ export default function UploadPreviewPage() {
       console.log('Confirmando importação de', registros.length, 'registros')
       
       // Chamar endpoint de confirmação correto (session_id na URL)
-      const response = await fetch(`${apiUrl}/upload/confirm/${sessionId}`, {
+      const response = await fetchWithAuth(`${BASE_URL_UPLOAD_CONFIRM}/${sessionId}`, {
         method: 'POST'
       })
       

@@ -1,0 +1,298 @@
+{
+  "timestamp": "2026-02-01T22:28:30.912Z",
+  "totalFiles": 17,
+  "totalIssues": 47,
+  "issues": {
+    "touchTargets": [],
+    "contrast": [
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/app/mobile/budget/edit/page.tsx",
+        "line": 170,
+        "issue": "Texto cinza pode ter contraste insuficiente",
+        "code": "? 'bg-gray-100 text-gray-400 cursor-not-allowed'"
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/app/mobile/budget/edit/page.tsx",
+        "line": 183,
+        "issue": "Texto cinza pode ter contraste insuficiente",
+        "code": "<div className=\"text-gray-500\">Carregando...</div>"
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/app/mobile/budget/edit/page.tsx",
+        "line": 198,
+        "issue": "Texto cinza pode ter contraste insuficiente",
+        "code": "<p className=\"text-xs text-gray-500\">Meta mensal</p>"
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/app/mobile/budget/edit/page.tsx",
+        "line": 203,
+        "issue": "Texto cinza pode ter contraste insuficiente",
+        "code": "<span className=\"absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-medium\">"
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/app/mobile/budget/edit/page.tsx",
+        "line": 236,
+        "issue": "Texto cinza pode ter contraste insuficiente",
+        "code": "? 'bg-gray-200 text-gray-400 cursor-not-allowed'"
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/app/mobile/budget/page.tsx",
+        "line": 236,
+        "issue": "Texto cinza pode ter contraste insuficiente",
+        "code": "<div className=\"text-gray-500\">Carregando...</div>"
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/app/mobile/budget/page.tsx",
+        "line": 259,
+        "issue": "Texto cinza pode ter contraste insuficiente",
+        "code": "<div className=\"text-gray-500 text-center\">"
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/app/mobile/dashboard/page.tsx",
+        "line": 143,
+        "issue": "Texto cinza pode ter contraste insuficiente",
+        "code": "<div className=\"text-gray-500\">Carregando...</div>"
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/app/mobile/dashboard/page.tsx",
+        "line": 149,
+        "issue": "Texto cinza pode ter contraste insuficiente",
+        "code": "<div className=\"text-sm text-gray-500 mb-1\">Receitas</div>"
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/app/mobile/dashboard/page.tsx",
+        "line": 157,
+        "issue": "Texto cinza pode ter contraste insuficiente",
+        "code": "<div className=\"text-sm text-gray-500 mb-1\">Despesas</div>"
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/app/mobile/dashboard/page.tsx",
+        "line": 165,
+        "issue": "Texto cinza pode ter contraste insuficiente",
+        "code": "<div className=\"text-sm text-gray-500 mb-1\">Saldo</div>"
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/app/mobile/dashboard/page.tsx",
+        "line": 173,
+        "issue": "Texto cinza pode ter contraste insuficiente",
+        "code": "<div className=\"text-sm text-gray-500 mb-1\">Investimentos</div>"
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/app/mobile/dashboard/page.tsx",
+        "line": 181,
+        "issue": "Texto cinza pode ter contraste insuficiente",
+        "code": "<div className=\"text-gray-500\">Erro ao carregar dados</div>"
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/app/mobile/profile/page.tsx",
+        "line": 238,
+        "issue": "Texto cinza pode ter contraste insuficiente",
+        "code": "<p className=\"text-sm text-gray-500\">{user?.email}</p>"
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/app/mobile/profile/page.tsx",
+        "line": 306,
+        "issue": "Texto cinza pode ter contraste insuficiente",
+        "code": "<svg className=\"w-5 h-5 text-gray-400\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\">"
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/app/mobile/profile/page.tsx",
+        "line": 386,
+        "issue": "Texto cinza pode ter contraste insuficiente",
+        "code": "<svg className=\"w-5 h-5 text-gray-400\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\">"
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/app/mobile/profile/page.tsx",
+        "line": 396,
+        "issue": "Texto cinza pode ter contraste insuficiente",
+        "code": "<h3 className=\"text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3\">"
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/app/mobile/profile/page.tsx",
+        "line": 455,
+        "issue": "Texto cinza pode ter contraste insuficiente",
+        "code": "<span className=\"text-sm text-gray-500\">Português</span>"
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/app/mobile/profile/page.tsx",
+        "line": 474,
+        "issue": "Texto cinza pode ter contraste insuficiente",
+        "code": "<p className=\"text-xs text-gray-400\">FinUp Mobile v1.0</p>"
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/app/mobile/transactions/page.tsx",
+        "line": 162,
+        "issue": "Texto cinza pode ter contraste insuficiente",
+        "code": "<div className=\"text-gray-500\">Carregando...</div>"
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/app/mobile/transactions/page.tsx",
+        "line": 166,
+        "issue": "Texto cinza pode ter contraste insuficiente",
+        "code": "<div className=\"text-gray-400 text-center mb-4\">"
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/app/mobile/upload/page.tsx",
+        "line": 183,
+        "issue": "Texto cinza pode ter contraste insuficiente",
+        "code": "<p className=\"text-sm text-gray-500\">"
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/app/mobile/upload/page.tsx",
+        "line": 198,
+        "issue": "Texto cinza pode ter contraste insuficiente",
+        "code": "<p className=\"text-sm text-gray-500 mb-4 text-center\">"
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/app/mobile/upload/page.tsx",
+        "line": 204,
+        "issue": "Texto cinza pode ter contraste insuficiente",
+        "code": "<div className=\"flex items-center gap-2 text-sm text-gray-400\">"
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/components/mobile/bottom-navigation.tsx",
+        "line": 59,
+        "issue": "Texto cinza pode ter contraste insuficiente",
+        "code": "isActive ? 'text-black' : 'text-gray-400'"
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/components/mobile/budget-edit-bottom-sheet.tsx",
+        "line": 119,
+        "issue": "Texto cinza pode ter contraste insuficiente",
+        "code": "<p className=\"text-xs text-gray-500\">{categoryName}</p>"
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/components/mobile/budget-edit-bottom-sheet.tsx",
+        "line": 127,
+        "issue": "Texto cinza pode ter contraste insuficiente",
+        "code": "<X className=\"w-5 h-5 text-gray-500\" />"
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/components/mobile/budget-edit-bottom-sheet.tsx",
+        "line": 139,
+        "issue": "Texto cinza pode ter contraste insuficiente",
+        "code": "<span className=\"absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-base font-medium\">"
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/components/mobile/budget-edit-bottom-sheet.tsx",
+        "line": 157,
+        "issue": "Texto cinza pode ter contraste insuficiente",
+        "code": "<p className=\"text-xs text-gray-500 mt-1.5\">"
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/components/mobile/month-scroll-picker.tsx",
+        "line": 173,
+        "issue": "Texto cinza pode ter contraste insuficiente",
+        "code": "isSelected ? 'text-gray-300' : 'text-gray-400'"
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/components/mobile/tracker-card.tsx",
+        "line": 138,
+        "issue": "Texto cinza pode ter contraste insuficiente",
+        "code": "className=\"text-gray-400 leading-relaxed\""
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/components/mobile/tracker-card.tsx",
+        "line": 162,
+        "issue": "Texto cinza pode ter contraste insuficiente",
+        "code": "className=\"text-gray-400 leading-relaxed\""
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/components/mobile/transaction-card.tsx",
+        "line": 173,
+        "issue": "Texto cinza pode ter contraste insuficiente",
+        "code": "className=\"text-gray-400 leading-relaxed truncate\""
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/components/mobile/transaction-card.tsx",
+        "line": 201,
+        "issue": "Texto cinza pode ter contraste insuficiente",
+        "code": "className=\"text-gray-400 leading-relaxed\""
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/components/mobile/ytd-toggle.tsx",
+        "line": 92,
+        "issue": "Texto cinza pode ter contraste insuficiente",
+        "code": "'bg-transparent text-gray-500',"
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/components/mobile/ytd-toggle.tsx",
+        "line": 124,
+        "issue": "Texto cinza pode ter contraste insuficiente",
+        "code": "'bg-transparent text-gray-500',"
+      }
+    ],
+    "aria": [
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/app/mobile/profile/page.tsx",
+        "line": 413,
+        "issue": "Switch sem aria-checked",
+        "code": "role=\"switch\""
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/app/mobile/profile/page.tsx",
+        "line": 436,
+        "issue": "Switch sem aria-checked",
+        "code": "role=\"switch\""
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/components/mobile/mobile-header.tsx",
+        "line": 9,
+        "issue": "Botão com ícone sem aria-label ou título",
+        "code": "import { IconButton } from './icon-button';"
+      }
+    ],
+    "headings": [
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/app/mobile/budget/edit/page.tsx",
+        "line": 195,
+        "issue": "Página não começa com h1",
+        "code": "Primeira heading deveria ser h1"
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/app/mobile/dashboard/page.tsx",
+        "line": 150,
+        "issue": "Página não começa com h1",
+        "code": "Primeira heading deveria ser h1"
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/app/mobile/profile/page.tsx",
+        "line": 237,
+        "issue": "Página não começa com h1",
+        "code": "Primeira heading deveria ser h1"
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/app/mobile/upload/page.tsx",
+        "line": 180,
+        "issue": "Página não começa com h1",
+        "code": "Primeira heading deveria ser h1"
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/components/mobile/budget-edit-bottom-sheet.tsx",
+        "line": 116,
+        "issue": "Página não começa com h1",
+        "code": "Primeira heading deveria ser h1"
+      }
+    ],
+    "forms": [
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/app/mobile/budget/edit/page.tsx",
+        "line": 206,
+        "issue": "Input sem label associado",
+        "code": "<input"
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/app/mobile/upload/page.tsx",
+        "line": 164,
+        "issue": "Input sem label associado",
+        "code": "<input"
+      },
+      {
+        "file": "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/src/components/mobile/budget-edit-bottom-sheet.tsx",
+        "line": 142,
+        "issue": "Input sem label associado",
+        "code": "<input"
+      }
+    ]
+  }
+}

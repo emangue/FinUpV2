@@ -27,6 +27,73 @@ from .schemas_migration import (
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 
+@router.get("/grupo-breakdown", summary="Breakdown de todos os grupos por período")
+def get_grupo_breakdown(
+    data_inicio: str = Query(..., description="Data início (YYYY-MM-DD)"),
+    data_fim: str = Query(..., description="Data fim (YYYY-MM-DD)"),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Retorna breakdown de gastos por grupo em um período
+    
+    Query params:
+    - data_inicio: Data início (ex: "2026-01-01")
+    - data_fim: Data fim (ex: "2026-01-31")
+    
+    Returns:
+    - grupos: dict com {grupo: {total, transacoes}}
+    """
+    service = TransactionService(db)
+    return service.get_all_grupos_breakdown(user_id, data_inicio, data_fim)
+
+@router.get("/receitas-despesas", summary="Total de receitas, despesas e investimentos por período")
+def get_receitas_despesas(
+    data_inicio: str = Query(..., description="Data início (YYYY-MM-DD)"),
+    data_fim: str = Query(..., description="Data fim (YYYY-MM-DD)"),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Retorna total de receitas, despesas e investimentos em um período
+    
+    Query params:
+    - data_inicio: Data início (ex: "2026-01-01")
+    - data_fim: Data fim (ex: "2026-01-31")
+    
+    Returns:
+    - receitas: float (CategoriaGeral = 'Receita')
+    - despesas: float (CategoriaGeral = 'Despesa')
+    - investimentos: float (CategoriaGeral = 'Investimentos', valores negativos = aplicações)
+    - saldo: float (receitas - despesas - investimentos)
+    """
+    service = TransactionService(db)
+    return service.get_receitas_despesas(user_id, data_inicio, data_fim)
+
+@router.get("/grupo-breakdown-single", summary="Breakdown de subgrupos por grupo")
+def get_grupo_breakdown_single(
+    grupo: str = Query(..., description="Nome do grupo (ex: Cartão de Crédito)"),
+    year: int = Query(..., description="Ano"),
+    month: int = Query(..., description="Mês"),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Retorna breakdown de subgrupos de um grupo específico
+    
+    Query params:
+    - grupo: Nome do grupo (ex: "Cartão de Crédito", "Casa")
+    - year: Ano (ex: 2026)
+    - month: Mês (ex: 2)
+    
+    Returns:
+    - grupo: str
+    - total: float
+    - subgrupos: List[{subgrupo, valor, percentual, quantidade_transacoes}]
+    """
+    service = TransactionService(db)
+    return service.get_grupo_breakdown(user_id, grupo, year, month)
+
 @router.get("/tipos-gasto-com-media", response_model=TiposGastoComMediaResponse)
 def get_tipos_gasto_com_media(
     mes_referencia: str = Query(..., description="Formato YYYY-MM"),

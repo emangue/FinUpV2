@@ -35,20 +35,26 @@ export async function fetchWithAuth(
     tokenPreview: token ? `${token.substring(0, 20)}...` : 'NENHUM TOKEN',
   })
   
+  // Detectar se body é FormData (para uploads)
+  const isFormData = options.body instanceof FormData
+  
   // Mesclar headers existentes com Authorization
-  const headers = {
-    'Content-Type': 'application/json',
+  // NÃO adicionar Content-Type se for FormData (browser adiciona automaticamente com boundary)
+  const headers: HeadersInit = {
+    ...(!isFormData && { 'Content-Type': 'application/json' }),
     ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
     ...options.headers,
   }
 
   // 🐛 DEBUG TEMPORÁRIO
   console.log('[api-client] Headers enviados:', headers)
+  console.log('[api-client] É FormData?', isFormData)
 
-  // Fazer request com token
+  // Fazer request com token (follow redirects com redirect: 'follow')
   return fetch(url, {
     ...options,
     headers,
+    redirect: 'follow',  // Segue redirects 307 automaticamente
   })
 }
 
