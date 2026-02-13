@@ -2,6 +2,74 @@
 
 Todas as mudanças notáveis do projeto serão documentadas neste arquivo.
 
+## [v2.0.0] - 2026-02-13 - 🎯 Consolidação Budget Tables (Breaking Changes)
+
+### 🎯 Marcos Principais
+- **ARQUITETURA SIMPLIFICADA** - 4 tabelas budget → 1 tabela (75% redução)
+- **BREAKING CHANGES** - API endpoints e campos renomeados
+- **MIGRATION COMPLETA** - 361 registros migrados sem perda de dados
+
+### ⚡ Redução de Complexidade
+- **Tabelas:** 4 → 1 (budget_planning apenas)
+- **Modelos:** 4 → 1 (75% redução)
+- **Repositories:** 3 → 1 (67% redução)
+- **Endpoints:** ~25 → ~12 (52% redução)
+- **Schemas:** 13 → 7 (46% redução)
+
+### 🔄 Database Migration
+- feat(migration): Migration 635e060a2434 - Consolidação completa
+  - Migra 361 records: budget_geral → budget_planning
+  - DROP tables: budget_geral, budget_categoria_config, budget_geral_historico
+  - Resultado: 1206 total records em budget_planning
+  - Backup automático: financas_dev.db.backup_pre_consolidation_*
+- feat(migration): Campo valor_medio_3_meses calculado automaticamente
+- feat(migration): Suporte a ativo/inativo sem perder valor_planejado
+
+### 🚨 Breaking Changes - Backend
+- **REMOVIDOS** endpoints obsoletos (retornam HTTP 410 Gone):
+  - ❌ POST /api/v1/budget/geral/bulk-upsert → ✅ /api/v1/budget/planning/bulk-upsert
+  - ❌ GET /api/v1/budget/geral → ✅ /api/v1/budget/planning
+  - ❌ GET /api/v1/budget/geral/grupos-disponiveis → ✅ /api/v1/budget/planning/grupos-disponiveis
+  - ❌ POST /api/v1/budget/categorias-config/* (removidos permanentemente)
+  - ❌ POST /api/v1/budget/geral/copy-to-year (removido temporariamente)
+- **CAMPO RENOMEADO:** categoria_geral → grupo
+- **CAMPO REMOVIDO:** total_mensal (calculado via transações agora)
+- **CAMPO NOVO:** valor_medio_3_meses (média automática)
+
+### 🗂️ Backend - Arquivos Removidos
+- delete: app/domains/budget/repository_geral.py
+- delete: app/domains/budget/repository_categoria_config.py
+- delete: schemas BudgetGeral*, BudgetCategoriaConfig*
+- delete: models BudgetGeral, BudgetCategoriaConfig, BudgetGeralHistorico
+
+### ⚛️ Frontend - Mudanças Massivas
+- refactor(frontend): 20+ arquivos TypeScript atualizados
+- refactor(goals): Interfaces Goal usando grupo em vez de categoria_geral
+- refactor(goals): calculateGoalProgress() recebe valorRealizado como parâmetro
+- refactor(mobile/budget): 4 páginas atualizadas (page, new, [goalId], manage)
+- refactor(desktop/budget): 3 páginas atualizadas (page, page 2, simples)
+- refactor(components): EditGoalModal sem referências a total_mensal
+- refactor(components): ManageGoalsListItem usa valor_medio_3_meses
+
+### 📚 Documentação
+- docs(plano): PLANO_IMPLEMENTACAO.md - 4 sprints detalhados
+- docs(sprint): Sprint 1 completo (2.5 horas, 153 arquivos)
+- docs(breaking): Breaking changes documentados em migration
+
+### ✅ Validações
+- ✅ Migration executada sem erros
+- ✅ Backend inicia corretamente
+- ✅ Frontend compila sem erros TypeScript
+- ✅ Endpoints antigos retornam HTTP 410
+- ✅ 153 arquivos commitados
+
+### 🔜 Próximo Release
+- Sprint 2: Auto-criação de grupos/subgrupos via API
+- Sprint 3: UI para criar grupos no upload
+- Sprint 4: Validação E2E completa
+
+---
+
 ## [v1.1.0] - 2026-01-22 - 🚀 Deploy Produção & Migração Completa
 
 ### 🎯 Marcos Principais
