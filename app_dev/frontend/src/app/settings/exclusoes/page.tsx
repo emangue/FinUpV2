@@ -87,14 +87,11 @@ export default function ExclusoesPage() {
       const response = await fetchWithAuth(BASE_URL_EXCLUSOES)
       if (response.ok) {
         const data = await response.json()
-        console.log('Exclusões recebidas:', data)
         setExclusoes(data.exclusoes || [])
       } else {
-        console.error('Erro ao buscar exclusões:', response.status)
         setNotification({ type: 'error', message: `Erro ao buscar exclusões (${response.status})` })
       }
     } catch (error) {
-      console.error('Erro ao buscar exclusões:', error)
       setNotification({ type: 'error', message: 'Erro ao carregar exclusões' })
     } finally {
       setLoadingExclusoes(false)
@@ -106,15 +103,12 @@ export default function ExclusoesPage() {
       const response = await fetchWithAuth(BASE_URL_COMPATIBILITY)
       if (response.ok) {
         const data = await response.json()
-        console.log('Bancos recebidos:', data)
         // API retorna { banks: [...], total: N }
         setBancos(data.banks || [])
       } else {
-        console.error('Erro ao buscar bancos:', response.status)
         setNotification({ type: 'error', message: `Erro ao buscar bancos (${response.status})` })
       }
     } catch (error) {
-      console.error('Erro ao buscar bancos:', error)
       setNotification({ type: 'error', message: 'Erro ao conectar com servidor' })
     }
   }
@@ -133,8 +127,6 @@ export default function ExclusoesPage() {
   }
 
   const handleEditExclusao = (exclusao: Exclusao) => {
-    console.log('Editando exclusão:', exclusao)
-    console.log('ID da exclusão:', exclusao.id)
     setEditingExclusao(exclusao)
     setExclusaoNome(exclusao.nome_transacao)
     setExclusaoBanco(exclusao.banco || 'TODOS')
@@ -150,9 +142,6 @@ export default function ExclusoesPage() {
   }
 
   const handleSaveExclusao = async () => {
-    console.log('Salvando exclusão. Modo edição:', !!editingExclusao)
-    console.log('editingExclusao:', editingExclusao)
-    
     if (!exclusaoNome.trim()) {
       setNotification({ type: 'error', message: 'Nome da transação é obrigatório' })
       return
@@ -177,9 +166,6 @@ export default function ExclusoesPage() {
         : '/api/exclusoes'
       const method = editingExclusao && editingExclusao.id ? 'PUT' : 'POST'
       
-      console.log('URL:', url)
-      console.log('Method:', method)
-      
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
@@ -202,7 +188,6 @@ export default function ExclusoesPage() {
       } else {
         try {
           const errorData = await response.json()
-          console.error('Erro do servidor:', errorData)
           let errorMsg = 'Erro desconhecido'
           if (typeof errorData === 'string') {
             errorMsg = errorData
@@ -221,7 +206,6 @@ export default function ExclusoesPage() {
         }
       }
     } catch (error) {
-      console.error('Erro ao salvar exclusão:', error)
       const errorMsg = error instanceof Error ? error.message : String(error)
       setNotification({ type: 'error', message: `Erro ao salvar: ${errorMsg}` })
     }
@@ -249,7 +233,6 @@ export default function ExclusoesPage() {
         setNotification({ type: 'error', message: 'Erro ao atualizar ação' })
       }
     } catch (error) {
-      console.error('Erro ao atualizar ação:', error)
       setNotification({ type: 'error', message: 'Erro ao atualizar ação' })
     }
   }
@@ -270,7 +253,7 @@ export default function ExclusoesPage() {
         setNotification({ type: 'error', message: 'Erro ao deletar regra' })
       }
     } catch (error) {
-      console.error('Erro ao deletar exclusão:', error)
+
       setNotification({ type: 'error', message: 'Erro ao deletar regra' })
     }
   }

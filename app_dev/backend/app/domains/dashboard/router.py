@@ -15,10 +15,24 @@ from .schemas import (
     ChartDataResponse, 
     CategoryExpense,
     BudgetVsActualResponse,
-    CreditCardExpense
+    CreditCardExpense,
+    IncomeSourcesResponse
 )
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
+
+
+@router.get("/last-month-with-data")
+def get_last_month_with_data(
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Retorna o último mês com dados (ano e mês) para o usuário.
+    Útil para inicializar o dashboard com dados reais.
+    """
+    service = DashboardService(db)
+    return service.get_last_month_with_data(user_id)
 
 
 @router.get("/metrics", response_model=DashboardMetrics)
@@ -168,4 +182,30 @@ def get_credit_card_expenses(
     
     service = DashboardService(db)
     return service.get_credit_card_expenses(user_id, year, month)
+
+
+@router.get("/income-sources", response_model=IncomeSourcesResponse)
+def get_income_sources(
+    year: int = Query(default=None, description="Ano (default: atual)"),
+    month: int = Query(default=None, description="Mês (default: None = ano todo)"),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Retorna breakdown de receitas por fonte (grupo):
+    - Nome da fonte (grupo)
+    - Total de receitas
+    - Percentual do total
+    - Número de transações
+    
+    Se month=None, retorna soma do ano inteiro.
+    Apenas transações com CategoriaGeral='Receita'.
+    """
+    # Usar ano atual se não informado
+    now = datetime.now()
+    year = year or now.year
+    # month pode ser None (ano todo) ou número específico
+    
+    service = DashboardService(db)
+    return service.get_income_sources(user_id, year, month)
 

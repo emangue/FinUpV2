@@ -1,6 +1,10 @@
 """
 Budget Router
 Endpoints FastAPI para gestão de orçamento
+
+CHANGELOG 13/02/2026:
+- ✅ Removidos imports obsoletos: BudgetGeral*, BudgetCategoriaConfig*
+- ✅ Removidos endpoints /geral/* (consolidados em /planning)
 """
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
@@ -15,12 +19,6 @@ from .schemas import (
     BudgetResponse, 
     BudgetListResponse,
     BudgetBulkUpsert,
-    BudgetGeralBulkUpsert,
-    BudgetGeralResponse,
-    BudgetGeralListResponse,
-    BudgetCategoriaConfigCreate,
-    BudgetCategoriaConfigUpdate,
-    BudgetCategoriaConfigResponse,
     DetalhamentoMediaResponse
 )
 
@@ -29,76 +27,51 @@ router = APIRouter()
 
 # ===== ROTAS ESPECÍFICAS (strings fixas) - SEMPRE ANTES DAS PARAMETRIZADAS =====
 
-# ----- ROTAS DE CONFIGURAÇÃO DE CATEGORIAS -----
-@router.get("/budget/categorias-config", summary="Listar configuração de categorias")
-def list_categorias_config(
-    apenas_ativas: bool = Query(True, description="Retornar apenas categorias ativas"),
+# ═══════════════════════════════════════════════════════════════════════════════
+# ENDPOINTS REMOVIDOS EM 13/02/2026 - Consolidação completa
+# ═══════════════════════════════════════════════════════════════════════════════
+# - POST /budget/geral/bulk-upsert → usar /budget/planning/bulk-upsert
+# - POST /budget/geral/bulk-upsert-validado → integrado ao planning
+# - GET /budget/geral → usar /budget/planning
+# - POST /budget/geral/copy-to-year → funcionalidade removida temporariamente
+# - GET /budget/geral/grupos-disponiveis → usar API de grupos
+#
+# - GET /budget/categorias-config → removido (categorias fixas)
+# - POST /budget/categorias-config → removido
+# - PUT /budget/categorias-config/reordenar → removido
+# - PATCH /budget/categorias-config/{id} → removido
+# - PATCH /budget/categorias-config/{id}/tipos-gasto → removido
+# - DELETE /budget/categorias-config/{id} → removido
+#
+# Se precisar restaurar, veja:
+# git show HEAD~1:app_dev/backend/app/domains/budget/router.py
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ----- ROTAS DE DETALHAMENTO -----
+def get_detalhamento_media(
+    grupo: str = Query(..., description="Grupo para detalhamento"),
+    mes_referencia: str = Query(..., description="Mês de referência no formato YYYY-MM"),
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
     """
-    Lista categorias configuradas do usuário ordenadas por hierarquia
+    Retorna detalhamento dos 3 meses anteriores que compõem a média
     
-    Retorna configuração de categorias personalizáveis com ordem, cores, etc
+    - **grupo**: Nome do grupo (ex: "Casa", "Cartão")
+    - **mes_referencia**: Mês planejado no formato YYYY-MM (ex: "2026-01")
+    
+    Retorna lista com cada um dos 3 meses anteriores contendo:
+    - Nome do mês (ex: "Dezembro 2025")
+    - Valor total do mês
+    - Quantidade de transações
+    
+    Também retorna média calculada e total geral
     """
     service = BudgetService(db)
-    return {"categorias": service.get_categorias_config(user_id, apenas_ativas)}
+    return service.get_detalhamento_media(user_id, grupo, mes_referencia)
 
 
-@router.post("/budget/categorias-config", summary="Criar nova categoria")
-def create_categoria_config(
-    data: dict,
-    user_id: int = Depends(get_current_user_id),
-    db: Session = Depends(get_db)
-):
-    """
-    Cria nova categoria configurada
-    
-    Body:
-    - nome_categoria: str
-    - ordem: int (opcional, default 999)
-    - fonte_dados: "GRUPO" | "TIPO_TRANSACAO"
-    - filtro_valor: str (ex: "Moradia", "Cartão")
-    - tipos_gasto_incluidos: List[str] (opcional)
-    - cor_visualizacao: str (hex, opcional, default "#94a3b8")
-    """
-    service = BudgetService(db)
-    return service.create_categoria_config(user_id, data)
-
-
-@router.put("/budget/categorias-config/reordenar", summary="Reordenar categorias")
-def reordenar_categorias(
-    data: dict,
-    user_id: int = Depends(get_current_user_id),
-    db: Session = Depends(get_db)
-):
-    """
-    Reordena múltiplas categorias em batch (drag & drop)
-    
-    Body: {"reordenar": [{"id": 1, "nova_ordem": 3}, {"id": 2, "nova_ordem": 1}, ...]}
-    """
-    service = BudgetService(db)
-    return {"categorias": service.reordenar_categorias(user_id, data.get("reordenar", []))}
-
-
-@router.get("/budget/tipos-gasto-disponiveis", summary="Listar tipos de gasto disponíveis")
-def listar_tipos_gasto_disponiveis(
-    fonte_dados: str = Query(..., description="GRUPO ou TIPO_TRANSACAO"),
-    filtro_valor: str = Query(..., description="Nome do grupo ou tipo de transação"),
-    user_id: int = Depends(get_current_user_id),
-    db: Session = Depends(get_db)
-):
-    """
-    Lista todos os tipos de gasto disponíveis para um grupo ou tipo de transação específico
-    
-    - **fonte_dados**: "GRUPO" ou "TIPO_TRANSACAO"
-    - **filtro_valor**: Nome do grupo (ex: "Casa") ou tipo de transação (ex: "Cartão")
-    
-    Retorna lista de tipos de gasto únicos encontrados nas transações
-    """
-    service = BudgetService(db)
-    return {"tipos_gasto": service.get_tipos_gasto_disponiveis(user_id, fonte_dados, filtro_valor)}
-
+# ----- ROTAS DE DETALHAMENTO -----
 
 @router.get("/budget/detalhamento-media", response_model=DetalhamentoMediaResponse, summary="Detalhamento da média dos 3 meses")
 def get_detalhamento_media(
@@ -124,7 +97,28 @@ def get_detalhamento_media(
     return service.get_detalhamento_media(user_id, grupo, mes_referencia)
 
 
+@router.get("/budget/tipos-gasto-disponiveis", summary="Listar tipos de gasto disponíveis")
+def listar_tipos_gasto_disponiveis(
+    fonte_dados: str = Query(..., description="GRUPO ou TIPO_TRANSACAO"),
+    filtro_valor: str = Query(..., description="Nome do grupo ou tipo de transação"),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Lista todos os tipos de gasto disponíveis para um grupo ou tipo de transação específico
+    
+    - **fonte_dados**: "GRUPO" ou "TIPO_TRANSACAO"
+    - **filtro_valor**: Nome do grupo (ex: "Casa") ou tipo de transação (ex: "Cartão")
+    
+    Retorna lista de tipos de gasto únicos encontrados nas transações
+    """
+    service = BudgetService(db)
+    return {"tipos_gasto": service.get_tipos_gasto_disponiveis(user_id, fonte_dados, filtro_valor)}
+
+
 # ----- ROTAS DE BULK OPERATIONS -----
+# ----- ROTAS DE BULK OPERATIONS -----
+
 @router.post("/budget/bulk-upsert", response_model=List[BudgetResponse], summary="Criar/atualizar múltiplos budgets")
 def bulk_upsert_budgets(
     data: BudgetBulkUpsert,
@@ -140,80 +134,54 @@ def bulk_upsert_budgets(
     return service.bulk_upsert_budgets(user_id, data.mes_referencia, data.budgets)
 
 
-@router.post("/budget/geral/bulk-upsert", response_model=List[BudgetGeralResponse], summary="Criar/atualizar múltiplas metas gerais")
-def bulk_upsert_budget_geral(
-    data: BudgetGeralBulkUpsert,
+# ----- ROTAS DE BUDGET PLANNING -----
+def get_budget_planning(
+    mes_referencia: str = Query(..., description="Mês de referência no formato YYYY-MM"),
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
     """
-    Cria ou atualiza múltiplas metas gerais de uma vez
+    Lista metas de budget planning (tabela budget_planning, campo grupo)
     
-    Útil para salvar todo o orçamento geral de um mês
+    Diferente de /budget/geral (categoria_geral), este endpoint usa grupos:
+    - Alimentação, Moradia, Transporte, etc.
+    
+    Query params:
+    - mes_referencia: str (YYYY-MM)
+    
+    Returns:
+    - mes_referencia: str
+    - budgets: List[{grupo, valor_planejado, valor_realizado, percentual}]
     """
     service = BudgetService(db)
-    return service.bulk_upsert_budget_geral(user_id, data.mes_referencia, data.budgets)
+    return service.get_budget_planning(user_id, mes_referencia)
 
 
-@router.post("/budget/geral/bulk-upsert-validado", summary="Criar/atualizar com validação")
-def bulk_upsert_budget_geral_validado(
+@router.post("/budget/planning/bulk-upsert", summary="Criar/atualizar múltiplas metas planning")
+def bulk_upsert_budget_planning(
     data: dict,
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
     """
-    Cria ou atualiza metas gerais com validação e auto-ajuste
+    Cria ou atualiza múltiplas metas de planning de uma vez
     
     Body:
     - mes_referencia: str (YYYY-MM)
-    - budgets: List[{categoria_geral, valor_planejado}]
-    - total_mensal: float (opcional, teto de gastos)
-    
-    Retorna:
-    - budgets: List
-    - total_ajustado: bool (se foi ajustado automaticamente)
-    - novo_total: float
-    - valor_anterior: float
-    - soma_categorias: float
-    """
-    service = BudgetService(db)
-    return service.bulk_upsert_budget_geral_com_validacao(
-        user_id=user_id,
-        mes_referencia=data["mes_referencia"],
-        budgets=data["budgets"],
-        total_mensal=data.get("total_mensal")
-    )
-
-
-# ----- ROTAS DE META GERAL -----
-@router.post("/budget/geral/copy-to-year", summary="Copiar metas para ano inteiro")
-def copy_budget_to_year(
-    data: dict,
-    user_id: int = Depends(get_current_user_id),
-    db: Session = Depends(get_db)
-):
-    """
-    Copia metas de um mês para todos os meses de um ano
-    
-    Body:
-    - mes_origem: str (YYYY-MM) - Mês de origem das metas
-    - ano_destino: int - Ano de destino (ex: 2026)
-    - substituir_existentes: bool - Se deve sobrescrever metas existentes
+    - budgets: List[{grupo, valor_planejado}]
     
     Returns:
-    - sucesso: bool
-    - meses_criados: int
-    - metas_copiadas: int
-    - mensagem: str
+    - List[{id, grupo, mes_referencia, valor_planejado}]
     """
     service = BudgetService(db)
-    return service.copy_budget_to_year(
-        user_id=user_id,
-        mes_origem=data["mes_origem"],
-        ano_destino=data["ano_destino"],
-        substituir_existentes=data.get("substituir_existentes", False)
+    return service.bulk_upsert_budget_planning(
+        user_id, 
+        data["mes_referencia"], 
+        data["budgets"]
     )
 
+
+# ----- ROTAS DE BUDGET PLANNING -----
 
 @router.get("/budget/planning", summary="Listar metas de planning (grupos)")
 def get_budget_planning(
@@ -262,7 +230,7 @@ def bulk_upsert_budget_planning(
     )
 
 
-@router.get("/budget/geral/grupos-disponiveis", response_model=List[str], summary="Listar grupos disponíveis")
+@router.get("/budget/planning/grupos-disponiveis", response_model=List[str], summary="Listar grupos disponíveis")
 def list_grupos_disponiveis(
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
@@ -278,27 +246,6 @@ def list_grupos_disponiveis(
     ).order_by(BaseGruposConfig.nome_grupo).all()
     
     return [g[0] for g in grupos]
-
-
-@router.get("/budget/geral", response_model=BudgetGeralListResponse, summary="Listar metas gerais")
-def list_budget_geral(
-    mes_referencia: str = Query(None, description="Filtrar por mês (formato YYYY-MM)"),
-    user_id: int = Depends(get_current_user_id),
-    db: Session = Depends(get_db)
-):
-    """
-    Lista metas gerais do usuário por categoria ampla
-    
-    - Se mes_referencia for informado, retorna apenas daquele mês
-    - Se não, retorna todas as metas gerais
-    """
-    service = BudgetService(db)
-    
-    if mes_referencia:
-        budgets = service.get_budget_geral_by_month(user_id, mes_referencia)
-        return {"budgets": budgets, "total": len(budgets)}
-    else:
-        return service.get_all_budget_geral(user_id)
 
 
 # ----- ROTAS DE BUDGET DETALHADO -----
@@ -361,48 +308,23 @@ def update_budget(
     return service.update_budget(budget_id, user_id, data)
 
 
-@router.patch("/budget/categorias-config/{config_id}", summary="Atualizar categoria")
-def update_categoria_config(
-    config_id: int,
+@router.patch("/budget/planning/toggle/{budget_id}", summary="Toggle ativo/inativo de uma meta")
+def toggle_budget_ativo(
+    budget_id: int,
     data: dict,
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
     """
-    Atualiza configuração de categoria existente
+    Ativa ou desativa uma meta (alterna campo 'ativo')
     
-    Aceita atualização parcial de campos
-    """
-    service = BudgetService(db)
-    return service.update_categoria_config(config_id, user_id, data)
-
-
-@router.patch("/budget/categorias-config/{config_id}/tipos-gasto", summary="Atualizar TipoGasto")
-def update_tipos_gasto(
-    config_id: int,
-    data: dict,
-    user_id: int = Depends(get_current_user_id),
-    db: Session = Depends(get_db)
-):
-    """
-    Atualiza lista de TipoGasto incluídos em uma categoria
+    Body: {"ativo": true/false}
     
-    Body: {"tipos_gasto": ["Ajustável", "Fixo", ...]}
+    IMPORTANTE: NÃO zera valor_planejado - apenas muda status
     """
     service = BudgetService(db)
-    return service.update_tipos_gasto_categoria(config_id, user_id, data.get("tipos_gasto", []))
-
-
-@router.delete("/budget/categorias-config/{config_id}", status_code=204, summary="Deletar categoria")
-def delete_categoria_config(
-    config_id: int,
-    user_id: int = Depends(get_current_user_id),
-    db: Session = Depends(get_db)
-):
-    """Deleta (desativa) uma configuração de categoria"""
-    service = BudgetService(db)
-    service.delete_categoria_config(config_id, user_id)
-    return None
+    ativo_value = 1 if data.get("ativo") else 0
+    return service.toggle_budget_ativo(budget_id, user_id, ativo_value)
 
 
 @router.delete("/budget/{budget_id}", status_code=204, summary="Deletar budget")

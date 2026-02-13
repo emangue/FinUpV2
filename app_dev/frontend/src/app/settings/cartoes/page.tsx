@@ -82,7 +82,7 @@ export default function CartoesPage() {
         setCartoes(data.cards || [])
       }
     } catch (error) {
-      console.error('Erro ao buscar cartões:', error)
+      // Silent error
     } finally {
       setLoadingCartoes(false)
     }
@@ -96,7 +96,7 @@ export default function CartoesPage() {
         setBancos(data)
       }
     } catch (error) {
-      console.error('Erro ao buscar bancos:', error)
+      // Silent error
     }
   }
 
@@ -111,8 +111,6 @@ export default function CartoesPage() {
   }
 
   const handleEditCartao = (cartao: Cartao) => {
-    console.log('Editando cartão:', cartao)
-    console.log('ID do cartão:', cartao.id)
     setEditingCartao(cartao)
     setCartaoNome(cartao.nome_cartao)
     setCartaoFinal(cartao.final_cartao)
@@ -121,9 +119,6 @@ export default function CartoesPage() {
   }
 
   const handleSaveCartao = async () => {
-    console.log('Salvando cartão. Modo edição:', !!editingCartao)
-    console.log('editingCartao:', editingCartao)
-    
     if (!cartaoNome.trim() || !cartaoFinal.trim() || !cartaoBanco.trim()) {
       alert('Todos os campos são obrigatórios')
       return
@@ -139,9 +134,6 @@ export default function CartoesPage() {
         ? `/api/cartoes/${editingCartao.id}` 
         : '/api/cartoes'
       const method = editingCartao && editingCartao.id ? 'PUT' : 'POST'
-      
-      console.log('URL:', url)
-      console.log('Method:', method)
       
       const response = await fetchWithAuth(url, {
         method,
@@ -159,7 +151,6 @@ export default function CartoesPage() {
       } else {
         try {
           const errorData = await response.json()
-          console.error('Erro do servidor:', errorData)
           let errorMsg = 'Erro desconhecido'
           if (typeof errorData === 'string') {
             errorMsg = errorData
@@ -178,7 +169,6 @@ export default function CartoesPage() {
         }
       }
     } catch (error) {
-      console.error('Erro ao salvar cartão:', error)
       const errorMsg = error instanceof Error ? error.message : String(error)
       alert(`Erro ao salvar cartão: ${errorMsg}`)
     }
@@ -196,7 +186,6 @@ export default function CartoesPage() {
         fetchCartoes()
       }
     } catch (error) {
-      console.error('Erro ao deletar cartão:', error)
       alert('Erro ao deletar cartão')
     }
   }

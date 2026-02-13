@@ -7,9 +7,11 @@
  * - useBanks → GET /api/v1/compatibility/banks
  * - useCreditCards → GET /api/v1/cards
  * - useUpload → POST /api/v1/upload
+ * 
+ * 🚨 PALIATIVO: Auto-login para dev (remover na produção)
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { TabType, FileFormat } from '@/features/upload/types';
 import { months, years, fileFormats } from '@/features/upload/mocks/mockUploadData';
@@ -22,9 +24,50 @@ import {
   TabBar 
 } from '@/features/upload/components';
 import { useBanks, useCreditCards, useUpload } from '@/features/upload/hooks';
+import { setAuthToken, isAuthenticated } from '@/core/utils/api-client';
+import { API_ENDPOINTS } from '@/core/config/api.config';
 
 export default function UploadPage() {
   const router = useRouter();
+  const [authReady, setAuthReady] = useState(false);
+  
+  // 🚨 PALIATIVO - Auto-login para desenvolvimento
+  useEffect(() => {
+    const setupAuth = async () => {
+      if (isAuthenticated()) {
+        setAuthReady(true);
+        return;
+      }
+
+      try {
+        const response = await fetch(API_ENDPOINTS.AUTH.LOGIN, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: 'admin@financas.com',
+            password: 'cahriZqonby8'
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          console.group('✅ [MOBILE-UPLOAD] Auto-login bem-sucedido')
+          console.log('👤 Usuário:', data.user)
+          console.log('🔑 Token recebido (primeiros 30 chars):', data.access_token.substring(0, 30) + '...')
+          console.groupEnd()
+          setAuthToken(data.access_token);
+        } else {
+          console.error('❌ [MOBILE-UPLOAD] Falha no auto-login:', response.status, response.statusText)
+        }
+      } catch (err) {
+        console.error('[mobile-upload] Erro no auto-login:', err);
+      } finally {
+        setAuthReady(true);
+      }
+    };
+
+    setupAuth();
+  }, []);
   
   // Hooks para dados reais
   const { banks, loading: loadingBanks } = useBanks();
@@ -53,6 +96,23 @@ export default function UploadPage() {
   };
 
   const handleSubmit = async () => {
+    console.group('🚀 [MOBILE-UPLOAD] handleSubmit iniciado')
+    console.log('📋 Formulário:', { 
+      banco: selectedBank, 
+      tipo: activeTab, 
+      formato: selectedFormat,
+      cartao: selectedCard, 
+      mes: selectedMonth, 
+      ano: selectedYear 
+    })
+    console.log('📎 Arquivo:', selectedFile ? { 
+      name: selectedFile.name, 
+      size: selectedFile.size, 
+      type: selectedFile.type 
+    } : 'NENHUM')
+    console.log('🔑 Autenticado?', isAuthenticated())
+    console.groupEnd()
+    
     // Validações
     if (!selectedBank) {
       alert('Por favor, selecione uma instituição financeira');
@@ -68,20 +128,51 @@ export default function UploadPage() {
     }
     
     try {
-      await upload({
+      // Buscar dados completos do cartão selecionado
+      let cartaoNome: string | undefined;
+      let cartaoFinal: string | undefined;
+      
+      if (activeTab === 'fatura' && selectedCard) {
+        const cartao = cards.find(c => c.id.toString() === selectedCard);
+        if (cartao) {
+          cartaoNome = cartao.name;
+          cartaoFinal = cartao.lastDigits;
+        }
+      }
+      
+      const result = await upload({
         file: selectedFile,
         banco: selectedBank,
         tipo: activeTab,
         cartaoId: activeTab === 'fatura' ? selectedCard : undefined,
+        cartaoNome,  // ✅ Enviar nome do cartão
+        cartaoFinal,  // ✅ Enviar final do cartão
         mes: activeTab === 'fatura' ? selectedMonth : undefined,
         ano: activeTab === 'fatura' ? selectedYear : undefined,
         formato: selectedFormat
       });
-      // Redirecionamento automático após upload
+      
+      // ✅ Redirecionar para preview MOBILE com sessionId
+      console.log('✅ [MOBILE-UPLOAD] Upload bem-sucedido! SessionId:', result.sessionId);
+      router.push(`/mobile/preview/${result.sessionId}`);
+      
     } catch (error) {
+      console.error('❌ [MOBILE-UPLOAD] Erro no upload:', error);
       alert('Erro ao fazer upload. Por favor, tente novamente.');
     }
   };
+
+  // 🚨 Loading screen enquanto autentica
+  if (!authReady) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="text-center">
+          <div className="animate-spin h-12 w-12 border-4 border-emerald-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+          <p className="text-gray-600">Configurando autenticação...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-gray-50 min-h-screen flex items-center justify-center p-4">

@@ -37,11 +37,8 @@ export function useUpload() {
       clearInterval(progressInterval);
       setProgress(100);
 
-      // Aguardar um momento para mostrar 100% antes de redirecionar
-      setTimeout(() => {
-        router.push(`/mobile/preview?sessionId=${result.sessionId}`);
-      }, 500);
-
+      // ✅ Retornar resultado sem fazer redirect automático
+      // Deixar o componente decidir para onde redirecionar
       return result;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao fazer upload');

@@ -158,7 +158,7 @@ export default function UploadPreviewPage() {
         setGruposSubgrupos(data)
       }
     } catch (err) {
-      console.error('Erro ao buscar grupos/subgrupos:', err)
+      // Silent error
     }
   }
 
@@ -179,7 +179,7 @@ export default function UploadPreviewPage() {
         ))
       }
     } catch (err) {
-      console.error('Erro ao atualizar grupo:', err)
+      // Silent error
     }
   }
 
@@ -208,7 +208,7 @@ export default function UploadPreviewPage() {
         } : r
       ))
     } catch (err) {
-      console.error('Erro ao atualizar grupo em lote:', err)
+      // Silent error
     }
   }
 
@@ -230,7 +230,7 @@ export default function UploadPreviewPage() {
         ))
       }
     } catch (err) {
-      console.error('Erro ao atualizar subgrupo:', err)
+      // Silent error
     }
   }
 
@@ -246,7 +246,7 @@ export default function UploadPreviewPage() {
         ))
       }
     } catch (err) {
-      console.error('Erro ao marcar exclusão:', err)
+      // Silent error
     }
   }
 
@@ -275,7 +275,7 @@ export default function UploadPreviewPage() {
         } : r
       ))
     } catch (err) {
-      console.error('Erro ao atualizar subgrupo em lote:', err)
+      // Silent error
     }
   }
 
@@ -288,7 +288,6 @@ export default function UploadPreviewPage() {
       
       router.push('/upload')
     } catch (err) {
-      console.error('Erro ao cancelar:', err)
       router.push('/upload')
     }
   }
@@ -296,8 +295,6 @@ export default function UploadPreviewPage() {
   const handleConfirm = async () => {
     setIsConfirming(true)
     try {
-      console.log('Confirmando importação de', registros.length, 'registros')
-      
       // Chamar endpoint de confirmação correto (session_id na URL)
       const response = await fetchWithAuth(`${BASE_URL_UPLOAD_CONFIRM}/${sessionId}`, {
         method: 'POST'
@@ -309,12 +306,10 @@ export default function UploadPreviewPage() {
       }
       
       const result = await response.json()
-      console.log('✅ Importação confirmada:', result)
       
       // Redirecionar para transações
       router.push('/transactions')
     } catch (err) {
-      console.error('❌ Erro ao confirmar:', err)
       setError(err instanceof Error ? err.message : 'Falha ao confirmar importação')
     } finally {
       setIsConfirming(false)

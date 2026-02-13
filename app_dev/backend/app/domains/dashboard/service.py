@@ -13,13 +13,20 @@ from .schemas import (
     ChartDataPoint,
     BudgetVsActualResponse,
     BudgetVsActualItem,
-    CreditCardExpense
+    CreditCardExpense,
+    IncomeSource,
+    IncomeSourcesResponse
 )
 
 
 class DashboardService:
     def __init__(self, db: Session):
         self.repository = DashboardRepository(db)
+    
+    def get_last_month_with_data(self, user_id: int):
+        """Retorna o último mês com dados (ano e mês)"""
+        result = self.repository.get_last_month_with_data(user_id)
+        return result
     
     def get_metrics(self, user_id: int, year: int, month: int = None) -> DashboardMetrics:
         """Retorna métricas principais do dashboard
@@ -82,4 +89,21 @@ class DashboardService:
         """
         data = self.repository.get_credit_card_expenses(user_id, year, month)
         return [CreditCardExpense(**expense) for expense in data]
+    
+    def get_income_sources(self, user_id: int, year: int, month: int = None) -> IncomeSourcesResponse:
+        """Retorna breakdown de receitas por fonte
+        
+        Args:
+            user_id: ID do usuário
+            year: Ano a filtrar
+            month: Mês específico (1-12) ou None para ano inteiro
+        """
+        data = self.repository.get_income_sources(user_id, year, month)
+        sources = [IncomeSource(**source) for source in data]
+        total_receitas = sum(s.total for s in sources)
+        
+        return IncomeSourcesResponse(
+            sources=sources,
+            total_receitas=total_receitas
+        )
 

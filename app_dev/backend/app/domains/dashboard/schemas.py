@@ -2,7 +2,7 @@
 Domínio Dashboard - Schemas Pydantic
 """
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 
 
 class DashboardMetrics(BaseModel):
@@ -12,6 +12,7 @@ class DashboardMetrics(BaseModel):
     total_cartoes: float
     saldo_periodo: float
     num_transacoes: int
+    change_percentage: Optional[float] = None  # Variação % vs mês anterior (se disponível)
 
 
 class ChartDataPoint(BaseModel):
@@ -56,3 +57,17 @@ class CreditCardExpense(BaseModel):
     total: float
     percentual: float
     num_transacoes: int
+
+
+class IncomeSource(BaseModel):
+    """Receita por fonte (grupo)"""
+    fonte: str
+    total: float
+    percentual: float
+    num_transacoes: int
+
+
+class IncomeSourcesResponse(BaseModel):
+    """Lista de fontes de receita"""
+    sources: List[IncomeSource]
+    total_receitas: float

@@ -23,3 +23,6 @@ export interface UploadFormData {
   format: FileFormat;
   file?: File;
 }
+
+// Re-export preview types
+export * from './preview.types';

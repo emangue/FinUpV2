@@ -1,0 +1,899 @@
+"""
+Budget Service
+Lógica de negócio para budget planning
+
+CHANGELOG 13/02/2026:
+- ✅ Removidos imports obsoletos: repository_geral, repository_categoria_config
+- ✅ Apenas BudgetRepository (para budget_planning)
+"""
+from sqlalchemy.orm import Session
+from sqlalchemy import func
+from typing import List, Optional, Dict, Any
+from fastapi import HTTPException, status
+import json
+
+from .repository import BudgetRepository
+from .schemas import BudgetCreate, BudgetUpdate, BudgetResponse, BudgetListResponse
+from app.domains.transactions.models import JournalEntry
+
+
+class BudgetService:
+    """Service com lógica de negócio para budget"""
+    
+    def __init__(self, db: Session):
+        self.db = db
+        self.repository = BudgetRepository(db)
+    
+    def copy_budget_to_year(
+        self,
+        user_id: int,
+        mes_origem: str,
+        ano_destino: int,
+        substituir_existentes: bool
+    ) -> dict:
+        """
+        Copia metas de mes_origem para todos os meses de ano_destino
+        
+        Args:
+            user_id: ID do usuário
+            mes_origem: Mês de origem no formato YYYY-MM
+            ano_destino: Ano de destino (ex: 2026)
+            substituir_existentes: Se deve sobrescrever metas existentes
+            
+        Returns:
+            dict com sucesso, meses_criados, metas_copiadas, mensagem
+        """
+        from .models import BudgetGeral
+        
+        # 1. Buscar metas do mês de origem
+        metas_origem = self.db.query(BudgetGeral).filter(
+            BudgetGeral.user_id == user_id,
+            BudgetGeral.mes_referencia == mes_origem
+        ).all()
+        
+        if not metas_origem:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Nenhuma meta encontrada para {mes_origem}"
+            )
+        
+        # 2. Gerar lista de meses do ano
+        meses_ano = [f"{ano_destino}-{str(m).zfill(2)}" for m in range(1, 13)]
+        
+        # 3. Para cada mês, copiar ou atualizar metas
+        meses_criados = 0
+        metas_copiadas = 0
+        
+        for mes_destino in meses_ano:
+            if mes_destino == mes_origem:
+                continue  # Pular mês de origem
+            
+            for meta_origem in metas_origem:
+                # Verificar se já existe
+                meta_existente = self.db.query(BudgetGeral).filter(
+                    BudgetGeral.user_id == user_id,
+                    BudgetGeral.categoria_geral == meta_origem.categoria_geral,
+                    BudgetGeral.mes_referencia == mes_destino
+                ).first()
+                
+                if meta_existente and not substituir_existentes:
+                    continue  # Pular se já existe e não deve substituir
+                
+                if meta_existente:
+                    # Atualizar
+                    meta_existente.valor_planejado = meta_origem.valor_planejado
+                else:
+                    # Criar nova
+                    nova_meta = BudgetGeral(
+                        user_id=user_id,
+                        categoria_geral=meta_origem.categoria_geral,
+                        mes_referencia=mes_destino,
+                        valor_planejado=meta_origem.valor_planejado
+                    )
+                    self.db.add(nova_meta)
+                    meses_criados += 1
+                
+                metas_copiadas += 1
+        
+        self.db.commit()
+        
+        return {
+            "sucesso": True,
+            "meses_criados": meses_criados,
+            "metas_copiadas": metas_copiadas,
+            "mensagem": f"Metas copiadas de {mes_origem} para {meses_criados} meses de {ano_destino}"
+        }
+    
+    def get_budget_planning(self, user_id: int, mes_referencia: str) -> dict:
+        """
+        Lista metas de budget planning (campo grupo)
+        
+        Args:
+            user_id: ID do usuário
+            mes_referencia: Mês no formato YYYY-MM
+            
+        Returns:
+            dict com mes_referencia e lista de budgets
+        """
+        from .models import BudgetPlanning
+        
+        budgets = self.db.query(BudgetPlanning).filter(
+            BudgetPlanning.user_id == user_id,
+            BudgetPlanning.mes_referencia == mes_referencia
+        ).all()
+        
+        # Calcular valor realizado para cada grupo
+        resultado = []
+        for budget in budgets:
+            valor_realizado = self._calcular_valor_realizado_grupo(
+                user_id, budget.grupo, mes_referencia
+            )
+            percentual = (valor_realizado / budget.valor_planejado * 100) if budget.valor_planejado > 0 else 0
+            
+            resultado.append({
+                "id": budget.id,
+                "grupo": budget.grupo,
+                "valor_planejado": float(budget.valor_planejado),
+                "valor_realizado": float(valor_realizado),
+                "percentual": round(percentual, 2),
+                "ativo": budget.ativo,
+                "valor_medio_3_meses": float(budget.valor_medio_3_meses)  # ✅ Média dos últimos 3 meses
+            })
+        
+        return {
+            "mes_referencia": mes_referencia,
+            "budgets": resultado
+        }
+    
+    def bulk_upsert_budget_planning(
+        self, 
+        user_id: int, 
+        mes_referencia: str, 
+        budgets: List[dict]
+    ) -> List[dict]:
+        """
+        Cria ou atualiza múltiplas metas de planning
+        
+        Args:
+            user_id: ID do usuário
+            mes_referencia: Mês no formato YYYY-MM
+            budgets: Lista de dicts com grupo e valor_planejado
+            
+        Returns:
+            Lista de budgets criados/atualizados
+        """
+        from .models import BudgetPlanning
+        
+        resultado = []
+        for budget_data in budgets:
+            grupo = budget_data["grupo"]
+            valor_planejado = budget_data["valor_planejado"]
+            
+            # Verificar se já existe
+            budget_existente = self.db.query(BudgetPlanning).filter(
+                BudgetPlanning.user_id == user_id,
+                BudgetPlanning.grupo == grupo,
+                BudgetPlanning.mes_referencia == mes_referencia
+            ).first()
+            
+            if budget_existente:
+                # Atualizar
+                budget_existente.valor_planejado = valor_planejado
+                self.db.flush()
+                resultado.append({
+                    "id": budget_existente.id,
+                    "grupo": budget_existente.grupo,
+                    "mes_referencia": budget_existente.mes_referencia,
+                    "valor_planejado": float(budget_existente.valor_planejado)
+                })
+            else:
+                # Criar novo
+                novo_budget = BudgetPlanning(
+                    user_id=user_id,
+                    grupo=grupo,
+                    mes_referencia=mes_referencia,
+                    valor_planejado=valor_planejado
+                )
+                self.db.add(novo_budget)
+                self.db.flush()
+                resultado.append({
+                    "id": novo_budget.id,
+                    "grupo": novo_budget.grupo,
+                    "mes_referencia": novo_budget.mes_referencia,
+                    "valor_planejado": float(novo_budget.valor_planejado)
+                })
+        
+        self.db.commit()
+        return resultado
+    
+    def _calcular_valor_realizado_grupo(self, user_id: int, grupo: str, mes_referencia: str) -> float:
+        """
+        Calcula valor realizado de um grupo em um mês
+        
+        Args:
+            user_id: ID do usuário
+            grupo: Nome do grupo
+            mes_referencia: Mês no formato YYYY-MM
+            
+        Returns:
+            Valor realizado (float)
+        """
+        ano, mes = mes_referencia.split('-')
+        mes_fatura = f"{ano}{mes}"  # YYYYMM
+        
+        total = self.db.query(func.sum(JournalEntry.Valor)).filter(
+            JournalEntry.user_id == user_id,
+            JournalEntry.GRUPO == grupo,
+            JournalEntry.MesFatura == mes_fatura,
+            JournalEntry.CategoriaGeral == 'Despesa',
+            JournalEntry.IgnorarDashboard == 0
+        ).scalar()
+        
+        return float(total) if total else 0.0
+    
+    def calcular_media_3_meses(self, user_id: int, grupo: str, mes_referencia: str) -> float:
+        """
+        Calcula média dos últimos 3 meses anteriores ao mes_referencia
+        
+        Args:
+            user_id: ID do usuário
+            grupo: Grupo (Casa, Cartão, etc)
+            mes_referencia: Mês no formato YYYY-MM
+            
+        Returns:
+            float: Média calculada (ou 0 se não houver dados)
+        """
+        # Converter mes_referencia para calcular meses anteriores
+        ano, mes = map(int, mes_referencia.split('-'))
+        
+        # Calcular os 3 meses anteriores
+        meses_anteriores = []
+        for i in range(1, 4):  # 3 meses atrás
+            m = mes - i
+            a = ano
+            if m < 1:
+                m += 12
+                a -= 1
+            meses_anteriores.append(f"{a:04d}-{m:02d}")
+        
+        # Criar condições para cada mês
+        from sqlalchemy import or_
+        condicoes_meses = []
+        for mes_anterior in meses_anteriores:
+            ano_mes, mes_num = mes_anterior.split('-')
+            mes_fatura_format = f"{ano_mes}{mes_num}"  # YYYYMM
+            condicoes_meses.append(JournalEntry.MesFatura == mes_fatura_format)
+        
+        # Buscar transações dos 3 meses anteriores
+        transacoes = self.db.query(JournalEntry).filter(
+            JournalEntry.user_id == user_id,
+            JournalEntry.GRUPO == grupo,
+            JournalEntry.CategoriaGeral == 'Despesa',
+            JournalEntry.IgnorarDashboard == 0,  # Excluir transações ignoradas
+            or_(*condicoes_meses)
+        ).all()
+        
+        if not transacoes:
+            return 0.0
+        
+        # Agrupar por mês e calcular soma
+        meses_com_dados = {}
+        for t in transacoes:
+            # Usar MesFatura para agrupar
+            if t.MesFatura:
+                mes_fatura = t.MesFatura  # YYYYMM
+                if mes_fatura not in meses_com_dados:
+                    meses_com_dados[mes_fatura] = 0
+                meses_com_dados[mes_fatura] += abs(t.Valor)
+        
+        # Calcular média (soma / qtd_meses_com_dados)
+        if meses_com_dados:
+            total = sum(meses_com_dados.values())
+            qtd_meses = len(meses_com_dados)
+            media = total / qtd_meses
+            return round(media, 2)
+        
+        return 0.0
+    
+    def get_detalhamento_media(
+        self, 
+        user_id: int, 
+        grupo: str, 
+        mes_referencia: str
+    ):
+        """
+        Retorna detalhamento dos 3 meses que compõem a média
+        
+        Args:
+            user_id: ID do usuário
+            grupo: Grupo (Casa, Cartão, etc)
+            mes_referencia: Mês de referência no formato YYYY-MM
+            
+        Returns:
+            DetalhamentoMediaResponse com lista de meses detalhados
+        """
+        from .schemas import DetalhamentoMediaResponse, MesDetalhamento
+        
+        # Converter mes_referencia para calcular meses anteriores
+        ano, mes = map(int, mes_referencia.split('-'))
+        
+        # Calcular os 3 meses anteriores
+        meses_anteriores = []
+        for i in range(1, 4):  # 3 meses atrás
+            m = mes - i
+            a = ano
+            if m < 1:
+                m += 12
+                a -= 1
+            meses_anteriores.append(f"{a:04d}-{m:02d}")
+        
+        # Nomes dos meses em português
+        meses_nomes = {
+            '01': 'Janeiro', '02': 'Fevereiro', '03': 'Março',
+            '04': 'Abril', '05': 'Maio', '06': 'Junho',
+            '07': 'Julho', '08': 'Agosto', '09': 'Setembro',
+            '10': 'Outubro', '11': 'Novembro', '12': 'Dezembro'
+        }
+        
+        # Criar condições para cada mês
+        from sqlalchemy import or_
+        condicoes_meses = []
+        for mes_anterior in meses_anteriores:
+            ano_mes, mes_num = mes_anterior.split('-')
+            mes_fatura_format = f"{ano_mes}{mes_num}"  # YYYYMM
+            condicoes_meses.append(JournalEntry.MesFatura == mes_fatura_format)
+        
+        # Buscar transações dos 3 meses anteriores
+        transacoes = self.db.query(JournalEntry).filter(
+            JournalEntry.user_id == user_id,
+            JournalEntry.GRUPO == grupo,
+            JournalEntry.CategoriaGeral == 'Despesa',
+            JournalEntry.IgnorarDashboard == 0,  # Excluir transações ignoradas
+            or_(*condicoes_meses)
+        ).all()
+        
+        # Agrupar por mês
+        detalhes_por_mes = {}
+        for mes_ant in meses_anteriores:
+            ano_mes, mes_num = mes_ant.split('-')
+            mes_fatura_format = f"{ano_mes}{mes_num}"  # YYYYMM
+            detalhes_por_mes[mes_fatura_format] = {
+                'mes_referencia': mes_ant,
+                'transacoes': [],
+                'total': 0.0
+            }
+        
+        for t in transacoes:
+            if t.MesFatura and t.MesFatura in detalhes_por_mes:
+                detalhes_por_mes[t.MesFatura]['transacoes'].append(t)
+                detalhes_por_mes[t.MesFatura]['total'] += abs(t.Valor)
+                
+                # Agrupar por subgrupo
+                if 'subgrupos' not in detalhes_por_mes[t.MesFatura]:
+                    detalhes_por_mes[t.MesFatura]['subgrupos'] = {}
+                
+                subgrupo_key = t.SUBGRUPO if t.SUBGRUPO else '__SEM_SUBGRUPO__'
+                if subgrupo_key not in detalhes_por_mes[t.MesFatura]['subgrupos']:
+                    detalhes_por_mes[t.MesFatura]['subgrupos'][subgrupo_key] = {
+                        'valor': 0.0,
+                        'quantidade': 0
+                    }
+                
+                detalhes_por_mes[t.MesFatura]['subgrupos'][subgrupo_key]['valor'] += abs(t.Valor)
+                detalhes_por_mes[t.MesFatura]['subgrupos'][subgrupo_key]['quantidade'] += 1
+        
+        # Construir lista de MesDetalhamento
+        meses_detalhados = []
+        total_geral = 0.0
+        
+        # Ordenar meses do mais antigo para o mais recente
+        for mes_ref in sorted(meses_anteriores):
+            ano_mes, mes_num = mes_ref.split('-')
+            mes_fatura_format = f"{ano_mes}{mes_num}"  # YYYYMM
+            
+            if mes_fatura_format in detalhes_por_mes:
+                detalhes = detalhes_por_mes[mes_fatura_format]
+                mes_nome = f"{meses_nomes[mes_num]} {ano_mes}"
+                
+                # Criar lista de subgrupos
+                subgrupos_list = []
+                if 'subgrupos' in detalhes:
+                    from .schemas import SubgrupoDetalhamento
+                    for subgrupo_key, dados in detalhes['subgrupos'].items():
+                        subgrupo_nome = None if subgrupo_key == '__SEM_SUBGRUPO__' else subgrupo_key
+                        subgrupos_list.append(SubgrupoDetalhamento(
+                            subgrupo=subgrupo_nome,
+                            valor_total=round(dados['valor'], 2),
+                            quantidade_transacoes=dados['quantidade']
+                        ))
+                    # Ordenar por valor decrescente
+                    subgrupos_list.sort(key=lambda x: x.valor_total, reverse=True)
+                
+                mes_det = MesDetalhamento(
+                    mes_referencia=mes_ref,
+                    mes_nome=mes_nome,
+                    valor_total=round(detalhes['total'], 2),
+                    quantidade_transacoes=len(detalhes['transacoes']),
+                    subgrupos=subgrupos_list if subgrupos_list else None
+                )
+                meses_detalhados.append(mes_det)
+                total_geral += detalhes['total']
+        
+        # Calcular média (apenas meses com transações)
+        meses_com_dados = [m for m in meses_detalhados if m.quantidade_transacoes > 0]
+        if meses_com_dados:
+            media_calculada = total_geral / len(meses_com_dados)
+        else:
+            media_calculada = 0.0
+        
+        return DetalhamentoMediaResponse(
+            grupo=grupo,
+            mes_planejado=mes_referencia,
+            meses_considerados=meses_detalhados,
+            media_calculada=round(media_calculada, 2),
+            total_geral=round(total_geral, 2)
+        )
+    
+    def get_budget(self, budget_id: int, user_id: int) -> BudgetResponse:
+        """Busca budget por ID"""
+        budget = self.repository.get_by_id(budget_id, user_id)
+        
+        if not budget:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Budget não encontrado"
+            )
+        
+        return BudgetResponse.from_orm(budget)
+    
+    def get_budgets_by_month(self, user_id: int, mes_referencia: str) -> List[BudgetResponse]:
+        """Lista budgets de um mês específico"""
+        budgets = self.repository.get_by_month(user_id, mes_referencia)
+        return [BudgetResponse.from_orm(b) for b in budgets]
+    
+    def get_all_budgets(self, user_id: int) -> BudgetListResponse:
+        """Lista todos os budgets do usuário"""
+        budgets = self.repository.get_all(user_id)
+        return BudgetListResponse(
+            budgets=[BudgetResponse.from_orm(b) for b in budgets],
+            total=len(budgets)
+        )
+    
+    def create_budget(self, user_id: int, data: BudgetCreate) -> BudgetResponse:
+        """Cria novo budget"""
+        # Verificar se já existe budget para este grupo/mês
+        existing = self.repository.get_by_tipo_gasto_and_month(
+            user_id, 
+            data.grupo,
+            data.mes_referencia
+        )
+        
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Já existe budget para {data.grupo} em {data.mes_referencia}. Use PUT para atualizar."
+            )
+        
+        budget = self.repository.create(user_id, data.dict())
+        return BudgetResponse.from_orm(budget)
+    
+    def update_budget(self, budget_id: int, user_id: int, data: BudgetUpdate) -> BudgetResponse:
+        """Atualiza budget existente"""
+        budget = self.repository.get_by_id(budget_id, user_id)
+        
+        if not budget:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Budget não encontrado"
+            )
+        
+        # Verificar conflitos se alterar grupo ou mês
+        if data.grupo or data.mes_referencia:
+            new_grupo = data.grupo if data.grupo else budget.grupo
+            new_mes = data.mes_referencia if data.mes_referencia else budget.mes_referencia
+            
+            # Só verifica se mudou algo
+            if new_grupo != budget.grupo or new_mes != budget.mes_referencia:
+                existing = self.repository.get_by_tipo_gasto_and_month(
+                    user_id, 
+                    new_grupo,
+                    new_mes
+                )
+                
+                if existing and existing.id != budget_id:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=f"Já existe budget para {new_grupo} em {new_mes}. Use outro grupo ou mês."
+                    )
+        
+        updated = self.repository.update(budget, data.dict(exclude_unset=True))
+        return BudgetResponse.from_orm(updated)
+    
+    def delete_budget(self, budget_id: int, user_id: int) -> None:
+        """Deleta budget"""
+        budget = self.repository.get_by_id(budget_id, user_id)
+        
+        if not budget:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Budget não encontrado"
+            )
+        
+        self.repository.delete(budget)
+    
+    def toggle_budget_ativo(self, budget_id: int, user_id: int, ativo: int) -> dict:
+        """
+        Toggle campo 'ativo' do budget (0=inativo, 1=ativo)
+        
+        IMPORTANTE: Não modifica valor_planejado - apenas status
+        """
+        budget = self.repository.get_by_id(budget_id, user_id)
+        
+        if not budget:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Budget não encontrado"
+            )
+        
+        # Atualizar apenas campo ativo (repository.update precisa de dict)
+        updated_budget = self.repository.update(budget, {"ativo": ativo})
+        
+        return {
+            "id": updated_budget.id,
+            "grupo": updated_budget.grupo,
+            "mes_referencia": updated_budget.mes_referencia,
+            "valor_planejado": updated_budget.valor_planejado,
+            "ativo": updated_budget.ativo,
+            "message": f"Meta {'ativada' if ativo == 1 else 'desativada'} com sucesso"
+        }
+    
+    def bulk_upsert_budgets(
+        self, 
+        user_id: int, 
+        mes_referencia: str, 
+        budgets: List[dict]
+    ) -> List[BudgetResponse]:
+        """Cria ou atualiza múltiplos budgets de uma vez"""
+        # Validar dados
+        for budget_data in budgets:
+            if "grupo" not in budget_data or "valor_planejado" not in budget_data:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Cada budget deve ter 'grupo' e 'valor_planejado'"
+                )
+            
+            if budget_data["valor_planejado"] <= 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="valor_planejado deve ser maior que zero"
+                )
+        
+        # Criar ou atualizar cada budget com média calculada
+        result = []
+        for budget_data in budgets:
+            # Calcular média dos 3 meses anteriores
+            media = self.calcular_media_3_meses(
+                user_id=user_id,
+                grupo=budget_data["grupo"],
+                mes_referencia=mes_referencia
+            )
+            
+            # Upsert com média
+            budget = self.repository.upsert(
+                user_id=user_id,
+                grupo=budget_data["grupo"],
+                mes_referencia=mes_referencia,
+                valor_planejado=budget_data["valor_planejado"],
+                valor_medio_3_meses=media
+            )
+            result.append(budget)
+        
+        return [BudgetResponse.from_orm(b) for b in result]
+    
+    # ═══════════════════════════════════════════════════════════════════════════════
+    # MÉTODOS OBSOLETOS - REMOVIDOS EM 13/02/2026
+    # ═══════════════════════════════════════════════════════════════════════════════
+    # 
+    # Métodos relacionados a tabelas deletadas:
+    # - get_budget_geral_by_month() → usar get_budget_planning()
+    # - get_all_budget_geral() → usar get_budget_planning()
+    # - bulk_upsert_budget_geral() → usar bulk_upsert_budget_planning()
+    # - bulk_upsert_budget_geral_com_validacao() → remover validação de total_mensal
+    # - get_categorias_config() → categorias agora são fixas (base_grupos_config)
+    # - create_categoria_config() → não é mais possível criar categorias via API
+    # - update_categoria_config() → remover
+    # - reordenar_categorias() → remover
+    # - update_tipos_gasto_categoria() → remover
+    # - delete_categoria_config() → remover
+    # - get_tipos_gasto_disponiveis() → remover (tipos fixos)
+    #
+    # Se precisar restaurar, veja:
+    # git show HEAD~1:app_dev/backend/app/domains/budget/service.py
+    # ═══════════════════════════════════════════════════════════════════════════════
+    
+    # MÉTODOS ATIVOS ABAIXO (budget_planning apenas)
+        """Lista budgets gerais de um mês específico"""
+        from .schemas import BudgetGeralResponse
+        budgets = self.repository_geral.get_by_month(user_id, mes_referencia)
+        return [BudgetGeralResponse.from_orm(b) for b in budgets]
+    
+    def get_all_budget_geral(self, user_id: int):
+        """Lista todos os budgets gerais do usuário"""
+        from .schemas import BudgetGeralResponse, BudgetGeralListResponse
+        budgets = self.repository_geral.get_all(user_id)
+        return BudgetGeralListResponse(
+            budgets=[BudgetGeralResponse.from_orm(b) for b in budgets],
+            total=len(budgets)
+        )
+    
+    def bulk_upsert_budget_geral(
+        self, 
+        user_id: int, 
+        mes_referencia: str, 
+        budgets: List[dict]
+    ) -> List['BudgetGeralResponse']:
+        """Cria ou atualiza múltiplos budgets gerais de uma vez"""
+        from .schemas import BudgetGeralResponse
+        
+        # Validar dados
+        for budget_data in budgets:
+            if "categoria_geral" not in budget_data or "valor_planejado" not in budget_data:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Cada budget geral deve ter 'categoria_geral' e 'valor_planejado'"
+                )
+            
+            # Permitir valores zero (grupos sem orçamento definido)
+            if budget_data["valor_planejado"] < 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="valor_planejado não pode ser negativo"
+                )
+        
+        result = self.repository_geral.bulk_upsert(user_id, mes_referencia, budgets)
+        return [BudgetGeralResponse.from_orm(b) for b in result]
+    
+    # ===== MÉTODOS PARA CONFIGURAÇÃO DE CATEGORIAS =====
+    
+    def get_categorias_config(self, user_id: int, apenas_ativas: bool = True) -> List[Dict[str, Any]]:
+        """Lista categorias configuradas do usuário ordenadas"""
+        configs = self.repository_categoria_config.get_ordered_by_user(user_id, apenas_ativas)
+        
+        # Converter para dict com parse de JSON
+        result = []
+        for config in configs:
+            config_dict = {
+                "id": config.id,
+                "nome_categoria": config.nome_categoria,
+                "ordem": config.ordem,
+                "fonte_dados": config.fonte_dados,
+                "filtro_valor": config.filtro_valor,
+                "tipos_gasto_incluidos": json.loads(config.tipos_gasto_incluidos) if config.tipos_gasto_incluidos else [],
+                "cor_visualizacao": config.cor_visualizacao,
+                "ativo": config.ativo == 1,
+                "created_at": config.created_at,
+                "updated_at": config.updated_at
+            }
+            result.append(config_dict)
+        
+        return result
+    
+    def create_categoria_config(self, user_id: int, data: dict) -> Dict[str, Any]:
+        """Cria nova categoria configurada"""
+        # Validações
+        if not data.get("nome_categoria"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="nome_categoria é obrigatório"
+            )
+        
+        if data.get("fonte_dados") not in ["GRUPO", "TIPO_TRANSACAO"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="fonte_dados deve ser 'GRUPO' ou 'TIPO_TRANSACAO'"
+            )
+        
+        if not data.get("filtro_valor"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="filtro_valor é obrigatório"
+            )
+        
+        # Verificar se já existe
+        existing = self.repository_categoria_config.get_by_nome(user_id, data["nome_categoria"])
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Categoria '{data['nome_categoria']}' já existe"
+            )
+        
+        # Criar
+        config = self.repository_categoria_config.create(user_id, data)
+        
+        return {
+            "id": config.id,
+            "nome_categoria": config.nome_categoria,
+            "ordem": config.ordem,
+            "fonte_dados": config.fonte_dados,
+            "filtro_valor": config.filtro_valor,
+            "tipos_gasto_incluidos": json.loads(config.tipos_gasto_incluidos) if config.tipos_gasto_incluidos else [],
+            "cor_visualizacao": config.cor_visualizacao,
+            "ativo": config.ativo == 1
+        }
+    
+    def update_categoria_config(self, config_id: int, user_id: int, data: dict) -> Dict[str, Any]:
+        """Atualiza configuração de categoria"""
+        config = self.repository_categoria_config.get_by_id(config_id, user_id)
+        if not config:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Configuração não encontrada"
+            )
+        
+        updated = self.repository_categoria_config.update(config, data)
+        
+        return {
+            "id": updated.id,
+            "nome_categoria": updated.nome_categoria,
+            "ordem": updated.ordem,
+            "fonte_dados": updated.fonte_dados,
+            "filtro_valor": updated.filtro_valor,
+            "tipos_gasto_incluidos": json.loads(updated.tipos_gasto_incluidos) if updated.tipos_gasto_incluidos else [],
+            "cor_visualizacao": updated.cor_visualizacao,
+            "ativo": updated.ativo == 1
+        }
+    
+    def reordenar_categorias(self, user_id: int, reorders: List[Dict[str, int]]) -> List[Dict[str, Any]]:
+        """Reordena categorias em batch"""
+        configs = self.repository_categoria_config.reorder_batch(user_id, reorders)
+        
+        result = []
+        for config in configs:
+            config_dict = {
+                "id": config.id,
+                "nome_categoria": config.nome_categoria,
+                "ordem": config.ordem,
+                "fonte_dados": config.fonte_dados,
+                "filtro_valor": config.filtro_valor,
+                "tipos_gasto_incluidos": json.loads(config.tipos_gasto_incluidos) if config.tipos_gasto_incluidos else [],
+                "cor_visualizacao": config.cor_visualizacao,
+                "ativo": config.ativo == 1
+            }
+            result.append(config_dict)
+        
+        return result
+    
+    def update_tipos_gasto_categoria(
+        self, 
+        config_id: int, 
+        user_id: int, 
+        tipos_gasto: List[str]
+    ) -> Dict[str, Any]:
+        """Atualiza lista de TipoGasto de uma categoria"""
+        config = self.repository_categoria_config.update_tipos_gasto(config_id, user_id, tipos_gasto)
+        
+        return {
+            "id": config.id,
+            "nome_categoria": config.nome_categoria,
+            "ordem": config.ordem,
+            "fonte_dados": config.fonte_dados,
+            "filtro_valor": config.filtro_valor,
+            "tipos_gasto_incluidos": json.loads(config.tipos_gasto_incluidos) if config.tipos_gasto_incluidos else [],
+            "cor_visualizacao": config.cor_visualizacao,
+            "ativo": config.ativo == 1
+        }
+    
+    def delete_categoria_config(self, config_id: int, user_id: int) -> None:
+        """Deleta (desativa) uma configuração de categoria"""
+        config = self.repository_categoria_config.get_by_id(config_id, user_id)
+        
+        if not config:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Categoria não encontrada"
+            )
+        
+        # Soft delete - apenas desativa
+        self.repository_categoria_config.update(config_id, user_id, {"ativo": 0})
+        
+        # Ou hard delete se preferir:
+        # self.repository_categoria_config.delete(config)
+    
+    def bulk_upsert_budget_geral_com_validacao(
+        self,
+        user_id: int,
+        mes_referencia: str,
+        budgets: List[dict],
+        total_mensal: Optional[float] = None
+    ) -> Dict[str, Any]:
+        """
+        Cria ou atualiza budgets gerais com validação e auto-ajuste de total
+        Retorna: {budgets: [...], total_ajustado: bool, novo_total: float, valor_anterior: float}
+        """
+        # Validar dados
+        for budget_data in budgets:
+            if "categoria_geral" not in budget_data or "valor_planejado" not in budget_data:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Cada budget geral deve ter 'categoria_geral' e 'valor_planejado'"
+                )
+        
+        # Calcular soma das categorias
+        soma_categorias = sum(b["valor_planejado"] for b in budgets)
+        
+        # Buscar total_mensal atual do banco
+        budget_geral_atual = self.repository_geral.get_by_month(user_id, mes_referencia)
+        valor_anterior = None
+        if budget_geral_atual and len(budget_geral_atual) > 0:
+            valor_anterior = budget_geral_atual[0].total_mensal
+        
+        # Se não tem total_mensal definido, usar o enviado ou a soma
+        if valor_anterior is None:
+            valor_anterior = total_mensal if total_mensal is not None else soma_categorias
+        
+        # Verificar se precisa ajustar
+        total_ajustado = False
+        novo_total = total_mensal if total_mensal is not None else valor_anterior
+        
+        if soma_categorias > novo_total:
+            # Auto-ajuste: total = soma das categorias
+            novo_total = soma_categorias
+            total_ajustado = True
+            
+            # Registrar no histórico
+            self.repository_historico.create_ajuste_log(
+                user_id=user_id,
+                mes_referencia=mes_referencia,
+                valor_anterior=valor_anterior,
+                valor_novo=novo_total,
+                soma_categorias=soma_categorias,
+                motivo=f"Soma das categorias (R$ {soma_categorias:.2f}) ultrapassou o total mensal (R$ {valor_anterior:.2f})"
+            )
+        
+        # Salvar budgets com total_mensal atualizado
+        result = self.repository_geral.bulk_upsert(user_id, mes_referencia, budgets)
+        
+        # Atualizar total_mensal no primeiro budget (convenção)
+        if result and len(result) > 0:
+            result[0].total_mensal = novo_total
+            self.repository_geral.db.commit()
+        
+        return {
+            "budgets": [BudgetResponse.from_orm(b) for b in result],
+            "total_ajustado": total_ajustado,
+            "novo_total": novo_total,
+            "valor_anterior": valor_anterior,
+            "soma_categorias": soma_categorias
+        }
+
+    def get_tipos_gasto_disponiveis(self, user_id: int, fonte_dados: str, filtro_valor: str) -> list:
+        """
+        Retorna lista de tipos de gasto disponíveis para um grupo ou tipo de transação
+        
+        Args:
+            user_id: ID do usuário
+            fonte_dados: "GRUPO" ou "TIPO_TRANSACAO"
+            filtro_valor: Nome do grupo (ex: "Casa") ou tipo de transação (ex: "Cartão")
+        
+        Returns:
+            Lista de tipos de gasto únicos encontrados nas transações
+        """
+        from sqlalchemy import distinct
+        from app.domains.transactions.models import JournalEntry
+        
+        query = self.repository.db.query(
+            distinct(JournalEntry.TipoGasto)
+        ).filter(
+            JournalEntry.user_id == user_id,
+            JournalEntry.CategoriaGeral == 'Despesa',  # Apenas despesas para orçamento
+            JournalEntry.TipoGasto.isnot(None),
+            JournalEntry.TipoGasto != ''
+        )
+        
+        if fonte_dados == "GRUPO":
+            query = query.filter(JournalEntry.GRUPO == filtro_valor)
+        elif fonte_dados == "TIPO_TRANSACAO":
+            query = query.filter(JournalEntry.TipoTransacao == filtro_valor)
+        
+        tipos_gasto = [row[0] for row in query.all() if row[0]]
+        return sorted(tipos_gasto)

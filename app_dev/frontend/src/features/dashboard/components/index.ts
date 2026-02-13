@@ -4,6 +4,7 @@
  * Centraliza exports de componentes do domínio de dashboard
  */
 
+// Desktop Components
 export { BudgetVsActual } from './budget-vs-actual'
 export { DemaisBreakdownModal } from './demais-breakdown-modal'
 export { default as CategoryExpenses } from './category-expenses'
@@ -13,3 +14,8 @@ export { default as CreditCardExpenses } from './credit-card-expenses'
 export { default as SectionCardsMinimal } from './section-cards-minimal'
 export { default as SectionCards } from './section-cards'
 export { default as DateFilters } from './date-filters'
+
+// Mobile Components - Sprint 3.2
+export { WalletBalanceCard } from './wallet-balance-card'
+export { BarChart } from './bar-chart'
+export { DonutChart } from './donut-chart'

@@ -11,7 +11,7 @@ from .schemas import (
 )
 from .service import UserService
 from .repository import UserRepository
-from .router import router
+# NÃO importar router aqui - causa circular import com require_admin
 
 __all__ = [
     "User",
@@ -21,5 +21,4 @@ __all__ = [
     "UserListResponse",
     "UserService",
     "UserRepository",
-    "router",
 ]

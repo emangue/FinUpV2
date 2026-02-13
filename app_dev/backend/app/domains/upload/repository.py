@@ -6,8 +6,11 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 from typing import Optional, List
 from datetime import datetime
+import logging
 from .models import PreviewTransacao
 from .history_models import UploadHistory
+
+logger = logging.getLogger(__name__)
 
 class UploadRepository:
     """
@@ -57,12 +60,17 @@ class UploadRepository:
         user_id: int
     ) -> int:
         """Deleta previews de uma sessão específica"""
-        deleted = self.db.query(PreviewTransacao).filter(
-            PreviewTransacao.session_id == session_id,
-            PreviewTransacao.user_id == user_id
-        ).delete(synchronize_session=False)
-        self.db.commit()
-        return deleted
+        try:
+            deleted = self.db.query(PreviewTransacao).filter(
+                PreviewTransacao.session_id == session_id,
+                PreviewTransacao.user_id == user_id
+            ).delete(synchronize_session=False)
+            self.db.commit()
+            return deleted
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Erro ao deletar sessão {session_id}: {str(e)}")
+            return 0
     
     def create_batch(self, previews: List[PreviewTransacao]) -> List[PreviewTransacao]:
         """Cria múltiplos previews em batch"""

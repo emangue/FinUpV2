@@ -15,6 +15,22 @@ class DashboardRepository:
     def __init__(self, db: Session):
         self.db = db
     
+    def get_last_month_with_data(self, user_id: int):
+        """Retorna último ano e mês com dados para o usuário"""
+        result = self.db.query(
+            JournalEntry.Ano,
+            JournalEntry.Mes
+        ).filter(
+            JournalEntry.user_id == user_id
+        ).order_by(
+            JournalEntry.Ano.desc(),
+            JournalEntry.Mes.desc()
+        ).first()
+        
+        if result:
+            return {"year": int(result.Ano), "month": int(result.Mes)}
+        return {"year": datetime.now().year, "month": datetime.now().month}
+    
     def _build_date_filter(self, year: int, month: Optional[int] = None):
         """Constrói filtro usando MesFatura
         
@@ -70,12 +86,50 @@ class DashboardRepository:
         # Saldo do período (Receitas + Despesas, onde Despesas são negativas)
         saldo_periodo = total_receitas + despesas_raw
         
+        # Calcular variação percentual vs mês anterior (apenas se month é específico)
+        change_percentage = None
+        if month is not None and month > 1:
+            # Mês anterior mesmo ano
+            prev_month = month - 1
+            prev_year = year
+        elif month == 1:
+            # Janeiro - comparar com dezembro do ano anterior
+            prev_month = 12
+            prev_year = year - 1
+        else:
+            # month=None (ano inteiro) - não calcula variação
+            prev_month = None
+            prev_year = None
+        
+        if prev_month is not None:
+            # Buscar despesas do mês anterior
+            prev_date_filter = self._build_date_filter(prev_year, prev_month)
+            prev_query = self.db.query(JournalEntry).filter(
+                JournalEntry.user_id == user_id,
+                prev_date_filter,
+                JournalEntry.IgnorarDashboard == 0
+            )
+            
+            prev_despesas_raw = prev_query.filter(
+                JournalEntry.CategoriaGeral == 'Despesa'
+            ).with_entities(func.sum(JournalEntry.Valor)).scalar() or 0.0
+            prev_total_despesas = abs(prev_despesas_raw)
+            
+            # Calcular variação percentual
+            if prev_total_despesas > 0:
+                change_percentage = ((total_despesas - prev_total_despesas) / prev_total_despesas) * 100
+            elif total_despesas > 0:
+                change_percentage = 100.0  # Sem gasto anterior, mas tem gasto agora = 100% aumento
+            else:
+                change_percentage = 0.0
+        
         return {
             "total_despesas": total_despesas,
             "total_receitas": total_receitas,
             "total_cartoes": total_cartoes,
             "saldo_periodo": saldo_periodo,
-            "num_transacoes": num_transacoes
+            "num_transacoes": num_transacoes,
+            "change_percentage": round(change_percentage, 1) if change_percentage is not None else None
         }
     
     def get_chart_data(self, user_id: int, year: int, month: int) -> List[Dict]:
@@ -125,7 +179,7 @@ class DashboardRepository:
             ).first()
             
             months_data.append({
-                "date": month_names[target_month - 1],
+                "date": f"{target_year}-{target_month:02d}-01",  # Formato YYYY-MM-01
                 "receitas": float(result.receitas or 0) if result else 0.0,
                 "despesas": float(result.despesas or 0) if result else 0.0,
                 "year": target_year,  # Adicionar ano para referência
@@ -415,6 +469,58 @@ class DashboardRepository:
         return [
             {
                 'cartao': r.cartao,
+                'total': float(r.total),
+                'percentual': round((r.total / total_geral * 100), 1) if total_geral > 0 else 0.0,
+                'num_transacoes': int(r.num_transacoes)
+            }
+            for r in results
+        ]
+    
+    def get_income_sources(self, user_id: int, year: int, month: Optional[int] = None) -> List[Dict]:
+        """Retorna breakdown de receitas por fonte (grupo)
+        
+        Args:
+            user_id: ID do usuário
+            year: Ano a filtrar
+            month: Mês específico (1-12) ou None para ano inteiro
+        
+        Returns:
+            Lista de dicts com: fonte (grupo), total, percentual, num_transacoes
+        """
+        # Filtro base
+        date_filter = self._build_date_filter(year, month)
+        
+        # Query agrupada por GRUPO - apenas receitas
+        query = (
+            self.db.query(
+                JournalEntry.GRUPO.label('fonte'),
+                func.sum(JournalEntry.Valor).label('total'),
+                func.count(JournalEntry.id).label('num_transacoes')
+            )
+            .filter(
+                JournalEntry.user_id == user_id,
+                date_filter,
+                JournalEntry.IgnorarDashboard == 0,
+                JournalEntry.CategoriaGeral == 'Receita',  # Apenas receitas
+                JournalEntry.GRUPO.isnot(None),  # Apenas com grupo
+                JournalEntry.GRUPO != ''  # Não vazio
+            )
+            .group_by(JournalEntry.GRUPO)
+            .order_by(func.sum(JournalEntry.Valor).desc())
+        )
+        
+        results = query.all()
+        
+        if not results:
+            return []
+        
+        # Calcular total geral para percentuais
+        total_geral = sum(r.total for r in results)
+        
+        # Formatar resposta
+        return [
+            {
+                'fonte': r.fonte or 'Sem Categoria',
                 'total': float(r.total),
                 'percentual': round((r.total / total_geral * 100), 1) if total_geral > 0 else 0.0,
                 'num_transacoes': int(r.num_transacoes)

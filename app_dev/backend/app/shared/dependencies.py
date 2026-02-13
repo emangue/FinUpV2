@@ -3,12 +3,14 @@ Dependências para autenticação e usuários
 🔐 SEGURANÇA - Autenticação JWT obrigatória em todos os endpoints
 🔴 CORREÇÃO CRÍTICA (23/01/2026): Removido user_id hardcoded que causava vazamento de dados
 """
+from typing import Optional, TYPE_CHECKING
 from sqlalchemy.orm import Session
 from fastapi import Header, Depends, HTTPException, status
-from typing import Optional
 from app.core.database import get_db
-from app.domains.users.models import User
 from app.domains.auth.jwt_utils import extract_user_id_from_token
+
+if TYPE_CHECKING:
+    from app.domains.users.models import User
 
 def get_current_user_id(
     authorization: Optional[str] = Header(None)
@@ -102,10 +104,78 @@ def get_current_user_id(
 # 
 # ============================================================================
 
-def get_current_user(db: Session) -> User:
+def get_current_user(
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db)
+) -> "User":
     """
-    Retorna o usuário atual completo
-    Por enquanto sempre retorna user_id = 1
+    🔒 Retorna o usuário autenticado completo (modelo User)
+    
+    Usa get_current_user_id para extrair user_id do JWT,
+    então busca o User completo no banco.
+    
+    Args:
+        authorization: Header Authorization com JWT
+        db: Sessão do banco de dados
+        
+    Returns:
+        User: Modelo completo do usuário autenticado
+        
+    Raises:
+        HTTPException 401: Se token inválido
+        HTTPException 404: Se usuário não encontrado no banco
     """
-    user = db.query(User).filter(User.id == 1).first()
+    # Import aqui para evitar circular import
+    from app.domains.users.models import User
+    
+    user_id = get_current_user_id(authorization)
+    user = db.query(User).filter(User.id == user_id).first()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Usuário ID {user_id} não encontrado"
+        )
+    
+    return user
+
+
+def require_admin(
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db)
+) -> "User":
+    """
+    🔐 PROTEÇÃO ADMIN - Valida que usuário é administrador
+    
+    Similar ao get_current_user, mas TAMBÉM verifica se role='admin'.
+    Use esta dependency em endpoints que só admins devem acessar.
+    
+    Args:
+        authorization: Header Authorization com JWT
+        db: Sessão do banco de dados
+        
+    Returns:
+        User: Modelo do usuário admin autenticado
+        
+    Raises:
+        HTTPException 401: Se token inválido
+        HTTPException 403: Se usuário não é admin
+        HTTPException 404: Se usuário não encontrado
+        
+    Examples:
+        ```python
+        @router.post("/admin/screens")
+        def update_screens(admin: User = Depends(require_admin)):
+            # Só admins chegam aqui
+            pass
+        ```
+    """
+    user = get_current_user(authorization, db)
+    
+    if user.role != 'admin':
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acesso negado. Apenas administradores podem executar esta ação."
+        )
+    
     return user

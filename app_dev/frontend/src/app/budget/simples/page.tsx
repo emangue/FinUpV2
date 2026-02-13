@@ -73,7 +73,7 @@ export default function BudgetSimplesPage() {
     try {
       // Carregar TODOS os grupos de base_grupos_config
       const gruposResponse = await fetch(
-        `${API_CONFIG.BACKEND_URL}/api/v1/budget/geral/grupos-disponiveis`
+        `${API_CONFIG.BACKEND_URL}/api/v1/budget/planning/grupos-disponiveis`
       );
       
       if (!gruposResponse.ok) {

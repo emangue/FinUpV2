@@ -69,26 +69,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const data = await response.json()
       const { access_token, user: userData } = data
 
-      // 🐛 DEBUG TEMPORÁRIO - Remover após validar
-      console.log('[AuthContext] Login bem-sucedido:', {
-        tokenPreview: `${access_token.substring(0, 20)}...`,
-        userId: userData.id,
-        userEmail: userData.email,
-      })
-
       // Salvar token no localStorage E no cookie (middleware espera 'auth_token')
       setAuthToken(access_token)
       document.cookie = `auth_token=${access_token}; path=/; max-age=3600; SameSite=Lax`
       
       setToken(access_token)
       setUser(userData)
-
-      // 🐛 DEBUG TEMPORÁRIO - Verificar se foi salvo
-      console.log('[AuthContext] Login completo:', {
-        localStorage: localStorage.getItem('authToken') === access_token,
-        cookieSet: document.cookie.includes('auth_token='),
-        willRedirect: true
-      })
     } catch (error) {
       console.error('Erro no login:', error)
       throw error

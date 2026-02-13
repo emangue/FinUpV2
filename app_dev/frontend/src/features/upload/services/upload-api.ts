@@ -4,7 +4,8 @@
  */
 
 import { API_CONFIG } from '@/core/config/api.config';
-import { Bank, CreditCard } from '../types';
+import { fetchWithAuth } from '@/core/utils/api-client';
+import { Bank, CreditCard, PreviewData } from '../types';
 
 const BASE_URL = `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}`;
 
@@ -12,7 +13,7 @@ const BASE_URL = `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}`;
  * Lista todos os bancos disponíveis para upload
  */
 export async function fetchBanks(): Promise<Bank[]> {
-  const response = await fetch(`${BASE_URL}/compatibility/banks`);
+  const response = await fetchWithAuth(`${BASE_URL}/compatibility/`);
   
   if (!response.ok) {
     throw new Error('Erro ao buscar instituições financeiras');
@@ -22,8 +23,8 @@ export async function fetchBanks(): Promise<Bank[]> {
   
   // Converter formato da API para formato do componente
   return data.banks.map((bank: any) => ({
-    id: bank.nome, // Usar nome como ID
-    name: bank.nome,
+    id: bank.id?.toString() || bank.bank_name, // Usar ID real do banco
+    name: bank.bank_name, // Campo correto da API
     formats: bank.formatos_suportados || []
   }));
 }
@@ -32,13 +33,7 @@ export async function fetchBanks(): Promise<Bank[]> {
  * Lista todos os cartões de crédito do usuário
  */
 export async function fetchCreditCards(): Promise<CreditCard[]> {
-  const response = await fetch(`${BASE_URL}/cards`, {
-    headers: {
-      'Content-Type': 'application/json',
-      // TODO: Adicionar token de autenticação quando implementado
-      // 'Authorization': `Bearer ${token}`
-    }
-  });
+  const response = await fetchWithAuth(`${BASE_URL}/cards/`);
   
   if (!response.ok) {
     throw new Error('Erro ao buscar cartões de crédito');
@@ -46,12 +41,15 @@ export async function fetchCreditCards(): Promise<CreditCard[]> {
   
   const data = await response.json();
   
+  // API retorna { cards: [...], total: number }
+  const cards = data.cards || [];
+  
   // Converter formato da API para formato do componente
-  return data.map((card: any) => ({
+  return cards.map((card: any) => ({
     id: card.id.toString(),
-    name: `${card.banco_nome} - ${card.numero_final}`,
-    bank: card.banco_nome,
-    lastDigits: card.numero_final
+    bankId: card.banco,
+    lastDigits: card.final_cartao,
+    name: card.nome_cartao  // ✅ Usar nome_cartao da API
   }));
 }
 
@@ -62,7 +60,9 @@ export async function uploadFile(formData: {
   file: File;
   banco: string;
   tipo: 'extrato' | 'fatura';
-  cartaoId?: string;
+  cartaoId?: string;  // ID do cartão selecionado
+  cartaoNome?: string;  // Nome do cartão
+  cartaoFinal?: string;  // Final do cartão
   mes?: string;
   ano?: number;
   formato: string;
@@ -70,32 +70,75 @@ export async function uploadFile(formData: {
   const body = new FormData();
   body.append('file', formData.file);
   body.append('banco', formData.banco);
-  body.append('tipo_documento', formData.tipo);
-  body.append('formato', formData.formato);
+  body.append('tipoDocumento', formData.tipo);
   
-  if (formData.tipo === 'fatura' && formData.cartaoId) {
-    body.append('cartao_id', formData.cartaoId);
-  }
+  // Formato em MAIÚSCULO como backend espera (CSV, Excel, PDF, OFX)
+  const formatoMap: Record<string, string> = {
+    'csv': 'CSV',
+    'excel': 'Excel',
+    'pdf': 'PDF',
+    'pdf-password': 'PDF',
+    'ofx': 'OFX'
+  };
+  body.append('formato', formatoMap[formData.formato] || 'CSV');
   
+  // mesFatura é obrigatório no formato YYYY-MM
   if (formData.mes && formData.ano) {
-    body.append('mes', formData.mes);
-    body.append('ano', formData.ano.toString());
+    // Converter "Fevereiro" → "02"
+    const monthMap: Record<string, string> = {
+      'Janeiro': '01', 'Fevereiro': '02', 'Março': '03', 'Abril': '04',
+      'Maio': '05', 'Junho': '06', 'Julho': '07', 'Agosto': '08',
+      'Setembro': '09', 'Outubro': '10', 'Novembro': '11', 'Dezembro': '12'
+    };
+    const monthNumber = monthMap[formData.mes] || '01';
+    const mesFatura = `${formData.ano}-${monthNumber}`;
+    body.append('mesFatura', mesFatura);
+  } else {
+    // Fallback: usar mês/ano atual
+    const now = new Date();
+    const mesFatura = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    body.append('mesFatura', mesFatura);
   }
   
-  const response = await fetch(`${BASE_URL}/upload`, {
-    method: 'POST',
-    body,
-    headers: {
-      // TODO: Adicionar token de autenticação quando implementado
-      // 'Authorization': `Bearer ${token}`
+  if (formData.tipo === 'fatura' && formData.cartaoNome) {
+    // Backend espera nome do cartão (não ID)
+    body.append('cartao', formData.cartaoNome);
+    if (formData.cartaoFinal) {
+      body.append('final_cartao', formData.cartaoFinal);
     }
+  }
+  
+  const response = await fetchWithAuth(`${BASE_URL}/upload/preview`, {
+    method: 'POST',
+    body
   });
   
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'Erro ao fazer upload do arquivo');
+    let errorDetail = 'Erro ao fazer upload do arquivo'
+    try {
+      const error = await response.json();
+      errorDetail = error.detail || errorDetail
+    } catch (e) {
+      const errorText = await response.text()
+      errorDetail = errorText || errorDetail
+    }
+    throw new Error(errorDetail);
   }
   
   const data = await response.json();
-  return { sessionId: data.session_id || data.sessionId };
+  return { sessionId: data.sessionId };
+}
+
+/**
+ * Busca dados de preview de uma sessão de upload
+ */
+export async function fetchPreviewData(sessionId: string): Promise<PreviewData> {
+  const response = await fetchWithAuth(`${BASE_URL}/upload/preview/${sessionId}`);
+  
+  if (!response.ok) {
+    throw new Error('Erro ao carregar dados do preview');
+  }
+  
+  const data = await response.json();
+  return data;
 }

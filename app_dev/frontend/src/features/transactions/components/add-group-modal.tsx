@@ -45,26 +45,11 @@ export function AddGroupModal({
   const [categoriasDisponiveis, setCategoriasDisponiveis] = React.useState<string[]>([])
   const [loading, setLoading] = React.useState(false)
 
-  // Debug: Log quando o modal abre
-  React.useEffect(() => {
-    if (open) {
-      console.log('🚀 Modal abriu:', {
-        tipo,
-        grupoAtual,
-        grupoState: grupo,
-        grupos: grupos.length
-      })
-    }
-  }, [open])
-
   // Carregar grupos existentes se for criar subgrupo
   React.useEffect(() => {
     if (tipo === 'subgrupo') {
-      console.log('📥 Buscando grupos...')
       fetchGrupos()
     } else {
-      // Se for grupo, buscar opções disponíveis
-      console.log('📥 Buscando opções para novo grupo...')
       fetchOpcoes()
     }
   }, [tipo])
@@ -72,56 +57,43 @@ export function AddGroupModal({
   // Atualizar grupo quando grupoAtual mudar
   React.useEffect(() => {
     if (grupoAtual && tipo === 'subgrupo') {
-      console.log('🔍 Tentando setar grupo:', grupoAtual)
       setGrupo(grupoAtual)
-      console.log('✅ Grupo setado para:', grupoAtual)
     }
   }, [grupoAtual, tipo])
 
   // Quando selecionar grupo, buscar TipoGasto e CategoriaGeral da base_grupos_config
   React.useEffect(() => {
     if (tipo === 'subgrupo' && grupo && grupos.length > 0) {
-      console.log('🔎 Procurando config do grupo:', grupo, 'em', grupos.length, 'grupos')
       const grupoConfig = grupos.find(g => g.nome_grupo === grupo)
-      console.log('📦 Config encontrado:', grupoConfig)
       if (grupoConfig) {
         setTipoGasto(grupoConfig.tipo_gasto_padrao || '')
         setCategoriaGeral(grupoConfig.categoria_geral || 'Despesa')
-        console.log('✅ TipoGasto setado:', grupoConfig.tipo_gasto_padrao)
       }
     }
   }, [grupo, grupos, tipo])
 
   const fetchGrupos = async () => {
     try {
-      console.log('🌐 Chamando API /api/grupos')
       const response = await fetchWithAuth('/api/grupos')
       if (response.ok) {
         const data = await response.json()
-        console.log('✅ Grupos recebidos:', data.grupos)
         setGrupos(data.grupos)
-      } else {
-        console.error('❌ Erro ao buscar grupos:', response.status)
       }
     } catch (error) {
-      console.error('❌ Erro ao carregar grupos:', error)
+      // Erro silencioso - grupos não carregados
     }
   }
 
   const fetchOpcoes = async () => {
     try {
-      console.log('🌐 Chamando API /api/grupos/opcoes')
       const response = await fetchWithAuth('/api/grupos/opcoes')
       if (response.ok) {
         const data = await response.json()
-        console.log('✅ Opções recebidas:', data)
         setTiposGastoDisponiveis(data.tipos_gasto || [])
         setCategoriasDisponiveis(data.categorias_gerais || [])
       }
     } catch (error) {
-      console.error('❌ Erro ao carregar opções:', error)
       // Fallback para valores padrão
-      console.log('⚠️ Usando valores fallback')
       setTiposGastoDisponiveis(['Fixo', 'Ajustável', 'Investimentos', 'Sem Categoria'])
       setCategoriasDisponiveis(['Despesa', 'Receita', 'Investimento', 'Transferência'])
     }
@@ -184,7 +156,6 @@ export function AddGroupModal({
       onSuccess()
       onOpenChange(false)
     } catch (error) {
-      console.error('Erro ao criar:', error)
       alert(error instanceof Error ? error.message : 'Erro ao criar ' + (tipo === 'grupo' ? 'grupo' : 'subgrupo'))
     } finally {
       setLoading(false)
@@ -202,18 +173,6 @@ export function AddGroupModal({
             Crie um novo {tipo === 'grupo' ? 'grupo' : 'subgrupo'} para categorizar suas transações.
           </DialogDescription>
         </DialogHeader>
-
-        {/* DEBUG INFO */}
-        <div className="bg-yellow-50 border border-yellow-200 rounded p-2 text-xs space-y-1">
-          <div><strong>DEBUG:</strong></div>
-          <div>Tipo: {tipo}</div>
-          <div>Grupo Atual Prop: {grupoAtual || 'undefined'}</div>
-          <div>Grupo State: {grupo || 'undefined'}</div>
-          <div>Grupos Carregados: {grupos.length}</div>
-          <div>TipoGasto: {tipoGasto || 'undefined'}</div>
-          <div>Categorias Disp: {categoriasDisponiveis.length}</div>
-          <div>TiposGasto Disp: {tiposGastoDisponiveis.length}</div>
-        </div>
 
         <div className="grid gap-4 py-4">
           {tipo === 'subgrupo' && (

@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     # App
     APP_NAME: str = "Sistema de Finanças API"
     APP_VERSION: str = "1.0.0"
-    DEBUG: bool = True
+    DEBUG: bool = False  # ✅ False por padrão (segurança)
     
     # Database - Suporta SQLite (dev) e PostgreSQL (prod)
     # ⚠️ IMPORTANTE: Este é o ÚNICO banco usado por TODA a aplicação
@@ -50,7 +50,7 @@ class Settings(BaseSettings):
     PORT: int = 8000
     
     # JWT Authentication
-    JWT_SECRET_KEY: str = "your-secret-key-change-in-production-min-32-chars"
+    JWT_SECRET_KEY: str  # ✅ OBRIGATÓRIO via .env (sem fallback inseguro)
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60  # 1 hora
     

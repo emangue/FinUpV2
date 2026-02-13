@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.shared.dependencies import require_admin
 from .service import UserService
 from .schemas import (
     UserResponse,
@@ -19,10 +20,11 @@ router = APIRouter(prefix="/users", tags=["users"])
 @router.get("/", response_model=UserListResponse)
 def list_users(
     apenas_ativos: bool = Query(True, description="Listar apenas usuários ativos"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    admin = Depends(require_admin)  # 🔐 Apenas admin
 ):
     """
-    Lista todos os usuários
+    🔐 ADMIN ONLY - Lista todos os usuários
     """
     service = UserService(db)
     return service.list_users(apenas_ativos)
@@ -41,10 +43,11 @@ def get_user(
 @router.post("/", response_model=UserResponse, status_code=201)
 def create_user(
     user: UserCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    admin = Depends(require_admin)  # 🔐 Apenas admin
 ):
     """
-    Cria novo usuário
+    🔐 ADMIN ONLY - Cria novo usuário
     """
     service = UserService(db)
     return service.create_user(user)
@@ -53,10 +56,11 @@ def create_user(
 def update_user(
     user_id: int,
     update_data: UserUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    admin = Depends(require_admin)  # 🔐 Apenas admin
 ):
     """
-    Atualiza usuário
+    🔐 ADMIN ONLY - Atualiza usuário
     """
     service = UserService(db)
     return service.update_user(user_id, update_data)
@@ -64,10 +68,11 @@ def update_user(
 @router.delete("/{user_id}")
 def delete_user(
     user_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    admin = Depends(require_admin)  # 🔐 Apenas admin
 ):
     """
-    Desativa usuário (soft delete)
+    🔐 ADMIN ONLY - Desativa usuário (soft delete)
     """
     service = UserService(db)
     return service.delete_user(user_id)
@@ -76,10 +81,11 @@ def delete_user(
 def reset_password(
     user_id: int,
     nova_senha: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    admin = Depends(require_admin)  # 🔐 Apenas admin
 ):
     """
-    Reseta a senha de um usuário
+    🔐 ADMIN ONLY - Reseta a senha de um usuário
     """
     service = UserService(db)
     return service.reset_password(user_id, nova_senha)

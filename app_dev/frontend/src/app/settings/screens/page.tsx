@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { fetchWithAuth } from '@/core/utils/api-client'
 import DashboardLayout from '@/components/dashboard-layout'
+import { RequireAdmin } from '@/core/components/require-admin'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -297,18 +298,19 @@ export default function ScreenVisibilityPage() {
   }
 
   return (
-    <DashboardLayout>
-      <div className="container mx-auto p-6 space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-              <Eye className="h-8 w-8" />
-              Visibilidade de Telas
-            </h1>
-            <p className="text-muted-foreground mt-2">
-              Controle quais telas aparecem para diferentes tipos de usuários (estrutura da sidebar)
-            </p>
-          </div>
+    <RequireAdmin>
+      <DashboardLayout>
+        <div className="container mx-auto p-6 space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
+                <Eye className="h-8 w-8" />
+                Visibilidade de Telas
+              </h1>
+              <p className="text-muted-foreground mt-2">
+                Controle quais telas aparecem para diferentes tipos de usuários (estrutura da sidebar)
+              </p>
+            </div>
 
           {hasChanges && (
             <div className="flex gap-2">
@@ -466,6 +468,7 @@ export default function ScreenVisibilityPage() {
         </div>
       </div>
     </DashboardLayout>
+    </RequireAdmin>
   )
 }
 

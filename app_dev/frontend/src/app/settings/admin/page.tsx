@@ -3,6 +3,7 @@
 import * as React from "react"
 import { fetchWithAuth } from "@/core/utils/api-client"
 import DashboardLayout from "@/components/dashboard-layout"
+import { RequireAdmin } from "@/core/components/require-admin"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -234,16 +235,17 @@ export default function AdminPage() {
   }
 
   return (
-    <DashboardLayout>
-      <div className="flex flex-1 flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold">Administração</h1>
-            <p className="text-muted-foreground">
-              Gerencie usuários do sistema
-            </p>
+    <RequireAdmin>
+      <DashboardLayout>
+        <div className="flex flex-1 flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-semibold">Administração</h1>
+              <p className="text-muted-foreground">
+                Gerencie usuários do sistema
+              </p>
+            </div>
           </div>
-        </div>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
@@ -438,5 +440,6 @@ export default function AdminPage() {
         </Dialog>
       </div>
     </DashboardLayout>
+    </RequireAdmin>
   )
 }

@@ -17,7 +17,7 @@ import { API_CONFIG } from '@/core/config/api.config';
 import Link from 'next/link';
 
 interface BudgetItem {
-  categoria_geral: string;
+  grupo: string;
   mes_referencia: string;
   valor_planejado: number;
 }
@@ -64,7 +64,7 @@ export default function BudgetPage() {
   const loadGruposDisponiveis = async () => {
     try {
       const response = await fetch(
-        `${API_CONFIG.BACKEND_URL}/api/v1/budget/geral/grupos-disponiveis`
+        `${API_CONFIG.BACKEND_URL}/api/v1/budget/planning/grupos-disponiveis`
       );
       
       if (response.ok) {
@@ -90,7 +90,7 @@ export default function BudgetPage() {
     setMessage(null);
     try {
       const response = await fetch(
-        `${API_CONFIG.BACKEND_URL}/api/v1/budget/geral?mes_referencia=${mesReferencia}`
+        `${API_CONFIG.BACKEND_URL}/api/v1/budget/planning?mes_referencia=${mesReferencia}`
       );
       
       if (response.ok) {
@@ -144,12 +144,12 @@ export default function BudgetPage() {
     setMessage(null);
     try {
       const items = Object.entries(budgetData)
-        .map(([categoria_geral, valor_planejado]) => ({
-          categoria_geral,
+        .map(([grupo, valor_planejado]) => ({
+          grupo,
           valor_planejado,
         }));
 
-      const response = await fetch(`${API_CONFIG.BACKEND_URL}/api/v1/budget/geral/bulk-upsert`, {
+      const response = await fetch(`${API_CONFIG.BACKEND_URL}/api/v1/budget/planning/bulk-upsert`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -187,7 +187,7 @@ export default function BudgetPage() {
     
     try {
       const response = await fetch(
-        `${API_CONFIG.BACKEND_URL}/api/v1/budget/geral?mes_referencia=${prevMesReferencia}`
+        `${API_CONFIG.BACKEND_URL}/api/v1/budget/planning?mes_referencia=${prevMesReferencia}`
       );
       
       if (response.ok) {

@@ -28,13 +28,6 @@ export async function fetchWithAuth(
   // Buscar token do localStorage (salvo no login)
   const token = localStorage.getItem('authToken')
   
-  // 🐛 DEBUG TEMPORÁRIO - Remover após validar
-  console.log('[api-client] fetchWithAuth chamado:', {
-    url,
-    tokenExists: !!token,
-    tokenPreview: token ? `${token.substring(0, 20)}...` : 'NENHUM TOKEN',
-  })
-  
   // Detectar se body é FormData (para uploads)
   const isFormData = options.body instanceof FormData
   
@@ -46,16 +39,25 @@ export async function fetchWithAuth(
     ...options.headers,
   }
 
-  // 🐛 DEBUG TEMPORÁRIO
-  console.log('[api-client] Headers enviados:', headers)
-  console.log('[api-client] É FormData?', isFormData)
-
   // Fazer request com token (follow redirects com redirect: 'follow')
-  return fetch(url, {
+  const response = await fetch(url, {
     ...options,
     headers,
     redirect: 'follow',  // Segue redirects 307 automaticamente
   })
+  
+  // 🔐 REDIRECT AUTOMÁTICO - Se 401 Unauthorized, redirecionar para login
+  if (response.status === 401) {
+    // Limpar token inválido
+    clearAuth()
+    
+    // Redirecionar para login (se estiver no browser)
+    if (typeof window !== 'undefined') {
+      window.location.href = '/auth/login'
+    }
+  }
+  
+  return response
 }
 
 /**

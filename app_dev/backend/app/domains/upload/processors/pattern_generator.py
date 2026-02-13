@@ -445,37 +445,77 @@ def atualizar_base_padroes(db: Session, user_id: int, padroes: List[Dict]) -> Tu
     """
     Atualiza base_padroes no banco
     
+    Estratégia:
+    1. Busca por padrao_num (hash único) - mais confiável que estabelecimento
+    2. Se existe: atualiza estatísticas (SEM mudar padrao_num)
+    3. Se não: verifica duplicata por padrao_num antes de criar
+    4. Rollback individual em caso de erro
+    
     Returns:
         (criados, atualizados)
     """
+    import logging
+    logger = logging.getLogger(__name__)
     criados = 0
     atualizados = 0
     
     for padrao_dict in padroes:
-        # Buscar padrão existente
-        padrao_estab = padrao_dict['padrao_estabelecimento']
-        
-        padrao_existente = db.query(BasePadroes).filter(
-            BasePadroes.padrao_estabelecimento == padrao_estab,
-            BasePadroes.user_id == user_id
-        ).first()
-        
-        if padrao_existente:
-            # Atualizar
-            for key, value in padrao_dict.items():
-                if hasattr(padrao_existente, key):
-                    setattr(padrao_existente, key, value)
-            atualizados += 1
-        else:
-            # Criar novo
-            novo_padrao = BasePadroes(
-                user_id=user_id,
-                **padrao_dict
-            )
-            db.add(novo_padrao)
-            criados += 1
+        try:
+            padrao_num = padrao_dict.get('padrao_num')
+            if not padrao_num:
+                logger.warning(f"Padrão sem hash: {padrao_dict.get('padrao_estabelecimento')}")
+                continue
+            
+            # 🔍 BUSCA POR HASH (mais confiável que estabelecimento)
+            padrao_existente = db.query(BasePadroes).filter(
+                BasePadroes.padrao_num == padrao_num,
+                BasePadroes.user_id == user_id
+            ).first()
+            
+            if padrao_existente:
+                # ✅ ATUALIZAR - Não toca em padrao_num e padrao_estabelecimento
+                campos_update = ['contagem', 'valor_medio', 'valor_min', 'valor_max', 
+                                'desvio_padrao', 'coef_variacao', 'percentual_consistencia',
+                                'confianca', 'grupo_sugerido', 'subgrupo_sugerido', 
+                                'tipo_gasto_sugerido', 'categoria_geral_sugerida',
+                                'faixa_valor', 'segmentado', 'exemplos', 'status']
+                
+                for key in campos_update:
+                    if key in padrao_dict:
+                        setattr(padrao_existente, key, padrao_dict[key])
+                
+                padrao_existente.data_criacao = datetime.now()  # Atualiza timestamp
+                atualizados += 1
+            else:
+                # ✅ CRIAR NOVO - Verifica duplicata antes
+                duplicata = db.query(BasePadroes).filter(
+                    BasePadroes.padrao_num == padrao_num
+                ).first()
+                
+                if duplicata:
+                    logger.warning(f"⚠️  Duplicata detectada (outro user?): {padrao_num}")
+                    continue
+                
+                novo_padrao = BasePadroes(
+                    user_id=user_id,
+                    **padrao_dict
+                )
+                db.add(novo_padrao)
+                criados += 1
+            
+            db.flush()
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao processar padrão {padrao_dict.get('padrao_estabelecimento', 'N/A')}: {str(e)}")
+            db.rollback()
+            continue
     
-    db.commit()
+    try:
+        db.commit()
+        logger.info(f"✅ Base padrões atualizada: {criados} criados, {atualizados} atualizados")
+    except Exception as e:
+        logger.error(f"❌ Erro ao commitar base_padroes: {str(e)}")
+        db.rollback()
     
     return criados, atualizados
 
