@@ -345,9 +345,140 @@ def test_upload_creates_missing_grupos():
 
 ---
 
+## � PROBLEMA ARQUITETURAL IDENTIFICADO
+
+### Redundância de Dados entre Tabelas
+
+**Situação Atual:**
+```sql
+-- base_grupos_config (fonte oficial)
+base_grupos_config:
+  - nome_grupo
+  - tipo_gasto_padrao       ✅ FONTE OFICIAL
+  - categoria_geral         ✅ FONTE OFICIAL
+
+-- base_marcacoes (duplicação!)
+base_marcacoes:
+  - GRUPO
+  - SUBGRUPO
+  - TipoGasto              ❌ DUPLICADO (deveria vir de grupos_config)
+  - CategoriaGeral         ❌ DUPLICADO (deveria vir de grupos_config)
+```
+
+**Problema:**
+- Campos `TipoGasto` e `CategoriaGeral` estão **duplicados** em `base_marcacoes`
+- Dados oficiais estão em `base_grupos_config`
+- Pode causar inconsistências (ex: mudar em um lugar e não atualizar no outro)
+
+**Solução Proposta:**
+```sql
+-- base_marcacoes LIMPA (apenas relação grupo-subgrupo)
+base_marcacoes:
+  - GRUPO              ✅ MANTÉM (FK para base_grupos_config.nome_grupo)
+  - SUBGRUPO           ✅ MANTÉM (nome do subgrupo)
+  
+-- Remover campos redundantes:
+  - TipoGasto          ❌ DELETAR (vem de JOIN com grupos_config)
+  - CategoriaGeral     ❌ DELETAR (vem de JOIN com grupos_config)
+```
+
+**Migration Necessária:**
+```python
+# migrations/versions/XXXX_cleanup_base_marcacoes.py
+def upgrade():
+    # 1. Validar integridade antes de deletar
+    op.execute("""
+        SELECT COUNT(*) FROM base_marcacoes m
+        LEFT JOIN base_grupos_config g ON m.GRUPO = g.nome_grupo
+        WHERE g.nome_grupo IS NULL
+    """)
+    # Se > 0, há grupos órfãos que precisam ser criados em grupos_config primeiro
+    
+    # 2. Remover colunas redundantes
+    op.drop_column('base_marcacoes', 'TipoGasto')
+    op.drop_column('base_marcacoes', 'CategoriaGeral')
+    
+    # 3. Adicionar FK (opcional)
+    op.create_foreign_key(
+        'fk_marcacoes_grupos',
+        'base_marcacoes', 'base_grupos_config',
+        ['GRUPO'], ['nome_grupo']
+    )
+
+def downgrade():
+    # Restaurar colunas (dados serão NULL após restore)
+    op.add_column('base_marcacoes', sa.Column('TipoGasto', sa.String(100)))
+    op.add_column('base_marcacoes', sa.Column('CategoriaGeral', sa.String(100)))
+    op.drop_constraint('fk_marcacoes_grupos', 'base_marcacoes')
+```
+
+**Queries Após Limpeza:**
+```python
+# ANTES (campos redundantes)
+marcacao = db.query(BaseMarcacao).filter(...).first()
+tipo_gasto = marcacao.TipoGasto  # Dados duplicados
+
+# DEPOIS (JOIN com grupos_config)
+marcacao = db.query(BaseMarcacao, BaseGruposConfig)\
+    .join(BaseGruposConfig, BaseMarcacao.GRUPO == BaseGruposConfig.nome_grupo)\
+    .filter(...).first()
+tipo_gasto = marcacao.BaseGruposConfig.tipo_gasto_padrao  # Fonte oficial
+```
+
+**Benefícios:**
+- ✅ Elimina duplicação de dados
+- ✅ Fonte única de verdade (base_grupos_config)
+- ✅ Reduz tamanho do banco
+- ✅ Previne inconsistências
+- ✅ Facilita manutenção
+
+---
+
 ## 📊 Sub-Sprints
 
+### Sprint 2.0 - Análise e Limpeza Arquitetural (2 horas) ⚠️ CRÍTICO
+**Atividades:**
+- [ ] **Análise:** Avaliar necessidade de manter ambas as tabelas
+  - Cenário 1: Manter ambas → Remover campos redundantes
+  - Cenário 2: Unificar → Migrar tudo para uma tabela
+- [ ] **Auditoria:** Verificar integridade de dados
+  - Grupos em base_marcacoes sem correspondente em base_grupos_config
+  - Inconsistências entre TipoGasto/CategoriaGeral das duas tabelas
+- [ ] **Migration:** Criar migration para limpeza
+  - Remover colunas TipoGasto e CategoriaGeral de base_marcacoes
+  - Adicionar FK GRUPO → base_grupos_config.nome_grupo
+  - Validar integridade referencial
+- [ ] **Atualizar Queries:** Refatorar para usar JOIN
+  - Atualizar MarcacaoRepository para fazer JOIN com grupos_config
+  - Atualizar schemas para pegar dados da fonte oficial
+- [ ] **Testes:** Validar que queries retornam mesmos dados
+
+**Arquivos:**
+- `migrations/versions/XXXX_cleanup_base_marcacoes.py` - Migration
+- `app/domains/marcacoes/repository.py` - Atualizar queries com JOIN
+- `docs/features/auto-create-grupos/LIMPEZA_ARQUITETURAL.md` - Documentação
+
+**Decisão Arquitetural:**
+```
+┌─────────────────────────────────────────────────────────────┐
+│ OPÇÃO RECOMENDADA: Manter 2 tabelas com limpeza            │
+├─────────────────────────────────────────────────────────────┤
+│ base_grupos_config:                                         │
+│   - Configuração do GRUPO (tipo_gasto, categoria)          │
+│   - 1 registro por grupo                                    │
+│                                                              │
+│ base_marcacoes:                                             │
+│   - Relação GRUPO + SUBGRUPO                                │
+│   - N registros por grupo (1 por subgrupo)                 │
+│   - JOIN com grupos_config para pegar configuração         │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
 ### Sprint 2.1 - Backend Endpoints (4 horas)
+**Dependências:** ⚠️ Sprint 2.0 deve ser completo primeiro
+
 **Atividades:**
 - [ ] Criar schema `GrupoCreate`, `GrupoResponse`
 - [ ] Endpoint `POST /api/v1/marcacoes/grupos`
@@ -386,11 +517,13 @@ def test_upload_creates_missing_grupos():
 - [ ] Verificar grupos criados no banco
 - [ ] Verificar marcação funciona
 - [ ] Teste edge cases (duplicatas, caracteres especiais)
+- [ ] **Validação pós-limpeza:** Confirmar JOIN funciona corretamente
 - [ ] Documentação
 
 **Arquivos:**
 - `docs/features/auto-create-grupos/SPRINT2_COMPLETE.md`
 - `docs/features/auto-create-grupos/API_DOCS.md`
+- `docs/features/auto-create-grupos/LIMPEZA_ARQUITETURAL.md`
 
 ---
 

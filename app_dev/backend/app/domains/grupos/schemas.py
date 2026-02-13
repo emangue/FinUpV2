@@ -37,3 +37,35 @@ class GrupoResponse(BaseModel):
 class GrupoListResponse(BaseModel):
     grupos: list[GrupoResponse]
     total: int
+
+
+# ===== SCHEMAS PARA AUTO-CRIAÇÃO (Sprint 2) =====
+
+class SubgrupoCreate(BaseModel):
+    """Schema para criar subgrupo (nome apenas, grupo_pai vem da URL)"""
+    nome: str = Field(..., description="Nome do subgrupo", min_length=1, max_length=100)
+    
+    class Config:
+        from_attributes = True
+
+
+class SubgrupoResponse(BaseModel):
+    """Schema de resposta para subgrupo criado"""
+    grupo_pai: str
+    subgrupo: str
+    message: str = "Subgrupo validado e disponível para uso"
+    
+    class Config:
+        from_attributes = True
+
+
+class GrupoBatchCreate(BaseModel):
+    """Schema para criação em lote de grupos"""
+    grupos: list[GrupoCreate] = Field(..., description="Lista de grupos a criar")
+
+
+class GrupoBatchResponse(BaseModel):
+    """Schema de resposta para criação em lote"""
+    created: list[GrupoResponse] = Field(default_factory=list, description="Grupos criados")
+    skipped: list[dict] = Field(default_factory=list, description="Grupos que já existiam")
+    errors: list[dict] = Field(default_factory=list, description="Erros durante criação")
