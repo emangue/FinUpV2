@@ -9,12 +9,12 @@
 ## FASE 1 - PRÉ-DEPLOY LOCAL
 
 ### 1.1 Git e Código
-- [ ] **1.1.1** Git status limpo (sem alterações não commitadas)
+- [x] **1.1.1** Git status limpo (sem alterações não commitadas) ✅
 - [ ] **1.1.2** Branch: `main` (ou merge de feature concluído)
 - [ ] **1.1.3** Código commitado e sincronizado com remoto
 
 **Comentários:**
-> ⏳ Há alterações não commitadas. Será necessário commit antes do deploy.
+> ✅ Commit abf3f9b9 feito. Merge para main pendente.
 
 ### 1.2 Validação Técnica
 - [x] **1.2.1** Build frontend OK (`npm run build`) ✅
