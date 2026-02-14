@@ -44,7 +44,7 @@ def upgrade() -> None:
             bg.mes_referencia,
             bg.valor_planejado,
             0.0 as valor_medio_3_meses,
-            1 as ativo,
+            true as ativo,
             COALESCE(bg.created_at, CURRENT_TIMESTAMP),
             COALESCE(bg.updated_at, CURRENT_TIMESTAMP)
         FROM budget_geral bg
