@@ -13,10 +13,13 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { Download } from 'lucide-react'
 import { MobileHeader } from '@/components/mobile/mobile-header'
 import { MonthScrollPicker } from '@/components/mobile/month-scroll-picker'
 import { YTDToggle, YTDToggleValue } from '@/components/mobile/ytd-toggle'
-import { WalletBalanceCard, BarChart, DonutChart } from '@/features/dashboard/components'
+import { WalletBalanceCard } from '@/features/dashboard/components/wallet-balance-card'
+import { BarChart } from '@/features/dashboard/components/bar-chart'
+import { DonutChart } from '@/features/dashboard/components/donut-chart'
 import { useDashboardMetrics, useIncomeSources, useExpenseSources, useChartData } from '@/features/dashboard/hooks/use-dashboard'
 import { fetchLastMonthWithData } from '@/features/dashboard/services/dashboard-api'
 import { useRequireAuth } from '@/core/hooks/use-require-auth'
@@ -88,11 +91,14 @@ export default function DashboardMobilePage() {
       {/* Header */}
       <MobileHeader
         title="Dashboard"
-        showBackButton={false}
-        rightButton={{
-          label: 'Download',
-          onClick: () => console.log('Download clicked')
-        }}
+        leftAction={null}
+        rightActions={[
+          {
+            icon: <Download className="w-5 h-5" />,
+            label: 'Download',
+            onClick: () => console.log('Download clicked')
+          }
+        ]}
       />
 
       {/* Date display */}

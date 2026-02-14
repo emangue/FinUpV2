@@ -4,7 +4,6 @@
  * Centraliza exports de componentes do domínio de dashboard
  */
 
-// Desktop Components
 export { BudgetVsActual } from './budget-vs-actual'
 export { DemaisBreakdownModal } from './demais-breakdown-modal'
 export { default as CategoryExpenses } from './category-expenses'

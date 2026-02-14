@@ -16,7 +16,9 @@ interface GoalCardProps {
 
 export function GoalCard({ goal, onClick }: GoalCardProps) {
   const status = calculateGoalStatus(goal)
-  const { percentual, valor_atual } = calculateGoalProgress(goal)
+  const progress = calculateGoalProgress(goal, goal.valor_realizado ?? 0)
+  const percentual = goal.percentual ?? progress.percentual
+  const valor_atual = goal.valor_realizado ?? progress.valor_atual
   const mesesRestantes = calculateMonthsRemaining(goal.mes_referencia)
   
   return (
@@ -51,10 +53,10 @@ export function GoalCard({ goal, onClick }: GoalCardProps) {
         <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
           <div
             className={`h-full transition-all duration-300 ${
-              percentual >= 100 ? 'bg-green-500' :
-              percentual >= 75 ? 'bg-blue-500' :
+              percentual >= 100 ? 'bg-red-500' :
+              percentual >= 75 ? 'bg-amber-500' :
               percentual >= 50 ? 'bg-yellow-500' :
-              'bg-gray-400'
+              'bg-green-500'
             }`}
             style={{ width: `${Math.min(percentual, 100)}%` }}
           />

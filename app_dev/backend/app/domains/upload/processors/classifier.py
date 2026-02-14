@@ -74,9 +74,12 @@ class CascadeClassifier:
             padrao_montado = f"{estab_normalizado} [{faixa}]"
             
             # BUSCAR MARCAÇÃO IA PARA TODAS AS TRANSAÇÕES (base_marcacoes)
-            marcacao_ia = self._buscar_marcacao_ia(marked.estabelecimento_base)
+            marcacao_ia = self._buscar_marcacao_ia(
+                estabelecimento=marked.estabelecimento_base,
+                banco=marked.banco
+            )
             
-            logger.debug(f"📍 Padrão: '{padrao_montado}' | MarcaçãoIA: '{marcacao_ia}' | R$ {marked.valor_positivo:.2f}")
+            logger.debug(f"📍 Padrão: '{padrao_montado}' | MarcaçãoIA: '{marcacao_ia}' | Banco: '{marked.banco}' | R$ {marked.valor_positivo:.2f}")
             
             # Tentar níveis em ordem de prioridade
             
@@ -359,7 +362,11 @@ class CascadeClassifier:
         Usa classificador de regras genéricas independente de banco
         """
         try:
-            resultado = self.generic_classifier.classify(marked.estabelecimento_base)
+            # Passar banco para regras específicas de subgrupo
+            resultado = self.generic_classifier.classify(
+                estabelecimento=marked.estabelecimento_base,
+                banco=marked.banco
+            )
             
             if resultado:
                 logger.debug(f"✅ Nível 4 (Regras Genéricas): {marked.estabelecimento_base[:30]}... (prioridade: {resultado['prioridade']})")
@@ -383,17 +390,25 @@ class CascadeClassifier:
         
         return None
     
-    def _buscar_marcacao_ia(self, estabelecimento: str) -> Optional[str]:
+    def _buscar_marcacao_ia(self, estabelecimento: str, banco: str = None) -> Optional[str]:
         """
         Busca sugestão de marcação IA para QUALQUER transação
         Usa apenas regras genéricas (hardcoded do n8n)
+        
+        Args:
+            estabelecimento: Nome do estabelecimento
+            banco: Nome do banco (opcional, para subgrupo específico)
         
         Returns:
             String formatada: "GRUPO > SUBGRUPO" ou None
         """
         try:
             # PRIMEIRA TENTATIVA: Regras genéricas (prioridade)
-            marcacao_generica = self.generic_classifier.get_marcacao_ia(estabelecimento)
+            # Passar banco para regras específicas de subgrupo
+            marcacao_generica = self.generic_classifier.get_marcacao_ia(
+                estabelecimento=estabelecimento,
+                banco=banco
+            )
             if marcacao_generica:
                 logger.debug(f"🎯 MarcaçãoIA (Regras Genéricas): {marcacao_generica}")
                 return marcacao_generica

@@ -56,7 +56,11 @@ class TransactionRepository:
         if filters.grupo:
             query = query.filter(JournalEntry.GRUPO == filters.grupo)
         
-        if filters.subgrupo:
+        if getattr(filters, 'subgrupo_null', None):
+            query = query.filter(
+                or_(JournalEntry.SUBGRUPO.is_(None), JournalEntry.SUBGRUPO == '')
+            )
+        elif filters.subgrupo:
             query = query.filter(JournalEntry.SUBGRUPO == filters.subgrupo)
         
         if filters.tipo:
@@ -105,7 +109,11 @@ class TransactionRepository:
             )
         if filters.grupo:
             query = query.filter(JournalEntry.GRUPO == filters.grupo)
-        if filters.subgrupo:
+        if getattr(filters, 'subgrupo_null', None):
+            query = query.filter(
+                or_(JournalEntry.SUBGRUPO.is_(None), JournalEntry.SUBGRUPO == '')
+            )
+        elif filters.subgrupo:
             query = query.filter(JournalEntry.SUBGRUPO == filters.subgrupo)
         if filters.tipo:
             query = query.filter(JournalEntry.TipoTransacao == filters.tipo)
@@ -172,7 +180,11 @@ class TransactionRepository:
                 query = query.filter(JournalEntry.TipoGasto == filters.tipo_gasto)
         if filters.grupo:
             query = query.filter(JournalEntry.GRUPO == filters.grupo)
-        if filters.subgrupo:
+        if getattr(filters, 'subgrupo_null', None):
+            query = query.filter(
+                or_(JournalEntry.SUBGRUPO.is_(None), JournalEntry.SUBGRUPO == '')
+            )
+        elif filters.subgrupo:
             query = query.filter(JournalEntry.SUBGRUPO == filters.subgrupo)
         if filters.estabelecimento:
             query = query.filter(JournalEntry.Estabelecimento.ilike(f"%{filters.estabelecimento}%"))

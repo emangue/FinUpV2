@@ -9,6 +9,38 @@ import { Bank, CreditCard, PreviewData } from '../types';
 
 const BASE_URL = `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}`;
 
+/** Status de compatibilidade por formato (OK=disponível, WIP=em desenvolvimento, TBD=em breve) */
+export type FormatStatus = 'OK' | 'WIP' | 'TBD';
+
+/** Mapa banco -> status por formato */
+export type BankCompatibilityMap = Record<string, {
+  csv_status: FormatStatus;
+  excel_status: FormatStatus;
+  pdf_status: FormatStatus;
+  ofx_status: FormatStatus;
+}>;
+
+/**
+ * Busca compatibilidade de formatos por banco (usado para desabilitar formatos TBD)
+ */
+export async function fetchCompatibility(): Promise<BankCompatibilityMap> {
+  const response = await fetchWithAuth(`${BASE_URL}/compatibility/`);
+  if (!response.ok) {
+    return {};
+  }
+  const data = await response.json();
+  const map: BankCompatibilityMap = {};
+  for (const item of data.banks || []) {
+    map[item.bank_name] = {
+      csv_status: item.csv_status || 'TBD',
+      excel_status: item.excel_status || 'TBD',
+      pdf_status: item.pdf_status || 'TBD',
+      ofx_status: item.ofx_status || 'TBD',
+    };
+  }
+  return map;
+}
+
 /**
  * Lista todos os bancos disponíveis para upload
  */

@@ -3,7 +3,7 @@
 import * as React from "react"
 import { Button } from "@/components/ui/button"
 import { UploadDialog } from "@/features/upload"
-import { Upload, FileText, PlusCircle, CheckCircle, XCircle, Clock, FileX } from "lucide-react"
+import { Upload, FileText, PlusCircle, CheckCircle, XCircle, Clock, FileX, Trash2 } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -11,6 +11,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import {
   Card,
   CardContent,
@@ -51,6 +61,9 @@ export default function UploadPage() {
   const [compatibilityDialogOpen, setCompatibilityDialogOpen] = React.useState(false)
   const [uploadHistory, setUploadHistory] = React.useState<UploadHistory[]>([])
   const [loading, setLoading] = React.useState(true)
+  const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false)
+  const [uploadToDelete, setUploadToDelete] = React.useState<UploadHistory | null>(null)
+  const [deleting, setDeleting] = React.useState(false)
 
   const fetchUploadHistory = async () => {
     try {
@@ -103,6 +116,35 @@ export default function UploadPage() {
         return <FileX className="h-4 w-4 text-gray-600" />
       default:
         return <FileX className="h-4 w-4 text-gray-600" />
+    }
+  }
+
+  const handleDeleteClick = (upload: UploadHistory) => {
+    setUploadToDelete(upload)
+    setDeleteDialogOpen(true)
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!uploadToDelete) return
+    try {
+      setDeleting(true)
+      const token = document.cookie.split('; ').find(c => c.startsWith('token='))?.split('=')[1]
+      const response = await fetch(`/api/upload/history/${uploadToDelete.id}`, {
+        method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      })
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        throw new Error(err?.detail?.error || (typeof err?.detail === 'string' ? err.detail : null) || 'Erro ao excluir')
+      }
+      setDeleteDialogOpen(false)
+      setUploadToDelete(null)
+      fetchUploadHistory()
+    } catch (err) {
+      console.error('Erro ao excluir upload:', err)
+      alert(err instanceof Error ? err.message : 'Erro ao excluir upload')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -281,12 +323,24 @@ export default function UploadPage() {
                   </div>
                   <div className="flex items-center space-x-3">
                     {upload.status === 'success' && (
-                      <div className="text-sm text-muted-foreground text-right">
-                        <p className="font-medium text-green-600">{upload.transacoes_importadas} importadas</p>
-                        {upload.transacoes_duplicadas > 0 && (
-                          <p className="text-xs text-amber-600">{upload.transacoes_duplicadas} duplicadas</p>
-                        )}
-                      </div>
+                      <>
+                        <div className="text-sm text-muted-foreground text-right">
+                          <p className="font-medium text-green-600">{upload.transacoes_importadas} importadas</p>
+                          {upload.transacoes_duplicadas > 0 && (
+                            <p className="text-xs text-amber-600">{upload.transacoes_duplicadas} duplicadas</p>
+                          )}
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDeleteClick(upload)}
+                          disabled={deleting}
+                          className="text-muted-foreground hover:text-red-600 hover:bg-red-50"
+                          title="Excluir todas as transações deste upload"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </>
                     )}
                     {getStatusBadge(upload.status)}
                   </div>
@@ -454,6 +508,38 @@ export default function UploadPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir upload</AlertDialogTitle>
+            <AlertDialogDescription>
+              Deseja excluir todas as {uploadToDelete?.transacoes_importadas ?? 0} transações deste upload?
+              <br /><br />
+              <strong>{uploadToDelete?.nome_arquivo}</strong>
+              {uploadToDelete?.banco && (
+                <>
+                  <br />
+                  {uploadToDelete.banco}
+                  {uploadToDelete.nome_cartao && ` • ${uploadToDelete.nome_cartao}`}
+                </>
+              )}
+              <br /><br />
+              Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); handleConfirmDelete() }}
+              disabled={deleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {deleting ? 'Excluindo...' : 'Sim, excluir'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       </div>
     </DashboardLayout>
   )

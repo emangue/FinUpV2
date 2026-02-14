@@ -18,6 +18,8 @@ export function useUpload() {
     banco: string;
     tipo: 'extrato' | 'fatura';
     cartaoId?: string;
+    cartaoNome?: string;
+    cartaoFinal?: string;
     mes?: string;
     ano?: number;
     formato: string;

@@ -3,6 +3,7 @@ Domínio Transactions - Router
 Endpoints HTTP - apenas validação e chamadas de service
 """
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import Optional, List
 
@@ -131,6 +132,7 @@ def list_transactions(
     estabelecimento: Optional[str] = None,
     grupo: Optional[str] = None,
     subgrupo: Optional[str] = None,
+    subgrupo_null: Optional[bool] = Query(None, description="Filtrar transações sem subgrupo (SUBGRUPO IS NULL)"),
     tipo: Optional[str] = None,
     categoria_geral: Optional[str] = None,
     tipo_gasto: Optional[List[str]] = Query(None),  # Aceita múltiplos valores
@@ -150,6 +152,7 @@ def list_transactions(
         estabelecimento=estabelecimento,
         grupo=grupo,
         subgrupo=subgrupo,
+        subgrupo_null=subgrupo_null,
         tipo=tipo,
         categoria_geral=categoria_geral,
         tipo_gasto=tipo_gasto,
@@ -180,6 +183,7 @@ def get_filtered_total(
     tipo_gasto: Optional[List[str]] = Query(None),  # Aceita múltiplos valores
     grupo: Optional[str] = None,
     subgrupo: Optional[str] = None,
+    subgrupo_null: Optional[bool] = Query(None),
     estabelecimento: Optional[str] = None,
     search: Optional[str] = None,
     cartao: Optional[str] = None,
@@ -199,12 +203,35 @@ def get_filtered_total(
         tipo_gasto=tipo_gasto,
         grupo=grupo,
         subgrupo=subgrupo,
+        subgrupo_null=subgrupo_null,
         estabelecimento=estabelecimento,
         search=search,
         cartao=cartao
     )
     
     return service.get_filtered_total(user_id, filters)
+
+
+class PropagateInfoResponse(BaseModel):
+    """Info para propagação de grupo/subgrupo"""
+    same_parcela_count: int = 0  # Outras transações com mesmo IdParcela (excluindo esta)
+    has_padrao: bool = False    # Existe padrão em base_padroes para esta transação
+    same_padrao_count: int = 0  # Transações que batem no mesmo padrão (excluindo esta)
+
+
+@router.get("/propagate-info/{transaction_id}", response_model=PropagateInfoResponse)
+def get_propagate_info(
+    transaction_id: str,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Retorna quantas transações seriam afetadas ao propagar grupo/subgrupo.
+    Usado para exibir opção "Atualizar em todas as X parcelas" ou "Atualizar em todas com este padrão".
+    """
+    service = TransactionService(db)
+    return service.get_propagate_info(transaction_id, user_id)
+
 
 @router.get("/{transaction_id}", response_model=TransactionResponse)
 def get_transaction(

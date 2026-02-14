@@ -8,9 +8,11 @@ interface TransactionListProps {
   activeTab: TabFilter;
   onEdit: (transaction: Transaction) => void;
   onBatchUpdate: (transactionId: string, grupo: string, subgrupo: string) => void;
+  onGroupAdded?: () => void;
+  existingGroups?: string[];
 }
 
-export default function TransactionList({ transactions, activeTab, onEdit, onBatchUpdate }: TransactionListProps) {
+export default function TransactionList({ transactions, activeTab, onEdit, onBatchUpdate, onGroupAdded, existingGroups = [] }: TransactionListProps) {
   const filteredTransactions = transactions.filter((tx) => {
     if (activeTab === 'all') return true;
     if (activeTab === 'classificadas') return tx.grupo && tx.subgrupo;
@@ -26,6 +28,8 @@ export default function TransactionList({ transactions, activeTab, onEdit, onBat
           transaction={transaction}
           onEdit={onEdit}
           onBatchUpdate={onBatchUpdate}
+          onGroupAdded={onGroupAdded}
+          existingGroups={existingGroups}
         />
       ))}
 

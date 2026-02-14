@@ -1,6 +1,6 @@
 import DashboardLayout from '@/components/dashboard-layout';
 
-export default function BudgetLayout({
+export default function InvestimentosLayout({
   children,
 }: {
   children: React.ReactNode;

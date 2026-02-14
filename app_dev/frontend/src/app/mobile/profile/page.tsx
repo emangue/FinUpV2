@@ -10,7 +10,7 @@ import { useRouter } from 'next/navigation';
 import { MobileHeader } from '@/components/mobile/mobile-header';
 import { fetchWithAuth } from '@/core/utils/api-client';
 import { API_CONFIG } from '@/core/config/api.config';
-import { User, Lock, Mail, LogOut, Bell, Moon, Globe } from 'lucide-react';
+import { User, Lock, LogOut, Bell, Moon, Globe, CreditCard, Ban, Upload } from 'lucide-react';
 import { useRequireAuth } from '@/core/hooks/use-require-auth';
 
 interface UserProfile {
@@ -409,6 +409,60 @@ export default function ProfileMobilePage() {
             </button>
           </div>
         )}
+
+        {/* Management Section */}
+        <div className="bg-white rounded-2xl shadow-sm overflow-hidden divide-y">
+          <div className="p-4">
+            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
+              Gerenciamento
+            </h3>
+          </div>
+
+          <button
+            onClick={() => router.push('/mobile/cards')}
+            className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
+          >
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
+                <CreditCard className="w-5 h-5 text-purple-600" />
+              </div>
+              <span className="font-medium text-gray-900">Meus Cartões</span>
+            </div>
+            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+
+          <button
+            onClick={() => router.push('/mobile/exclusions')}
+            className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
+          >
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                <Ban className="w-5 h-5 text-red-600" />
+              </div>
+              <span className="font-medium text-gray-900">Excluir / Ignorar</span>
+            </div>
+            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+
+          <button
+            onClick={() => router.push('/mobile/uploads')}
+            className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
+          >
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
+                <Upload className="w-5 h-5 text-indigo-600" />
+              </div>
+              <span className="font-medium text-gray-900">Painel de Uploads</span>
+            </div>
+            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
 
         {/* Settings Section */}
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden divide-y">

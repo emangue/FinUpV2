@@ -8,6 +8,7 @@
  */
 
 import * as React from 'react'
+import { Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { format } from 'date-fns'
 import { Save, ArrowLeft } from 'lucide-react'
@@ -35,7 +36,7 @@ const GROUP_TO_CATEGORY: Record<string, { category: CategoryType; name: string }
   'Lazer': { category: 'lazer', name: 'Lazer' },
 }
 
-export default function BudgetEditPage() {
+function BudgetEditContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const mesReferencia = searchParams.get('mes_referencia') || format(new Date(), 'yyyy-MM')
@@ -158,22 +159,15 @@ export default function BudgetEditPage() {
       {/* Header */}
       <MobileHeader
         title={`Editar Metas - ${formatMesReferencia(mesReferencia)}`}
-        showBackButton
-        onBackClick={() => router.back()}
-        rightAction={
-          <button
-            onClick={handleSave}
-            disabled={saving || loading}
-            className={cn(
-              'p-2 rounded-full transition-colors',
-              saving || loading
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                : 'bg-blue-600 text-white hover:bg-blue-700'
-            )}
-          >
-            <Save className="w-5 h-5" />
-          </button>
-        }
+        leftAction="back"
+        onBack={() => router.back()}
+        rightActions={[
+          {
+            icon: <Save className="w-5 h-5" />,
+            label: 'Salvar',
+            onClick: () => { if (!saving && !loading) handleSave(); },
+          },
+        ]}
       />
       
       {/* Content */}
@@ -190,7 +184,7 @@ export default function BudgetEditPage() {
                 className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100"
               >
                 <div className="flex items-center gap-3 mb-3">
-                  <CategoryIcon category={budget.category} size="md" />
+                  <CategoryIcon category={budget.category} size={40} />
                   <div className="flex-1">
                     <div className="font-semibold text-gray-900">
                       {budget.categoryName}
@@ -247,5 +241,17 @@ export default function BudgetEditPage() {
         </div>
       )}
     </div>
+  )
+}
+
+export default function BudgetEditPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex flex-col h-screen bg-gray-50 items-center justify-center">
+        <div className="text-gray-500">Carregando...</div>
+      </div>
+    }>
+      <BudgetEditContent />
+    </Suspense>
   )
 }

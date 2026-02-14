@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import DashboardLayout from "@/components/dashboard-layout"
+import { AddGroupDialog } from "@/features/upload/components/add-group-dialog"
 
 interface PreviewData {
   id: number
@@ -123,8 +124,15 @@ export default function UploadPreviewPage() {
       const data = await response.json()
       
       // Backend retorna: { success, sessionId, totalRegistros, dados, banco, tipo_documento, nome_arquivo, nome_cartao, mes_fatura, balance_validation }
+      // API pode retornar GRUPO/SUBGRUPO (CamelCase) - normalizar para grupo/subgrupo
       if (data.dados && data.dados.length > 0) {
-        const firstRecord = data.dados[0]
+        const normalizedDados = data.dados.map((r: any) => ({
+          ...r,
+          grupo: r.grupo ?? r.GRUPO ?? '',
+          subgrupo: r.subgrupo ?? r.SUBGRUPO ?? '',
+          lancamento: r.lancamento ?? r.Lancamento ?? r.estabelecimento ?? '',
+        }))
+        const firstRecord = normalizedDados[0]
         
         // Construir metadata a partir dos dados do backend (priority) ou firstRecord (fallback)
         const metadata: Metadata = {
@@ -133,13 +141,13 @@ export default function UploadPreviewPage() {
           nomeArquivo: data.nome_arquivo || firstRecord.nome_arquivo || '',
           mesFatura: data.mes_fatura || firstRecord.mes_fatura || '',
           totalRegistros: data.totalRegistros,
-          somaTotal: data.dados.reduce((sum: number, r: any) => sum + (r.valor || 0), 0),
+          somaTotal: normalizedDados.reduce((sum: number, r: any) => sum + (r.valor || 0), 0),
           tipoDocumento: data.tipo_documento || '',
           balanceValidation: data.balance_validation || undefined
         }
         
         setMetadata(metadata)
-        setRegistros(data.dados)
+        setRegistros(normalizedDados)
       } else {
         throw new Error('Nenhum dado encontrado para esta sessão')
       }
@@ -631,6 +639,14 @@ export default function UploadPreviewPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {/* Botão de Adicionar Grupo/Subgrupo */}
+            <div className="mb-4 flex justify-end">
+              <AddGroupDialog 
+                onGroupAdded={fetchGruposSubgrupos}
+                existingGroups={gruposSubgrupos.grupos}
+              />
+            </div>
+
             {/* Filtros de Origem - Abas */}
             <div className="mb-4 flex gap-2 flex-wrap">
               <Button
@@ -755,43 +771,65 @@ export default function UploadPreviewPage() {
                               </div>
                             </TableCell>
                             <TableCell onClick={(e) => e.stopPropagation()}>
-                              <Select
-                                value={rep.grupo || ''}
-                                onValueChange={(value) => handleGrupoChangeBatch(group.name, value)}
-                              >
-                                <SelectTrigger className="w-full">
-                                  <SelectValue placeholder="Selecione grupo">
-                                    {rep.grupo || 'Selecione grupo'}
-                                  </SelectValue>
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {gruposSubgrupos.grupos.map((grupo) => (
-                                    <SelectItem key={grupo} value={grupo}>
-                                      {grupo}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                              <div className="flex items-center gap-1">
+                                <Select
+                                  value={rep.grupo || ''}
+                                  onValueChange={(value) => handleGrupoChangeBatch(group.name, value)}
+                                >
+                                  <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Selecione grupo">
+                                      {rep.grupo || 'Selecione grupo'}
+                                    </SelectValue>
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {gruposSubgrupos.grupos.map((grupo) => (
+                                      <SelectItem key={grupo} value={grupo}>
+                                        {grupo}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <AddGroupDialog 
+                                  onGroupAdded={fetchGruposSubgrupos}
+                                  existingGroups={gruposSubgrupos.grupos}
+                                  compact
+                                  initialMode="grupo"
+                                  onCreated={async (g, s) => {
+                                    await handleGrupoChangeBatch(group.name, g)
+                                    await handleSubgrupoChangeBatch(group.name, s)
+                                  }}
+                                />
+                              </div>
                             </TableCell>
                             <TableCell onClick={(e) => e.stopPropagation()}>
-                              <Select
-                                value={rep.subgrupo || ''}
-                                onValueChange={(value) => handleSubgrupoChangeBatch(group.name, value)}
-                                disabled={!rep.grupo}
-                              >
-                                <SelectTrigger className="w-full">
-                                  <SelectValue placeholder="Selecione subgrupo">
-                                    {rep.subgrupo || 'Selecione subgrupo'}
-                                  </SelectValue>
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {rep.grupo && gruposSubgrupos.subgruposPorGrupo[rep.grupo]?.map((subgrupo) => (
-                                    <SelectItem key={subgrupo} value={subgrupo}>
-                                      {subgrupo}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                              <div className="flex items-center gap-1">
+                                <Select
+                                  value={rep.subgrupo || ''}
+                                  onValueChange={(value) => handleSubgrupoChangeBatch(group.name, value)}
+                                  disabled={!rep.grupo}
+                                >
+                                  <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Selecione subgrupo">
+                                      {rep.subgrupo || 'Selecione subgrupo'}
+                                    </SelectValue>
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {rep.grupo && gruposSubgrupos.subgruposPorGrupo[rep.grupo]?.map((subgrupo) => (
+                                      <SelectItem key={subgrupo} value={subgrupo}>
+                                        {subgrupo}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <AddGroupDialog 
+                                  onGroupAdded={fetchGruposSubgrupos}
+                                  existingGroups={gruposSubgrupos.grupos}
+                                  compact
+                                  initialMode={rep.grupo ? "subgrupo" : "grupo"}
+                                  initialGrupo={rep.grupo || undefined}
+                                  onCreated={(g, s) => handleSubgrupoChangeBatch(group.name, s)}
+                                />
+                              </div>
                             </TableCell>
                             <TableCell>
                               <Badge variant="outline" className="text-xs">
@@ -823,43 +861,65 @@ export default function UploadPreviewPage() {
                                 </div>
                               </TableCell>
                               <TableCell onClick={(e) => e.stopPropagation()}>
-                                <Select
-                                  value={registro.grupo || ''}
-                                  onValueChange={(value) => handleGrupoChange(registro.id, value)}
-                                >
-                                  <SelectTrigger className="w-full">
-                                    <SelectValue placeholder="Selecione grupo">
-                                      {registro.grupo || 'Selecione grupo'}
-                                    </SelectValue>
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {gruposSubgrupos.grupos.map((grupo) => (
-                                      <SelectItem key={grupo} value={grupo}>
-                                        {grupo}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
+                                <div className="flex items-center gap-1">
+                                  <Select
+                                    value={registro.grupo || ''}
+                                    onValueChange={(value) => handleGrupoChange(registro.id, value)}
+                                  >
+                                    <SelectTrigger className="w-full">
+                                      <SelectValue placeholder="Selecione grupo">
+                                        {registro.grupo || 'Selecione grupo'}
+                                      </SelectValue>
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {gruposSubgrupos.grupos.map((grupo) => (
+                                        <SelectItem key={grupo} value={grupo}>
+                                          {grupo}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                  <AddGroupDialog 
+                                    onGroupAdded={fetchGruposSubgrupos}
+                                    existingGroups={gruposSubgrupos.grupos}
+                                    compact
+                                    initialMode="grupo"
+                                    onCreated={async (g, s) => {
+                                      await handleGrupoChange(registro.id, g)
+                                      await handleSubgrupoChange(registro.id, s)
+                                    }}
+                                  />
+                                </div>
                               </TableCell>
                               <TableCell onClick={(e) => e.stopPropagation()}>
-                                <Select
-                                  value={registro.subgrupo || ''}
-                                  onValueChange={(value) => handleSubgrupoChange(registro.id, value)}
-                                  disabled={!registro.grupo}
-                                >
-                                  <SelectTrigger className="w-full">
-                                    <SelectValue placeholder="Selecione subgrupo">
-                                      {registro.subgrupo || 'Selecione subgrupo'}
-                                    </SelectValue>
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {registro.grupo && gruposSubgrupos.subgruposPorGrupo[registro.grupo]?.map((subgrupo) => (
-                                      <SelectItem key={subgrupo} value={subgrupo}>
-                                        {subgrupo}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
+                                <div className="flex items-center gap-1">
+                                  <Select
+                                    value={registro.subgrupo || ''}
+                                    onValueChange={(value) => handleSubgrupoChange(registro.id, value)}
+                                    disabled={!registro.grupo}
+                                  >
+                                    <SelectTrigger className="w-full">
+                                      <SelectValue placeholder="Selecione subgrupo">
+                                        {registro.subgrupo || 'Selecione subgrupo'}
+                                      </SelectValue>
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {registro.grupo && gruposSubgrupos.subgruposPorGrupo[registro.grupo]?.map((subgrupo) => (
+                                        <SelectItem key={subgrupo} value={subgrupo}>
+                                          {subgrupo}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                  <AddGroupDialog 
+                                    onGroupAdded={fetchGruposSubgrupos}
+                                    existingGroups={gruposSubgrupos.grupos}
+                                    compact
+                                    initialMode={registro.grupo ? "subgrupo" : "grupo"}
+                                    initialGrupo={registro.grupo || undefined}
+                                    onCreated={(g, s) => handleSubgrupoChange(registro.id, s)}
+                                  />
+                                </div>
                               </TableCell>
                               <TableCell>
                                 <Badge variant={

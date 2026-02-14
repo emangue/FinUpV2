@@ -82,8 +82,8 @@ export default function PreviewPage({ params }: PreviewPageProps) {
       description: tx.Lancamento || tx.lancamento,
       value: valor,
       type: (tx.CategoriaGeral || tx.categoria_geral) === 'Receita' ? 'receita' as const : 'despesa' as const,
-      grupo: tx.GRUPO || tx.grupo || '',
-      subgrupo: tx.SUBGRUPO || tx.subgrupo || '',
+      grupo: (tx.grupo ?? tx.GRUPO ?? '').toString().trim(),
+      subgrupo: (tx.subgrupo ?? tx.SUBGRUPO ?? '').toString().trim(),
       source: mapSourceToEnum(tx.origem_classificacao),
       isDuplicate: tx.is_duplicate || false,
     };

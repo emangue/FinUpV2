@@ -1,7 +1,7 @@
 """
 Domínio Marcações - Gestão de Grupos e Subgrupos
 """
-from .models import BaseMarcacao
+from app.domains.categories.models import BaseMarcacao  # Importar modelo existente
 from .schemas import (
     MarcacaoCreate,
     MarcacaoResponse,

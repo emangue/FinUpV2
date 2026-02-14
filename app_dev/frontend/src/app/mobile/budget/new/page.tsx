@@ -6,6 +6,7 @@
  */
 
 import * as React from 'react'
+import { Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ArrowLeft, Save } from 'lucide-react'
 import { MobileHeader } from '@/components/mobile/mobile-header'
@@ -14,7 +15,7 @@ import { useGoalDetail } from '@/features/goals/hooks/use-goal-detail'
 import { GoalCreate, GoalUpdate } from '@/features/goals/types'
 import { format } from 'date-fns'
 
-export default function CreateEditGoalPage() {
+function CreateEditGoalContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const goalId = searchParams.get('id')
@@ -24,6 +25,7 @@ export default function CreateEditGoalPage() {
   const { goal, loading: loadingGoal } = useGoalDetail(goalId ? parseInt(goalId) : 0)
   
   const [formData, setFormData] = React.useState({
+    grupo: '',
     categoria_geral: '',
     valor_planejado: '',
     mes_referencia: format(new Date(), 'yyyy-MM')
@@ -37,6 +39,7 @@ export default function CreateEditGoalPage() {
     if (isEdit && goal) {
       setFormData({
         grupo: goal.grupo,
+        categoria_geral: goal.grupo, // Mesmo valor de grupo
         valor_planejado: goal.valor_planejado.toString(),
         mes_referencia: goal.mes_referencia
       })
@@ -192,5 +195,17 @@ export default function CreateEditGoalPage() {
         </button>
       </div>
     </div>
+  )
+}
+
+export default function CreateEditGoalPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex flex-col h-screen bg-gray-50 items-center justify-center">
+        <div className="text-gray-500">Carregando...</div>
+      </div>
+    }>
+      <CreateEditGoalContent />
+    </Suspense>
   )
 }

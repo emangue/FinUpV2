@@ -112,8 +112,8 @@ export function TrackerCard({
       role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : undefined}
       style={{
-        minHeight: mobileDimensions.touchTarget,
-        borderRadius: mobileDimensions.borderRadius.card,
+        minHeight: mobileDimensions.sizes.touchTargetMinimum.px,
+        borderRadius: mobileDimensions.borderRadius.card.px,
         ...mobileAnimations.card,
       }}
     >

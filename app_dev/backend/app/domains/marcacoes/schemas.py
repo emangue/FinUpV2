@@ -30,13 +30,16 @@ class MarcacaoResponse(BaseModel):
         
     @classmethod
     def from_db_model(cls, db_model):
-        """Converte modelo do banco (campos maiúsculos) para schema"""
+        """Converte dict do repository (já com JOIN) para schema"""
+        if isinstance(db_model, dict):
+            return cls(**db_model)
+        # Fallback para modelo SQLAlchemy (não tem mais TipoGasto)
         return cls(
             id=db_model.id,
             grupo=db_model.GRUPO,
             subgrupo=db_model.SUBGRUPO,
-            tipo_gasto=db_model.TipoGasto,
-            categoria_geral=db_model.CategoriaGeral
+            tipo_gasto="",  # Será preenchido via JOIN
+            categoria_geral=None
         )
 
 
@@ -47,10 +50,8 @@ class MarcacaoListResponse(BaseModel):
 
 
 class SubgrupoCreate(BaseModel):
-    """Schema para criar subgrupo (grupo_pai vem da URL)"""
+    """Schema para criar subgrupo (herda config do grupo_pai)"""
     subgrupo: str = Field(..., description="Nome do subgrupo", min_length=1, max_length=100)
-    tipo_gasto: str = Field(..., description="Tipo de gasto")
-    categoria_geral: Optional[str] = Field("Despesa", description="Categoria geral")
     
     class Config:
         from_attributes = True
@@ -74,3 +75,14 @@ class GrupoComSubgrupos(BaseModel):
     grupo: str
     subgrupos: list[str]
     total_subgrupos: int
+
+
+class GrupoComSubgrupoCreate(BaseModel):
+    """Schema para criar grupo E subgrupo juntos"""
+    grupo: str = Field(..., description="Nome do novo grupo", min_length=1, max_length=100)
+    subgrupo: str = Field(..., description="Nome do primeiro subgrupo", min_length=1, max_length=100)
+    tipo_gasto: str = Field(..., description="Tipo de gasto padrão (Fixo/Ajustável/etc)")
+    categoria_geral: str = Field("Despesa", description="Categoria geral (Despesa/Receita/etc)")
+    
+    class Config:
+        from_attributes = True

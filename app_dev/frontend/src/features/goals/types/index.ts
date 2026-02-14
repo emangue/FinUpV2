@@ -7,16 +7,23 @@
  * MUDANÇAS: categoria_geral → grupo, total_mensal removido
  */
 
+export type GoalStatus = 'ativo' | 'concluido' | 'atrasado' | 'inativo'
+
 export interface Goal {
   // ✅ Campos REAIS retornados pelo backend (budget_planning)
   id: number
-  user_id: number
+  user_id?: number
   grupo: string                    // ANTES: categoria_geral - nome da meta/grupo
   mes_referencia: string           // Era "prazo" - formato YYYY-MM
   valor_planejado: number          // Era "valor_alvo" ou "orcamento"
-  valor_medio_3_meses: number      // Média calculada dos 3 meses anteriores
-  created_at: string
-  updated_at: string
+  valor_medio_3_meses?: number      // Média calculada dos 3 meses anteriores
+  valor_realizado?: number         // Calculado pelo backend a partir de journal_entries
+  percentual?: number              // Calculado pelo backend
+  ativo?: number                   // 0=inativo, 1=ativo
+  subgrupos?: { subgrupo: string; valor: number; percentual: number }[]
+  created_at?: string
+  updated_at?: string
+  status?: GoalStatus              // Adicionado pelo useGoals no frontend
 }
 
 export interface GoalCreate {
@@ -46,8 +53,6 @@ export interface GoalProgress {
   falta: number                // calculado: valor_objetivo - valor_atual
 }
 
-export type GoalStatus = 'ativo' | 'concluido' | 'atrasado' | 'inativo'
-
 export interface GoalWithProgress extends Goal {
   status: GoalStatus           // calculado no frontend
   progresso: GoalProgress      // calculado no frontend
@@ -57,10 +62,10 @@ export interface GoalWithProgress extends Goal {
 
 /**
  * Calcula progresso de uma meta
- * NOTA: valor_atual vem de transações (não mais do campo total_mensal)
+ * NOTA: Despesas vêm negativas do banco - usa abs() para exibição
  */
 export function calculateGoalProgress(goal: Goal, valorRealizado: number = 0): GoalProgress {
-  const valor_atual = valorRealizado  // Passa como parâmetro (buscar de transações)
+  const valor_atual = Math.abs(valorRealizado)  // Sempre positivo para exibição
   const valor_objetivo = goal.valor_planejado
   const percentual = valor_objetivo > 0 ? (valor_atual / valor_objetivo) * 100 : 0
   const falta = Math.max(0, valor_objetivo - valor_atual)
@@ -77,7 +82,7 @@ export function calculateGoalProgress(goal: Goal, valorRealizado: number = 0): G
  * Calcula status de uma meta
  */
 export function calculateGoalStatus(goal: Goal): GoalStatus {
-  const { percentual } = calculateGoalProgress(goal)
+  const percentual = goal.percentual ?? calculateGoalProgress(goal, goal.valor_realizado ?? 0).percentual
   
   if (percentual >= 100) return 'concluido'
   if (percentual >= 90) return 'ativo'

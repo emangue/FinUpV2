@@ -38,12 +38,13 @@ class GenericRulesClassifier:
         self.db = db
         self._hardcoded_rules = self._get_hardcoded_rules()  # Fallback
     
-    def classify(self, estabelecimento: str) -> Optional[Dict]:
+    def classify(self, estabelecimento: str, banco: str = None) -> Optional[Dict]:
         """
         Classifica estabelecimento usando regras configuráveis
         
         Args:
             estabelecimento: Nome do estabelecimento
+            banco: Nome do banco (opcional, para regras específicas)
             
         Returns:
             Dict com classificação ou None
@@ -53,6 +54,8 @@ class GenericRulesClassifier:
             if self.db:
                 result = self._classify_database_rules(estabelecimento)
                 if result:
+                    # Aplicar subgrupo específico por banco se Investimentos
+                    result = self._apply_bank_specific_subgroup(result, banco, estabelecimento)
                     return result
             
             # 2ª Tentativa: Regras hardcoded (fallback)
@@ -60,6 +63,8 @@ class GenericRulesClassifier:
             if result:
                 # Marcar como hardcoded para debug
                 result['source'] = 'hardcoded'
+                # Aplicar subgrupo específico por banco se Investimentos
+                result = self._apply_bank_specific_subgroup(result, banco, estabelecimento)
                 return result
             
             return None
@@ -68,17 +73,73 @@ class GenericRulesClassifier:
             logger.error(f"Erro na classificação genérica: {e}")
             return None
     
-    def get_marcacao_ia(self, estabelecimento: str) -> Optional[str]:
+    def _apply_bank_specific_subgroup(self, result: Dict, banco: str, estabelecimento: str) -> Dict:
+        """
+        Aplica subgrupo específico baseado no banco para Investimentos
+        
+        Args:
+            result: Resultado da classificação
+            banco: Nome do banco
+            estabelecimento: Nome do estabelecimento
+            
+        Returns:
+            Resultado atualizado com subgrupo específico
+        """
+        if not result or result['grupo'] != 'Investimentos' or not banco:
+            return result
+        
+        banco_upper = banco.upper()
+        estabelecimento_upper = estabelecimento.upper()
+        
+        # Regras específicas por banco
+        if 'MERCADOPAGO' in banco_upper or 'MERCADO PAGO' in banco_upper:
+            # MercadoPago: verificar se é transferência ou aplicação
+            if any(kw in estabelecimento_upper for kw in ['TRANSF', 'PIX', 'TED', 'DOC']):
+                result['subgrupo'] = 'Transferência'
+                logger.debug(f"🏦 Subgrupo MercadoPago: Transferência")
+            else:
+                result['subgrupo'] = 'Conta Digital'
+                logger.debug(f"🏦 Subgrupo MercadoPago: Conta Digital")
+        
+        elif 'ITAU' in banco_upper or 'ITAÚ' in banco_upper:
+            # Itaú: verificar tipo de investimento
+            if 'POUPANCA' in estabelecimento_upper or 'POUP' in estabelecimento_upper:
+                result['subgrupo'] = 'Poupança'
+                logger.debug(f"🏦 Subgrupo Itaú: Poupança")
+            else:
+                result['subgrupo'] = 'Investimentos Itaú'
+                logger.debug(f"🏦 Subgrupo Itaú: Investimentos Itaú")
+        
+        elif any(kw in banco_upper for kw in ['BTG', 'XP', 'CLEAR', 'RICO']):
+            # Corretoras
+            result['subgrupo'] = 'Corretora'
+            logger.debug(f"🏦 Subgrupo Corretora: {banco}")
+        
+        elif any(kw in banco_upper for kw in ['NUBANK', 'NU', 'C6', 'INTER']):
+            # Bancos digitais
+            result['subgrupo'] = 'Conta Digital'
+            logger.debug(f"🏦 Subgrupo Banco Digital: {banco}")
+        
+        else:
+            # Default: manter subgrupo original ou usar genérico
+            if not result.get('subgrupo') or result['subgrupo'] == 'Investimentos':
+                result['subgrupo'] = 'Outros Investimentos'
+                logger.debug(f"🏦 Subgrupo Default: Outros Investimentos")
+        
+        return result
+    
+    def get_marcacao_ia(self, estabelecimento: str, banco: str = None) -> Optional[str]:
         """
         Retorna marcação IA formatada: "GRUPO > SUBGRUPO"
         
         Args:
             estabelecimento: Nome do estabelecimento
+            banco: Nome do banco (opcional)
             
         Returns:
             String formatada ou None
         """
-        result = self.classify(estabelecimento)
+        result = self.classify(estabelecimento, banco)
         if result:
             return f"{result['grupo']} > {result['subgrupo']}"
         return None

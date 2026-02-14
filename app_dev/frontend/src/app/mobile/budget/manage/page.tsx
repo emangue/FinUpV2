@@ -52,7 +52,9 @@ export default function ManageGoalsPage() {
   }
 
   const handleEdit = (goalId: string) => {
-    router.push(`/mobile/budget/${goalId}`)
+    const goal = goals.find((g) => g.id === Number(goalId))
+    const qs = goal?.mes_referencia ? `?mes=${goal.mes_referencia}` : ''
+    router.push(`/mobile/budget/${goalId}${qs}`)
   }
   
   const handleUpdateValor = async (goalId: string, novoValor: number, aplicarAteFinAno: boolean) => {

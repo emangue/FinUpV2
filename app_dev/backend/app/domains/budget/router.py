@@ -6,7 +6,7 @@ CHANGELOG 13/02/2026:
 - ✅ Removidos imports obsoletos: BudgetGeral*, BudgetCategoriaConfig*
 - ✅ Removidos endpoints /geral/* (consolidados em /planning)
 """
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List
 
@@ -185,7 +185,9 @@ def bulk_upsert_budget_planning(
 
 @router.get("/budget/planning", summary="Listar metas de planning (grupos)")
 def get_budget_planning(
-    mes_referencia: str = Query(..., description="Mês de referência no formato YYYY-MM"),
+    mes_referencia: str = Query(None, description="Mês de referência no formato YYYY-MM"),
+    year: int = Query(None, description="Ano (alternativa a mes_referencia)"),
+    month: int = Query(None, ge=1, le=12, description="Mês 1-12 (alternativa a mes_referencia)"),
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
@@ -196,14 +198,23 @@ def get_budget_planning(
     - Alimentação, Moradia, Transporte, etc.
     
     Query params:
-    - mes_referencia: str (YYYY-MM)
+    - mes_referencia: str (YYYY-MM) OU year + month
     
     Returns:
     - mes_referencia: str
     - budgets: List[{grupo, valor_planejado, valor_realizado, percentual}]
     """
+    if mes_referencia:
+        ref = mes_referencia
+    elif year is not None and month is not None:
+        ref = f"{year}-{month:02d}"
+    else:
+        raise HTTPException(
+            status_code=422,
+            detail="Informe mes_referencia (YYYY-MM) ou year e month"
+        )
     service = BudgetService(db)
-    return service.get_budget_planning(user_id, mes_referencia)
+    return service.get_budget_planning(user_id, ref)
 
 
 @router.post("/budget/planning/bulk-upsert", summary="Criar/atualizar múltiplas metas planning")
@@ -246,6 +257,31 @@ def list_grupos_disponiveis(
     ).order_by(BaseGruposConfig.nome_grupo).all()
     
     return [g[0] for g in grupos]
+
+
+@router.get("/budget/planning/subgrupos", summary="Subgrupos de um grupo no mês")
+def get_subgrupos_planning(
+    grupo: str = Query(..., description="Nome do grupo"),
+    mes_referencia: str = Query(..., description="Mês YYYY-MM"),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """Retorna subgrupos com valores - mesma fonte que valor realizado da meta"""
+    service = BudgetService(db)
+    return {"subgrupos": service._get_subgrupos_grupo(user_id, grupo, mes_referencia)}
+
+
+@router.get("/budget/planning/{budget_id}", summary="Buscar meta por ID")
+def get_budget_planning_by_id(
+    budget_id: int,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Retorna uma meta específica por ID com valor_realizado, percentual e subgrupos
+    """
+    service = BudgetService(db)
+    return service.get_budget_planning_by_id(user_id, budget_id)
 
 
 # ----- ROTAS DE BUDGET DETALHADO -----

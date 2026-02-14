@@ -15,7 +15,8 @@ from .schemas import (
     MarcacaoListResponse,
     SubgrupoCreate,
     SubgrupoResponse,
-    GrupoComSubgrupos
+    GrupoComSubgrupos,
+    GrupoComSubgrupoCreate
 )
 
 router = APIRouter(prefix="/marcacoes", tags=["marcacoes"])
@@ -52,18 +53,23 @@ def get_marcacoes_by_grupo(
     return service.get_marcacoes_by_grupo(grupo)
 
 
-@router.post("/", response_model=MarcacaoResponse)
-def create_marcacao(
-    marcacao_data: MarcacaoCreate,
+@router.post("/grupos", status_code=201)
+def create_grupo_com_subgrupo(
+    data: GrupoComSubgrupoCreate,
     db: Session = Depends(get_db),
     user_id: int = Depends(get_current_user_id)
 ):
     """
-    Cria marcação manualmente (grupo + subgrupo).
-    Grupo deve existir em base_grupos_config.
+    Cria GRUPO em base_grupos_config E primeiro subgrupo em base_marcacoes.
+    Operação atômica: se falhar, nada é criado.
     """
     service = MarcacaoService(db)
-    return service.create_marcacao_manual(marcacao_data)
+    return service.create_grupo_com_subgrupo(
+        grupo=data.grupo,
+        subgrupo=data.subgrupo,
+        tipo_gasto=data.tipo_gasto,
+        categoria_geral=data.categoria_geral
+    )
 
 
 @router.post("/grupos/{grupo}/subgrupos", response_model=SubgrupoResponse)

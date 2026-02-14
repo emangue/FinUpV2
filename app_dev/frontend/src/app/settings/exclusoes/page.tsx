@@ -216,7 +216,7 @@ export default function ExclusoesPage() {
       const exclusao = exclusoes.find(e => e.id === id)
       if (!exclusao) return
 
-      const response = await fetch(`${apiUrl}/exclusoes/${id}`, {
+      const response = await fetch(`${BASE_URL_EXCLUSOES}/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -241,7 +241,7 @@ export default function ExclusoesPage() {
     if (!confirm('Deseja realmente deletar esta regra?')) return
 
     try {
-      const response = await fetch(`${apiUrl}/exclusoes/${id}`, {
+      const response = await fetch(`${BASE_URL_EXCLUSOES}/${id}`, {
         method: 'DELETE'
       })
 

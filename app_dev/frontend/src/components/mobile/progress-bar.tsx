@@ -19,7 +19,19 @@
 
 import * as React from 'react'
 import { cn } from '@/lib/utils'
-import { getCategoryColor, type CategoryType } from '@/config/mobile-colors'
+import { categoryColors } from '@/config/mobile-colors'
+import type { CategoryColor } from '@/config/mobile-colors'
+import type { CategoryType } from '@/components/mobile/category-icon'
+
+const categoryToColor: Record<CategoryType, CategoryColor> = {
+  casa: 'purple',
+  alimentacao: 'blue',
+  compras: 'pink',
+  transporte: 'stone',
+  contas: 'amber',
+  lazer: 'green',
+  outros: 'stone',
+}
 import { mobileDimensions } from '@/config/mobile-dimensions'
 import { mobileAnimations } from '@/config/mobile-animations'
 
@@ -89,7 +101,7 @@ export function ProgressBar({
     } else if (showWarning && isWarning) {
       barColor = '#F59E0B' // amber-500
     } else if (category) {
-      barColor = getCategoryColor(category).progress
+      barColor = categoryColors[categoryToColor[category] || 'stone'].progress
     } else {
       barColor = '#3B82F6' // blue-500 (padrão)
     }

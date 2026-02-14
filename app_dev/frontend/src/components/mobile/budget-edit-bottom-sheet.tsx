@@ -111,7 +111,7 @@ export function BudgetEditBottomSheet({
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
           <div className="flex items-center gap-2">
-            <CategoryIcon category={category} size="sm" />
+            <CategoryIcon category={category} size={36} />
             <div>
               <h1 className="text-base font-semibold text-gray-900">
                 Editar Meta

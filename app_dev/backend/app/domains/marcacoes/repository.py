@@ -6,7 +6,7 @@ from typing import List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-from .models import BaseMarcacao
+from app.domains.categories.models import BaseMarcacao  # Importar modelo existente
 from .schemas import MarcacaoCreate
 from app.domains.grupos.models import BaseGruposConfig
 
@@ -15,9 +15,27 @@ class MarcacaoRepository:
     def __init__(self, db: Session):
         self.db = db
     
-    def get_all(self) -> List[BaseMarcacao]:
-        """Busca todas as marcações (grupo + subgrupo)"""
-        return self.db.query(BaseMarcacao).order_by(BaseMarcacao.GRUPO, BaseMarcacao.SUBGRUPO).all()
+    def get_all(self) -> List[dict]:
+        """Busca todas as marcações com config do grupo (JOIN)"""
+        results = (
+            self.db.query(
+                BaseMarcacao.id,
+                BaseMarcacao.GRUPO,
+                BaseMarcacao.SUBGRUPO,
+                BaseGruposConfig.tipo_gasto_padrao.label('tipo_gasto'),
+                BaseGruposConfig.categoria_geral
+            )
+            .join(BaseGruposConfig, BaseMarcacao.GRUPO == BaseGruposConfig.nome_grupo)
+            .order_by(BaseMarcacao.GRUPO, BaseMarcacao.SUBGRUPO)
+            .all()
+        )
+        return [{
+            'id': r.id,
+            'grupo': r.GRUPO,
+            'subgrupo': r.SUBGRUPO,
+            'tipo_gasto': r.tipo_gasto,
+            'categoria_geral': r.categoria_geral
+        } for r in results]
     
     def get_by_grupo(self, grupo: str) -> List[BaseMarcacao]:
         """Busca todas as marcações de um grupo específico"""
@@ -48,13 +66,11 @@ class MarcacaoRepository:
             BaseGruposConfig.nome_grupo == nome_grupo
         ).first()
     
-    def create_marcacao(self, grupo: str, subgrupo: str, tipo_gasto: str, categoria_geral: str) -> BaseMarcacao:
-        """Cria nova marcação (grupo + subgrupo)"""
+    def create_marcacao(self, grupo: str, subgrupo: str) -> BaseMarcacao:
+        """Cria nova marcação (grupo + subgrupo apenas - config vem de grupos_config)"""
         marcacao = BaseMarcacao(
             GRUPO=grupo,
-            SUBGRUPO=subgrupo,
-            TipoGasto=tipo_gasto,
-            CategoriaGeral=categoria_geral
+            SUBGRUPO=subgrupo
         )
         self.db.add(marcacao)
         self.db.commit()

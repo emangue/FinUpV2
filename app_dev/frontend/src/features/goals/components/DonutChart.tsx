@@ -1,5 +1,6 @@
 'use client'
 
+import { cn } from '@/lib/utils'
 import { Goal, calculateGoalProgress } from '../types'
 
 interface DonutChartProps {
@@ -10,7 +11,7 @@ interface DonutChartProps {
 export function DonutChart({ goals, selectedMonth }: DonutChartProps) {
   const totalBudget = goals.reduce((sum, goal) => sum + goal.valor_planejado, 0)
   const totalSpent = goals.reduce((sum, goal) => {
-    const { valor_atual } = calculateGoalProgress(goal)
+    const { valor_atual } = calculateGoalProgress(goal, goal.valor_realizado ?? 0)
     return sum + valor_atual
   }, 0)
   const overallPercentage = totalBudget > 0 ? Math.round((totalSpent / totalBudget) * 100) : 0
@@ -57,13 +58,19 @@ export function DonutChart({ goals, selectedMonth }: DonutChartProps) {
                       'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
   const monthLabel = `${monthNames[selectedMonth.getMonth()]} ${selectedMonth.getFullYear()}`
 
+  // Formatação compacta para caber no círculo
+  const formatCompact = (v: number) => {
+    if (v >= 1000) return `R$ ${(v / 1000).toFixed(1).replace('.', ',')}k`
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v)
+  }
+
   return (
-    <div className="relative w-48 h-48 mx-auto">
-      <svg className="transform -rotate-90" width="192" height="192" viewBox="0 0 192 192">
+    <div className="relative w-52 h-52 mx-auto">
+      <svg className="transform -rotate-90" width="208" height="208" viewBox="0 0 208 208">
         {/* Background circle */}
         <circle
-          cx="96"
-          cy="96"
+          cx="104"
+          cy="104"
           r={radius}
           fill="none"
           stroke="#f3f4f6"
@@ -74,8 +81,8 @@ export function DonutChart({ goals, selectedMonth }: DonutChartProps) {
         {segments.map((segment, index) => (
           <circle
             key={index}
-            cx="96"
-            cy="96"
+            cx="104"
+            cy="104"
             r={radius}
             fill="none"
             stroke={segment.color}
@@ -88,21 +95,23 @@ export function DonutChart({ goals, selectedMonth }: DonutChartProps) {
         ))}
       </svg>
       
-      {/* Center text */}
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">
+      {/* Center text - tamanhos reduzidos para caber melhor */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center px-2">
+        <p className="text-[8px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">
           {monthLabel}
         </p>
-        <div className="flex items-baseline">
-          <span className="text-3xl font-bold text-gray-800">
-            R$ {(totalSpent / 1000).toFixed(1).replace('.', ',')}
+        <div className="flex items-baseline justify-center max-w-full">
+          <span className="text-xl font-bold text-gray-800 truncate">
+            {formatCompact(totalSpent)}
           </span>
-          <span className="text-xl font-bold text-gray-400 ml-0.5">k</span>
         </div>
-        <p className="text-[10px] text-gray-400 mt-0.5">
-          de R$ {(totalBudget / 1000).toFixed(1).replace('.', ',')}k
+        <p className="text-[9px] text-gray-400 mt-0.5">
+          de {formatCompact(totalBudget)}
         </p>
-        <p className="text-xs font-medium text-gray-500 mt-1">
+        <p className={cn(
+          'text-sm font-bold mt-1',
+          overallPercentage >= 100 ? 'text-red-600' : 'text-gray-600'
+        )}>
           {overallPercentage}%
         </p>
       </div>

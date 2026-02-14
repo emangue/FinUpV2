@@ -68,7 +68,7 @@ export function YTDToggle({
       role="tablist"
       aria-label="Período de visualização"
       style={{
-        minHeight: mobileDimensions.touchTarget,
+        minHeight: mobileDimensions.sizes.touchTargetMinimum.px,
       }}
     >
       {/* Botão MÊS */}

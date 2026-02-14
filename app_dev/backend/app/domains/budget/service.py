@@ -123,18 +123,20 @@ class BudgetService:
         ).all()
         
         # Calcular valor realizado para cada grupo
+        # Despesas são negativas no banco - retornar abs() para exibição
         resultado = []
         for budget in budgets:
-            valor_realizado = self._calcular_valor_realizado_grupo(
+            valor_realizado_raw = self._calcular_valor_realizado_grupo(
                 user_id, budget.grupo, mes_referencia
             )
+            valor_realizado = abs(float(valor_realizado_raw)) if valor_realizado_raw else 0.0
             percentual = (valor_realizado / budget.valor_planejado * 100) if budget.valor_planejado > 0 else 0
             
             resultado.append({
                 "id": budget.id,
                 "grupo": budget.grupo,
                 "valor_planejado": float(budget.valor_planejado),
-                "valor_realizado": float(valor_realizado),
+                "valor_realizado": valor_realizado,
                 "percentual": round(percentual, 2),
                 "ativo": budget.ativo,
                 "valor_medio_3_meses": float(budget.valor_medio_3_meses)  # ✅ Média dos últimos 3 meses
@@ -143,6 +145,35 @@ class BudgetService:
         return {
             "mes_referencia": mes_referencia,
             "budgets": resultado
+        }
+    
+    def get_budget_planning_by_id(self, user_id: int, budget_id: int) -> dict:
+        """
+        Busca uma meta de planning por ID com valor_realizado e percentual
+        """
+        budget = self.repository.get_by_id(budget_id, user_id)
+        if not budget:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Meta não encontrada"
+            )
+        mes_referencia = budget.mes_referencia
+        valor_realizado_raw = self._calcular_valor_realizado_grupo(
+            user_id, budget.grupo, mes_referencia
+        )
+        valor_realizado = abs(float(valor_realizado_raw)) if valor_realizado_raw else 0.0
+        percentual = (valor_realizado / budget.valor_planejado * 100) if budget.valor_planejado > 0 else 0
+        subgrupos = self._get_subgrupos_grupo(user_id, budget.grupo, mes_referencia)
+        return {
+            "id": budget.id,
+            "grupo": budget.grupo,
+            "mes_referencia": mes_referencia,
+            "valor_planejado": float(budget.valor_planejado),
+            "valor_realizado": valor_realizado,
+            "percentual": round(percentual, 2),
+            "ativo": budget.ativo,
+            "valor_medio_3_meses": float(budget.valor_medio_3_meses),
+            "subgrupos": subgrupos,
         }
     
     def bulk_upsert_budget_planning(
@@ -230,6 +261,40 @@ class BudgetService:
         ).scalar()
         
         return float(total) if total else 0.0
+    
+    def _get_subgrupos_grupo(self, user_id: int, grupo: str, mes_referencia: str) -> List[dict]:
+        """
+        Retorna subgrupos de um grupo no mês - mesma fonte que valor realizado
+        Garante que a soma dos subgrupos = valor realizado total
+        """
+        ano, mes = mes_referencia.split('-')
+        mes_fatura = f"{ano}{mes}"
+        
+        from sqlalchemy import func
+        results = (
+            self.db.query(
+                JournalEntry.SUBGRUPO.label('subgrupo'),
+                func.sum(JournalEntry.Valor).label('valor')
+            )
+            .filter(
+                JournalEntry.user_id == user_id,
+                JournalEntry.GRUPO == grupo,
+                JournalEntry.MesFatura == mes_fatura,
+                JournalEntry.CategoriaGeral == 'Despesa',
+                JournalEntry.IgnorarDashboard == 0
+            )
+            .group_by(JournalEntry.SUBGRUPO)
+        ).all()
+        
+        total_abs = abs(sum(r.valor for r in results)) or 1.0
+        return [
+            {
+                "subgrupo": r.subgrupo or "Sem subgrupo",
+                "valor": abs(float(r.valor)),
+                "percentual": round((abs(r.valor) / total_abs) * 100, 1)
+            }
+            for r in sorted(results, key=lambda x: abs(x.valor), reverse=True)
+        ]
     
     def calcular_media_3_meses(self, user_id: int, grupo: str, mes_referencia: str) -> float:
         """

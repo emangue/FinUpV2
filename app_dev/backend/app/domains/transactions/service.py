@@ -316,6 +316,9 @@ class TransactionService:
         
         # Aplicar mudanças (apenas campos não-None)
         update_dict = update_data.dict(exclude_unset=True)
+        propagate_parcela = update_dict.pop("propagate_parcela", None)
+        propagate_padrao = update_dict.pop("propagate_padrao", None)
+        
         for field, value in update_dict.items():
             setattr(transaction, field, value)
         
@@ -349,9 +352,219 @@ class TransactionService:
                     user_id=user_id
                 )
         
-        # Salvar
+        # Salvar transação principal
         updated = self.repository.update(transaction)
+        
+        # Propagação: parcelas (IdParcela)
+        if propagate_parcela and updated.IdParcela and ("GRUPO" in update_dict or "SUBGRUPO" in update_dict):
+            self._propagate_to_parcela(
+                user_id=user_id,
+                id_parcela=updated.IdParcela,
+                grupo=updated.GRUPO,
+                subgrupo=updated.SUBGRUPO,
+                exclude_id_transacao=updated.IdTransacao
+            )
+        
+        # Propagação: base padrões
+        if propagate_padrao and ("GRUPO" in update_dict or "SUBGRUPO" in update_dict):
+            self._propagate_to_padrao(
+                user_id=user_id,
+                transaction=updated,
+                grupo=updated.GRUPO,
+                subgrupo=updated.SUBGRUPO
+            )
+        
         return TransactionResponse.from_orm(updated)
+    
+    def get_propagate_info(self, transaction_id: str, user_id: int) -> dict:
+        """
+        Retorna quantas transações seriam afetadas ao propagar grupo/subgrupo.
+        """
+        from app.domains.patterns.models import BasePadroes
+        from app.shared.utils import normalizar_estabelecimento, get_faixa_valor
+        
+        transaction = self.repository.get_by_id(transaction_id, user_id)
+        if not transaction:
+            raise HTTPException(status_code=404, detail="Transaction not found")
+        
+        same_parcela_count = 0
+        if transaction.IdParcela:
+            count = self.repository.db.query(JournalEntry).filter(
+                JournalEntry.user_id == user_id,
+                JournalEntry.IdParcela == transaction.IdParcela,
+                JournalEntry.IdTransacao != transaction_id
+            ).count()
+            same_parcela_count = count
+        
+        has_padrao = False
+        same_padrao_count = 0
+        estab_base = transaction.EstabelecimentoBase or transaction.Estabelecimento
+        if estab_base:
+            valor_pos = abs(transaction.Valor or 0)
+            estab_norm = normalizar_estabelecimento(estab_base)
+            faixa = get_faixa_valor(valor_pos)
+            padrao_montado = f"{estab_norm} [{faixa}]"
+            
+            padrao = self.repository.db.query(BasePadroes).filter(
+                BasePadroes.padrao_estabelecimento == padrao_montado,
+                BasePadroes.user_id == user_id
+            ).first()
+            if not padrao:
+                padrao = self.repository.db.query(BasePadroes).filter(
+                    BasePadroes.padrao_estabelecimento == estab_norm,
+                    BasePadroes.user_id == user_id
+                ).first()
+            
+            if padrao:
+                has_padrao = True
+                v_min = padrao.valor_min if padrao.valor_min is not None else 0
+                v_max = padrao.valor_max if padrao.valor_max is not None else float('inf')
+                
+                all_t = self.repository.db.query(JournalEntry).filter(
+                    JournalEntry.user_id == user_id
+                ).all()
+                for t in all_t:
+                    if t.IdTransacao == transaction_id:
+                        continue
+                    e = t.EstabelecimentoBase or t.Estabelecimento or ""
+                    v = abs(t.Valor or 0)
+                    en = normalizar_estabelecimento(e)
+                    if en == estab_norm and v_min <= v <= v_max:
+                        same_padrao_count += 1
+        
+        return {
+            "same_parcela_count": same_parcela_count,
+            "has_padrao": has_padrao,
+            "same_padrao_count": same_padrao_count
+        }
+    
+    def _propagate_to_parcela(
+        self,
+        user_id: int,
+        id_parcela: str,
+        grupo: Optional[str],
+        subgrupo: Optional[str],
+        exclude_id_transacao: Optional[str] = None
+    ) -> None:
+        """Atualiza todas as transações com mesmo IdParcela e base_parcelas."""
+        from app.domains.grupos.models import BaseGruposConfig
+        from app.domains.transactions.models import BaseParcelas
+        from datetime import datetime
+        
+        tipo_gasto = None
+        categoria_geral = None
+        if grupo:
+            grupo_config = self.repository.db.query(BaseGruposConfig).filter(
+                BaseGruposConfig.nome_grupo == grupo
+            ).first()
+            if grupo_config:
+                tipo_gasto = grupo_config.tipo_gasto_padrao
+                categoria_geral = grupo_config.categoria_geral
+        
+        # Atualizar journal_entries com mesmo IdParcela
+        others = self.repository.db.query(JournalEntry).filter(
+            JournalEntry.user_id == user_id,
+            JournalEntry.IdParcela == id_parcela
+        )
+        if exclude_id_transacao:
+            others = others.filter(JournalEntry.IdTransacao != exclude_id_transacao)
+        
+        for t in others.all():
+            t.GRUPO = grupo
+            t.SUBGRUPO = subgrupo
+            t.origem_classificacao = "Manual"
+            if tipo_gasto:
+                t.TipoGasto = tipo_gasto
+            if categoria_geral:
+                t.CategoriaGeral = categoria_geral
+        
+        # Atualizar base_parcelas
+        parcela = self.repository.db.query(BaseParcelas).filter(
+            BaseParcelas.user_id == user_id,
+            BaseParcelas.id_parcela == id_parcela
+        ).first()
+        if parcela:
+            parcela.grupo_sugerido = grupo
+            parcela.subgrupo_sugerido = subgrupo
+            if tipo_gasto:
+                parcela.tipo_gasto_sugerido = tipo_gasto
+            if categoria_geral:
+                parcela.categoria_geral_sugerida = categoria_geral
+            parcela.updated_at = datetime.now()
+        
+        self.repository.db.commit()
+    
+    def _propagate_to_padrao(
+        self,
+        user_id: int,
+        transaction: JournalEntry,
+        grupo: Optional[str],
+        subgrupo: Optional[str]
+    ) -> None:
+        """Atualiza BasePadroes e transações que batem no mesmo padrão."""
+        from app.domains.grupos.models import BaseGruposConfig
+        from app.domains.patterns.models import BasePadroes
+        from app.shared.utils import normalizar_estabelecimento, get_faixa_valor
+        
+        estab_base = transaction.EstabelecimentoBase or transaction.Estabelecimento
+        valor_pos = abs(transaction.Valor or 0)
+        estab_norm = normalizar_estabelecimento(estab_base)
+        faixa = get_faixa_valor(valor_pos)
+        padrao_montado = f"{estab_norm} [{faixa}]"
+        
+        tipo_gasto = None
+        categoria_geral = None
+        if grupo:
+            grupo_config = self.repository.db.query(BaseGruposConfig).filter(
+                BaseGruposConfig.nome_grupo == grupo
+            ).first()
+            if grupo_config:
+                tipo_gasto = grupo_config.tipo_gasto_padrao
+                categoria_geral = grupo_config.categoria_geral
+        
+        # Buscar BasePadroes que bate (com faixa ou só estab)
+        padrao = self.repository.db.query(BasePadroes).filter(
+            BasePadroes.padrao_estabelecimento == padrao_montado,
+            BasePadroes.user_id == user_id
+        ).first()
+        if not padrao:
+            padrao = self.repository.db.query(BasePadroes).filter(
+                BasePadroes.padrao_estabelecimento == estab_norm,
+                BasePadroes.user_id == user_id
+            ).first()
+        
+        if not padrao:
+            return
+        
+        padrao.grupo_sugerido = grupo
+        padrao.subgrupo_sugerido = subgrupo
+        if tipo_gasto:
+            padrao.tipo_gasto_sugerido = tipo_gasto
+        if categoria_geral:
+            padrao.categoria_geral_sugerida = categoria_geral
+        
+        # Transações que batem no padrão: mesmo estab normalizado e valor na faixa
+        v_min = padrao.valor_min if padrao.valor_min is not None else (valor_pos * 0.5)
+        v_max = padrao.valor_max if padrao.valor_max is not None else (valor_pos * 1.5)
+        
+        all_user = self.repository.db.query(JournalEntry).filter(
+            JournalEntry.user_id == user_id
+        ).all()
+        
+        for t in all_user:
+            e = t.EstabelecimentoBase or t.Estabelecimento or ""
+            v = abs(t.Valor or 0)
+            en = normalizar_estabelecimento(e)
+            if en == estab_norm and v_min <= v <= v_max:
+                t.GRUPO = grupo
+                t.SUBGRUPO = subgrupo
+                t.origem_classificacao = "Manual"
+                if tipo_gasto:
+                    t.TipoGasto = tipo_gasto
+                if categoria_geral:
+                    t.CategoriaGeral = categoria_geral
+        
+        self.repository.db.commit()
     
     def _buscar_tipo_gasto_base_marcacoes(
         self, 
@@ -700,25 +913,18 @@ class TransactionService:
     
     def _ensure_marcacao_exists(self, grupo: str, subgrupo: str, tipo_gasto: str, user_id: int = None):
         """
-        Garante que a combinação grupo+subgrupo+tipo_gasto existe em base_marcacoes
-        Se não existir, cria automaticamente
+        Garante que a combinação grupo+subgrupo existe em base_marcacoes.
+        Sprint 2.0: base_marcacoes tem apenas GRUPO+SUBGRUPO (TipoGasto em base_grupos_config).
         """
         from app.domains.categories.models import BaseMarcacao
         
-        # Verificar se já existe
         existing = self.repository.db.query(BaseMarcacao).filter(
             BaseMarcacao.GRUPO == grupo,
-            BaseMarcacao.SUBGRUPO == subgrupo,
-            BaseMarcacao.TipoGasto == tipo_gasto
+            BaseMarcacao.SUBGRUPO == subgrupo
         ).first()
         
         if not existing:
-            # Criar nova marcação
-            nova_marcacao = BaseMarcacao(
-                GRUPO=grupo,
-                SUBGRUPO=subgrupo,
-                TipoGasto=tipo_gasto
-            )
+            nova_marcacao = BaseMarcacao(GRUPO=grupo, SUBGRUPO=subgrupo)
             self.repository.db.add(nova_marcacao)
-            self.repository.db.flush()  # Flush para garantir inserção sem commit ainda
-            print(f"➕ Nova marcação criada: {grupo} > {subgrupo} ({tipo_gasto})")
+            self.repository.db.flush()
+            print(f"➕ Nova marcação criada: {grupo} > {subgrupo}")

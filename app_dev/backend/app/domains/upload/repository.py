@@ -122,15 +122,18 @@ class UploadRepository:
         self,
         user_id: int,
         limit: int = 50,
-        offset: int = 0
+        offset: int = 0,
+        status: Optional[str] = None
     ) -> List[UploadHistory]:
-        """Lista históricos de um usuário (ordem decrescente)"""
-        return self.db.query(UploadHistory).filter(
-            UploadHistory.user_id == user_id
-        ).order_by(desc(UploadHistory.data_upload)).limit(limit).offset(offset).all()
+        """Lista históricos de um usuário (ordem decrescente). status='success' filtra só realizados."""
+        q = self.db.query(UploadHistory).filter(UploadHistory.user_id == user_id)
+        if status:
+            q = q.filter(UploadHistory.status == status)
+        return q.order_by(desc(UploadHistory.data_upload)).limit(limit).offset(offset).all()
     
-    def count_upload_history(self, user_id: int) -> int:
+    def count_upload_history(self, user_id: int, status: Optional[str] = None) -> int:
         """Conta total de históricos de um usuário"""
-        return self.db.query(func.count(UploadHistory.id)).filter(
-            UploadHistory.user_id == user_id
-        ).scalar()
+        q = self.db.query(func.count(UploadHistory.id)).filter(UploadHistory.user_id == user_id)
+        if status:
+            q = q.filter(UploadHistory.status == status)
+        return q.scalar()

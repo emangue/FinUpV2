@@ -17,12 +17,13 @@ export function usePreviewData(sessionId: string | null) {
       setLoading(false);
       return;
     }
+    const id = sessionId;
 
     async function loadPreviewData() {
       try {
         setLoading(true);
         setError(null);
-        const previewData = await fetchPreviewData(sessionId);
+        const previewData = await fetchPreviewData(id);
         setData(previewData);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Erro desconhecido');

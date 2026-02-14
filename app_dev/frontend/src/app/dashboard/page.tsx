@@ -2,14 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { fetchWithAuth } from '@/core/utils/api-client';
-import {
-  ChartAreaInteractive,
-  DateFilters,
-  CompactMetrics,
-  CategoryExpenses,
-  BudgetVsActual,
-  CreditCardExpenses
-} from '@/features/dashboard';
+import ChartAreaInteractive from '@/features/dashboard/components/chart-area-interactive';
+import DateFilters from '@/features/dashboard/components/date-filters';
+import CompactMetrics from '@/features/dashboard/components/compact-metrics';
+import CategoryExpenses from '@/features/dashboard/components/category-expenses';
+import { BudgetVsActual } from '@/features/dashboard/components/budget-vs-actual';
+import CreditCardExpenses from '@/features/dashboard/components/credit-card-expenses';
 import DashboardLayout from '@/components/dashboard-layout';
 
 interface Metrics {

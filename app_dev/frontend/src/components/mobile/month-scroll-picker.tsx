@@ -104,8 +104,8 @@ export function MonthScrollPicker({
       <div
         className="flex gap-2 px-5"
         style={{
-          paddingTop: mobileDimensions.spacing.md,
-          paddingBottom: mobileDimensions.spacing.md,
+          paddingTop: mobileDimensions.spacing.cardPadding.px,
+          paddingBottom: mobileDimensions.spacing.cardPadding.px,
         }}
       >
         {months.map((month) => {

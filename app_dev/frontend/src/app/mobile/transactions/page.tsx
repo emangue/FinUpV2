@@ -3,21 +3,14 @@
 /**
  * Transactions Mobile - Tela de Transações
  * 
- * Integra:
- * - MonthScrollPicker (scroll de meses)
- * - TransactionCard (cards de transação)
- * - MobileHeader (header unificado)
- * - Pills de filtro (Todas/Receitas/Despesas)
- * 
- * Baseado no PRD Seção 4.2
- * 
- * Endpoints usados:
- * - GET /api/v1/transactions/list?year=X&month=Y&categoria_geral=X
+ * Query params: year, month, grupo, subgrupo, from
+ * - from=metas: veio da tela de metas, voltar leva para /mobile/budget
  */
 
 import * as React from 'react'
-import { useRouter } from 'next/navigation'
-import { startOfMonth, endOfMonth, format } from 'date-fns'
+import { Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { format } from 'date-fns'
 import { Plus } from 'lucide-react'
 import { MonthScrollPicker } from '@/components/mobile/month-scroll-picker'
 import { TransactionCard } from '@/components/mobile/transaction-card'
@@ -25,30 +18,65 @@ import { MobileHeader } from '@/components/mobile/mobile-header'
 import { fetchWithAuth } from '@/core/utils/api-client'
 import { API_CONFIG } from '@/core/config/api.config'
 import { cn } from '@/lib/utils'
+import type { CategoryType } from '@/components/mobile/category-icon'
+import { TransactionDetailBottomSheet } from '@/components/mobile/transaction-detail-bottom-sheet'
 
 type FilterType = 'all' | 'receita' | 'despesa'
 
+function grupoToCategory(grupo: string | undefined): CategoryType {
+  if (!grupo) return 'outros'
+  const g = grupo.toLowerCase()
+  if (g.includes('casa') || g.includes('moradia') || g.includes('aluguel')) return 'casa'
+  if (g.includes('aliment') || g.includes('restaurante')) return 'alimentacao'
+  if (g.includes('compra') || g.includes('shopping')) return 'compras'
+  if (g.includes('transporte') || g.includes('combust')) return 'transporte'
+  if (g.includes('conta') || g.includes('utilidade')) return 'contas'
+  if (g.includes('lazer') || g.includes('saúde') || g.includes('viagem')) return 'lazer'
+  return 'outros'
+}
+
 interface Transaction {
   id: number
+  IdTransacao: string
   Estabelecimento: string
   Valor: number
   Data: string
-  Grupo: string
+  GRUPO?: string
+  SUBGRUPO?: string
+  Grupo?: string
   Subgrupo?: string
-  CategoriaGeral: string
+  CategoriaGeral?: string
+  IdParcela?: string
+  origem_classificacao?: string
+  MesFatura?: string
+  NomeCartao?: string
 }
 
-export default function TransactionsMobilePage() {
+function TransactionsMobileContent() {
   const router = useRouter()
-  const [selectedMonth, setSelectedMonth] = React.useState<Date>(new Date())
-  const [filterType, setFilterType] = React.useState<FilterType>('all')
+  const searchParams = useSearchParams()
+  const fromMetas = searchParams.get('from') === 'metas'
+  const urlGoalId = searchParams.get('goalId')
+  const urlYear = searchParams.get('year')
+  const urlMonth = searchParams.get('month')
+  const urlGrupo = searchParams.get('grupo')
+  const urlSubgrupo = searchParams.get('subgrupo')
+
+  const [selectedMonth, setSelectedMonth] = React.useState<Date>(() => {
+    if (urlYear && urlMonth) {
+      return new Date(parseInt(urlYear), parseInt(urlMonth) - 1, 1)
+    }
+    return new Date()
+  })
+  const [filterType, setFilterType] = React.useState<FilterType>(urlGrupo ? 'despesa' : 'all')
   const [transactions, setTransactions] = React.useState<Transaction[]>([])
   const [loading, setLoading] = React.useState(true)
-  
-  // Buscar transações quando mês ou filtro mudar
+  const [selectedTransaction, setSelectedTransaction] = React.useState<Transaction | null>(null)
+  const [detailSheetOpen, setDetailSheetOpen] = React.useState(false)
+
   React.useEffect(() => {
     fetchTransactions()
-  }, [selectedMonth, filterType])
+  }, [selectedMonth, filterType, urlGrupo, urlSubgrupo])
   
   const fetchTransactions = async () => {
     try {
@@ -57,14 +85,20 @@ export default function TransactionsMobilePage() {
       const BASE_URL = `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}`
       
       const year = format(selectedMonth, 'yyyy')
-      const month = format(selectedMonth, 'M') // Mês sem zero à esquerda
+      const month = format(selectedMonth, 'M')
       
-      // Buscar transações usando endpoint correto /list
       let url = `${BASE_URL}/transactions/list?year=${year}&month=${month}&limit=100`
       
-      // Adicionar filtro de categoria se não for "all"
       if (filterType !== 'all') {
         url += `&categoria_geral=${filterType === 'receita' ? 'Receita' : 'Despesa'}`
+      }
+      if (urlGrupo) url += `&grupo=${encodeURIComponent(urlGrupo)}`
+      if (urlSubgrupo) {
+        if (urlSubgrupo === '__null__') {
+          url += '&subgrupo_null=1'
+        } else {
+          url += `&subgrupo=${encodeURIComponent(urlSubgrupo)}`
+        }
       }
       
       const response = await fetchWithAuth(url)
@@ -107,8 +141,13 @@ export default function TransactionsMobilePage() {
     <div className="flex flex-col h-screen bg-gray-50">
       {/* Header */}
       <MobileHeader
-        title="Transações"
-        showBackButton={false}
+        title={urlGrupo ? `${urlGrupo}${urlSubgrupo && urlSubgrupo !== '__null__' ? ` › ${urlSubgrupo}` : ''}` : 'Transações'}
+        leftAction={fromMetas ? 'back' : null}
+        onBack={fromMetas ? () => {
+          const mes = urlYear && urlMonth ? `?mes=${urlYear}-${String(urlMonth).padStart(2, '0')}` : ''
+          const target = urlGoalId ? `/mobile/budget/${urlGoalId}${mes}` : `/mobile/budget${mes}`
+          router.push(target)
+        } : undefined}
       />
       
       {/* Month Picker */}
@@ -178,15 +217,16 @@ export default function TransactionsMobilePage() {
             {transactions.map((transaction) => (
               <TransactionCard
                 key={transaction.id}
+                id={transaction.id}
                 description={transaction.Estabelecimento}
                 amount={transaction.Valor}
                 date={transaction.Data}
-                group={transaction.GRUPO}
-                subgroup={transaction.SUBGRUPO}
-                category={transaction.GRUPO}
+                group={typeof transaction.GRUPO === 'string' ? transaction.GRUPO : (typeof transaction.Grupo === 'string' ? transaction.Grupo : undefined)}
+                subgroup={typeof transaction.SUBGRUPO === 'string' ? transaction.SUBGRUPO : (typeof transaction.Subgrupo === 'string' ? transaction.Subgrupo : undefined)}
+                category={grupoToCategory(typeof transaction.GRUPO === 'string' ? transaction.GRUPO : (typeof transaction.Grupo === 'string' ? transaction.Grupo : undefined))}
                 onClick={() => {
-                  // TODO: Abrir bottom sheet de detalhes
-                  console.log('Clicked transaction:', transaction.id)
+                  setSelectedTransaction(transaction)
+                  setDetailSheetOpen(true)
                 }}
               />
             ))}
@@ -194,6 +234,16 @@ export default function TransactionsMobilePage() {
         )}
       </div>
       
+      <TransactionDetailBottomSheet
+        isOpen={detailSheetOpen}
+        onClose={() => {
+          setDetailSheetOpen(false)
+          setSelectedTransaction(null)
+        }}
+        transaction={selectedTransaction}
+        onSaved={fetchTransactions}
+      />
+
       {/* FAB - Nova Transação */}
       <button
         onClick={() => {
@@ -209,5 +259,17 @@ export default function TransactionsMobilePage() {
         <Plus className="w-6 h-6" />
       </button>
     </div>
+  )
+}
+
+export default function TransactionsMobilePage() {
+  return (
+    <Suspense fallback={
+      <div className="flex flex-col h-screen bg-gray-50 items-center justify-center">
+        <div className="text-gray-500">Carregando...</div>
+      </div>
+    }>
+      <TransactionsMobileContent />
+    </Suspense>
   )
 }

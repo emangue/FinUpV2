@@ -54,7 +54,7 @@ class MarcacaoService:
     def create_subgrupo(self, grupo: str, subgrupo_data: SubgrupoCreate) -> SubgrupoResponse:
         """
         Cria novo subgrupo para um grupo existente.
-        Busca configuração (tipo_gasto, categoria) de base_grupos_config.
+        Herda configuração (tipo_gasto, categoria) de base_grupos_config.
         """
         # 1. Verificar se grupo existe em base_grupos_config
         grupo_config = self.repository.get_grupo_config(grupo)
@@ -69,71 +69,65 @@ class MarcacaoService:
         if existing:
             raise HTTPException(
                 status_code=409,
-                detail=f"Subgrupo '{subgrupo_data.subgrupo}' já existe no grupo '{grupo}'",
-                headers={"X-Existing-Id": str(existing.id)}
+                detail=f"Subgrupo '{subgrupo_data.subgrupo}' já existe no grupo '{grupo}'"
             )
         
-        # 3. Pegar configuração do grupo (tipo_gasto e categoria vêm de lá)
-        tipo_gasto = grupo_config.tipo_gasto_padrao
-        categoria_geral = grupo_config.categoria_geral
-        
-        # 4. Permitir override se fornecido (opcional)
-        if subgrupo_data.tipo_gasto:
-            tipo_gasto = subgrupo_data.tipo_gasto
-        if subgrupo_data.categoria_geral:
-            categoria_geral = subgrupo_data.categoria_geral
-        
-        # 5. Criar marcação em base_marcacoes
+        # 3. Criar marcação em base_marcacoes (apenas GRUPO + SUBGRUPO)
         marcacao = self.repository.create_marcacao(
             grupo=grupo,
-            subgrupo=subgrupo_data.subgrupo,
-            tipo_gasto=tipo_gasto,
-            categoria_geral=categoria_geral
+            subgrupo=subgrupo_data.subgrupo
         )
         
-        # 6. Retornar resposta
+        # 4. Retornar resposta com config do grupo
         return SubgrupoResponse(
             id=marcacao.id,
             grupo=marcacao.GRUPO,
             subgrupo=marcacao.SUBGRUPO,
-            tipo_gasto=marcacao.TipoGasto,
-            categoria_geral=marcacao.CategoriaGeral,
-            message=f"Subgrupo '{subgrupo_data.subgrupo}' criado no grupo '{grupo}'"
+            tipo_gasto=grupo_config.tipo_gasto_padrao,
+            categoria_geral=grupo_config.categoria_geral,
+            message=f"Subgrupo '{subgrupo_data.subgrupo}' criado no grupo '{grupo}' (herda config: {grupo_config.tipo_gasto_padrao})"
         )
     
-    def create_marcacao_manual(self, marcacao_data: MarcacaoCreate) -> MarcacaoResponse:
+    def create_grupo_com_subgrupo(self, grupo: str, subgrupo: str, tipo_gasto: str, categoria_geral: str = "Despesa") -> dict:
         """
-        Cria marcação manualmente (grupo + subgrupo).
-        Verifica se grupo existe em base_grupos_config.
+        Cria grupo em base_grupos_config E subgrupo em base_marcacoes (atomicamente).
         """
-        # 1. Verificar se grupo existe
-        grupo_config = self.repository.get_grupo_config(marcacao_data.grupo)
-        if not grupo_config:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Grupo '{marcacao_data.grupo}' não encontrado. Crie o grupo primeiro em /api/v1/grupos"
-            )
-        
-        # 2. Verificar se marcação já existe
-        existing = self.repository.get_by_grupo_subgrupo(
-            marcacao_data.grupo,
-            marcacao_data.subgrupo
-        )
-        if existing:
+        # 1. Verificar se grupo já existe
+        existing_grupo = self.repository.get_grupo_config(grupo)
+        if existing_grupo:
             raise HTTPException(
                 status_code=409,
-                detail=f"Marcação '{marcacao_data.grupo} / {marcacao_data.subgrupo}' já existe"
+                detail=f"Grupo '{grupo}' já existe em base_grupos_config"
             )
         
-        # 3. Criar marcação
+        # 2. Criar grupo em base_grupos_config
+        from app.domains.grupos.models import BaseGruposConfig
+        novo_grupo = BaseGruposConfig(
+            nome_grupo=grupo,
+            tipo_gasto_padrao=tipo_gasto,
+            categoria_geral=categoria_geral
+        )
+        self.repository.db.add(novo_grupo)
+        self.repository.db.flush()  # Flush para obter ID mas não commit ainda
+        
+        # 3. Criar subgrupo em base_marcacoes
         marcacao = self.repository.create_marcacao(
-            grupo=marcacao_data.grupo,
-            subgrupo=marcacao_data.subgrupo,
-            tipo_gasto=marcacao_data.tipo_gasto,
-            categoria_geral=marcacao_data.categoria_geral
+            grupo=grupo,
+            subgrupo=subgrupo
         )
         
-        return MarcacaoResponse.from_db_model(marcacao)
+        # 4. Commit de tudo junto (atomic)
+        self.repository.db.commit()
+        
+        return {
+            "grupo": grupo,
+            "subgrupo": subgrupo,
+            "tipo_gasto": tipo_gasto,
+            "categoria_geral": categoria_geral,
+            "grupo_id": novo_grupo.id,
+            "marcacao_id": marcacao.id,
+            "message": f"Grupo '{grupo}' e subgrupo '{subgrupo}' criados com sucesso"
+        }
     
     def delete_subgrupo(self, grupo: str, subgrupo: str) -> dict:
         """Exclui subgrupo (marcação específica)"""

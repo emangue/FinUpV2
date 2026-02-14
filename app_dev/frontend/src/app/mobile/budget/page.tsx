@@ -55,8 +55,9 @@ export default function GoalsMobilePage() {
     }
   }, [goals])
   
-  const handleGoalClick = (goalId: number) => {
-    router.push(`/mobile/budget/${goalId}`)
+  const handleGoalClick = (goalId: number, mesReferencia?: string) => {
+    const qs = mesReferencia ? `?mes=${mesReferencia}` : ''
+    router.push(`/mobile/budget/${goalId}${qs}`)
   }
   
   const handleCreateGoal = () => {
@@ -172,7 +173,7 @@ export default function GoalsMobilePage() {
               <GoalCard
                 key={goal.id}
                 goal={goal}
-                onClick={() => handleGoalClick(goal.id)}
+                onClick={() => handleGoalClick(goal.id, goal.mes_referencia)}
               />
             ))}
           </div>

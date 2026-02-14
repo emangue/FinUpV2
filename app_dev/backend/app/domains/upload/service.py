@@ -741,6 +741,15 @@ class UploadService:
         """
         logger.info(f"📤 Confirmando upload: {session_id}")
         
+        # Verificar se é revisão (rev-{upload_history_id}-{uuid})
+        is_revision = session_id.startswith("rev-")
+        original_upload_history_id = None
+        if is_revision:
+            try:
+                original_upload_history_id = int(session_id.split("-")[1])
+            except (IndexError, ValueError):
+                pass
+        
         # Buscar histórico
         history = self.repository.get_upload_history_by_session(session_id, user_id)
         if not history:
@@ -748,6 +757,15 @@ class UploadService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail={"errorCode": "UPL_008", "error": "Histórico de upload não encontrado"}
             )
+        
+        # Para revisão: usar o histórico ORIGINAL (não o rev_history)
+        if is_revision and original_upload_history_id:
+            original_history = self.db.query(UploadHistory).filter(
+                UploadHistory.id == original_upload_history_id,
+                UploadHistory.user_id == user_id
+            ).first()
+            if original_history:
+                history = original_history
         
         # Buscar dados de preview (filtrar não-duplicatas e não-excluídos)
         previews = self.db.query(PreviewTransacao).filter(
@@ -765,7 +783,25 @@ class UploadService:
         
         try:
             # Importar JournalEntry
-            from app.domains.transactions.models import JournalEntry
+            from app.domains.transactions.models import JournalEntry, BaseParcelas
+            
+            # Revisão: coletar IdParcela antigos ANTES de deletar (para limpar base_parcelas)
+            old_id_parcelas = set()
+            if is_revision and original_upload_history_id:
+                old_rows = self.db.query(JournalEntry.IdParcela).filter(
+                    JournalEntry.upload_history_id == original_upload_history_id,
+                    JournalEntry.user_id == user_id,
+                    JournalEntry.IdParcela.isnot(None)
+                ).distinct().all()
+                old_id_parcelas = {r[0] for r in old_rows if r[0]}
+            
+            # Revisão: deletar journal_entries antigos do upload original
+            if is_revision and original_upload_history_id:
+                deleted_old = self.db.query(JournalEntry).filter(
+                    JournalEntry.upload_history_id == original_upload_history_id,
+                    JournalEntry.user_id == user_id
+                ).delete(synchronize_session=False)
+                logger.info(f"🗑️ Revisão: {deleted_old} transações antigas removidas")
             
             transacoes_criadas = 0
             now = datetime.now()
@@ -796,8 +832,8 @@ class UploadService:
                     TipoTransacao=item.TipoTransacao,    # ✅ CamelCase
                     Ano=item.Ano,                        # ✅ CamelCase
                     Mes=item.Mes,                        # ✅ CamelCase
-                    session_id=session_id,               # ✅ RASTREAMENTO
-                    upload_history_id=history.id,        # ✅ RASTREAMENTO
+                    session_id=history.session_id if is_revision else session_id,  # Original session
+                    upload_history_id=history.id,        # ✅ Sempre o ID do histórico original
                     created_at=now,
                 )
                 
@@ -808,8 +844,8 @@ class UploadService:
             self.db.commit()
             logger.info(f"✅ {transacoes_criadas} transações salvas no journal_entries")
             
-            # Contar duplicatas (total_registros - transacoes_criadas)
-            total_duplicatas = history.total_registros - transacoes_criadas
+            # Contar duplicatas (para revisão: 0, pois preview já filtrou)
+            total_duplicatas = 0 if is_revision else (history.total_registros - transacoes_criadas)
             
             # Atualizar histórico: status='success', contadores, data_confirmacao
             self.repository.update_upload_history(
@@ -821,7 +857,25 @@ class UploadService:
             )
             logger.info(f"📝 Histórico atualizado: {transacoes_criadas} importadas, {total_duplicatas} duplicadas")
             
-            # ========== NOVA FASE 5: ATUALIZAR BASE_PARCELAS ==========
+            # ========== REVISÃO: LIMPAR BASE_PARCELAS ÓRFÃS ==========
+            # Parcelas que existiam no upload antigo mas foram removidas na revisão
+            if is_revision and old_id_parcelas:
+                new_rows = self.db.query(JournalEntry.IdParcela).filter(
+                    JournalEntry.upload_history_id == history.id,
+                    JournalEntry.user_id == user_id,
+                    JournalEntry.IdParcela.isnot(None)
+                ).distinct().all()
+                new_id_parcelas = {r[0] for r in new_rows if r[0]}
+                removed_id_parcelas = old_id_parcelas - new_id_parcelas
+                if removed_id_parcelas:
+                    deleted_parcelas = self.db.query(BaseParcelas).filter(
+                        BaseParcelas.user_id == user_id,
+                        BaseParcelas.id_parcela.in_(removed_id_parcelas)
+                    ).delete(synchronize_session=False)
+                    self.db.commit()
+                    logger.info(f"🗑️ Revisão: {deleted_parcelas} parcelas órfãs removidas de base_parcelas")
+            
+            # ========== FASE 5: ATUALIZAR BASE_PARCELAS ==========
             logger.info("🔄 Fase 5: Atualização de Base Parcelas")
             try:
                 resultado_parcelas = self._fase5_update_base_parcelas(user_id, history.id)
@@ -830,9 +884,27 @@ class UploadService:
                 # NÃO bloquear confirmação se atualização falhar
                 logger.warning(f"  ⚠️ Erro na atualização de parcelas: {str(e)}")
             
+            # ========== FASE 6: SINCRONIZAR BUDGET_PLANNING ==========
+            # Garante que grupos com transações tenham linha no budget (mesmo com plano zero)
+            # para que o valor realizado apareça na tela de Metas
+            logger.info("🔄 Fase 6: Sincronização Budget Planning")
+            try:
+                resultado_budget = self._fase6_sync_budget_planning(user_id, history.id)
+                logger.info(f"  ✅ Budget: {resultado_budget['criados']} linhas criadas para grupos com realizado")
+            except Exception as e:
+                logger.warning(f"  ⚠️ Erro na sincronização de budget: {str(e)}")
+            
             # Limpar dados de preview
             deleted = self.repository.delete_by_session_id(session_id, user_id)
             logger.info(f"🗑️  {deleted} registros de preview removidos")
+            
+            # Revisão: deletar o UploadHistory temporário (rev_history)
+            if is_revision:
+                rev_history = self.repository.get_upload_history_by_session(session_id, user_id)
+                if rev_history:
+                    self.db.delete(rev_history)
+                    self.db.commit()
+                    logger.info(f"🗑️ Histórico temporário de revisão removido")
             
             return ConfirmUploadResponse(
                 success=True,
@@ -886,19 +958,212 @@ class UploadService:
         self,
         user_id: int,
         limit: int = 50,
-        offset: int = 0
+        offset: int = 0,
+        status: Optional[str] = None
     ) -> UploadHistoryListResponse:
         """
-        Lista histórico de uploads do usuário
+        Lista histórico de uploads do usuário. status='success' retorna só realizados.
+        Inclui valor_somado (soma das transações) para cada upload.
         """
-        uploads = self.repository.list_upload_history(user_id, limit, offset)
-        total = self.repository.count_upload_history(user_id)
+        from app.domains.transactions.models import JournalEntry
+        
+        uploads = self.repository.list_upload_history(user_id, limit, offset, status=status)
+        total = self.repository.count_upload_history(user_id, status=status)
+        
+        # Buscar soma por upload_history_id
+        ids = [u.id for u in uploads]
+        somas = {}
+        if ids:
+            from sqlalchemy import func
+            rows = self.db.query(
+                JournalEntry.upload_history_id,
+                func.sum(JournalEntry.Valor).label('total')
+            ).filter(
+                JournalEntry.upload_history_id.in_(ids),
+                JournalEntry.user_id == user_id
+            ).group_by(JournalEntry.upload_history_id).all()
+            somas = {r[0]: float(r[1]) if r[1] else 0.0 for r in rows}
+        
+        def to_response(u):
+            d = {c.key: getattr(u, c.key) for c in u.__table__.columns}
+            d['valor_somado'] = somas.get(u.id)
+            return UploadHistoryResponse(**d)
         
         return UploadHistoryListResponse(
             success=True,
             total=total,
-            uploads=[UploadHistoryResponse.from_orm(u) for u in uploads]
+            uploads=[to_response(u) for u in uploads]
         )
+    
+    def delete_upload_history(
+        self,
+        upload_history_id: int,
+        user_id: int
+    ) -> dict:
+        """
+        Deleta todas as transações de um upload e o registro de histórico.
+        
+        1. Verifica se o upload pertence ao usuário
+        2. Coleta IdParcela das transações (para limpar base_parcelas órfãs)
+        3. Deleta journal_entries com upload_history_id
+        4. Remove parcelas órfãs de base_parcelas
+        5. Deleta o registro de upload_history
+        
+        Returns:
+            dict com transacoes_deletadas
+        """
+        from app.domains.transactions.models import JournalEntry, BaseParcelas
+        
+        history = self.db.query(UploadHistory).filter(
+            UploadHistory.id == upload_history_id,
+            UploadHistory.user_id == user_id
+        ).first()
+        
+        if not history:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"errorCode": "UPL_013", "error": "Upload não encontrado"}
+            )
+        
+        # Coletar IdParcela antes de deletar (para limpar base_parcelas)
+        old_rows = self.db.query(JournalEntry.IdParcela).filter(
+            JournalEntry.upload_history_id == upload_history_id,
+            JournalEntry.user_id == user_id,
+            JournalEntry.IdParcela.isnot(None)
+        ).distinct().all()
+        old_id_parcelas = {r[0] for r in old_rows if r[0]}
+        
+        # Deletar journal_entries
+        deleted_count = self.db.query(JournalEntry).filter(
+            JournalEntry.upload_history_id == upload_history_id,
+            JournalEntry.user_id == user_id
+        ).delete(synchronize_session=False)
+        
+        # Remover parcelas órfãs de base_parcelas (que não têm mais journal_entries)
+        if old_id_parcelas:
+            remaining = self.db.query(JournalEntry.IdParcela).filter(
+                JournalEntry.user_id == user_id,
+                JournalEntry.IdParcela.in_(old_id_parcelas)
+            ).distinct().all()
+            remaining_set = {r[0] for r in remaining if r[0]}
+            removed = old_id_parcelas - remaining_set
+            if removed:
+                self.db.query(BaseParcelas).filter(
+                    BaseParcelas.user_id == user_id,
+                    BaseParcelas.id_parcela.in_(removed)
+                ).delete(synchronize_session=False)
+        
+        # Deletar registro de upload_history
+        self.db.delete(history)
+        self.db.commit()
+        
+        logger.info(f"🗑️ Upload {upload_history_id} deletado: {deleted_count} transações removidas")
+        
+        return {"transacoes_deletadas": deleted_count}
+    
+    def recreate_preview_from_history(
+        self,
+        upload_history_id: int,
+        user_id: int
+    ) -> dict:
+        """
+        Recria preview a partir de journal_entries de um upload já confirmado.
+        Permite revisar e re-salvar alterações.
+        Retorna session_id para redirecionar à tela de preview.
+        """
+        from app.domains.transactions.models import JournalEntry
+        import uuid
+        
+        # Buscar upload history
+        history = self.db.query(UploadHistory).filter(
+            UploadHistory.id == upload_history_id,
+            UploadHistory.user_id == user_id,
+            UploadHistory.status == 'success'
+        ).first()
+        
+        if not history:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"errorCode": "UPL_011", "error": "Upload não encontrado ou não confirmado"}
+            )
+        
+        # Buscar journal_entries do upload
+        entries = self.db.query(JournalEntry).filter(
+            JournalEntry.upload_history_id == upload_history_id,
+            JournalEntry.user_id == user_id
+        ).all()
+        
+        if not entries:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"errorCode": "UPL_012", "error": "Nenhuma transação encontrada para este upload"}
+            )
+        
+        # Session ID para revisão: rev-{id}-{uuid}
+        new_session_id = f"rev-{upload_history_id}-{uuid.uuid4().hex[:12]}"
+        now = datetime.now()
+        
+        # Criar PreviewTransacao a partir de cada JournalEntry
+        previews = []
+        for je in entries:
+            p = PreviewTransacao(
+                session_id=new_session_id,
+                user_id=user_id,
+                created_at=now,
+                updated_at=now,
+                banco=history.banco or je.banco_origem or '',
+                tipo_documento=history.tipo_documento or je.tipodocumento or 'fatura',
+                cartao=history.final_cartao,
+                nome_cartao=history.nome_cartao or je.NomeCartao,
+                nome_arquivo=history.nome_arquivo,
+                mes_fatura=history.mes_fatura or (f"{je.Ano}-{str(je.Mes).zfill(2)}" if je.Ano and je.Mes else None),
+                data=je.Data or '',
+                lancamento=je.Estabelecimento or '',
+                valor=je.Valor or 0,
+                data_criacao=now,
+                IdTransacao=je.IdTransacao,
+                IdParcela=je.IdParcela,
+                EstabelecimentoBase=je.EstabelecimentoBase,
+                ParcelaAtual=je.parcela_atual,
+                TotalParcelas=je.TotalParcelas,
+                ValorPositivo=je.ValorPositivo or abs(je.Valor or 0),
+                TipoTransacao=je.TipoTransacao,
+                Ano=je.Ano,
+                Mes=je.Mes,
+                GRUPO=je.GRUPO,
+                SUBGRUPO=je.SUBGRUPO,
+                TipoGasto=je.TipoGasto,
+                CategoriaGeral=je.CategoriaGeral,
+                origem_classificacao=je.origem_classificacao or 'Manual',
+                excluir=0,
+                is_duplicate=False,
+            )
+            previews.append(p)
+        
+        self.db.add_all(previews)
+        
+        # Criar UploadHistory para a sessão de revisão (necessário para get_preview_data)
+        rev_history = UploadHistory(
+            user_id=user_id,
+            session_id=new_session_id,
+            banco=history.banco,
+            tipo_documento=history.tipo_documento,
+            nome_arquivo=f"[Revisão] {history.nome_arquivo}",
+            nome_cartao=history.nome_cartao,
+            final_cartao=history.final_cartao,
+            mes_fatura=history.mes_fatura,
+            status='processing',
+            total_registros=len(previews),
+            transacoes_importadas=0,
+            transacoes_duplicadas=0,
+        )
+        self.db.add(rev_history)
+        self.db.commit()
+        self.db.refresh(rev_history)
+        
+        logger.info(f"📋 Preview recriado: {len(previews)} transações, session_id={new_session_id}")
+        
+        return {"session_id": new_session_id, "revision_of": upload_history_id}
     
     def update_preview_classification(
         self,
@@ -981,27 +1246,20 @@ class UploadService:
     
     def _ensure_marcacao_exists(self, grupo: str, subgrupo: str, tipo_gasto: str, user_id: int = None):
         """
-        Garante que a combinação grupo+subgrupo+tipo_gasto existe em base_marcacoes
-        Se não existir, cria automaticamente
+        Garante que a combinação grupo+subgrupo existe em base_marcacoes.
+        Sprint 2.0: base_marcacoes tem apenas GRUPO+SUBGRUPO (TipoGasto em base_grupos_config).
         """
         from app.domains.categories.models import BaseMarcacao
         
-        # Verificar se já existe
         existing = self.db.query(BaseMarcacao).filter(
             BaseMarcacao.GRUPO == grupo,
-            BaseMarcacao.SUBGRUPO == subgrupo,
-            BaseMarcacao.TipoGasto == tipo_gasto
+            BaseMarcacao.SUBGRUPO == subgrupo
         ).first()
         
         if not existing:
-            # Criar nova marcação
-            nova_marcacao = BaseMarcacao(
-                GRUPO=grupo,
-                SUBGRUPO=subgrupo,
-                TipoGasto=tipo_gasto
-            )
+            nova_marcacao = BaseMarcacao(GRUPO=grupo, SUBGRUPO=subgrupo)
             self.db.add(nova_marcacao)
-            logger.info(f"  ➕ Nova marcação criada em base_marcacoes: {grupo} > {subgrupo} ({tipo_gasto})")
+            logger.info(f"  ➕ Nova marcação criada em base_marcacoes: {grupo} > {subgrupo}")
         else:
             logger.debug(f"  ✓ Marcação já existe em base_marcacoes: {grupo} > {subgrupo}")
     
@@ -1047,25 +1305,33 @@ class UploadService:
             ).first()
             
             if parcela_existente:
-                # ATUALIZAR qtd_pagas e status se necessário
+                # ATUALIZAR qtd_pagas e status (só aumenta qtd_pagas, nunca diminui)
+                updated_any = False
                 if transacao.parcela_atual > parcela_existente.qtd_pagas:
-                    # Atualizar quantidade de parcelas pagas
                     parcela_existente.qtd_pagas = transacao.parcela_atual
-                    
-                    # Atualizar status baseado no progresso
-                    if transacao.parcela_atual >= transacao.TotalParcelas:
+                    updated_any = True
+                if transacao.parcela_atual >= transacao.TotalParcelas:
+                    if parcela_existente.status != 'finalizada':
                         parcela_existente.status = 'finalizada'
-                        status_desc = "finalizada"
                         finalizadas += 1
-                    else:
+                        updated_any = True
+                else:
+                    if parcela_existente.status != 'ativa':
                         parcela_existente.status = 'ativa'
-                        status_desc = "ativa"
-                    
-                    # Atualizar data da última atualização
+                        updated_any = True
+                # Sincronizar classificação (revisão pode ter alterado grupo/subgrupo)
+                if transacao.GRUPO and transacao.GRUPO != parcela_existente.grupo_sugerido:
+                    parcela_existente.grupo_sugerido = transacao.GRUPO
+                    updated_any = True
+                if transacao.SUBGRUPO and transacao.SUBGRUPO != parcela_existente.subgrupo_sugerido:
+                    parcela_existente.subgrupo_sugerido = transacao.SUBGRUPO
+                    updated_any = True
+                if transacao.TipoGasto and transacao.TipoGasto != parcela_existente.tipo_gasto_sugerido:
+                    parcela_existente.tipo_gasto_sugerido = transacao.TipoGasto
+                    updated_any = True
+                if updated_any:
                     parcela_existente.updated_at = datetime.now()
-                    
                     atualizadas += 1
-                    logger.debug(f"  📝 Atualizada: {transacao.IdParcela} (parcela {transacao.parcela_atual}/{transacao.TotalParcelas}) → {status_desc}")
             
             else:
                 # INSERIR nova compra parcelada
@@ -1111,6 +1377,56 @@ class UploadService:
             'finalizadas': finalizadas,
             'total_processadas': atualizadas + novas
         }
+    
+    def _fase6_sync_budget_planning(self, user_id: int, upload_history_id: int) -> dict:
+        """
+        Garante que cada grupo com transações no upload tenha linha em budget_planning.
+        Cria com valor_planejado=0 se não existir, para que o valor realizado apareça na tela de Metas.
+        """
+        from app.domains.budget.models import BudgetPlanning
+        
+        # Buscar (grupo, mes_fatura) distintos do upload
+        rows = self.db.query(JournalEntry.GRUPO, JournalEntry.MesFatura).filter(
+            JournalEntry.upload_history_id == upload_history_id,
+            JournalEntry.user_id == user_id,
+            JournalEntry.GRUPO.isnot(None),
+            JournalEntry.GRUPO != '',
+            JournalEntry.MesFatura.isnot(None)
+        ).distinct().all()
+        
+        criados = 0
+        for grupo, mes_fatura in rows:
+            if not grupo or not mes_fatura:
+                continue
+            # Converter YYYYMM -> YYYY-MM
+            if len(mes_fatura) == 6:
+                mes_referencia = f"{mes_fatura[:4]}-{mes_fatura[4:6]}"
+            else:
+                continue
+            
+            existente = self.db.query(BudgetPlanning).filter(
+                BudgetPlanning.user_id == user_id,
+                BudgetPlanning.grupo == grupo,
+                BudgetPlanning.mes_referencia == mes_referencia
+            ).first()
+            
+            if not existente:
+                novo = BudgetPlanning(
+                    user_id=user_id,
+                    grupo=grupo,
+                    mes_referencia=mes_referencia,
+                    valor_planejado=0.0,
+                    valor_medio_3_meses=0.0,
+                    ativo=1
+                )
+                self.db.add(novo)
+                criados += 1
+                logger.debug(f"  ➕ Budget criado: {grupo} {mes_referencia} (plano 0)")
+        
+        if criados > 0:
+            self.db.commit()
+        
+        return {'criados': criados}
     
     def _get_categoria_geral_from_grupo(self, grupo: str) -> str:
         """

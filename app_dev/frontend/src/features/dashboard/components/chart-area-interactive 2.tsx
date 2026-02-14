@@ -1,0 +1,220 @@
+'use client';
+
+import React, { useMemo, useRef, useEffect } from 'react';
+import { Bar, BarChart, CartesianGrid, XAxis, LabelList } from 'recharts';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from '@/components/ui/chart';
+
+interface ChartDataItem {
+  mes: string;
+  receitas: number;
+  despesas: number;
+}
+
+interface ChartAreaInteractiveProps {
+  data?: ChartDataItem[];
+  loading?: boolean;
+  error?: string | null;
+  selectedMonth?: string; // 'all' ou '1'-'12'
+  onMonthClick?: (monthIndex: string) => void; // Callback quando clicar em um mês
+}
+
+const chartConfig = {
+  receitas: {
+    label: "Receitas",
+    color: "#10b981", // green-500
+  },
+  despesas: {
+    label: "Despesas",
+    color: "#ef4444", // red-500
+  },
+} satisfies ChartConfig;
+
+const ChartAreaInteractive: React.FC<ChartAreaInteractiveProps> = ({
+  data = [],
+  loading = false,
+  error = null,
+  selectedMonth = 'all',
+  onMonthClick
+}) => {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Scroll para a direita e para baixo ao montar o componente
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollLeft = scrollRef.current.scrollWidth;
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [data]);
+
+  // Mapear nomes de meses para índices (1-12)
+  const monthNameToIndex: { [key: string]: number } = {
+    'Jan': 1, 'Fev': 2, 'Mar': 3, 'Abr': 4, 'Mai': 5, 'Jun': 6,
+    'Jul': 7, 'Ago': 8, 'Set': 9, 'Out': 10, 'Nov': 11, 'Dez': 12
+  };
+
+  // Mostrar todos os 12 meses com scroll horizontal
+  const visibleData = useMemo(() => {
+    if (!data || data.length === 0) return [];
+    
+    // Retornar todos os dados disponíveis (12 meses)
+    return data;
+  }, [data]);
+
+  // Handler para click em barra
+  const handleBarClick = (data: any) => {
+    if (!onMonthClick || !data || !data.mes) return;
+    
+    // Converter nome do mês para índice (1-12)
+    const monthIndex = monthNameToIndex[data.mes];
+    if (monthIndex) {
+      // Se já está selecionado, volta para 'all', senão seleciona
+      const newSelection = selectedMonth === String(monthIndex) ? 'all' : String(monthIndex);
+      onMonthClick(newSelection);
+    }
+  };
+  const formatCurrency = (value: number): string => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(value);
+  };
+
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-white p-3 border rounded-lg shadow-lg">
+          <p className="font-medium">{`Mês: ${label}`}</p>
+          {payload.map((entry: any, index: number) => (
+            <p key={index} style={{ color: entry.color }}>
+              {entry.dataKey === 'receitas' ? 'Receitas' : 'Despesas'}: {formatCurrency(entry.value || 0)}
+            </p>
+          ))}
+        </div>
+      );
+    }
+    return null;
+  };
+
+  if (loading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Receitas vs Despesas</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-[400px] flex items-center justify-center">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">Carregando dados...</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Receitas vs Despesas</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Badge variant="destructive" className="w-full justify-center py-4">
+            Erro ao carregar dados: {error}
+          </Badge>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Receitas vs Despesas</CardTitle>
+        <p className="text-xs text-muted-foreground mt-1">
+          Apenas receitas e despesas • Exclui investimentos e transferências • Valores em milhares (k)
+        </p>
+      </CardHeader>
+      <CardContent>
+        <div ref={scrollRef} className="overflow-auto h-[350px]">
+          <div style={{ minWidth: '1400px' }}>
+            <ChartContainer config={chartConfig}>
+              <BarChart 
+                accessibilityLayer 
+                data={visibleData}
+                barSize={70}
+                barGap={10}
+                barCategoryGap={30}
+              >
+            <CartesianGrid vertical={false} />
+            <XAxis
+              dataKey="mes"
+              tickLine={false}
+              tickMargin={10}
+              axisLine={false}
+              tickFormatter={(value) => value.slice(0, 3)}
+            />
+            <ChartTooltip
+              cursor={false}
+              content={<CustomTooltip />}
+            />
+                <Bar 
+                  dataKey="receitas" 
+                  fill="var(--color-receitas)" 
+                  radius={4}
+                  onClick={handleBarClick}
+                  style={{ cursor: onMonthClick ? 'pointer' : 'default' }}
+                  fillOpacity={0.8}
+                >
+                  <LabelList
+                    position="insideTop"
+                    offset={8}
+                    className="fill-white/80"
+                    fontSize={11}
+                    fontWeight={500}
+                    formatter={(value: number) => {
+                      const valorEmMil = value / 1000;
+                      return `${valorEmMil.toFixed(1)}k`;
+                    }}
+                  />
+                </Bar>
+                <Bar 
+                  dataKey="despesas" 
+                  fill="var(--color-despesas)" 
+                  radius={4}
+                  onClick={handleBarClick}
+                  style={{ cursor: onMonthClick ? 'pointer' : 'default' }}
+                  fillOpacity={0.8}
+                >
+                  <LabelList
+                    position="insideTop"
+                    offset={8}
+                    className="fill-white/80"
+                    fontSize={11}
+                    fontWeight={500}
+                    formatter={(value: number) => {
+                      const valorEmMil = value / 1000;
+                      return `${valorEmMil.toFixed(1)}k`;
+                    }}
+                  />
+                </Bar>
+              </BarChart>
+            </ChartContainer>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
+export default ChartAreaInteractive;

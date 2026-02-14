@@ -20,6 +20,7 @@ class UploadHistoryResponse(BaseModel):
     total_registros: int
     transacoes_importadas: int
     transacoes_duplicadas: int
+    valor_somado: Optional[float] = None  # Soma das transações (Valor) do upload
     classification_stats: Optional[Dict[str, Any]] = None
     balance_validation: Optional[Dict[str, Any]] = None
     data_upload: datetime

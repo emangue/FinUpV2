@@ -26,7 +26,8 @@ import {
   DollarSign
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { categoryColors, getCategoryColor } from '@/config/mobile-colors'
+import { categoryColors } from '@/config/mobile-colors'
+import type { CategoryColor } from '@/config/mobile-colors'
 import { mobileDimensions } from '@/config/mobile-dimensions'
 
 // Mapa de ícones por categoria
@@ -78,7 +79,16 @@ export function CategoryIcon({
 }: CategoryIconProps) {
   // Buscar ícone e cor da categoria
   const Icon = CATEGORY_ICONS[category] || CATEGORY_ICONS.outros
-  const colors = getCategoryColor(category)
+  const categoryToColor: Record<CategoryType, CategoryColor> = {
+    casa: 'purple',
+    alimentacao: 'blue',
+    compras: 'pink',
+    transporte: 'stone',
+    contas: 'amber',
+    lazer: 'green',
+    outros: 'stone',
+  }
+  const colors = categoryColors[categoryToColor[category] || 'stone']
   
   return (
     <div

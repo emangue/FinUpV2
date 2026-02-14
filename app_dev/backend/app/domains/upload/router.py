@@ -2,7 +2,7 @@
 Domínio Upload - Router
 Endpoints HTTP - apenas validação e chamadas de service
 """
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Depends, UploadFile, File, Form
 from sqlalchemy.orm import Session
 
@@ -219,19 +219,47 @@ async def update_preview_classification(
 async def get_upload_history(
     limit: int = 50,
     offset: int = 0,
+    status: Optional[str] = None,
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
     """
-    Lista histórico de uploads do usuário
-    
-    **Parâmetros:**
-    - limit: Número máximo de registros (padrão: 50)
-    - offset: Deslocamento para paginação (padrão: 0)
-    
-    **Retorna:**
-    - total: Total de uploads no histórico
-    - uploads: Lista de registros de upload
+    Lista histórico de uploads do usuário.
+    status='success' retorna apenas uploads confirmados (realizados).
     """
     service = UploadService(db)
-    return service.get_upload_history(user_id, limit, offset)
+    return service.get_upload_history(user_id, limit, offset, status=status)
+
+
+@router.delete("/history/{history_id}")
+async def delete_upload_history(
+    history_id: int,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Deleta todas as transações de um upload e o registro de histórico.
+    
+    **Retorna:**
+    - transacoes_deletadas: quantidade de transações removidas
+    """
+    service = UploadService(db)
+    return service.delete_upload_history(history_id, user_id)
+
+
+@router.post("/recreate-preview/{history_id}")
+async def recreate_preview_from_history(
+    history_id: int,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Recria preview a partir de um upload já confirmado.
+    Permite revisar e re-salvar alterações.
+    
+    **Retorna:**
+    - session_id: ID da sessão de preview para redirecionar
+    - revision_of: ID do upload original
+    """
+    service = UploadService(db)
+    return service.recreate_preview_from_history(history_id, user_id)

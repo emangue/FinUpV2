@@ -185,7 +185,7 @@ export default function GestaoGrupos() {
       setError(null);
       setSuccess(null);
 
-      const response = await fetch(`${apiUrl}/grupos/${grupoToDelete.id}`, {
+      const response = await fetchWithAuth(`${BASE_URL}/${grupoToDelete.id}`, {
         method: 'DELETE',
       });
 

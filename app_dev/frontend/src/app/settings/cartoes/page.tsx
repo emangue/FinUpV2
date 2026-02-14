@@ -178,7 +178,7 @@ export default function CartoesPage() {
     if (!confirm('Deseja realmente deletar este cartão?')) return
 
     try {
-      const response = await fetchWithAuth(`${apiUrl}/cards/${id}`, {
+      const response = await fetchWithAuth(`${BASE_URL_CARDS}/${id}`, {
         method: 'DELETE'
       })
 

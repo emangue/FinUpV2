@@ -346,22 +346,21 @@ class DashboardRepository:
         }
     
     def get_subgrupos_by_tipo(self, user_id: int, year: int, month: int, grupo: str):
-        """Busca subgrupos de um tipo de gasto específico com valores"""
+        """Busca subgrupos de um tipo de gasto específico com valores.
+        Usa MesFatura apenas (igual ao budget) para consistência com valor realizado.
+        """
         from sqlalchemy import func
         from app.domains.transactions.models import JournalEntry
         
-        # Filtros base (usar campos integer, NUNCA campo Data string)
+        # Filtros alinhados com budget._calcular_valor_realizado_grupo
         filters = [
             JournalEntry.user_id == user_id,
-            JournalEntry.Ano == year,  # ← Usar campo Ano (integer)
             JournalEntry.GRUPO == grupo,
-            JournalEntry.CategoriaGeral == 'Despesa',  # Apenas despesas
+            JournalEntry.CategoriaGeral == 'Despesa',
             JournalEntry.IgnorarDashboard == 0
         ]
-        
-        # Filtro de mês (se especificado) - usar campo MesFatura (string YYYYMM)
         if month is not None:
-            mes_fatura = f"{year}{month:02d}"  # Formato YYYYMM
+            mes_fatura = f"{year}{month:02d}"  # YYYYMM
             filters.append(JournalEntry.MesFatura == mes_fatura)
         
         # Query para buscar subgrupos e somar valores

@@ -1,20 +1,104 @@
 'use client'
 
 import * as React from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { Suspense } from 'react'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { MobileHeader } from '@/components/mobile/mobile-header'
 import { useGoalDetail } from '@/features/goals/hooks/use-goal-detail'
 import { useEditGoal } from '@/features/goals/hooks/use-edit-goal'
 import { EditGoalModal, type EditGoalData } from '@/features/goals/components'
 import { calculateGoalProgress } from '@/features/goals/types'
+import { fetchWithAuth } from '@/core/utils/api-client'
+import { API_CONFIG } from '@/core/config/api.config'
 import { ArrowLeft, Edit2 } from 'lucide-react'
 
-export default function GoalDetailPage() {
+interface SubgrupoItem {
+  subgrupo: string
+  valor: number
+  percentual: number
+}
+
+function GoalSubgrupos({
+  grupo,
+  mesReferencia,
+  subgruposFromGoal,
+  onSubgrupoClick
+}: {
+  grupo: string
+  mesReferencia: string
+  subgruposFromGoal?: SubgrupoItem[]
+  onSubgrupoClick?: (subgrupo: string) => void
+}) {
+  // Usar subgrupos da meta apenas se existirem (budget = fonte única)
+  const hasSubgruposFromGoal = Array.isArray(subgruposFromGoal) && subgruposFromGoal.length > 0
+  const [subgrupos, setSubgrupos] = React.useState<SubgrupoItem[]>(subgruposFromGoal ?? [])
+  const [loading, setLoading] = React.useState(!hasSubgruposFromGoal)
+
+  React.useEffect(() => {
+    if (hasSubgruposFromGoal) {
+      setSubgrupos(subgruposFromGoal!)
+      setLoading(false)
+      return
+    }
+    const load = async () => {
+      try {
+        setLoading(true)
+        const [year, month] = mesReferencia.split('-').map(Number)
+        const url = `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/dashboard/subgrupos-by-tipo?year=${year}&month=${month}&grupo=${encodeURIComponent(grupo)}`
+        const res = await fetchWithAuth(url)
+        if (res.ok) {
+          const data = await res.json()
+          setSubgrupos(data.subgrupos || [])
+        }
+      } catch {
+        setSubgrupos([])
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [grupo, mesReferencia, hasSubgruposFromGoal, subgruposFromGoal?.length])
+
+  const formatCurrency = (v: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 }).format(v)
+
+  return (
+    <div className="pt-6">
+      <h3 className="text-sm font-bold text-gray-900 mb-4">Subgrupos</h3>
+      {loading ? (
+        <div className="py-4 text-center text-gray-400 text-sm">Carregando...</div>
+      ) : subgrupos.length === 0 ? (
+        <p className="text-gray-400 text-sm py-4">Nenhum subgrupo com transações neste mês</p>
+      ) : (
+        <div className="space-y-2">
+          {subgrupos.map((s) => (
+            <button
+              key={s.subgrupo}
+              type="button"
+              onClick={() => onSubgrupoClick?.(s.subgrupo)}
+              className="w-full flex justify-between items-center py-2 px-3 bg-gray-50 rounded-lg hover:bg-gray-100 active:bg-gray-200 transition-colors text-left"
+            >
+              <span className="text-sm font-medium text-gray-700">{s.subgrupo}</span>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-gray-500">{s.percentual.toFixed(1)}%</span>
+                <span className="text-sm font-semibold text-gray-900">{formatCurrency(s.valor)}</span>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function GoalDetailContent() {
   const params = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const goalId = params.goalId as string
+  const mesRef = searchParams.get('mes')
   
-  const { goal, loading, error, refreshGoal } = useGoalDetail(Number(goalId))
+  const { goal, loading, error, refreshGoal } = useGoalDetail(Number(goalId), mesRef ?? undefined)
   const { updateGoal, deleteGoal } = useEditGoal()
   const [isEditModalOpen, setIsEditModalOpen] = React.useState(false)
 
@@ -40,14 +124,20 @@ export default function GoalDetailPage() {
     )
   }
 
-  const { percentual, valor_atual } = calculateGoalProgress(goal)
+  // Despesas vêm negativas do banco - normalizar para exibição (sempre positivo)
+  const valor_realizado_raw = goal.valor_realizado ?? 0
+  const valor_atual = Math.abs(valor_realizado_raw)
+  const percentual = goal.valor_planejado > 0
+    ? (valor_atual / goal.valor_planejado) * 100
+    : 0
   const remaining = goal.valor_planejado - valor_atual
   const percentage = percentual
   
-  // SVG circle progress
+  // SVG circle progress (cap visual em 100%, mas exibe % real)
   const radius = 70
   const circumference = 2 * Math.PI * radius
-  const offset = circumference - (circumference * percentage) / 100
+  const percentageForCircle = Math.min(percentage, 100)
+  const offset = circumference - (circumference * percentageForCircle) / 100
 
   // Modal handlers
   const handleSave = async (data: EditGoalData) => {
@@ -84,10 +174,12 @@ export default function GoalDetailPage() {
         ]}
       />
 
-      {/* Date */}
+      {/* Date - sempre do orçamento da meta */}
       <div className="bg-white px-6 py-2 border-b border-gray-200">
         <p className="text-xs text-gray-400 text-right">
-          {new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+          {goal.mes_referencia
+            ? new Date(goal.mes_referencia + '-01').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+            : new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
         </p>
       </div>
 
@@ -126,9 +218,20 @@ export default function GoalDetailPage() {
                   transform="rotate(-90 100 100)"
                 />
               </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-4xl font-bold text-gray-900">{percentage}%</span>
-                <span className="text-xs text-gray-400 mt-1">realizado</span>
+              <div className="absolute inset-0 flex flex-col items-center justify-center px-2">
+                <span className={`font-bold truncate max-w-full ${percentage >= 100 ? 'text-lg text-red-600' : 'text-xl text-gray-900'}`}>
+                  {percentage.toFixed(percentage >= 100 ? 0 : 1)}%
+                </span>
+                <span className="text-[9px] text-gray-500 mt-0.5 truncate max-w-full">
+                  {valor_atual >= 1000
+                    ? `R$ ${(valor_atual / 1000).toFixed(1).replace('.', ',')}k`
+                    : valor_atual.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
+                </span>
+                <span className="text-[8px] text-gray-400">
+                  de {goal.valor_planejado >= 1000
+                    ? `R$ ${(goal.valor_planejado / 1000).toFixed(1).replace('.', ',')}k`
+                    : goal.valor_planejado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
+                </span>
               </div>
             </div>
 
@@ -147,28 +250,33 @@ export default function GoalDetailPage() {
                 </p>
               </div>
               <div>
-                <p className="text-xs text-gray-500 mb-1">Restante</p>
-                <p className={`text-base font-bold ${remaining > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  R$ {Math.abs(remaining).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                <p className="text-xs text-gray-500 mb-1">{remaining >= 0 ? 'Restante' : 'Estouro'}</p>
+                <p className={`text-base font-bold ${remaining >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {remaining >= 0 ? 'R$ ' : '- R$ '}
+                  {Math.abs(remaining).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </p>
               </div>
             </div>
           </div>
 
-          {/* Transactions History */}
-          <div className="pt-6">
-            <h3 className="text-sm font-bold text-gray-900 mb-4">Histórico de Transações</h3>
-
-            {/* TODO: Integrar com transações reais filtradas por grupo */}
-            <div className="text-center py-8">
-              <p className="text-gray-400 text-sm">
-                Histórico de transações em desenvolvimento
-              </p>
-              <p className="text-xs text-gray-400 mt-2">
-                Conectar com GET /transactions/?grupo={goal.grupo}
-              </p>
-            </div>
-          </div>
+          {/* Subgrupos - mesma fonte que valor realizado */}
+          <GoalSubgrupos
+            grupo={goal.grupo}
+            mesReferencia={goal.mes_referencia}
+            subgruposFromGoal={goal.subgrupos}
+            onSubgrupoClick={(subgrupo) => {
+              const [year, month] = goal.mes_referencia.split('-')
+              const params = new URLSearchParams({
+                year,
+                month,
+                grupo: goal.grupo,
+                subgrupo: subgrupo === 'Sem subgrupo' ? '__null__' : subgrupo,
+                from: 'metas',
+                goalId: String(goal.id)
+              })
+              router.push(`/mobile/transactions?${params}`)
+            }}
+          />
         </div>
       </div>
 
@@ -199,5 +307,17 @@ export default function GoalDetailPage() {
         onDelete={handleDelete}
       />
     </div>
+  )
+}
+
+export default function GoalDetailPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex flex-col h-screen bg-gray-50 items-center justify-center">
+        <div className="text-gray-500">Carregando...</div>
+      </div>
+    }>
+      <GoalDetailContent />
+    </Suspense>
   )
 }

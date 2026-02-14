@@ -189,7 +189,7 @@ export function ManageGoalsListItem({
         <div className="flex items-center justify-between text-xs">
           <span className="text-gray-500">Total mensal:</span>
           <span className="font-medium text-gray-700">
-            R$ {totalMensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            R$ {goal.valor_planejado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </span>
         </div>
         

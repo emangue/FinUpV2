@@ -258,10 +258,7 @@ class TransactionMarker:
             valor_positivo = abs(raw.valor)
             valor_arredondado = arredondar_2_decimais(valor_positivo)
             
-            # 2b. Extrair Ano e Mês da data
-            ano, mes = self._extrair_ano_mes(raw.data)
-            
-            # 2c. Determinar TipoTransacao baseado em cartão e valor
+            # 2b. Determinar TipoTransacao baseado em cartão e valor
             tipo_transacao = self._determinar_tipo_transacao(raw.nome_cartao, raw.valor)
             
             # 3. Detectar duplicados no arquivo e obter sequência
@@ -271,6 +268,19 @@ class TransactionMarker:
             # - EXTRATO: NÃO normaliza parcela (mantém original, pois "BA04/10" é parte do nome)
             tipo_doc_lower = raw.tipo_documento.lower() if raw.tipo_documento else ''
             is_fatura = 'fatura' in tipo_doc_lower or 'cartao' in tipo_doc_lower or 'cartão' in tipo_doc_lower
+            
+            # 2c. Ano e Mes: FATURA → da MesFatura | EXTRATO → da Data da transação
+            if is_fatura and raw.mes_fatura:
+                # Fatura: Ano e Mes vêm da MesFatura (ex: 202601 → ano=2026, mes=1)
+                mes_fatura = raw.mes_fatura.replace('-', '').strip()
+                if len(mes_fatura) >= 6:
+                    ano = int(mes_fatura[:4])
+                    mes = int(mes_fatura[4:6])
+                else:
+                    ano, mes = self._extrair_ano_mes(raw.data)
+            else:
+                # Extrato: Ano e Mes da Data da transação
+                ano, mes = self._extrair_ano_mes(raw.data)
             
             # Sempre normalizar espaços + uppercase
             lancamento_normalizado = normalizar_espacos(raw.lancamento).upper().strip()
@@ -301,11 +311,12 @@ class TransactionMarker:
             id_parcela = None
             if info_parcela and total_parcelas:
                 # IMPORTANTE: Usar estabelecimento NORMALIZADO para match com base_parcelas
+                # CRÍTICO: Incluir user_id no hash para isolar parcelas por usuário
                 import hashlib
                 estab_normalizado_parcela = normalizar_estabelecimento(estabelecimento_base)
-                chave = f"{estab_normalizado_parcela}|{valor_arredondado:.2f}|{total_parcelas}"
+                chave = f"{estab_normalizado_parcela}|{valor_arredondado:.2f}|{total_parcelas}|{self.user_id}"
                 id_parcela = hashlib.md5(chave.encode()).hexdigest()[:16]
-                logger.debug(f"IdParcela: {id_parcela} para {estab_normalizado_parcela} {parcela_atual}/{total_parcelas}")
+                logger.debug(f"IdParcela: {id_parcela} para {estab_normalizado_parcela} {parcela_atual}/{total_parcelas} (user_id={self.user_id})")
                 logger.debug(f"  Chave IdParcela: '{chave}'")
             
             # 7. Criar MarkedTransaction

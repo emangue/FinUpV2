@@ -14,3 +14,6 @@ export { MonthYearPicker } from './month-year-picker';
 export { FormatSelector } from './format-selector';
 export { FileInput } from './file-input';
 export { TabBar } from './tab-bar';
+
+// Preview components
+export { AddGroupDialog } from './add-group-dialog';

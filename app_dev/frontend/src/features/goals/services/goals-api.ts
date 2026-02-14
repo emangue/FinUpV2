@@ -20,10 +20,11 @@ const BASE_URL = `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}`
 export async function fetchGoals(selectedMonth?: Date): Promise<Goal[]> {
   const currentDate = selectedMonth || new Date()
   const year = currentDate.getFullYear()
-  const month = currentDate.getMonth() + 1
+  const month = String(currentDate.getMonth() + 1).padStart(2, '0')
+  const mes_referencia = `${year}-${month}`
   
   try {
-    const response = await fetchWithAuth(`${BASE_URL}/budget/planning?year=${year}&month=${month}`)
+    const response = await fetchWithAuth(`${BASE_URL}/budget/planning?mes_referencia=${mes_referencia}`)
     
     if (!response.ok) {
       return []
@@ -31,10 +32,22 @@ export async function fetchGoals(selectedMonth?: Date): Promise<Goal[]> {
     
     const data = await response.json()
     
-    // Backend retorna array direto de Goal com 8 campos
-    const goals: Goal[] = Array.isArray(data) ? data : []
+    // Backend retorna { mes_referencia, budgets: [...] }
+    const budgets = data?.budgets ?? []
     
-    return goals
+    return budgets.map((b: any) => ({
+      id: b.id,
+      grupo: b.grupo,
+      mes_referencia: data.mes_referencia || mes_referencia,
+      valor_planejado: b.valor_planejado ?? 0,
+      valor_realizado: b.valor_realizado ?? 0,
+      percentual: b.percentual ?? 0,
+      ativo: b.ativo ?? 1,
+      valor_medio_3_meses: b.valor_medio_3_meses ?? 0,
+      user_id: 0,
+      created_at: '',
+      updated_at: ''
+    }))
     
   } catch (error) {
     console.error('Erro ao buscar metas:', error)
@@ -44,27 +57,42 @@ export async function fetchGoals(selectedMonth?: Date): Promise<Goal[]> {
 
 /**
  * Busca uma meta específica por ID
- * CORRETO: Retorna Goal com 8 campos do backend
+ * Usa GET /budget/planning/{id} - busca direta por ID
+ * Fallback: se 404 e mesReferencia informado, busca na lista do mês
  */
-export async function fetchGoalById(goalId: number): Promise<Goal> {
-  const currentDate = new Date()
-  const year = currentDate.getFullYear()
-  const month = currentDate.getMonth() + 1
+export async function fetchGoalById(goalId: number, mesReferencia?: string): Promise<Goal> {
+  const response = await fetchWithAuth(`${BASE_URL}/budget/planning/${goalId}`)
   
-  const response = await fetchWithAuth(`${BASE_URL}/budget/planning?year=${year}&month=${month}`)
-  if (!response.ok) {
-    throw new Error(`Erro ao buscar meta: ${response.statusText}`)
+  if (response.ok) {
+    const b = await response.json()
+    return {
+      id: b.id,
+      grupo: b.grupo,
+      mes_referencia: b.mes_referencia,
+      valor_planejado: b.valor_planejado ?? 0,
+      valor_realizado: b.valor_realizado ?? 0,
+      percentual: b.percentual ?? 0,
+      ativo: b.ativo ?? 1,
+      valor_medio_3_meses: b.valor_medio_3_meses ?? 0,
+      subgrupos: b.subgrupos ?? [],
+      user_id: 0,
+      created_at: '',
+      updated_at: ''
+    }
   }
   
-  const data = await response.json()
-  const goals: Goal[] = Array.isArray(data) ? data : []
-  const goal = goals.find((g: Goal) => g.id === goalId)
+  if (response.status === 404 && mesReferencia) {
+    const [year, month] = mesReferencia.split('-').map(Number)
+    const refDate = new Date(year, month - 1, 1)
+    const goals = await fetchGoals(refDate)
+    const goal = goals.find((g: Goal) => g.id === goalId)
+    if (goal) return goal
+  }
   
-  if (!goal) {
+  if (response.status === 404) {
     throw new Error('Meta não encontrada')
   }
-  
-  return goal
+  throw new Error(`Erro ao buscar meta: ${response.statusText}`)
 }
 
 /**

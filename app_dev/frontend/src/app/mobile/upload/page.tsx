@@ -24,6 +24,9 @@ import {
   TabBar 
 } from '@/features/upload/components';
 import { useBanks, useCreditCards, useUpload } from '@/features/upload/hooks';
+import { fetchCompatibility } from '@/features/upload/services/upload-api';
+import type { BankCompatibilityMap } from '@/features/upload/services/upload-api';
+import type { FormatAvailability } from '@/features/upload/components/format-selector';
 import { setAuthToken, isAuthenticated } from '@/core/utils/api-client';
 import { API_ENDPOINTS } from '@/core/config/api.config';
 
@@ -73,6 +76,12 @@ export default function UploadPage() {
   const { banks, loading: loadingBanks } = useBanks();
   const { cards, loading: loadingCards } = useCreditCards();
   const { upload, uploading, progress } = useUpload();
+
+  // Compatibilidade de formatos por banco (desabilita TBD)
+  const [compatibility, setCompatibility] = useState<BankCompatibilityMap>({});
+  useEffect(() => {
+    fetchCompatibility().then(setCompatibility).catch(() => setCompatibility({}));
+  }, []);
   
   // Form state
   const [activeTab, setActiveTab] = useState<TabType>('fatura');
@@ -88,8 +97,40 @@ export default function UploadPage() {
     if (file) {
       setFileName(file.name);
       setSelectedFile(file);
+      // Auto-detectar formato pela extensão do arquivo
+      const ext = file.name.split('.').pop()?.toLowerCase();
+      if (ext === 'xlsx' || ext === 'xls' || ext === 'xlsm') {
+        setSelectedFormat('excel');
+      } else if (ext === 'csv' || ext === 'txt') {
+        setSelectedFormat('csv');
+      } else if (ext === 'pdf') {
+        setSelectedFormat('pdf');
+      } else if (ext === 'ofx') {
+        setSelectedFormat('ofx');
+      }
     }
   };
+
+  // Quando banco muda, se formato atual for TBD, resetar para primeiro disponível
+  const formatAvailability: FormatAvailability = selectedBank && compatibility[selectedBank]
+    ? {
+        csv: compatibility[selectedBank].csv_status,
+        excel: compatibility[selectedBank].excel_status,
+        pdf: compatibility[selectedBank].pdf_status,
+        'pdf-password': compatibility[selectedBank].pdf_status,
+        ofx: compatibility[selectedBank].ofx_status,
+      }
+    : {};
+
+  useEffect(() => {
+    if (!selectedBank || !compatibility[selectedBank]) return;
+    const b = compatibility[selectedBank];
+    const getStatus = (f: FileFormat) => (f === 'pdf-password' ? b.pdf_status : b[`${f}_status` as keyof typeof b]);
+    if (getStatus(selectedFormat) === 'TBD') {
+      const first = (['csv', 'excel', 'pdf', 'pdf-password', 'ofx'] as const).find((f) => getStatus(f) !== 'TBD');
+      if (first) setSelectedFormat(first);
+    }
+  }, [selectedBank, compatibility, selectedFormat]);
 
   const handleAddCard = () => {
     alert('Funcionalidade de adicionar cartão será implementada em breve');
@@ -247,10 +288,12 @@ export default function UploadPage() {
           )}
           
           {/* Formato do arquivo */}
-          <FormatSelector 
+          <FormatSelector
             formats={fileFormats}
             value={selectedFormat}
             onChange={setSelectedFormat}
+            formatAvailability={Object.keys(formatAvailability).length > 0 ? formatAvailability : undefined}
+            bankNotSelected={!selectedBank}
           />
           
           {/* Arquivo */}

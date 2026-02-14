@@ -6,14 +6,17 @@ import { formatCurrency, GRUPOS, SUBGRUPOS } from '../lib/constants';
 import { CLASSIFICATION_SOURCE_LABELS, CLASSIFICATION_SOURCE_COLORS } from '../types';
 import Badge from '../atoms/Badge';
 import IconButton from '../atoms/IconButton';
+import { AddGroupDialog } from '@/features/upload/components/add-group-dialog';
 
 interface TransactionCardProps {
   transaction: Transaction;
   onEdit?: (transaction: Transaction) => void;
   onBatchUpdate?: (transactionId: string, grupo: string, subgrupo: string) => void;
+  onGroupAdded?: () => void;
+  existingGroups?: string[];
 }
 
-export default function TransactionCard({ transaction, onEdit, onBatchUpdate }: TransactionCardProps) {
+export default function TransactionCard({ transaction, onEdit, onBatchUpdate, onGroupAdded, existingGroups = [] }: TransactionCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedGrupo, setSelectedGrupo] = useState(transaction.grupo || '');
   const [selectedSubgrupo, setSelectedSubgrupo] = useState(transaction.subgrupo || '');
@@ -38,6 +41,12 @@ export default function TransactionCard({ transaction, onEdit, onBatchUpdate }: 
       // Auto-save quando selecionar subgrupo completo
       onBatchUpdate(transaction.id, selectedGrupo, value);
     }
+  };
+
+  const handleGroupCreated = (grupo: string, subgrupo: string) => {
+    setSelectedGrupo(grupo);
+    setSelectedSubgrupo(subgrupo);
+    onBatchUpdate?.(transaction.id, grupo, subgrupo);
   };
 
   return (
@@ -102,7 +111,7 @@ export default function TransactionCard({ transaction, onEdit, onBatchUpdate }: 
             {/* Classification Fields - Always visible */}
             <div className="mt-2 space-y-1.5">
               <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-500 w-20">Grupo:</span>
+                <span className="text-xs text-gray-500 w-20 shrink-0">Grupo:</span>
                 <select
                   value={selectedGrupo}
                   onChange={(e) => {
@@ -110,7 +119,7 @@ export default function TransactionCard({ transaction, onEdit, onBatchUpdate }: 
                     handleGrupoChange(e.target.value);
                   }}
                   onClick={(e) => e.stopPropagation()}
-                  className={`flex-1 text-sm border rounded-lg px-2 py-1 focus:ring-2 focus:ring-blue-100 outline-none ${
+                  className={`flex-1 min-w-0 text-sm border rounded-lg px-2 py-1 focus:ring-2 focus:ring-blue-100 outline-none ${
                     isClassified 
                       ? 'border-green-200 bg-green-50 text-gray-900 font-medium' 
                       : 'border-gray-300 bg-white text-gray-700 focus:border-blue-500'
@@ -123,10 +132,19 @@ export default function TransactionCard({ transaction, onEdit, onBatchUpdate }: 
                     </option>
                   ))}
                 </select>
+                {onGroupAdded && (
+                  <AddGroupDialog
+                    onGroupAdded={onGroupAdded}
+                    existingGroups={existingGroups.length > 0 ? existingGroups : GRUPOS}
+                    compact
+                    initialMode="grupo"
+                    onCreated={handleGroupCreated}
+                  />
+                )}
               </div>
               
               <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-500 w-20">Subgrupo:</span>
+                <span className="text-xs text-gray-500 w-20 shrink-0">Subgrupo:</span>
                 <select
                   value={selectedSubgrupo}
                   onChange={(e) => {
@@ -135,7 +153,7 @@ export default function TransactionCard({ transaction, onEdit, onBatchUpdate }: 
                   }}
                   onClick={(e) => e.stopPropagation()}
                   disabled={!selectedGrupo}
-                  className={`flex-1 text-sm border rounded-lg px-2 py-1 focus:ring-2 focus:ring-blue-100 outline-none disabled:bg-gray-100 disabled:cursor-not-allowed ${
+                  className={`flex-1 min-w-0 text-sm border rounded-lg px-2 py-1 focus:ring-2 focus:ring-blue-100 outline-none disabled:bg-gray-100 disabled:cursor-not-allowed ${
                     isClassified 
                       ? 'border-green-200 bg-green-50 text-gray-900 font-medium' 
                       : 'border-gray-300 bg-white text-gray-700 focus:border-blue-500'
@@ -149,6 +167,16 @@ export default function TransactionCard({ transaction, onEdit, onBatchUpdate }: 
                       </option>
                     ))}
                 </select>
+                {onGroupAdded && (
+                  <AddGroupDialog
+                    onGroupAdded={onGroupAdded}
+                    existingGroups={existingGroups.length > 0 ? existingGroups : GRUPOS}
+                    compact
+                    initialMode={selectedGrupo ? "subgrupo" : "grupo"}
+                    initialGrupo={selectedGrupo || undefined}
+                    onCreated={handleGroupCreated}
+                  />
+                )}
               </div>
 
               

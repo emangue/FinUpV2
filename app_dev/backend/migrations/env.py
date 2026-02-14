@@ -25,10 +25,8 @@ from app.domains.exclusoes.models import TransacaoExclusao
 from app.domains.upload.models import PreviewTransacao
 from app.domains.patterns.models import BasePadroes
 from app.domains.screen_visibility.models import ScreenVisibility
-from app.domains.budget.models import (
-    BudgetGeral, BudgetPlanning,
-    BudgetCategoriaConfig, BudgetGeralHistorico
-)
+from app.domains.budget.models import BudgetPlanning
+# BudgetGeral, BudgetCategoriaConfig, BudgetGeralHistorico foram removidos no Sprint 1
 from app.domains.compatibility.models import BankFormatCompatibility
 from app.domains.classification.models import GenericClassificationRules
 from app.domains.investimentos.models import (

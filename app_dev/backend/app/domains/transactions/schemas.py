@@ -33,6 +33,8 @@ class TransactionUpdate(BaseModel):
     Estabelecimento: Optional[str] = None
     Valor: Optional[float] = None
     IgnorarDashboard: Optional[int] = None
+    propagate_parcela: Optional[bool] = None  # Atualizar todas com mesmo IdParcela
+    propagate_padrao: Optional[bool] = None   # Atualizar BasePadroes e transações do mesmo padrão
 
 class TransactionResponse(TransactionBase):
     """Schema de resposta de transação"""
@@ -68,6 +70,7 @@ class TransactionFilters(BaseModel):
     estabelecimento: Optional[str] = None
     grupo: Optional[str] = None
     subgrupo: Optional[str] = None
+    subgrupo_null: Optional[bool] = None  # True = filtrar SUBGRUPO IS NULL ou vazio
     tipo: Optional[str] = None
     categoria_geral: Optional[str] = None
     tipo_gasto: Optional[Union[str, List[str]]] = None  # Aceita string ou lista
