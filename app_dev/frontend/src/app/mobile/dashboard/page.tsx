@@ -254,9 +254,6 @@ export default function DashboardMobilePage() {
             {/* Recent Transactions */}
             <div className="border-t border-gray-100 pt-4 mt-6">
               <h3 className="text-sm font-bold text-gray-900 mb-3">Transações Recentes</h3>
-              <p className="text-xs text-gray-400 text-center py-4">
-                Clique em "Ver Todas" para navegar
-              </p>
               <button
                 onClick={() => router.push('/mobile/transactions')}
                 className="w-full py-3 bg-gray-900 text-white rounded-xl font-semibold hover:bg-gray-800 transition-colors"

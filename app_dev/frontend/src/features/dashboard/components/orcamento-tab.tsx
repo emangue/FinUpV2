@@ -202,31 +202,34 @@ export function OrcamentoTab({ year, month }: OrcamentoTabProps) {
             .map((cat, idx) => {
               const realizado = cat.valor_realizado ?? 0
               const planejado = cat.valor_planejado ?? 0
+              const diff = realizado - planejado
               const pct = planejado > 0 ? (realizado / planejado) * 100 : 0
               const isOver = realizado > planejado
               const color = getGoalColor(cat.grupo, idx)
+              const highlightText =
+                diff >= 0 ? `+${formatCurrency(diff)}` : `-${formatCurrency(-diff)}`
+              const highlightClass =
+                diff > 0
+                  ? 'text-red-500 font-semibold'
+                  : diff < 0
+                    ? 'text-emerald-600 font-semibold'
+                    : 'text-gray-500 font-medium'
               return (
                 <div key={cat.grupo}>
                   <div className="flex items-center justify-between mb-1.5">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <div
-                        className="w-2.5 h-2.5 rounded-full"
+                        className="w-2.5 h-2.5 rounded-full shrink-0"
                         style={{ backgroundColor: color }}
                       />
                       <span className="text-sm text-gray-800">{cat.grupo}</span>
+                      <span className={`text-xs ${highlightClass}`}>{highlightText}</span>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <span
-                        className={`text-sm font-semibold ${isOver ? 'text-red-500' : 'text-gray-900'}`}
-                      >
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="text-sm font-semibold text-gray-900">
                         {formatCurrency(realizado)}
                       </span>
                       <span className="text-[9px] text-gray-400">/ {formatCurrency(planejado)}</span>
-                      {isOver && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-red-50 text-red-500 font-semibold">
-                          +{formatCurrency(realizado - planejado)}
-                        </span>
-                      )}
                     </div>
                   </div>
                   <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
