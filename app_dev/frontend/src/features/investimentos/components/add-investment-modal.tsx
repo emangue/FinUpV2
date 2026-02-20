@@ -77,7 +77,11 @@ export function AddInvestmentModal({
     setError(null)
 
     try {
-      await createInvestimento(formData)
+      const dataToSend = {
+        ...formData,
+        balance_id: formData.balance_id.trim() || `web-${Date.now()}-${crypto.randomUUID().replace(/-/g, '').slice(0, 8)}`,
+      }
+      await createInvestimento(dataToSend)
       toast.success(TOAST_MESSAGES.INVESTMENT_ADDED)
       onSuccess()
       onClose()

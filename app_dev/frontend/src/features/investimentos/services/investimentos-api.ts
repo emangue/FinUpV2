@@ -10,6 +10,7 @@ import type {
   InvestimentoPortfolio,
   PortfolioResumo,
   RendimentoMensal,
+  PatrimonioMensal,
   InvestimentoCenario,
   SimulacaoCompleta,
   DistribuicaoTipo,
@@ -35,6 +36,7 @@ export async function getInvestimentos(
   
   if (filters?.tipo_investimento) params.append('tipo_investimento', filters.tipo_investimento)
   if (filters?.ativo !== undefined) params.append('ativo', String(filters.ativo))
+  if (filters?.anomes) params.append('anomes', String(filters.anomes))
   if (filters?.skip) params.append('skip', String(filters.skip))
   if (filters?.limit) params.append('limit', String(filters.limit))
 
@@ -42,8 +44,37 @@ export async function getInvestimentos(
   return apiGet<InvestimentoPortfolio[]>(url)
 }
 
-export async function getInvestimento(id: number): Promise<InvestimentoPortfolio> {
-  return apiGet<InvestimentoPortfolio>(`${BASE_URL}/${id}`)
+export async function copiarMesAnterior(anomesDestino: number): Promise<{ copiados: number }> {
+  const url = `${BASE_URL}/copiar-mes-anterior?anomes_destino=${anomesDestino}`
+  return apiPost<{ copiados: number }>(url, {})
+}
+
+export async function getInvestimento(
+  id: number,
+  anomes?: number
+): Promise<InvestimentoPortfolio> {
+  const params = anomes ? `?anomes=${anomes}` : ''
+  return apiGet<InvestimentoPortfolio>(`${BASE_URL}/${id}${params}`)
+}
+
+/** Atualiza valores do histórico (patrimônio) de um investimento para um mês */
+export async function updateHistoricoMes(
+  investimentoId: number,
+  anomes: number,
+  data: { quantidade?: number; valor_unitario?: number; valor_total?: number }
+): Promise<InvestimentoHistorico> {
+  return apiPatch<InvestimentoHistorico>(
+    `${BASE_URL}/${investimentoId}/historico/${anomes}`,
+    data
+  )
+}
+
+/** Remove o investimento deste mês (apaga registro do histórico) */
+export async function deleteHistoricoMes(
+  investimentoId: number,
+  anomes: number
+): Promise<void> {
+  return apiDelete<void>(`${BASE_URL}/${investimentoId}/historico/${anomes}`)
 }
 
 export async function createInvestimento(
@@ -70,8 +101,13 @@ export async function getPortfolioResumo(): Promise<PortfolioResumo> {
   return apiGet<PortfolioResumo>(`${BASE_URL}/resumo`)
 }
 
-export async function getDistribuicaoPorTipo(): Promise<DistribuicaoTipo[]> {
-  return apiGet<DistribuicaoTipo[]>(`${BASE_URL}/distribuicao-tipo`)
+export async function getDistribuicaoPorTipo(
+  filters?: { classe_ativo?: 'Ativo' | 'Passivo' }
+): Promise<DistribuicaoTipo[]> {
+  const params = new URLSearchParams()
+  if (filters?.classe_ativo) params.append('classe_ativo', filters.classe_ativo)
+  const url = `${BASE_URL}/distribuicao-tipo${params.toString() ? `?${params.toString()}` : ''}`
+  return apiGet<DistribuicaoTipo[]>(url)
 }
 
 /**
@@ -100,6 +136,18 @@ export async function getRendimentosTimeline(
 
   const url = `${BASE_URL}/timeline/rendimentos?${params.toString()}`
   return apiGet<RendimentoMensal[]>(url)
+}
+
+export async function getPatrimonioTimeline(
+  filters: TimelineFilters
+): Promise<PatrimonioMensal[]> {
+  const params = new URLSearchParams({
+    ano_inicio: String(filters.ano_inicio),
+    ano_fim: String(filters.ano_fim),
+  })
+
+  const url = `${BASE_URL}/timeline/patrimonio?${params.toString()}`
+  return apiGet<PatrimonioMensal[]>(url)
 }
 
 /**

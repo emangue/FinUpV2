@@ -2,12 +2,17 @@
 Script de migração de dados de investimentos do Excel para o banco de dados.
 
 Importa dados históricos de:
-- BaseAtivosPassivos: 298 produtos de investimento com histórico mensal
+- BaseAtivosPassivos: produtos de investimento com histórico mensal
 - Planejamento Financeiro 2026: Projeções e metas
 - Estimativa Patrimonio Atual: Parâmetros de cenários
 
+Agrupamento: (Nome, Banco, ativo/passivo) - mesmo produto pode ter 2 linhas/mês
+(ativo = valor positivo, passivo = valor negativo, ex: imóvel + financiamento).
+
+Normalização: quantidade=1 se ausente; valor_unitario = valor_total/quantidade se ausente/zero.
+
 Uso:
-    python scripts/migrate_investimentos_from_excel.py
+    python scripts/migrate_investimentos_from_excel.py [--yes]
 """
 import sys
 import os
@@ -23,6 +28,10 @@ SCRIPT_DIR = Path(__file__).parent
 PROJECT_ROOT = SCRIPT_DIR.parent
 BACKEND_DIR = PROJECT_ROOT / "app_dev" / "backend"
 sys.path.insert(0, str(BACKEND_DIR))
+
+# Carregar .env antes de importar config
+from dotenv import load_dotenv
+load_dotenv(BACKEND_DIR / ".env")
 
 from app.core.database import SessionLocal, engine
 from app.domains.investimentos.models import (
@@ -71,6 +80,25 @@ class InvestimentoMigrator:
         self.db.commit()
         print(f"   Removidos: {count_portfolio} investimentos, {count_historico} históricos, {count_cenarios} cenários")
 
+    def _normalizar_valores(self, valor_total, valor_unitario, quantidade):
+        """Aplica regra: valor_total = valor_unitario × quantidade."""
+        qty = 1.0
+        if quantidade is not None and pd.notna(quantidade) and float(quantidade) != 0:
+            qty = float(quantidade)
+        vt = 0.0
+        if valor_total is not None and pd.notna(valor_total):
+            vt = float(valor_total)
+        vu = None
+        if valor_unitario is not None and pd.notna(valor_unitario) and float(valor_unitario) != 0:
+            vu = float(valor_unitario)
+        if vt != 0 and (vu is None or vu == 0):
+            vu = vt / qty
+        return (
+            Decimal(str(qty)),
+            Decimal(str(vu)) if vu is not None else (Decimal('0') if vt == 0 else None),
+            Decimal(str(vt))
+        )
+
     def migrar_portfolio_e_historico(self):
         """Migra dados da aba BaseAtivosPassivos"""
         print("\n📊 Migrando dados de BaseAtivosPassivos...")
@@ -83,89 +111,109 @@ class InvestimentoMigrator:
             df = df.dropna(subset=['Nome'])
             print(f"   {len(df)} linhas após limpeza")
 
-            # Agrupar por produto (balance_id único)
-            produtos_unicos = df.groupby('BalanceID').first().reset_index()
-            print(f"   {len(produtos_unicos)} produtos únicos identificados")
+            # Colunas do Excel (7): Valor Unitário Ult dia mes, Valor Total ult dia mes
+            col_vu = 'Valor Unitário Ult dia mes' if 'Valor Unitário Ult dia mes' in df.columns else 'Valor Unitário ult dia mes'
+            col_vt = 'Valor Total ult dia mes' if 'Valor Total ult dia mes' in df.columns else 'Valor Total Ult dia mes'
+
+            # Agrupar por (Nome, Banco, ativo/passivo) - cada BalanceID é único por linha
+            df['_ativo'] = df[col_vt].fillna(0) >= 0
+            grupos = df.groupby(['Nome', 'Banco', '_ativo'], sort=False)
+
+            # Para cada grupo, usar o primeiro BalanceID como identificador único do investimento
+            investimentos_map = {}  # (Nome, Banco, ativo) -> (balance_id, first_row, all_rows)
+            for (nome, banco, ativo), grp in grupos:
+                first = grp.iloc[0]
+                balance_id = str(first['BalanceID'])
+                investimentos_map[(nome, banco, ativo)] = (balance_id, first, grp)
+            print(f"   {len(investimentos_map)} produtos únicos identificados (Nome+Banco+ativo/passivo)")
 
             # Criar investimentos no portfólio
-            investimentos_map = {}  # BalanceID -> InvestimentoPortfolio
+            balance_to_portfolio = {}  # balance_id -> InvestimentoPortfolio
 
-            for _, row in produtos_unicos.iterrows():
+            for (nome, banco, ativo), (balance_id, first, _) in investimentos_map.items():
                 try:
+                    qty = float(first.get('Quantidade', 1.0)) if pd.notna(first.get('Quantidade')) and first.get('Quantidade', 0) != 0 else 1.0
+                    vt_inicial = first.get('Valor Total Inicial', 0) or 0
+                    vu_inicial = first.get('Valor Unitário Inicial', 0) or 0
+                    if vt_inicial and (not vu_inicial or vu_inicial == 0):
+                        vu_inicial = vt_inicial / qty
+
                     investimento = InvestimentoPortfolio(
                         user_id=self.user_id,
-                        balance_id=str(row['BalanceID']),
-                        nome_produto=str(row['Nome'])[:255],
-                        corretora=str(row.get('Banco', row.get('Banco / Corretora', 'Não especificado')))[:100],
-                        tipo_investimento=str(row.get('tipo_investimento', 'Outros'))[:50],
-                        classe_ativo=str(row.get('Classe', ''))[:50] if pd.notna(row.get('Classe')) else None,
-                        ano=int(row['Ano']) if pd.notna(row.get('Ano')) else None,
-                        anomes=int(row['anomes']) if pd.notna(row.get('anomes')) else None,
-                        emissor=str(row.get('Emissor', ''))[:100] if pd.notna(row.get('Emissor')) else None,
-                        percentual_cdi=float(row.get('%CDI', 0)) if pd.notna(row.get('%CDI')) else None,
-                        data_aplicacao=pd.to_datetime(row.get('data_aplicacao')).date() if pd.notna(row.get('data_aplicacao')) else None,
-                        data_vencimento=pd.to_datetime(row.get('Vencimento')).date() if pd.notna(row.get('Vencimento')) else None,
-                        quantidade=float(row.get('Quantidade', 1.0)) if pd.notna(row.get('Quantidade')) else 1.0,
-                        valor_unitario_inicial=Decimal(str(row.get('Valor Unitário Inicial', 0))),
-                        valor_total_inicial=Decimal(str(row.get('Valor Total Inicial', 0))),
+                        balance_id=balance_id,
+                        nome_produto=str(nome)[:255],
+                        corretora=str(banco)[:100],
+                        tipo_investimento=str(first.get('tipo_investimento', 'Outros'))[:50],
+                        classe_ativo=str(first.get('Classe', ''))[:50] if pd.notna(first.get('Classe')) else None,
+                        ano=int(first['Ano']) if pd.notna(first.get('Ano')) else None,
+                        anomes=int(first['anomes']) if pd.notna(first.get('anomes')) else None,
+                        emissor=str(first.get('Emissor', ''))[:100] if pd.notna(first.get('Emissor')) else None,
+                        percentual_cdi=float(first.get('%CDI', 0)) if pd.notna(first.get('%CDI')) else None,
+                        data_aplicacao=pd.to_datetime(first.get('data_aplicacao'), dayfirst=True).date() if pd.notna(first.get('data_aplicacao')) else None,
+                        data_vencimento=pd.to_datetime(first.get('Vencimento'), dayfirst=True).date() if pd.notna(first.get('Vencimento')) else None,
+                        quantidade=qty,
+                        valor_unitario_inicial=Decimal(str(vu_inicial)),
+                        valor_total_inicial=Decimal(str(vt_inicial)),
                         ativo=True
                     )
 
                     self.db.add(investimento)
-                    self.db.flush()  # Para obter o ID
-
-                    investimentos_map[str(row['BalanceID'])] = investimento
+                    self.db.flush()
+                    balance_to_portfolio[balance_id] = investimento
                     self.stats['portfolio_criados'] += 1
 
                 except Exception as e:
-                    self.stats['erros'].append(f"Erro ao criar investimento {row.get('BalanceID')}: {str(e)}")
-                    print(f"   ⚠️  Erro no produto {row.get('Nome')}: {str(e)}")
+                    self.stats['erros'].append(f"Erro ao criar investimento {balance_id}: {str(e)}")
+                    print(f"   ⚠️  Erro no produto {nome}: {str(e)}")
 
             self.db.commit()
             print(f"✅ {self.stats['portfolio_criados']} investimentos criados no portfólio")
 
-            # Criar histórico mensal
-            print("\n📅 Criando histórico mensal...")
+            # Criar histórico mensal (uma linha por mês por investimento)
+            print("\n📅 Criando histórico mensal (com normalização valor_unitario × quantidade)...")
 
-            for _, row in df.iterrows():
-                balance_id = str(row['BalanceID'])
-                investimento = investimentos_map.get(balance_id)
-
+            for (nome, banco, ativo), (balance_id, _, grp) in investimentos_map.items():
+                investimento = balance_to_portfolio.get(balance_id)
                 if not investimento:
                     continue
 
-                try:
-                    ano = int(row['Ano'])
-                    anomes = int(row['anomes'])
-                    mes = anomes % 100
+                for _, row in grp.iterrows():
+                    try:
+                        ano = int(row['Ano'])
+                        anomes = int(row['anomes'])
+                        mes = anomes % 100
 
-                    # Data de referência: último dia do mês
-                    if mes == 12:
-                        data_ref = date(ano, 12, 31)
-                    else:
                         import calendar
-                        ultimo_dia = calendar.monthrange(ano, mes)[1]
-                        data_ref = date(ano, mes, ultimo_dia)
+                        if mes == 12:
+                            data_ref = date(ano, 12, 31)
+                        else:
+                            ultimo_dia = calendar.monthrange(ano, mes)[1]
+                            data_ref = date(ano, mes, ultimo_dia)
 
-                    historico = InvestimentoHistorico(
-                        investimento_id=investimento.id,
-                        ano=ano,
-                        mes=mes,
-                        anomes=anomes,
-                        data_referencia=data_ref,
-                        quantidade=float(row.get('Quantidade', 1.0)) if pd.notna(row.get('Quantidade')) else None,
-                        valor_unitario=Decimal(str(row.get('Valor Unitário ult dia mes', 0))) if pd.notna(row.get('Valor Unitário ult dia mes')) else None,
-                        valor_total=Decimal(str(row.get('Valor Total ult dia mes', 0))) if pd.notna(row.get('Valor Total ult dia mes')) else None,
-                        aporte_mes=Decimal('0.00'),  # Calcular depois se necessário
-                        rendimento_mes=None,  # Calcular depois
-                        rendimento_acumulado=None
-                    )
+                        vt = row.get(col_vt)
+                        vu = row.get(col_vu)
+                        qty = row.get('Quantidade')
+                        qty_norm, vu_norm, vt_norm = self._normalizar_valores(vt, vu, qty)
 
-                    self.db.add(historico)
-                    self.stats['historico_criados'] += 1
+                        historico = InvestimentoHistorico(
+                            investimento_id=investimento.id,
+                            ano=ano,
+                            mes=mes,
+                            anomes=anomes,
+                            data_referencia=data_ref,
+                            quantidade=qty_norm,
+                            valor_unitario=vu_norm,
+                            valor_total=vt_norm,
+                            aporte_mes=Decimal('0.00'),
+                            rendimento_mes=None,
+                            rendimento_acumulado=None
+                        )
 
-                except Exception as e:
-                    self.stats['erros'].append(f"Erro ao criar histórico {balance_id}/{anomes}: {str(e)}")
+                        self.db.add(historico)
+                        self.stats['historico_criados'] += 1
+
+                    except Exception as e:
+                        self.stats['erros'].append(f"Erro ao criar histórico {balance_id}/{anomes}: {str(e)}")
 
             self.db.commit()
             print(f"✅ {self.stats['historico_criados']} registros de histórico criados")
@@ -293,8 +341,8 @@ def main():
     print("\n🚀 MIGRAÇÃO DE INVESTIMENTOS - EXCEL → DATABASE")
     print("=" * 60)
 
-    # Path do Excel (arquivo atualizado com dados até Dezembro/2025)
-    excel_path = PROJECT_ROOT / "_arquivos_historicos" / "_csvs_historico" / "App_Emangue_SA (6).xlsx"
+    # Path do Excel (arquivo atualizado com dados até Janeiro/2026)
+    excel_path = PROJECT_ROOT / "_arquivos_historicos" / "_csvs_historico" / "App_Emangue_SA (7).xlsx"
 
     if not excel_path.exists():
         print(f"❌ Arquivo não encontrado: {excel_path}")
@@ -302,7 +350,6 @@ def main():
 
     print(f"📁 Arquivo: {excel_path}")
     print(f"👤 User ID: {args.user_id}")
-    print(f"📊 Total de linhas esperadas: ~313 (incluindo dados até Dezembro/2025)")
 
     # Confirmar antes de executar
     if not args.yes:

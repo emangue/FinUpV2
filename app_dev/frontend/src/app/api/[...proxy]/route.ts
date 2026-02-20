@@ -74,30 +74,22 @@ async function handleProxy(
     const searchParams = request.nextUrl.searchParams.toString();
     const fullUrl = searchParams ? `${backendUrl}?${searchParams}` : backendUrl;
     
-    // Preparar headers (remover headers específicos do Next.js)
+    // Whitelist de headers (segurança - evita spoofing)
+    const ALLOWED_HEADERS = ['authorization', 'content-type', 'accept', 'accept-language', 'cache-control', 'pragma', 'cookie'];
     const headers = new Headers();
     const contentType = request.headers.get('content-type');
-    
-    request.headers.forEach((value, key) => {
-      // Skip headers que não devem ser encaminhados
-      // Para multipart/form-data, NÃO incluir content-type (deixar o fetch gerar)
-      if (!['host', 'connection', 'content-length'].includes(key.toLowerCase())) {
-        if (contentType?.includes('multipart/form-data') && key.toLowerCase() === 'content-type') {
-          // Não incluir - deixar o fetch criar automaticamente com boundary correto
-        } else {
-          headers.set(key, value);
-        }
+    ALLOWED_HEADERS.forEach((key) => {
+      const value = request.headers.get(key);
+      if (value && !(contentType?.includes('multipart/form-data') && key === 'content-type')) {
+        headers.set(key, value);
       }
     });
     
-    // 🔐 ADICIONAR TOKEN JWT AUTOMATICAMENTE
-    // Se a requisição já tem Authorization, manter (prioridade do cliente)
-    // Senão, tentar pegar do cookie 'token' (para SSR) ou será enviado pelo cliente
+    // 🔐 Token: Authorization header ou cookie auth_token (SSR)
     if (!headers.has('authorization')) {
-      const tokenCookie = request.cookies.get('token');
+      const tokenCookie = request.cookies.get('auth_token') || request.cookies.get('token');
       if (tokenCookie?.value) {
         headers.set('Authorization', `Bearer ${tokenCookie.value}`);
-        console.log('[Proxy] Added token from cookie');
       }
     }
     
@@ -114,9 +106,6 @@ async function handleProxy(
         body = await request.text();
       }
     }
-    
-    // Fazer requisição para backend
-    console.log(`[Proxy] ${method} ${fullUrl}`);
     
     const response = await fetch(fullUrl, {
       method,
@@ -146,15 +135,9 @@ async function handleProxy(
     return nextResponse;
     
   } catch (error) {
-    console.error('[Proxy] Error:', error);
-    
-    return NextResponse.json(
-      {
-        detail: error instanceof Error ? error.message : 'Internal proxy error',
-        code: 'PROXY_ERROR',
-      },
-      { status: 500 }
-    );
+    const isProd = process.env.NODE_ENV === 'production';
+    const message = isProd ? 'Erro interno. Tente novamente.' : (error instanceof Error ? error.message : 'Internal proxy error');
+    return NextResponse.json({ detail: message, code: 'PROXY_ERROR' }, { status: 500 });
   }
 }
 

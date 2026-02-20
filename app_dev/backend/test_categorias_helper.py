@@ -132,14 +132,14 @@ def test_helper_functions():
     print("🧪 TESTE 4: Investimentos")
     print("-" * 80)
     
-    tipo = determinar_tipo_gasto_via_config(conn, 'Aplicações')
-    cat = determinar_categoria_geral_via_config(conn, 'Aplicações')
+    tipo = determinar_tipo_gasto_via_config(conn, 'Investimentos')
+    cat = determinar_categoria_geral_via_config(conn, 'Investimentos')
     
     if tipo == 'Investimentos' and cat == 'Investimentos':
-        print(f"  ✅ Aplicações        → {tipo:<15} | {cat}")
+        print(f"  ✅ Investimentos     → {tipo:<15} | {cat}")
         print("\n✅ TESTE 4 PASSOU: Investimentos OK\n")
     else:
-        print(f"  ❌ Aplicações → TipoGasto={tipo}, Categoria={cat}")
+        print(f"  ❌ Investimentos → TipoGasto={tipo}, Categoria={cat}")
         print("     Esperado: TipoGasto=Investimentos, Categoria=Investimentos\n")
         return False
     
@@ -147,14 +147,14 @@ def test_helper_functions():
     print("🧪 TESTE 5: Transferência")
     print("-" * 80)
     
-    tipo = determinar_tipo_gasto_via_config(conn, 'Movimentações')
-    cat = determinar_categoria_geral_via_config(conn, 'Movimentações')
+    tipo = determinar_tipo_gasto_via_config(conn, 'Transferência Entre Contas')
+    cat = determinar_categoria_geral_via_config(conn, 'Transferência Entre Contas')
     
     if tipo == 'Transferência' and cat == 'Transferência':
-        print(f"  ✅ Movimentações     → {tipo:<15} | {cat}")
+        print(f"  ✅ Transferência Entre Contas → {tipo:<15} | {cat}")
         print("\n✅ TESTE 5 PASSOU: Transferência OK\n")
     else:
-        print(f"  ❌ Movimentações → TipoGasto={tipo}, Categoria={cat}")
+        print(f"  ❌ Transferência Entre Contas → TipoGasto={tipo}, Categoria={cat}")
         print("     Esperado: TipoGasto=Transferência, Categoria=Transferência\n")
         return False
     

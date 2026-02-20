@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { ArrowLeft, Plus } from 'lucide-react'
 import { ManageGoalsListItem } from '@/features/goals/components'
 import { useGoals } from '@/features/goals/hooks/use-goals'
+import { fetchLastMonthWithData } from '@/features/dashboard/services/dashboard-api'
 import { useEditGoal } from '@/features/goals/hooks/use-edit-goal'
 import { Goal } from '@/features/goals/types'
 import { MonthScrollPicker } from '@/components/mobile/month-scroll-picker'
@@ -12,6 +13,15 @@ import { MonthScrollPicker } from '@/components/mobile/month-scroll-picker'
 export default function ManageGoalsPage() {
   const router = useRouter()
   const [selectedMonth, setSelectedMonth] = useState<Date>(new Date())
+  useEffect(() => {
+    let cancelled = false
+    fetchLastMonthWithData('transactions')
+      .then(({ year, month }) => {
+        if (!cancelled) setSelectedMonth(new Date(year, month - 1, 1))
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
   const { goals, loading, refreshGoals } = useGoals(selectedMonth)
   const { deleteGoal } = useEditGoal()
   const [activeStates, setActiveStates] = useState<Record<string, boolean>>({})
@@ -19,11 +29,11 @@ export default function ManageGoalsPage() {
 
   // Initialize active states when goals load
   useEffect(() => {
-    if (goals.length > 0) {
+    const comMeta = goals.filter((g) => g.id != null)
+    if (comMeta.length > 0) {
       const initialStates: Record<string, boolean> = {}
-      goals.forEach((goal) => {
-        // Todas as metas retornadas pelo backend estão ativas por padrão
-        initialStates[goal.id] = true
+      comMeta.forEach((goal) => {
+        if (goal.id != null) initialStates[goal.id] = true
       })
       setActiveStates(initialStates)
     }
@@ -91,13 +101,13 @@ export default function ManageGoalsPage() {
   }
 
   const handleNewGoal = () => {
-    // TODO: Navigate to create goal page
-    alert('Criar nova meta ainda não implementado')
+    router.push('/mobile/budget/new')
   }
 
-  // Separate goals by type
-  const gastosGoals = goals.filter((g) => g.grupo?.toLowerCase() !== 'investimento')
-  const investimentosGoals = goals.filter((g) => g.grupo?.toLowerCase() === 'investimento')
+  // Apenas metas com id (budget_planning) - sem meta definida não aparece em gerenciar
+  const goalsComMeta = goals.filter((g): g is Goal & { id: number } => g.id != null)
+  const gastosGoals = goalsComMeta.filter((g) => (g.planType ?? 'gastos') === 'gastos')
+  const investimentosGoals = goalsComMeta.filter((g) => g.planType === 'investimentos')
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -145,7 +155,7 @@ export default function ManageGoalsPage() {
             </div>
 
             {/* Goals List */}
-            {goals.length === 0 ? (
+            {goalsComMeta.length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-gray-500">Nenhuma meta encontrada</p>
                 <p className="text-sm text-gray-400 mt-2">

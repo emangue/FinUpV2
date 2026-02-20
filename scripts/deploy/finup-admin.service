@@ -1,0 +1,20 @@
+[Unit]
+Description=FinUp Admin Frontend
+After=network.target
+
+[Service]
+Type=simple
+User=deploy
+Group=deploy
+WorkingDirectory=/var/www/finup/app_admin/frontend
+Environment="NODE_ENV=production"
+Environment="PORT=3002"
+Environment="NEXT_PUBLIC_BACKEND_URL=https://meufinup.com.br"
+ExecStart=/usr/bin/npx next start -p 3002
+
+PrivateTmp=true
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -25,13 +25,15 @@ import {
 } from '@/components/ui/select'
 import { Loader2 } from 'lucide-react'
 import type { InvestimentoPortfolio } from '../types'
-import { updateInvestimento } from '../services/investimentos-api'
+import { updateInvestimento, updateHistoricoMes } from '../services/investimentos-api'
 
 interface EditInvestmentModalProps {
   investment: InvestimentoPortfolio | null
   open: boolean
   onClose: () => void
   onSuccess: () => void
+  /** Quando informado, inclui e salva valores do mês (patrimônio) */
+  anomes?: number
 }
 
 export function EditInvestmentModal({
@@ -39,6 +41,7 @@ export function EditInvestmentModal({
   open,
   onClose,
   onSuccess,
+  anomes,
 }: EditInvestmentModalProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -57,23 +60,40 @@ export function EditInvestmentModal({
     ativo: true,
   })
 
+  const quantidadeMes = investment?.quantidade_mes ?? investment?.quantidade ?? 1
+  const valorTotalMes = investment?.valor_total_mes != null
+    ? (typeof investment.valor_total_mes === 'number'
+        ? investment.valor_total_mes
+        : parseFloat(String(investment.valor_total_mes)) || 0)
+    : parseFloat(investment?.valor_total_inicial || '0') || 0
+  let valorUnitarioMes = investment?.valor_unitario_mes != null
+    ? (typeof investment.valor_unitario_mes === 'number'
+        ? investment.valor_unitario_mes
+        : parseFloat(String(investment.valor_unitario_mes)) || 0)
+    : parseFloat(investment?.valor_unitario_inicial || '0') || 0
+  if (valorTotalMes !== 0 && (valorUnitarioMes === 0 || !valorUnitarioMes)) {
+    valorUnitarioMes = valorTotalMes / (quantidadeMes || 1)
+  }
+
   useEffect(() => {
     if (investment) {
+      const qty = anomes ? quantidadeMes : (investment.quantidade ?? 0)
+      const valUnit = anomes ? valorUnitarioMes : parseFloat(investment.valor_unitario_inicial || '0')
       setFormData({
         nome_produto: investment.nome_produto,
         corretora: investment.corretora,
         emissor: investment.emissor || '',
         tipo_investimento: investment.tipo_investimento,
         classe_ativo: investment.classe_ativo || '',
-        quantidade: investment.quantidade ?? 0,
-        valor_unitario_inicial: parseFloat(investment.valor_unitario_inicial || '0'),
+        quantidade: qty,
+        valor_unitario_inicial: valUnit,
         percentual_cdi: investment.percentual_cdi ?? null,
         data_aplicacao: investment.data_aplicacao || '',
         data_vencimento: investment.data_vencimento || '',
         ativo: investment.ativo,
       })
     }
-  }, [investment])
+  }, [investment, anomes, quantidadeMes, valorUnitarioMes])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -83,13 +103,31 @@ export function EditInvestmentModal({
     setError(null)
 
     try {
-      // Convert formData to match CreateInvestimentoForm types
-      const updateData = {
-        ...formData,
-        percentual_cdi: formData.percentual_cdi ?? undefined,
+      if (anomes) {
+        const total = formData.quantidade * formData.valor_unitario_inicial
+        await updateHistoricoMes(investment.id, anomes, {
+          quantidade: formData.quantidade,
+          valor_unitario: formData.valor_unitario_inicial,
+          valor_total: total,
+        })
       }
-      
-      await updateInvestimento(investment.id, updateData)
+
+      const updateData: Record<string, unknown> = {
+        nome_produto: formData.nome_produto,
+        corretora: formData.corretora,
+        emissor: formData.emissor || undefined,
+        tipo_investimento: formData.tipo_investimento,
+        classe_ativo: formData.classe_ativo || undefined,
+        percentual_cdi: formData.percentual_cdi ?? undefined,
+        data_aplicacao: formData.data_aplicacao || undefined,
+        data_vencimento: formData.data_vencimento || undefined,
+        ativo: formData.ativo,
+      }
+      if (!anomes) {
+        updateData.quantidade = formData.quantidade
+        updateData.valor_unitario_inicial = formData.valor_unitario_inicial
+      }
+      await updateInvestimento(investment.id, updateData as Parameters<typeof updateInvestimento>[1])
       onSuccess()
       onClose()
     } catch (err) {
@@ -105,7 +143,9 @@ export function EditInvestmentModal({
         <DialogHeader>
           <DialogTitle>Editar Investimento</DialogTitle>
           <DialogDescription>
-            Atualize as informações do investimento
+            {anomes
+              ? 'Atualize valor e demais informações do investimento neste mês'
+              : 'Atualize as informações do investimento'}
           </DialogDescription>
         </DialogHeader>
 
@@ -170,6 +210,11 @@ export function EditInvestmentModal({
               </Select>
             </div>
 
+            {anomes && (
+              <div className="col-span-2 rounded-lg bg-indigo-50 p-3 text-sm text-indigo-800">
+                Valores do mês (patrimônio) — alterações aqui atualizam o histórico
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="quantidade">Quantidade *</Label>
               <Input
@@ -189,10 +234,19 @@ export function EditInvestmentModal({
                 type="number"
                 step="0.01"
                 value={formData.valor_unitario_inicial}
-                onChange={(e) => setFormData({ ...formData, valor_unitario_inicial: parseFloat(e.target.value) })}
+                onChange={(e) => setFormData({ ...formData, valor_unitario_inicial: parseFloat(e.target.value) || 0 })}
                 required
               />
             </div>
+            {anomes && (
+              <div className="space-y-2">
+                <Label>Valor Total (calculado)</Label>
+                <p className="text-lg font-semibold text-indigo-600">
+                  R$ {(formData.quantidade * formData.valor_unitario_inicial).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </p>
+                <p className="text-xs text-gray-500">Valor total = valor unitário × quantidade</p>
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="percentual_cdi">% CDI</Label>

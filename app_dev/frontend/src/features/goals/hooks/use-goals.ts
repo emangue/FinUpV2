@@ -19,13 +19,17 @@ export function useGoals(selectedMonth?: Date) {
       setError(null)
       const data = await fetchGoals(selectedMonth)
       
-      // Adicionar status calculado
+      // Adicionar status calculado e ordenar por valor total (valor_realizado) ou valor planejado
       const goalsWithStatus = data.map(goal => ({
         ...goal,
         status: calculateGoalStatus(goal)
       }))
-      
-      setGoals(goalsWithStatus)
+      const sorted = [...goalsWithStatus].sort((a, b) => {
+        const va = a.valor_realizado ?? a.valor_planejado ?? 0
+        const vb = b.valor_realizado ?? b.valor_planejado ?? 0
+        return vb - va // Maior primeiro
+      })
+      setGoals(sorted)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao carregar metas')
       console.error('Erro ao carregar metas:', err)
@@ -38,9 +42,9 @@ export function useGoals(selectedMonth?: Date) {
     loadGoals()
   }, [selectedMonth])
 
-  const addGoal = async (data: GoalCreate): Promise<Goal> => {
-    const newGoal = await createGoal(data)
-    await loadGoals() // Recarregar para ter progresso atualizado
+  const addGoal = async (data: GoalCreate, replicarParaAnoTodo = false): Promise<Goal> => {
+    const newGoal = await createGoal(data, replicarParaAnoTodo)
+    await loadGoals()
     return newGoal
   }
 

@@ -21,60 +21,33 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { isAuthenticated } from '@/core/utils/api-client';
+import { useAuth } from '@/contexts/AuthContext';
 
 export function useRequireAuth(): boolean {
   const router = useRouter();
-  const [isAuth, setIsAuth] = useState(false);
-  const [isChecking, setIsChecking] = useState(true);
+  const { isAuthenticated, loading } = useAuth();
 
   useEffect(() => {
-    // Verificar autenticação
-    const checkAuth = () => {
-      if (!isAuthenticated()) {
-        console.warn('🚨 [AUTH] Usuário não autenticado - Redirecionando para login');
-        router.push('/auth/login');
-        return false;
-      }
-      
-      setIsAuth(true);
-      setIsChecking(false);
-      return true;
-    };
+    if (loading) return;
+    if (!isAuthenticated) {
+      router.push('/auth/login');
+    }
+  }, [isAuthenticated, loading, router]);
 
-    checkAuth();
-  }, [router]);
-
-  // Durante verificação, retorna false
-  return isAuth;
+  return isAuthenticated && !loading;
 }
 
-/**
- * Hook alternativo que retorna loading state
- * Útil para mostrar spinner durante verificação
- */
-export function useAuth() {
+/** Hook alternativo com loading state */
+export function useRequireAuthWithLoading() {
   const router = useRouter();
-  const [isAuth, setIsAuth] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const { isAuthenticated, loading } = useAuth();
 
   useEffect(() => {
-    const checkAuth = () => {
-      if (!isAuthenticated()) {
-        console.warn('🚨 [AUTH] Usuário não autenticado - Redirecionando para login');
-        router.push('/auth/login');
-        setIsAuth(false);
-      } else {
-        setIsAuth(true);
-      }
-      
-      setIsLoading(false);
-    };
+    if (loading) return;
+    if (!isAuthenticated) router.push('/auth/login');
+  }, [isAuthenticated, loading, router]);
 
-    checkAuth();
-  }, [router]);
-
-  return { isAuth, isLoading };
+  return { isAuth: isAuthenticated, isLoading: loading };
 }

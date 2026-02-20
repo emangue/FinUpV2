@@ -11,17 +11,18 @@ import * as React from 'react'
 import { Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { format } from 'date-fns'
-import { Plus } from 'lucide-react'
+import { Plus, Search } from 'lucide-react'
 import { MonthScrollPicker } from '@/components/mobile/month-scroll-picker'
 import { TransactionCard } from '@/components/mobile/transaction-card'
 import { MobileHeader } from '@/components/mobile/mobile-header'
 import { fetchWithAuth } from '@/core/utils/api-client'
 import { API_CONFIG } from '@/core/config/api.config'
+import { fetchLastMonthWithData } from '@/features/dashboard/services/dashboard-api'
 import { cn } from '@/lib/utils'
 import type { CategoryType } from '@/components/mobile/category-icon'
 import { TransactionDetailBottomSheet } from '@/components/mobile/transaction-detail-bottom-sheet'
 
-type FilterType = 'all' | 'receita' | 'despesa'
+type FilterType = 'all' | 'receita' | 'despesa' | 'transferencia' | 'investimentos'
 
 function grupoToCategory(grupo: string | undefined): CategoryType {
   if (!grupo) return 'outros'
@@ -68,7 +69,20 @@ function TransactionsMobileContent() {
     }
     return new Date()
   })
+
+  // Default: último mês com transações (quando não veio da URL)
+  React.useEffect(() => {
+    if (urlYear && urlMonth) return
+    let cancelled = false
+    fetchLastMonthWithData('transactions')
+      .then(({ year, month }) => {
+        if (!cancelled) setSelectedMonth(new Date(year, month - 1, 1))
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [urlYear, urlMonth])
   const [filterType, setFilterType] = React.useState<FilterType>(urlGrupo ? 'despesa' : 'all')
+  const [searchQuery, setSearchQuery] = React.useState('')
   const [transactions, setTransactions] = React.useState<Transaction[]>([])
   const [loading, setLoading] = React.useState(true)
   const [selectedTransaction, setSelectedTransaction] = React.useState<Transaction | null>(null)
@@ -90,7 +104,15 @@ function TransactionsMobileContent() {
       let url = `${BASE_URL}/transactions/list?year=${year}&month=${month}&limit=100`
       
       if (filterType !== 'all') {
-        url += `&categoria_geral=${filterType === 'receita' ? 'Receita' : 'Despesa'}`
+        const catMap: Record<FilterType, string> = {
+          all: '',
+          receita: 'Receita',
+          despesa: 'Despesa',
+          transferencia: 'Transferência',
+          investimentos: 'Investimentos',
+        }
+        const cat = catMap[filterType]
+        if (cat) url += `&categoria_geral=${encodeURIComponent(cat)}`
       }
       if (urlGrupo) url += `&grupo=${encodeURIComponent(urlGrupo)}`
       if (urlSubgrupo) {
@@ -137,6 +159,18 @@ function TransactionsMobileContent() {
     return `${day}/${month}`
   }
 
+  // Filtrar transações pela pesquisa (estabelecimento, grupo, subgrupo)
+  const filteredTransactions = React.useMemo(() => {
+    if (!searchQuery.trim()) return transactions
+    const q = searchQuery.trim().toLowerCase()
+    return transactions.filter((t) => {
+      const estab = (t.Estabelecimento || '').toLowerCase()
+      const grupo = ((t.GRUPO || t.Grupo) || '').toLowerCase()
+      const subgrupo = ((t.SUBGRUPO || t.Subgrupo) || '').toLowerCase()
+      return estab.includes(q) || grupo.includes(q) || subgrupo.includes(q)
+    })
+  }, [transactions, searchQuery])
+
   return (
     <div className="flex flex-col h-screen bg-gray-50">
       {/* Header */}
@@ -157,8 +191,23 @@ function TransactionsMobileContent() {
         className="bg-white border-b border-gray-200"
       />
       
+      {/* Search */}
+      <div className="px-5 py-3 bg-white border-b border-gray-200">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" aria-hidden />
+          <input
+            type="search"
+            placeholder="Buscar estabelecimento, grupo..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 bg-gray-100 rounded-xl text-base text-gray-900 placeholder-gray-500 border-0 focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
+            aria-label="Buscar transações"
+          />
+        </div>
+      </div>
+
       {/* Filter Pills */}
-      <div className="flex gap-2 px-5 py-3 bg-white border-b border-gray-200">
+      <div className="flex flex-wrap gap-2 px-5 py-3 bg-white border-b border-gray-200">
         <button
           onClick={() => setFilterType('all')}
           className={cn(
@@ -192,6 +241,28 @@ function TransactionsMobileContent() {
         >
           Despesas
         </button>
+        <button
+          onClick={() => setFilterType('transferencia')}
+          className={cn(
+            'px-4 py-2 rounded-full text-sm font-medium transition-all',
+            filterType === 'transferencia'
+              ? 'bg-indigo-600 text-white shadow-md'
+              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          )}
+        >
+          Transferências
+        </button>
+        <button
+          onClick={() => setFilterType('investimentos')}
+          className={cn(
+            'px-4 py-2 rounded-full text-sm font-medium transition-all',
+            filterType === 'investimentos'
+              ? 'bg-amber-600 text-white shadow-md'
+              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          )}
+        >
+          Investimentos
+        </button>
       </div>
       
       {/* Transactions List */}
@@ -200,21 +271,25 @@ function TransactionsMobileContent() {
           <div className="flex items-center justify-center py-10">
             <div className="text-gray-500">Carregando...</div>
           </div>
-        ) : transactions.length === 0 ? (
+        ) : filteredTransactions.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10">
             <div className="text-gray-400 text-center mb-4">
-              Nenhuma transação neste período.
+              {searchQuery.trim()
+                ? `Nenhuma transação encontrada para "${searchQuery}"`
+                : 'Nenhuma transação neste período.'}
             </div>
-            <button
-              onClick={() => router.push('/mobile/upload')}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              Importar Arquivo
-            </button>
+            {!searchQuery.trim() && (
+              <button
+                onClick={() => router.push('/mobile/upload')}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Importar Arquivo
+              </button>
+            )}
           </div>
         ) : (
           <div className="space-y-3">
-            {transactions.map((transaction) => (
+            {filteredTransactions.map((transaction) => (
               <TransactionCard
                 key={transaction.id}
                 id={transaction.id}

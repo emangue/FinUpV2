@@ -257,7 +257,7 @@ export default function ProfileMobilePage() {
               <h2 className="text-xl font-bold text-gray-900">{user?.nome}</h2>
               <p className="text-sm text-gray-500">{user?.email}</p>
               <span className="inline-block mt-1 px-2 py-1 text-xs font-semibold rounded-full bg-indigo-100 text-indigo-800">
-                {user?.role === 'admin' ? 'Administrador' : 'Usuário'}
+                Usuário
               </span>
             </div>
           </div>

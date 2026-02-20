@@ -1380,29 +1380,51 @@ class UploadService:
     
     def _fase6_sync_budget_planning(self, user_id: int, upload_history_id: int) -> dict:
         """
-        Garante que cada grupo com transações no upload tenha linha em budget_planning.
-        Cria com valor_planejado=0 se não existir, para que o valor realizado apareça na tela de Metas.
+        Garante que TODOS os grupos com gastos (Despesa) e investimentos tenham linha em budget_planning.
+        Cria com valor_planejado=0 se não existir.
+        Inclui: Despesa + Investimentos (CategoriaGeral em journal_entries)
         """
         from app.domains.budget.models import BudgetPlanning
         
-        # Buscar (grupo, mes_fatura) distintos do upload
-        rows = self.db.query(JournalEntry.GRUPO, JournalEntry.MesFatura).filter(
-            JournalEntry.upload_history_id == upload_history_id,
+        # Buscar (grupo, mes_fatura) com Despesa OU Investimentos em journal_entries
+        rows_desp = self.db.query(
+            JournalEntry.GRUPO,
+            JournalEntry.MesFatura
+        ).filter(
             JournalEntry.user_id == user_id,
+            JournalEntry.CategoriaGeral == 'Despesa',
+            JournalEntry.IgnorarDashboard == 0,
             JournalEntry.GRUPO.isnot(None),
             JournalEntry.GRUPO != '',
             JournalEntry.MesFatura.isnot(None)
         ).distinct().all()
         
+        rows_inv = self.db.query(
+            JournalEntry.GRUPO,
+            JournalEntry.MesFatura
+        ).filter(
+            JournalEntry.user_id == user_id,
+            JournalEntry.CategoriaGeral == 'Investimentos',
+            JournalEntry.IgnorarDashboard == 0,
+            JournalEntry.GRUPO.isnot(None),
+            JournalEntry.GRUPO != '',
+            JournalEntry.MesFatura.isnot(None)
+        ).distinct().all()
+        
+        # União (grupo, mes_fatura) sem duplicatas
+        seen = set()
+        rows = []
+        for r in rows_desp + rows_inv:
+            key = (r.GRUPO, r.MesFatura)
+            if key not in seen:
+                seen.add(key)
+                rows.append((r.GRUPO, r.MesFatura))
+        
         criados = 0
         for grupo, mes_fatura in rows:
-            if not grupo or not mes_fatura:
+            if not grupo or not mes_fatura or len(mes_fatura) != 6:
                 continue
-            # Converter YYYYMM -> YYYY-MM
-            if len(mes_fatura) == 6:
-                mes_referencia = f"{mes_fatura[:4]}-{mes_fatura[4:6]}"
-            else:
-                continue
+            mes_referencia = f"{mes_fatura[:4]}-{mes_fatura[4:6]}"
             
             existente = self.db.query(BudgetPlanning).filter(
                 BudgetPlanning.user_id == user_id,

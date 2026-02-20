@@ -3,7 +3,7 @@ Router do domínio Investimentos.
 Endpoints FastAPI isolados aqui.
 """
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Path, Body
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -35,10 +35,11 @@ def create_investimento(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/", response_model=List[schemas.InvestimentoPortfolioResponse])
+@router.get("/", response_model=List[schemas.InvestimentoComHistoricoResponse])
 def list_investimentos(
     tipo_investimento: Optional[str] = Query(None, description="Filtrar por tipo"),
     ativo: Optional[bool] = Query(True, description="Apenas ativos"),
+    anomes: Optional[int] = Query(None, description="Filtrar por mês (YYYYMM)"),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
@@ -50,6 +51,7 @@ def list_investimentos(
         user_id=user_id,
         tipo_investimento=tipo_investimento,
         ativo=ativo,
+        anomes=anomes,
         skip=skip,
         limit=limit
     )
@@ -67,27 +69,74 @@ def get_portfolio_resumo(
 
 @router.get("/distribuicao-tipo")
 def get_distribuicao_por_tipo(
+    classe_ativo: Optional[str] = Query(None, description="Filtrar por classe: Ativo ou Passivo"),
     db: Session = Depends(get_db),
     user_id: int = Depends(get_current_user_id)
 ):
     """Retorna distribuição do portfólio por tipo de investimento"""
     service = InvestimentoService(db)
-    return service.get_distribuicao_por_tipo(user_id)
+    return service.get_distribuicao_por_tipo(user_id, classe_ativo)
 
 
-@router.get("/{investimento_id}", response_model=schemas.InvestimentoPortfolioResponse)
-def get_investimento(
-    investimento_id: int,
+# Timeline - rotas específicas ANTES de /{investimento_id} para evitar conflito
+@router.get("/timeline/rendimentos", response_model=List[schemas.RendimentoMensal])
+def get_rendimentos_timeline(
+    ano_inicio: int = Query(..., ge=2000, le=2100),
+    ano_fim: int = Query(..., ge=2000, le=2100),
     db: Session = Depends(get_db),
     user_id: int = Depends(get_current_user_id)
 ):
-    """Busca investimento por ID"""
+    """Retorna série temporal de rendimentos mensais"""
     service = InvestimentoService(db)
-    investimento = service.get_investimento(investimento_id, user_id)
+    return service.get_rendimentos_timeline(user_id, ano_inicio, ano_fim)
+
+
+@router.get("/timeline/patrimonio", response_model=List[schemas.PatrimonioMensal])
+def get_patrimonio_timeline(
+    ano_inicio: int = Query(..., ge=2000, le=2100),
+    ano_fim: int = Query(..., ge=2000, le=2100),
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id)
+):
+    """Retorna série temporal de ativos, passivos e PL por mês"""
+    service = InvestimentoService(db)
+    return service.get_patrimonio_timeline(user_id, ano_inicio, ano_fim)
+
+
+@router.post("/copiar-mes-anterior")
+def copiar_mes_anterior(
+    anomes_destino: int = Query(..., description="Mês destino YYYYMM"),
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id)
+):
+    """Copia todos investimentos do mês anterior para o mês destino"""
+    service = InvestimentoService(db)
+    count = service.copiar_mes_anterior(user_id, anomes_destino)
+    return {"copiados": count, "anomes_destino": anomes_destino}
+
+
+@router.get("/{investimento_id}", response_model=schemas.InvestimentoComHistoricoResponse)
+def get_investimento(
+    investimento_id: int,
+    anomes: Optional[int] = Query(None, description="Mês (YYYYMM) para retornar valores do histórico"),
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id)
+):
+    """Busca investimento por ID. Se anomes informado, inclui valor_total_mes, valor_unitario_mes, quantidade_mes."""
+    service = InvestimentoService(db)
+    investimento = service.get_investimento(investimento_id, user_id, anomes)
 
     if not investimento:
         raise HTTPException(status_code=404, detail="Investimento não encontrado")
 
+    # Garantir resposta como InvestimentoComHistoricoResponse
+    if isinstance(investimento, schemas.InvestimentoPortfolioResponse):
+        return schemas.InvestimentoComHistoricoResponse(
+            **investimento.model_dump(),
+            valor_total_mes=None,
+            valor_unitario_mes=None,
+            quantidade_mes=None,
+        )
     return investimento
 
 
@@ -167,16 +216,42 @@ def get_historico_investimento(
     )
 
 
-@router.get("/timeline/rendimentos", response_model=List[schemas.RendimentoMensal])
-def get_rendimentos_timeline(
-    ano_inicio: int = Query(..., ge=2000, le=2100),
-    ano_fim: int = Query(..., ge=2000, le=2100),
+@router.patch("/{investimento_id}/historico/{anomes}", response_model=schemas.InvestimentoHistoricoResponse)
+def update_historico_mes(
+    investimento_id: int,
+    anomes: int = Path(..., ge=200001, le=210012, description="Mês no formato YYYYMM"),
+    data: schemas.InvestimentoHistoricoUpdate = Body(...),
     db: Session = Depends(get_db),
     user_id: int = Depends(get_current_user_id)
 ):
-    """Retorna série temporal de rendimentos mensais"""
+    """Atualiza valores do histórico (patrimônio) de um investimento para um mês específico."""
     service = InvestimentoService(db)
-    return service.get_rendimentos_timeline(user_id, ano_inicio, ano_fim)
+    historico = service.update_historico_mes(investimento_id, anomes, user_id, data)
+
+    if not historico:
+        raise HTTPException(
+            status_code=404,
+            detail="Investimento ou histórico do mês não encontrado"
+        )
+
+    return historico
+
+
+@router.delete("/{investimento_id}/historico/{anomes}", status_code=204)
+def delete_historico_mes(
+    investimento_id: int,
+    anomes: int = Path(..., ge=200001, le=210012, description="Mês no formato YYYYMM"),
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id)
+):
+    """Remove o investimento deste mês (apaga registro do histórico)."""
+    service = InvestimentoService(db)
+    ok = service.delete_historico_mes(investimento_id, anomes, user_id)
+    if not ok:
+        raise HTTPException(
+            status_code=404,
+            detail="Investimento ou histórico do mês não encontrado"
+        )
 
 
 # ============================================================================

@@ -12,7 +12,16 @@ class DashboardMetrics(BaseModel):
     total_cartoes: float
     saldo_periodo: float
     num_transacoes: int
-    change_percentage: Optional[float] = None  # Variação % vs mês anterior (se disponível)
+    change_percentage: Optional[float] = None  # Despesas vs mês anterior
+    receitas_change_percentage: Optional[float] = None  # Receitas vs mês anterior
+    despesas_vs_plano_percent: Optional[float] = None  # Despesas vs plano (quando há orçamento)
+    ativos_mes: Optional[float] = None
+    passivos_mes: Optional[float] = None
+    patrimonio_liquido_mes: Optional[float] = None
+    ativos_change_percentage: Optional[float] = None
+    passivos_change_percentage: Optional[float] = None
+    patrimonio_change_percentage: Optional[float] = None
+    patrimonio_vs_plano_percent: Optional[float] = None
 
 
 class ChartDataPoint(BaseModel):
@@ -71,3 +80,17 @@ class IncomeSourcesResponse(BaseModel):
     """Lista de fontes de receita"""
     sources: List[IncomeSource]
     total_receitas: float
+
+
+class OrcamentoInvestimentosItem(BaseModel):
+    """Item de Investimentos vs Plano"""
+    grupo: str
+    valor: float  # investido (realizado)
+    plano: float  # planejado
+
+
+class OrcamentoInvestimentosResponse(BaseModel):
+    """Resposta de orçamento investimentos vs plano"""
+    total_investido: float
+    total_planejado: float
+    items: List[OrcamentoInvestimentosItem]

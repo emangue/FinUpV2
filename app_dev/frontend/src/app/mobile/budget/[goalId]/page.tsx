@@ -141,13 +141,15 @@ function GoalDetailContent() {
 
   // Modal handlers
   const handleSave = async (data: EditGoalData) => {
+    if (goal.id == null) return
     await updateGoal(goal.id, goal.grupo, goal.mes_referencia, data)
     await refreshGoal()
     setIsEditModalOpen(false)
   }
 
   const handleDelete = async () => {
-    await deleteGoal(goal.grupo, goal.mes_referencia)
+    if (goal.id == null) return
+    await deleteGoal(goal.id)
     router.push('/mobile/budget')
   }
 

@@ -19,7 +19,7 @@ import { EmptyInvestimentos, EmptyFilterResults } from '../empty-states'
 import { ApiErrorFallback } from '../error-boundary'
 import { InvestmentFilters } from '../investment-filters'
 import { PeriodFilter } from '../period-filter'
-import { BottomNav } from '@/features/dashboard/components/mobile/bottom-nav'
+import { BottomNav } from '@/components/mobile/bottom-nav'
 
 export function DashboardInvestimentosMobile() {
   const [addModalOpen, setAddModalOpen] = useState(false)

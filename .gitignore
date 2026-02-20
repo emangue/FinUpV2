@@ -12,6 +12,12 @@ eggs/
 .eggs/
 lib/
 lib64/
+# Exceção: frontend src/lib (código TypeScript, não Python)
+!app_dev/frontend/src/lib/
+!app_dev/frontend/src/lib/*.ts
+# Exceção: plano-aposentadoria lib
+!app_dev/frontend/src/features/plano-aposentadoria/lib/
+!app_dev/frontend/src/features/plano-aposentadoria/lib/*.ts
 parts/
 sdist/
 var/
@@ -23,16 +29,24 @@ wheels/
 # Backups e reorganizações
 _backup_*
 _arquivos_historicos/
+dashboard copy/
 
 # Virtual Environment
 venv/
 env/
 ENV/
 
-# Credenciais de Deploy (NUNCA commitar!)
+# Credenciais e Senhas (NUNCA commitar!)
 .env.deploy
 .env.server
+.env.production
+.env.staging
 *.deploy
+*.secret
+*_password*
+*_credentials*
+secrets/
+credentials/
 
 # Database
 *.db
@@ -75,6 +89,8 @@ frontend.pid
 
 # Uploads
 uploads/
+# Exceção: rota mobile /mobile/uploads (Painel de Uploads)
+!app_dev/frontend/src/app/mobile/uploads/
 temp_*
 app/uploads_temp/
 app_dev/uploads_temp/
@@ -87,20 +103,31 @@ app_dev/static/uploads/
 _temp_scripts/
 _csvs_historico/
 
-# Environment variables
+# Environment variables (contêm senhas, tokens, DB URLs)
 .env
+.env.*
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
 
-# SSH credentials (NUNCA commitar)
+# SSH e credenciais de servidor (NUNCA commitar)
 .ssh_password
 .server_password
 
 # Backup files
 *.bak
 *.backup
+*.backup_*
+*.db.backup*
+
+# Duplicatas acidentais (ex: "arquivo 2.py", "component 3.tsx")
+* 2.*
+* 3.*
+.cursorrules 2
+scripts/fix_cors_env.sh
+* 4.*
+* 5.*
 
 # Local backups folder (not for git)
 backups_local/
@@ -118,6 +145,10 @@ app_dev/frontend/dist/
 app_dev/frontend/.vite/
 app_dev/venv/
 
+# App Admin (Next.js build)
+app_admin/frontend/.next/
+app_admin/frontend/node_modules/
+
 # App PROD recursos (não versionar - atualizado via deploy)
 app/financas.db
 app/uploads_temp/
@@ -127,4 +158,6 @@ app/venv/
 # Arquivos temporários
 temp/logs/*.log
 temp/pids/*.pid
+temp/export_*.sql
+temp/.test_token*
 export-to-main-project/*/node_modules/

@@ -4,6 +4,7 @@ Todas as queries SQL isoladas aqui.
 """
 from typing import List, Optional, Dict, Any
 from datetime import date
+from calendar import monthrange
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_, extract, desc
 from decimal import Decimal
@@ -46,32 +47,36 @@ class InvestimentoRepository:
         user_id: int,
         tipo_investimento: Optional[str] = None,
         ativo: Optional[bool] = True,
+        anomes: Optional[int] = None,
         skip: int = 0,
         limit: int = 100
     ) -> List[InvestimentoPortfolio]:
-        """Lista investimentos com filtros - retorna apenas produtos com histórico no último mês"""
-        # Descobrir qual é o último mês disponível
-        ultimo_mes = self.db.query(
-            func.max(InvestimentoHistorico.anomes)
-        ).filter(
-            InvestimentoHistorico.investimento_id.in_(
-                self.db.query(InvestimentoPortfolio.id).filter(
-                    InvestimentoPortfolio.user_id == user_id
+        """Lista investimentos com filtros. anomes: filtrar por mês (YYYYMM). Se None, usa último mês."""
+        # Determinar mês de referência
+        if anomes is not None:
+            mes_ref = anomes
+        else:
+            ultimo_mes = self.db.query(
+                func.max(InvestimentoHistorico.anomes)
+            ).filter(
+                InvestimentoHistorico.investimento_id.in_(
+                    self.db.query(InvestimentoPortfolio.id).filter(
+                        InvestimentoPortfolio.user_id == user_id
+                    )
                 )
-            )
-        ).scalar()
-        
-        if not ultimo_mes:
-            return []
-        
-        # Buscar investimentos que têm histórico no último mês
+            ).scalar()
+            if not ultimo_mes:
+                return []
+            mes_ref = ultimo_mes
+
+        # Buscar investimentos que têm histórico no mês de referência
+        # OU portfolio.anomes == mes_ref (para investimentos criados direto no mês)
+        subq_historico = self.db.query(InvestimentoHistorico.investimento_id).filter(
+            InvestimentoHistorico.anomes == mes_ref
+        ).distinct()
         query = self.db.query(InvestimentoPortfolio).filter(
             InvestimentoPortfolio.user_id == user_id,
-            InvestimentoPortfolio.id.in_(
-                self.db.query(InvestimentoHistorico.investimento_id).filter(
-                    InvestimentoHistorico.anomes == ultimo_mes
-                )
-            )
+            InvestimentoPortfolio.id.in_(subq_historico)
         )
 
         if tipo_investimento:
@@ -81,6 +86,137 @@ class InvestimentoRepository:
             query = query.filter(InvestimentoPortfolio.ativo == ativo)
 
         return query.order_by(InvestimentoPortfolio.corretora, InvestimentoPortfolio.nome_produto).offset(skip).limit(limit).all()
+
+    def list_all_com_historico(
+        self,
+        user_id: int,
+        anomes: int,
+        tipo_investimento: Optional[str] = None,
+        ativo: Optional[bool] = True,
+        skip: int = 0,
+        limit: int = 100
+    ) -> List[Dict[str, Any]]:
+        """Lista investimentos com valores do histórico do mês (mesma fonte de ativos/passivos)."""
+        rows = self.db.query(
+            InvestimentoPortfolio,
+            InvestimentoHistorico.valor_total,
+            InvestimentoHistorico.valor_unitario,
+            InvestimentoHistorico.quantidade,
+        ).join(
+            InvestimentoHistorico,
+            (InvestimentoHistorico.investimento_id == InvestimentoPortfolio.id) &
+            (InvestimentoHistorico.anomes == anomes)
+        ).filter(
+            InvestimentoPortfolio.user_id == user_id
+        )
+        if tipo_investimento:
+            rows = rows.filter(InvestimentoPortfolio.tipo_investimento == tipo_investimento)
+        if ativo is not None:
+            rows = rows.filter(InvestimentoPortfolio.ativo == ativo)
+        rows = rows.order_by(
+            InvestimentoPortfolio.corretora,
+            InvestimentoPortfolio.nome_produto
+        ).offset(skip).limit(limit).all()
+
+        return [
+            {
+                'portfolio': p,
+                'valor_total_mes': vt,
+                'valor_unitario_mes': vu,
+                'quantidade_mes': q,
+            }
+            for p, vt, vu, q in rows
+        ]
+
+    def list_all_for_anomes(
+        self, user_id: int, anomes: int
+    ) -> List[tuple]:
+        """Retorna (InvestimentoPortfolio, InvestimentoHistorico) para investimentos com histórico no anomes."""
+        return self.db.query(
+            InvestimentoPortfolio,
+            InvestimentoHistorico
+        ).join(
+            InvestimentoHistorico,
+            InvestimentoHistorico.investimento_id == InvestimentoPortfolio.id
+        ).filter(
+            InvestimentoPortfolio.user_id == user_id,
+            InvestimentoPortfolio.ativo == True,
+            InvestimentoHistorico.anomes == anomes
+        ).all()
+
+    def copiar_mes_anterior(
+        self, user_id: int, anomes_destino: int
+    ) -> int:
+        """Copia todos investimentos do mês anterior para o mês destino. Retorna quantidade copiada."""
+        ano_dest = anomes_destino // 100
+        mes_dest = anomes_destino % 100
+        # Mês anterior
+        if mes_dest == 1:
+            anomes_origem = (ano_dest - 1) * 100 + 12
+        else:
+            anomes_origem = ano_dest * 100 + (mes_dest - 1)
+
+        rows = self.list_all_for_anomes(user_id, anomes_origem)
+        if not rows:
+            return 0
+
+        # Último dia do mês destino
+        _, last_day = monthrange(ano_dest, mes_dest)
+        data_ref = date(ano_dest, mes_dest, last_day)
+
+        count = 0
+        for portfolio, historico in rows:
+            # Novo balance_id único (user_id evita colisão entre usuários)
+            new_balance_id = f"copy-{user_id}-{portfolio.id}-{anomes_destino}"
+            if self.get_by_balance_id(new_balance_id, user_id):
+                continue  # Já existe, pular
+
+            # Criar novo portfolio (cópia)
+            new_portfolio = InvestimentoPortfolio(
+                user_id=user_id,
+                balance_id=new_balance_id,
+                nome_produto=portfolio.nome_produto,
+                corretora=portfolio.corretora,
+                tipo_investimento=portfolio.tipo_investimento,
+                classe_ativo=portfolio.classe_ativo,
+                emissor=portfolio.emissor,
+                ano=ano_dest,
+                anomes=anomes_destino,
+                percentual_cdi=portfolio.percentual_cdi,
+                data_aplicacao=portfolio.data_aplicacao,
+                data_vencimento=portfolio.data_vencimento,
+                quantidade=historico.quantidade or portfolio.quantidade,
+                valor_unitario_inicial=historico.valor_unitario or portfolio.valor_unitario_inicial,
+                valor_total_inicial=historico.valor_total or portfolio.valor_total_inicial,
+                ativo=True,
+            )
+            new_portfolio = self.create(new_portfolio)
+
+            # Criar historico - garantir valor_total = valor_unitario * quantidade
+            qty = float(historico.quantidade or 1) or 1.0
+            vt = float(historico.valor_total or 0)
+            vu = float(historico.valor_unitario or 0)
+            if vt and (not vu or vu == 0):
+                vu = vt / qty
+            elif vu and (not vt or vt == 0):
+                vt = vu * qty
+            new_historico = InvestimentoHistorico(
+                investimento_id=new_portfolio.id,
+                ano=ano_dest,
+                mes=mes_dest,
+                anomes=anomes_destino,
+                data_referencia=data_ref,
+                quantidade=qty,
+                valor_unitario=Decimal(str(vu)),
+                valor_total=Decimal(str(vt)),
+                aporte_mes=historico.aporte_mes or Decimal('0'),
+                rendimento_mes=historico.rendimento_mes,
+                rendimento_acumulado=historico.rendimento_acumulado,
+            )
+            self.create_historico(new_historico)
+            count += 1
+
+        return count
 
     def create(self, investimento: InvestimentoPortfolio) -> InvestimentoPortfolio:
         """Cria novo investimento"""
@@ -208,6 +344,32 @@ class InvestimentoRepository:
             'updated_at': None
         }
 
+    def get_historico_by_investimento_and_anomes(
+        self, investimento_id: int, anomes: int
+    ) -> Optional[InvestimentoHistorico]:
+        """Busca histórico de um investimento para um mês específico"""
+        return self.db.query(InvestimentoHistorico).filter(
+            InvestimentoHistorico.investimento_id == investimento_id,
+            InvestimentoHistorico.anomes == anomes
+        ).first()
+
+    def update_historico(self, historico: InvestimentoHistorico) -> InvestimentoHistorico:
+        """Atualiza registro de histórico"""
+        self.db.commit()
+        self.db.refresh(historico)
+        return historico
+
+    def delete_historico_by_investimento_and_anomes(
+        self, investimento_id: int, anomes: int
+    ) -> bool:
+        """Remove registro de histórico de um investimento para um mês específico."""
+        deleted = self.db.query(InvestimentoHistorico).filter(
+            InvestimentoHistorico.investimento_id == investimento_id,
+            InvestimentoHistorico.anomes == anomes
+        ).delete()
+        self.db.commit()
+        return deleted > 0
+
     def create_historico(self, historico: InvestimentoHistorico) -> InvestimentoHistorico:
         """Cria registro de histórico"""
         self.db.add(historico)
@@ -304,18 +466,13 @@ class InvestimentoRepository:
             'produtos_ativos': quantidade_total  # Produtos com histórico no último mês
         }
 
-        return {
-            'total_investido': total_investido,
-            'valor_atual': valor_atual,
-            'rendimento_total': rendimento_total,
-            'rendimento_percentual': float(rendimento_total / total_investido * 100) if total_investido > 0 else 0.0,
-            'quantidade_produtos': len(investimentos),
-            'produtos_ativos': sum(1 for inv in investimentos if inv.ativo)
-        }
-
-    def get_rendimento_por_tipo(self, user_id: int) -> List[Dict[str, Any]]:
-        """Retorna rendimento agrupado por tipo de investimento baseado no último mês"""
-        # Descobrir qual é o último mês disponível
+    def get_rendimento_por_tipo(
+        self,
+        user_id: int,
+        classe_ativo: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Retorna rendimento agrupado por tipo de investimento baseado no último mês.
+        classe_ativo: 'Ativo' | 'Passivo' para filtrar, ou None para todos."""
         ultimo_mes = self.db.query(
             func.max(InvestimentoHistorico.anomes)
         ).filter(
@@ -329,8 +486,7 @@ class InvestimentoRepository:
         if not ultimo_mes:
             return []
         
-        # Buscar valores do último mês agrupados por tipo_investimento
-        results = self.db.query(
+        query = self.db.query(
             InvestimentoPortfolio.tipo_investimento,
             func.count(InvestimentoHistorico.id).label('quantidade'),
             func.sum(InvestimentoHistorico.valor_total).label('total_investido')
@@ -340,17 +496,18 @@ class InvestimentoRepository:
         ).filter(
             InvestimentoPortfolio.user_id == user_id,
             InvestimentoHistorico.anomes == ultimo_mes
-        ).group_by(
-            InvestimentoPortfolio.tipo_investimento
-        ).all()
-
+        )
+        if classe_ativo:
+            query = query.filter(
+                InvestimentoPortfolio.classe_ativo == classe_ativo.strip()
+            )
         return [
             {
                 'tipo': r.tipo_investimento,
                 'quantidade': r.quantidade,
                 'total_investido': r.total_investido or Decimal('0')
             }
-            for r in results
+            for r in query.group_by(InvestimentoPortfolio.tipo_investimento).all()
         ]
 
     def get_rendimentos_mensais(
@@ -392,6 +549,60 @@ class InvestimentoRepository:
                 'aporte_mes': r.aporte_total or Decimal('0')
             }
             for r in results
+        ]
+
+    def get_patrimonio_timeline(
+        self,
+        user_id: int,
+        ano_inicio: int,
+        ano_fim: int
+    ) -> List[Dict[str, Any]]:
+        """Retorna série temporal de ativos, passivos e PL por mês"""
+        results = self.db.query(
+            InvestimentoPortfolio.classe_ativo,
+            InvestimentoHistorico.ano,
+            InvestimentoHistorico.mes,
+            InvestimentoHistorico.anomes,
+            func.sum(InvestimentoHistorico.valor_total).label('total')
+        ).join(
+            InvestimentoPortfolio,
+            InvestimentoHistorico.investimento_id == InvestimentoPortfolio.id
+        ).filter(
+            InvestimentoPortfolio.user_id == user_id,
+            InvestimentoHistorico.ano >= ano_inicio,
+            InvestimentoHistorico.ano <= ano_fim
+        ).group_by(
+            InvestimentoPortfolio.classe_ativo,
+            InvestimentoHistorico.ano,
+            InvestimentoHistorico.mes,
+            InvestimentoHistorico.anomes
+        ).order_by(
+            InvestimentoHistorico.anomes
+        ).all()
+
+        # Agrupar por anomes
+        by_anomes: Dict[int, Dict] = {}
+        for r in results:
+            anomes = r.anomes
+            if anomes not in by_anomes:
+                by_anomes[anomes] = {'ano': r.ano, 'mes': r.mes, 'anomes': anomes, 'ativos': 0.0, 'passivos': 0.0}
+            classe = (r.classe_ativo or '').strip()
+            valor = float(r.total or 0)
+            if classe.lower() == 'ativo':
+                by_anomes[anomes]['ativos'] += valor
+            elif classe.lower() == 'passivo':
+                by_anomes[anomes]['passivos'] += valor
+
+        return [
+            {
+                'ano': v['ano'],
+                'mes': v['mes'],
+                'anomes': v['anomes'],
+                'ativos': v['ativos'],
+                'passivos': v['passivos'],
+                'patrimonio_liquido': v['ativos'] + v['passivos']
+            }
+            for v in sorted(by_anomes.values(), key=lambda x: x['anomes'])
         ]
 
     # ============================================================================

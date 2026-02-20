@@ -17,6 +17,10 @@ export interface InvestimentoPortfolio {
   quantidade: number
   valor_unitario_inicial?: string
   valor_total_inicial?: string
+  /** Valores do histórico do mês (mesma fonte de ativos/passivos) - usar quando disponível */
+  valor_total_mes?: string | number
+  valor_unitario_mes?: string | number
+  quantidade_mes?: number
   ativo: boolean
   created_at: string
   updated_at?: string
@@ -55,6 +59,15 @@ export interface RendimentoMensal {
   rendimento_mes: string
   patrimonio_final: string
   aporte_mes: string
+}
+
+export interface PatrimonioMensal {
+  ano: number
+  mes: number
+  anomes: number
+  ativos: number
+  passivos: number
+  patrimonio_liquido: number
 }
 
 export interface InvestimentoCenario {
@@ -147,6 +160,7 @@ export interface DistribuicaoTipo {
 export interface InvestimentosFilters {
   tipo_investimento?: string
   ativo?: boolean
+  anomes?: number
   skip?: number
   limit?: number
 }
@@ -164,6 +178,8 @@ export interface CreateInvestimentoForm {
   tipo_investimento: string
   classe_ativo?: string
   emissor?: string
+  ano?: number
+  anomes?: number
   percentual_cdi?: number
   data_aplicacao?: string
   data_vencimento?: string

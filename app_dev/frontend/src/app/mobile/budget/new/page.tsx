@@ -3,17 +3,31 @@
 /**
  * Create/Edit Goal Page
  * Página para criar ou editar uma meta
+ * 1º dropdown: Tipo (Despesa | Receita | Investimentos)
+ * 2º dropdown: Grupo filtrado pela categoria
  */
 
 import * as React from 'react'
 import { Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ArrowLeft, Save } from 'lucide-react'
+import { Save } from 'lucide-react'
 import { MobileHeader } from '@/components/mobile/mobile-header'
 import { useGoals } from '@/features/goals/hooks/use-goals'
 import { useGoalDetail } from '@/features/goals/hooks/use-goal-detail'
+import { fetchGruposComCategoria } from '@/features/goals/services/goals-api'
 import { GoalCreate, GoalUpdate } from '@/features/goals/types'
 import { format } from 'date-fns'
+
+const TIPOS_META = [
+  { value: 'Despesa', label: 'Despesa' },
+  { value: 'Receita', label: 'Receita' },
+  { value: 'Investimentos', label: 'Investimentos' }
+] as const
+
+/** Mapeia categoria_geral do grupo para o tipo do 1º dropdown (Transferência → Despesa) */
+function tipoParaFiltro(categoria_geral: string): string {
+  return categoria_geral === 'Transferência' ? 'Despesa' : categoria_geral
+}
 
 function CreateEditGoalContent() {
   const router = useRouter()
@@ -23,38 +37,84 @@ function CreateEditGoalContent() {
   
   const { addGoal, editGoal } = useGoals()
   const { goal, loading: loadingGoal } = useGoalDetail(goalId ? parseInt(goalId) : 0)
+  const [gruposComCategoria, setGruposComCategoria] = React.useState<{ nome_grupo: string; categoria_geral: string }[]>([])
+  
+  const grupoFromUrl = searchParams.get('grupo')
+  const mesFromUrl = searchParams.get('mes')
   
   const [formData, setFormData] = React.useState({
-    grupo: '',
-    categoria_geral: '',
+    tipo: '' as string,
+    grupo: grupoFromUrl || '',
     valor_planejado: '',
-    mes_referencia: format(new Date(), 'yyyy-MM')
+    mes_referencia: mesFromUrl || format(new Date(), 'yyyy-MM'),
+    replicarParaAnoTodo: false
   })
   
   const [saving, setSaving] = React.useState(false)
   const [errors, setErrors] = React.useState<Record<string, string>>({})
   
+  // Carregar grupos com categoria
+  React.useEffect(() => {
+    fetchGruposComCategoria().then(setGruposComCategoria)
+  }, [])
+  
+  // Preencher grupo/mes da URL (ex: /new?grupo=Casa&mes=2026-02)
+  React.useEffect(() => {
+    if (!grupoFromUrl && !mesFromUrl) return
+    setFormData((prev) => {
+      const next = { ...prev }
+      if (grupoFromUrl) next.grupo = grupoFromUrl
+      if (mesFromUrl) next.mes_referencia = mesFromUrl
+      return next
+    })
+  }, [grupoFromUrl, mesFromUrl])
+  
+  // Inferir tipo quando grupo da URL existir em gruposComCategoria
+  React.useEffect(() => {
+    if (grupoFromUrl && gruposComCategoria.length > 0) {
+      const cat = gruposComCategoria.find((g) => g.nome_grupo === grupoFromUrl)?.categoria_geral
+      if (cat) {
+        setFormData((prev) => ({ ...prev, tipo: tipoParaFiltro(cat) }))
+      }
+    }
+  }, [grupoFromUrl, gruposComCategoria])
+  
+  // Grupos filtrados pelo tipo selecionado
+  const gruposFiltrados = React.useMemo(() => {
+    if (!formData.tipo) return []
+    return gruposComCategoria
+      .filter((g) => tipoParaFiltro(g.categoria_geral) === formData.tipo)
+      .map((g) => g.nome_grupo)
+      .sort()
+  }, [gruposComCategoria, formData.tipo])
+  
   // Carregar dados da meta se for edição
   React.useEffect(() => {
     if (isEdit && goal) {
-      setFormData({
+      const cat = goal.categoria_geral || 'Despesa'
+      const tipo = tipoParaFiltro(cat)
+      setFormData((prev) => ({
+        ...prev,
+        tipo,
         grupo: goal.grupo,
-        categoria_geral: goal.grupo, // Mesmo valor de grupo
         valor_planejado: goal.valor_planejado.toString(),
         mes_referencia: goal.mes_referencia
-      })
+      }))
     }
   }, [isEdit, goal])
   
-  const handleBack = () => {
-    router.back()
+  const handleTipoChange = (tipo: string) => {
+    setFormData({ ...formData, tipo, grupo: '' })
   }
-  
+
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {}
     
+    if (!formData.tipo) {
+      newErrors.tipo = 'Selecione o tipo'
+    }
     if (!formData.grupo.trim()) {
-      newErrors.grupo = 'Categoria é obrigatória'
+      newErrors.grupo = 'Selecione um grupo'
     }
     
     const valor = parseFloat(formData.valor_planejado)
@@ -87,7 +147,7 @@ function CreateEditGoalContent() {
       if (isEdit && goalId) {
         await editGoal(parseInt(goalId), data)
       } else {
-        await addGoal(data as GoalCreate)
+        await addGoal(data as GoalCreate, formData.replicarParaAnoTodo)
       }
       
       router.push('/mobile/budget')
@@ -119,22 +179,52 @@ function CreateEditGoalContent() {
       {/* Form */}
       <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5">
         <div className="space-y-5">
-          {/* Categoria */}
+          {/* 1º dropdown: Tipo (Despesa | Receita | Investimentos) */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Categoria *
+              Tipo *
             </label>
-            <input
-              type="text"
+            <select
+              value={formData.tipo}
+              onChange={(e) => handleTipoChange(e.target.value)}
+              className={`w-full px-4 py-3 rounded-lg border ${
+                errors.tipo ? 'border-red-500' : 'border-gray-200'
+              } focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white`}
+            >
+              <option value="">Selecione o tipo</option>
+              {TIPOS_META.map((t) => (
+                <option key={t.value} value={t.value}>{t.label}</option>
+              ))}
+            </select>
+            {errors.tipo && (
+              <p className="text-red-500 text-sm mt-1">{errors.tipo}</p>
+            )}
+          </div>
+
+          {/* 2º dropdown: Grupo filtrado pelo tipo */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Grupo *
+            </label>
+            <select
               value={formData.grupo}
               onChange={(e) => setFormData({ ...formData, grupo: e.target.value })}
-              placeholder="Ex: Alimentação, Transporte, Lazer"
+              disabled={!formData.tipo}
               className={`w-full px-4 py-3 rounded-lg border ${
-                errors.categoria_geral ? 'border-red-500' : 'border-gray-200'
-              } focus:outline-none focus:ring-2 focus:ring-blue-500`}
-            />
-            {errors.categoria_geral && (
-              <p className="text-red-500 text-sm mt-1">{errors.categoria_geral}</p>
+                errors.grupo ? 'border-red-500' : 'border-gray-200'
+              } focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-gray-50 disabled:text-gray-500`}
+            >
+              <option value="">
+                {formData.tipo ? 'Selecione um grupo' : 'Selecione o tipo primeiro'}
+              </option>
+              {[...new Set([...gruposFiltrados, ...(formData.grupo ? [formData.grupo] : [])])]
+                .sort()
+                .map((g) => (
+                  <option key={g} value={g}>{g}</option>
+                ))}
+            </select>
+            {errors.grupo && (
+              <p className="text-red-500 text-sm mt-1">{errors.grupo}</p>
             )}
           </div>
           
@@ -180,6 +270,28 @@ function CreateEditGoalContent() {
               <p className="text-red-500 text-sm mt-1">{errors.mes_referencia}</p>
             )}
           </div>
+
+          {/* Replicar para o ano todo - apenas na criação */}
+          {!isEdit && (
+            <div className="space-y-1">
+              <label className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 bg-white cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.replicarParaAnoTodo}
+                  onChange={(e) => setFormData({ ...formData, replicarParaAnoTodo: e.target.checked })}
+                  className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-sm font-medium text-gray-700">
+                  Replicar esta meta para o ano todo
+                </span>
+              </label>
+              {formData.replicarParaAnoTodo && formData.mes_referencia && (
+                <p className="text-xs text-gray-500 px-1">
+                  Será criada do mês {formData.mes_referencia} até dezembro do mesmo ano
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </form>
       

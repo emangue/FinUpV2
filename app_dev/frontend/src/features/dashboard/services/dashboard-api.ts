@@ -14,13 +14,20 @@ import type { DashboardMetrics, IncomeSource, ExpenseSource, ChartDataPoint } fr
 
 const BASE_URL = `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}`
 
+export type LastMonthSource = 'transactions' | 'patrimonio'
+
 /**
- * Busca o último mês com dados para inicializar o dashboard
+ * Busca o último mês com dados para inicializar scrolls.
+ * - transactions: journal_entries (transações, metas, dashboard resultado)
+ * - patrimonio: investimentos_historico (ativos/passivos, tela investimentos)
  */
-export async function fetchLastMonthWithData(): Promise<{ year: number; month: number }> {
-  const response = await fetchWithAuth(`${BASE_URL}/dashboard/last-month-with-data`)
+export async function fetchLastMonthWithData(
+  source: LastMonthSource = 'transactions'
+): Promise<{ year: number; month: number }> {
+  const response = await fetchWithAuth(
+    `${BASE_URL}/dashboard/last-month-with-data?source=${source}`
+  )
   if (!response.ok) throw new Error(`Failed to fetch last month: ${response.status}`)
-  
   return response.json()
 }
 
@@ -76,64 +83,137 @@ export async function fetchChartData(
 }
 
 /**
- * Busca breakdown de despesas por grupo (budget_planning)
+ * Busca breakdown de despesas por grupo.
+ * Usa dashboard/budget-vs-actual (mesmo plano da tabela de orçamento).
  * TOP 5 grupos + "Outros"
  */
 export async function fetchExpenseSources(
   year: number,
   month?: number
 ): Promise<{ sources: ExpenseSource[]; total_despesas: number }> {
-  // Converter year+month para formato mes_referencia (YYYY-MM)
-  const mesReferencia = month 
-    ? `${year}-${String(month).padStart(2, '0')}`
-    : `${year}-01` // Se não tiver mês, usa janeiro
-  
-  const params = new URLSearchParams({ 
-    mes_referencia: mesReferencia
-  })
-  
-  console.log('🌐 fetchExpenseSources - URL:', `${BASE_URL}/budget/planning?${params}`)
-  const response = await fetchWithAuth(`${BASE_URL}/budget/planning?${params}`)
-  console.log('📡 fetchExpenseSources - Response status:', response.status)
+  const params = new URLSearchParams({ year: year.toString() })
+  if (month) params.append('month', month.toString())
+  else params.append('ytd', 'true')
+
+  const response = await fetchWithAuth(`${BASE_URL}/dashboard/budget-vs-actual?${params}`)
   if (!response.ok) throw new Error(`Failed to fetch expense sources: ${response.status}`)
-  
+
   const data = await response.json()
-  console.log('📦 fetchExpenseSources - Raw data:', data)
-  console.log('📦 fetchExpenseSources - Budgets array:', data.budgets)
-  
-  // A resposta tem formato: { mes_referencia, budgets: [{grupo, valor_planejado, valor_realizado, percentual}] }
-  // Filtrar apenas grupos com despesas (valores negativos no banco!)
-  console.log('🔍 Antes do filtro - total budgets:', data.budgets.length)
-  const expenses = data.budgets
-    .filter((item: any) => {
-      console.log('🔍 Filtrando item:', item.grupo, 'valor_realizado:', item.valor_realizado)
-      // Despesas são NEGATIVAS no banco! Filtrar por != 0
-      return item.valor_realizado !== 0 && item.valor_realizado !== null
-    })
+  const items = data.items || []
+
+  // Filtrar apenas grupos com realizado > 0 e ordenar por valor
+  const expenses = items
+    .filter((item: any) => (item.realizado ?? 0) > 0)
     .map((item: any) => ({
       grupo: item.grupo,
-      total: Math.abs(item.valor_realizado), // Usar valor absoluto
-      percentual: item.percentual || 0
+      total: item.realizado ?? 0,
+      percentual: item.percentual ?? 0,
+      valor_planejado: item.planejado ?? 0
     }))
     .sort((a: any, b: any) => b.total - a.total)
-  
-  const totalDespesas = expenses.reduce((sum: number, item: any) => sum + item.total, 0)
-  
-  // TOP 5 + Outros
+
+  const totalDespesas = data.total_realizado ?? expenses.reduce((sum: number, item: any) => sum + item.total, 0)
+
+  // TOP 5 + Outros (plano de Outros = soma do planejado dos grupos 6+)
   const top5 = expenses.slice(0, 5)
   const others = expenses.slice(5)
-  
-  let result: ExpenseSource[] = top5
-  
+
+  let result: ExpenseSource[] = top5.map((item: any) => ({
+    ...item,
+    valor_planejado: item.valor_planejado ?? 0
+  }))
+
   if (others.length > 0) {
     const outrosTotal = others.reduce((sum: number, item: any) => sum + item.total, 0)
+    const outrosPlanejado = others.reduce((sum: number, item: any) => sum + (item.valor_planejado ?? 0), 0)
     const outrosPercentual = totalDespesas > 0 ? (outrosTotal / totalDespesas) * 100 : 0
     result.push({
       grupo: 'Outros',
       total: outrosTotal,
-      percentual: outrosPercentual
+      percentual: outrosPercentual,
+      valor_planejado: outrosPlanejado
     })
   }
-  
+
   return { sources: result, total_despesas: totalDespesas }
+}
+
+export interface CreditCardExpense {
+  cartao: string
+  total: number
+  percentual: number
+  num_transacoes: number
+}
+
+/**
+ * Busca gastos por cartão de crédito.
+ * Usa GET /dashboard/credit-cards
+ */
+export interface OrcamentoInvestimentosItem {
+  grupo: string
+  valor: number
+  plano: number
+}
+
+export interface OrcamentoInvestimentosResponse {
+  total_investido: number
+  total_planejado: number
+  items: OrcamentoInvestimentosItem[]
+}
+
+/**
+ * Busca Budget vs Actual (raw) para o tab Orçamento
+ */
+export async function fetchBudgetVsActual(
+  year: number,
+  month?: number
+): Promise<{
+  items: { grupo: string; realizado: number; planejado: number }[]
+  total_realizado: number
+  total_planejado: number
+  percentual_geral: number
+}> {
+  const params = new URLSearchParams({ year: year.toString() })
+  if (month) params.append('month', month.toString())
+  else params.append('ytd', 'true')
+
+  const response = await fetchWithAuth(`${BASE_URL}/dashboard/budget-vs-actual?${params}`)
+  if (!response.ok) throw new Error(`Failed to fetch budget vs actual: ${response.status}`)
+
+  const data = await response.json()
+  return {
+    items: data.items || [],
+    total_realizado: data.total_realizado ?? 0,
+    total_planejado: data.total_planejado ?? 0,
+    percentual_geral: data.percentual_geral ?? 0,
+  }
+}
+
+/**
+ * Busca Investimentos vs Plano para o tab Orçamento
+ */
+export async function fetchOrcamentoInvestimentos(
+  year: number,
+  month?: number
+): Promise<OrcamentoInvestimentosResponse> {
+  const params = new URLSearchParams({ year: year.toString() })
+  if (month) params.append('month', month.toString())
+
+  const response = await fetchWithAuth(`${BASE_URL}/dashboard/orcamento-investimentos?${params}`)
+  if (!response.ok) throw new Error(`Failed to fetch orcamento investimentos: ${response.status}`)
+
+  return response.json()
+}
+
+export async function fetchCreditCards(
+  year: number,
+  month?: number
+): Promise<CreditCardExpense[]> {
+  const params = new URLSearchParams({ year: year.toString() })
+  if (month) params.append('month', month.toString())
+
+  const response = await fetchWithAuth(`${BASE_URL}/dashboard/credit-cards?${params}`)
+  if (!response.ok) throw new Error(`Failed to fetch credit cards: ${response.status}`)
+
+  return response.json()
 }

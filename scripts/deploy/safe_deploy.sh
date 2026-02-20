@@ -40,9 +40,27 @@ cd "$PROJECT_ROOT"
 
 # Verificar branch
 CURRENT_BRANCH=$(git branch --show-current)
-if [[ "$CURRENT_BRANCH" != "main" && "$CURRENT_BRANCH" != "master" ]]; then
+
+# Regra: alteração grande = branch antes de subir; merge na main só após validar no servidor
+if [[ "$CURRENT_BRANCH" == "main" || "$CURRENT_BRANCH" == "master" ]]; then
+    echo -e "${YELLOW}📌 Regra: em alteração grande, crie uma branch antes de subir no servidor.${NC}"
+    echo -e "${YELLOW}   Só após validar no servidor, faça merge dessa branch na main.${NC}"
+    read -p "Criar branch de deploy agora? (ex: deploy/$(date +%Y-%m-%d)-minha-feature) (s/N) " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Ss]$ ]]; then
+        read -p "Nome da branch (sufixo após deploy/$(date +%Y-%m-%d)-): " BRANCH_SUFFIX
+        DEPLOY_BRANCH="deploy/$(date +%Y-%m-%d)-${BRANCH_SUFFIX:-deploy}"
+        git checkout -b "$DEPLOY_BRANCH"
+        echo -e "${GREEN}✅ Branch criada: $DEPLOY_BRANCH${NC}"
+        echo -e "${BLUE}   Faça push desta branch, no servidor dê pull nela e valide.${NC}"
+        echo -e "${BLUE}   Só depois: git checkout main && git merge $DEPLOY_BRANCH && git push origin main${NC}"
+        CURRENT_BRANCH=$(git branch --show-current)
+    fi
+elif [[ "$CURRENT_BRANCH" == deploy/* ]] || [[ "$CURRENT_BRANCH" == feature/* ]]; then
+    echo -e "${GREEN}✅ Deploy a partir da branch: $CURRENT_BRANCH (após validar no servidor, faça merge na main)${NC}"
+else
     echo -e "${YELLOW}⚠️  Você está na branch: $CURRENT_BRANCH${NC}"
-    read -p "Deploy geralmente é feito da main/master. Continuar? (y/N) " -n 1 -r
+    read -p "Continuar com deploy desta branch? (y/N) " -n 1 -r
     echo
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
         echo -e "${RED}❌ Deploy cancelado${NC}"

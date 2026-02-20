@@ -38,6 +38,9 @@ class BudgetPlanning(Base):
     valor_planejado = Column(Float, nullable=False)
     valor_medio_3_meses = Column(Float, nullable=False, default=0.0)  # Média dos últimos 3 meses
     
+    # Cor no gráfico donut (hex, ex: #3b82f6)
+    cor = Column(String(7), nullable=True)
+    
     # Status
     ativo = Column(Integer, nullable=False, default=1)  # 0=inativo, 1=ativo (SQLite boolean as int)
     

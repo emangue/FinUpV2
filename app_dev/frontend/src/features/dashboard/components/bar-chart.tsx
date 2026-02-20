@@ -60,12 +60,8 @@ export function BarChart({ data, title, totalValue, selectedMonth }: BarChartPro
 
   // Calcular os últimos 7 meses dinamicamente (com dados da API quando disponíveis)
   const displayData = generateLast7Months()
-  
-  // Debug: ver dados da API
-  console.log('📊 BarChart - Dados da API:', data)
-  console.log('📊 BarChart - displayData gerado:', displayData)
 
-  // ⚡ NOVO: Calcular alturas proporcionais baseadas nos valores reais
+  // Calcular alturas proporcionais baseadas nos valores reais
   const calculateProportionalHeights = () => {
     // Encontrar o valor máximo entre todas receitas e despesas
     const allValues = displayData.flatMap(d => [d.receitas, d.despesas])
@@ -94,6 +90,14 @@ export function BarChart({ data, title, totalValue, selectedMonth }: BarChartPro
     }).format(value)
   }
 
+  // Formato compacto como no gráfico de patrimônio: 40k, 1,2M
+  const formatCompact = (v: number) =>
+    v >= 1_000_000
+      ? `${(v / 1_000_000).toFixed(1).replace('.', ',')}M`
+      : v >= 1_000
+        ? `${(v / 1_000).toFixed(0)}k`
+        : String(Math.round(v))
+
   const formatDate = (dateStr: string) => {
     // dateStr format: YYYY-MM-DD
     const [year, month, day] = dateStr.split('-')
@@ -111,8 +115,8 @@ export function BarChart({ data, title, totalValue, selectedMonth }: BarChartPro
 
       {/* Bar Chart */}
       <div className="relative">
-        {/* Chart Container - Altura fixa h-40 (160px) */}
-        <div className="flex items-end justify-between gap-4 h-40 px-2">
+        {/* Chart Container - espaço para labels (14px) + barras (150px) */}
+        <div className="flex items-end justify-between gap-4 h-[164px] pt-3 px-2">
           {displayData.map((item, index) => (
             <div
               key={`${item.date}-${index}`}
@@ -120,23 +124,31 @@ export function BarChart({ data, title, totalValue, selectedMonth }: BarChartPro
               onMouseEnter={() => setHoveredBar(index)}
               onMouseLeave={() => setHoveredBar(null)}
             >
-              {/* ORDEM CRÍTICA: Despesas PRIMEIRO (cinza), Receitas DEPOIS (preto) */}
+              {/* Despesas: label acima + barra */}
+              <div className="flex flex-col items-center flex-1">
+                <span className="text-[9px] font-semibold text-gray-500 mb-0.5 min-h-[12px]">
+                  {item.despesas > 0 ? formatCompact(item.despesas) : ''}
+                </span>
+                <div
+                  className="w-2 bg-gray-400 rounded-t-sm cursor-pointer transition-opacity hover:opacity-80"
+                  style={{
+                    height: `${proportionalHeights[index]?.despesas || 20}px`
+                  }}
+                />
+              </div>
               
-              {/* Despesas (cinza) - w-2 (8px fixo), altura proporcional */}
-              <div
-                className="w-2 bg-gray-400 rounded-t-sm cursor-pointer transition-opacity hover:opacity-80"
-                style={{
-                  height: `${proportionalHeights[index]?.despesas || 20}px`
-                }}
-              />
-              
-              {/* Receitas (preto) - w-2 (8px fixo), altura proporcional */}
-              <div
-                className="w-2 bg-gray-900 rounded-t-sm cursor-pointer transition-opacity hover:opacity-80"
-                style={{
-                  height: `${proportionalHeights[index]?.receitas || 20}px`
-                }}
-              />
+              {/* Receitas: label acima + barra */}
+              <div className="flex flex-col items-center flex-1">
+                <span className="text-[9px] font-semibold text-gray-900 mb-0.5 min-h-[12px]">
+                  {item.receitas > 0 ? formatCompact(item.receitas) : ''}
+                </span>
+                <div
+                  className="w-2 bg-gray-900 rounded-t-sm cursor-pointer transition-opacity hover:opacity-80"
+                  style={{
+                    height: `${proportionalHeights[index]?.receitas || 20}px`
+                  }}
+                />
+              </div>
 
               {/* Tooltip */}
               {hoveredBar === index && (

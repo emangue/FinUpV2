@@ -1,5 +1,12 @@
 "use client"
 
+/**
+ * AddGroupDialog - Modal para criar grupo/subgrupo
+ * Usado por: upload (confirm), preview (TransactionCard)
+ * Preview faz parte do fluxo de upload (preview → confirm) - import permitido.
+ * @see docs/architecture/PROPOSTA_MODULARIDADE_PRAGMATICA.md
+ */
+
 import * as React from "react"
 import { Plus, Loader2 } from "lucide-react"
 import { fetchWithAuth } from "@/core/utils/api-client"

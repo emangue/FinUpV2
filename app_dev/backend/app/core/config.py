@@ -43,7 +43,8 @@ class Settings(BaseSettings):
         return self.DATABASE_URL.startswith("postgresql")
     
     # CORS - Aceita tanto lista quanto string separada por vírgulas
-    BACKEND_CORS_ORIGINS: Union[list[str], str] = "http://localhost:3000,http://127.0.0.1:3000"
+    # 3000=BAU frontend | 3001=app_admin
+    BACKEND_CORS_ORIGINS: Union[list[str], str] = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001"
     
     # Server
     HOST: str = "0.0.0.0"

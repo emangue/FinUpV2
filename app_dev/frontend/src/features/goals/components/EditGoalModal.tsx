@@ -15,7 +15,7 @@
 import * as React from 'react'
 import { X } from 'lucide-react'
 import { Goal } from '../types'
-import { formatCurrency } from '../lib/utils'
+import { GOAL_COLORS } from '../lib/colors'
 
 interface EditGoalModalProps {
   goal: Goal
@@ -29,13 +29,15 @@ export interface EditGoalData {
   nome: string
   descricao: string
   orcamento: number
+  cor?: string
   aplicarMesesFuturos: boolean
 }
 
 export function EditGoalModal({ goal, isOpen, onClose, onSave, onDelete }: EditGoalModalProps) {
   const [nome, setNome] = React.useState(goal.grupo)
-  const [descricao, setDescricao] = React.useState('')  // Campo não existe no backend
+  const [descricao, setDescricao] = React.useState('')
   const [orcamento, setOrcamento] = React.useState(goal.valor_planejado.toString())
+  const [cor, setCor] = React.useState(goal.cor || '')
   const [aplicarFuturos, setAplicarFuturos] = React.useState(false)
   const [isLoading, setIsLoading] = React.useState(false)
   const [isDeleting, setIsDeleting] = React.useState(false)
@@ -43,8 +45,9 @@ export function EditGoalModal({ goal, isOpen, onClose, onSave, onDelete }: EditG
   // Reset form when goal changes
   React.useEffect(() => {
     setNome(goal.grupo)
-    setDescricao('')  // Campo não existe
+    setDescricao('')
     setOrcamento(goal.valor_planejado.toString())
+    setCor(goal.cor || '')
     setAplicarFuturos(false)
   }, [goal])
 
@@ -66,6 +69,7 @@ export function EditGoalModal({ goal, isOpen, onClose, onSave, onDelete }: EditG
         nome: nome.trim(),
         descricao: descricao.trim(),
         orcamento: orcamentoNum,
+        cor: cor || undefined,
         aplicarMesesFuturos: aplicarFuturos
       })
       onClose()
@@ -167,6 +171,36 @@ export function EditGoalModal({ goal, isOpen, onClose, onSave, onDelete }: EditG
                 placeholder="Ex: Gastos com supermercado e restaurantes"
                 className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
               />
+            </div>
+
+            {/* Cor no gráfico donut */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-2">
+                Cor no gráfico
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {GOAL_COLORS.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setCor(cor === c ? '' : c)}
+                    className={`w-8 h-8 rounded-full border-2 transition-all ${
+                      cor === c ? 'border-gray-900 scale-110' : 'border-transparent hover:scale-105'
+                    }`}
+                    style={{ backgroundColor: c }}
+                    aria-label={`Cor ${c}`}
+                  />
+                ))}
+              </div>
+              {cor && (
+                <button
+                  type="button"
+                  onClick={() => setCor('')}
+                  className="text-xs text-gray-500 mt-2 hover:text-gray-700"
+                >
+                  Remover cor personalizada
+                </button>
+              )}
             </div>
 
             {/* Orçamento */}

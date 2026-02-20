@@ -1,81 +1,39 @@
 /**
  * Mobile Redirect Middleware
- * 
- * Detecta dispositivos mobile (width < 768px) e redireciona
- * automaticamente para as rotas /mobile/*
- * 
- * Rotas mapeadas:
- * - / → /mobile/dashboard
- * - /dashboard → /mobile/dashboard
- * - /transactions → /mobile/transactions
- * - /budget → /mobile/budget
- * - /investimentos → /mobile/investimentos (futuro)
- * - /upload → /mobile/upload
- * - /profile → /mobile/profile
+ *
+ * Visão 100% mobile: sempre redireciona rotas desktop para /mobile/*
+ * Desktop removido do deploy - ver _arquivo_desktop/
  */
 
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-// Rotas que devem ser redirecionadas para mobile
-const MOBILE_ROUTES = {
+const MOBILE_ROUTES: Record<string, string> = {
   '/': '/mobile/dashboard',
   '/dashboard': '/mobile/dashboard',
   '/transactions': '/mobile/transactions',
   '/budget': '/mobile/budget',
+  '/investimentos': '/mobile/investimentos',
   '/upload': '/mobile/upload',
   '/profile': '/mobile/profile',
 }
 
-// Rotas que NÃO devem ser redirecionadas
-const EXCLUDE_PATHS = [
-  '/api',
-  '/_next',
-  '/static',
-  '/favicon.ico',
-  '/login',
-  '/mobile', // Já está em mobile
-]
+const EXCLUDE_PATHS = ['/api', '/_next', '/static', '/favicon.ico', '/login', '/auth', '/mobile']
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
-  
-  // Não redirecionar rotas excluídas
-  if (EXCLUDE_PATHS.some(path => pathname.startsWith(path))) {
+
+  if (EXCLUDE_PATHS.some((path) => pathname.startsWith(path))) {
     return NextResponse.next()
   }
-  
-  // Detectar se é mobile via User-Agent
-  const userAgent = request.headers.get('user-agent') || ''
-  const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent)
-  
-  // Detectar se usuário prefere mobile (cookie)
-  const prefersMobile = request.cookies.get('prefer-mobile')?.value === 'true'
-  const prefersDesktop = request.cookies.get('prefer-desktop')?.value === 'true'
-  
-  // Se usuário preferir desktop, não redirecionar
-  if (prefersDesktop) {
-    return NextResponse.next()
+
+  const mobileRoute = MOBILE_ROUTES[pathname] ?? MOBILE_ROUTES[pathname.replace(/\/$/, '')]
+  if (mobileRoute) {
+    const url = request.nextUrl.clone()
+    url.pathname = mobileRoute
+    return NextResponse.redirect(url)
   }
-  
-  // Redirecionar para mobile se:
-  // 1. É dispositivo mobile OU
-  // 2. Usuário prefere mobile
-  const shouldRedirectToMobile = isMobileDevice || prefersMobile
-  
-  if (shouldRedirectToMobile) {
-    // Verificar se há mapeamento para essa rota
-    const mobileRoute = MOBILE_ROUTES[pathname as keyof typeof MOBILE_ROUTES]
-    
-    if (mobileRoute) {
-      const url = request.nextUrl.clone()
-      url.pathname = mobileRoute
-      
-      // Preservar query params
-      return NextResponse.redirect(url)
-    }
-  }
-  
+
   return NextResponse.next()
 }
 

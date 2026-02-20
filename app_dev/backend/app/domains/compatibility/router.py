@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List
 from app.core.database import get_db
+from app.shared.dependencies import require_admin
 from .schemas import (
     BankCompatibilityCreate,
     BankCompatibilityUpdate,
@@ -51,7 +52,11 @@ def get_bank(id: int, db: Session = Depends(get_db)):
     return service.get_by_id(id)
 
 @router.post("/", response_model=BankCompatibilityResponse, status_code=201)
-def create_bank(data: BankCompatibilityCreate, db: Session = Depends(get_db)):
+def create_bank(
+    data: BankCompatibilityCreate,
+    db: Session = Depends(get_db),
+    admin=Depends(require_admin),
+):
     """
     Criar novo banco com todos os formatos
     
@@ -61,7 +66,12 @@ def create_bank(data: BankCompatibilityCreate, db: Session = Depends(get_db)):
     return service.create(data)
 
 @router.put("/{id}", response_model=BankCompatibilityResponse)
-def update_bank(id: int, data: BankCompatibilityUpdate, db: Session = Depends(get_db)):
+def update_bank(
+    id: int,
+    data: BankCompatibilityUpdate,
+    db: Session = Depends(get_db),
+    admin=Depends(require_admin),
+):
     """
     Atualizar banco e/ou status de formatos
     
@@ -71,7 +81,11 @@ def update_bank(id: int, data: BankCompatibilityUpdate, db: Session = Depends(ge
     return service.update(id, data)
 
 @router.delete("/{id}")
-def delete_bank(id: int, db: Session = Depends(get_db)):
+def delete_bank(
+    id: int,
+    db: Session = Depends(get_db),
+    admin=Depends(require_admin),
+):
     """Deletar banco"""
     service = CompatibilityService(db)
     return service.delete(id)

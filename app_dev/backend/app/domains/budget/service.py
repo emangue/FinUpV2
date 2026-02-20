@@ -6,7 +6,10 @@ CHANGELOG 13/02/2026:
 - ✅ Removidos imports obsoletos: repository_geral, repository_categoria_config
 - ✅ Apenas BudgetRepository (para budget_planning)
 """
+import logging
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 from sqlalchemy import func
 from typing import List, Optional, Dict, Any
 from fastapi import HTTPException, status
@@ -106,40 +109,121 @@ class BudgetService:
     
     def get_budget_planning(self, user_id: int, mes_referencia: str) -> dict:
         """
-        Lista metas de budget planning (campo grupo)
-        
-        Args:
-            user_id: ID do usuário
-            mes_referencia: Mês no formato YYYY-MM
-            
-        Returns:
-            dict com mes_referencia e lista de budgets
+        Lista metas de budget planning + grupos com gastos sem meta definida.
+        Todo grupo que tem gasto no mês aparece na lista (com valor_planejado=0 se não tiver meta).
         """
+        try:
+            return self._get_budget_planning_impl(user_id, mes_referencia)
+        except Exception as e:
+            logger.exception(
+                "get_budget_planning falhou: user_id=%s mes_referencia=%s erro=%s",
+                user_id, mes_referencia, e
+            )
+            raise
+    
+    def _get_budget_planning_impl(self, user_id: int, mes_referencia: str) -> dict:
         from .models import BudgetPlanning
+        from app.domains.grupos.models import BaseGruposConfig
         
         budgets = self.db.query(BudgetPlanning).filter(
             BudgetPlanning.user_id == user_id,
             BudgetPlanning.mes_referencia == mes_referencia
         ).all()
         
-        # Calcular valor realizado para cada grupo
-        # Despesas são negativas no banco - retornar abs() para exibição
+        try:
+            grupos_rows = self.db.query(BaseGruposConfig.nome_grupo, BaseGruposConfig.categoria_geral).all()
+            grupos_config = {nome: cat for nome, cat in grupos_rows}
+        except Exception as e:
+            logger.warning("get_budget_planning: base_grupos_config inacessível, usando fallback: %s", e)
+            grupos_config = {}
+        
+        # Mapa grupo -> budget (para juntar com grupos que têm gastos)
+        by_grupo = {b.grupo: b for b in budgets}
+        
+        # Grupos com gastos no mês (Despesa) que não estão em budget_planning
+        ano, mes = mes_referencia.split('-')
+        mes_fatura = f"{ano}{mes}"
+        grupos_com_gasto = (
+            self.db.query(JournalEntry.GRUPO, func.sum(JournalEntry.Valor).label('total'))
+            .filter(
+                JournalEntry.user_id == user_id,
+                JournalEntry.MesFatura == mes_fatura,
+                JournalEntry.CategoriaGeral == 'Despesa',
+                JournalEntry.IgnorarDashboard == 0,
+                JournalEntry.GRUPO.isnot(None),
+                JournalEntry.GRUPO != ''
+            )
+            .group_by(JournalEntry.GRUPO)
+            .all()
+        )
+        # Grupos com investimentos no mês que não estão em budget_planning
+        grupos_com_investimento = (
+            self.db.query(JournalEntry.GRUPO, func.sum(JournalEntry.Valor).label('total'))
+            .filter(
+                JournalEntry.user_id == user_id,
+                JournalEntry.MesFatura == mes_fatura,
+                JournalEntry.CategoriaGeral == 'Investimentos',
+                JournalEntry.IgnorarDashboard == 0,
+                JournalEntry.GRUPO.isnot(None),
+                JournalEntry.GRUPO != ''
+            )
+            .group_by(JournalEntry.GRUPO)
+            .all()
+        )
+        
         resultado = []
         for budget in budgets:
+            categoria_geral = grupos_config.get(budget.grupo) or 'Despesa'
             valor_realizado_raw = self._calcular_valor_realizado_grupo(
-                user_id, budget.grupo, mes_referencia
+                user_id, budget.grupo, mes_referencia, categoria_geral
             )
             valor_realizado = abs(float(valor_realizado_raw)) if valor_realizado_raw else 0.0
             percentual = (valor_realizado / budget.valor_planejado * 100) if budget.valor_planejado > 0 else 0
-            
             resultado.append({
                 "id": budget.id,
                 "grupo": budget.grupo,
+                "categoria_geral": categoria_geral,
+                "cor": getattr(budget, 'cor', None),
                 "valor_planejado": float(budget.valor_planejado),
                 "valor_realizado": valor_realizado,
                 "percentual": round(percentual, 2),
                 "ativo": budget.ativo,
-                "valor_medio_3_meses": float(budget.valor_medio_3_meses)  # ✅ Média dos últimos 3 meses
+                "valor_medio_3_meses": float(budget.valor_medio_3_meses)
+            })
+        
+        # Adicionar grupos com gasto que não têm budget_planning
+        for grupo, total in grupos_com_gasto:
+            if grupo in by_grupo:
+                continue
+            valor_realizado = abs(float(total))
+            categoria_geral = grupos_config.get(grupo) or 'Despesa'
+            resultado.append({
+                "id": None,  # Sem meta definida
+                "grupo": grupo,
+                "categoria_geral": categoria_geral,
+                "cor": None,
+                "valor_planejado": 0.0,
+                "valor_realizado": valor_realizado,
+                "percentual": 0.0,
+                "ativo": 1,
+                "valor_medio_3_meses": 0.0
+            })
+        # Adicionar grupos com investimento que não têm budget_planning
+        for grupo, total in grupos_com_investimento:
+            if grupo in by_grupo:
+                continue
+            valor_realizado = abs(float(total))
+            categoria_geral = grupos_config.get(grupo) or 'Investimentos'
+            resultado.append({
+                "id": None,  # Sem meta definida
+                "grupo": grupo,
+                "categoria_geral": categoria_geral,
+                "cor": None,
+                "valor_planejado": 0.0,
+                "valor_realizado": valor_realizado,
+                "percentual": 0.0,
+                "ativo": 1,
+                "valor_medio_3_meses": 0.0
             })
         
         return {
@@ -157,9 +241,14 @@ class BudgetService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Meta não encontrada"
             )
+        from app.domains.grupos.models import BaseGruposConfig
         mes_referencia = budget.mes_referencia
+        grupo_config = self.db.query(BaseGruposConfig).filter(
+            BaseGruposConfig.nome_grupo == budget.grupo
+        ).first()
+        categoria_geral = grupo_config.categoria_geral if grupo_config else 'Despesa'
         valor_realizado_raw = self._calcular_valor_realizado_grupo(
-            user_id, budget.grupo, mes_referencia
+            user_id, budget.grupo, mes_referencia, categoria_geral
         )
         valor_realizado = abs(float(valor_realizado_raw)) if valor_realizado_raw else 0.0
         percentual = (valor_realizado / budget.valor_planejado * 100) if budget.valor_planejado > 0 else 0
@@ -167,6 +256,8 @@ class BudgetService:
         return {
             "id": budget.id,
             "grupo": budget.grupo,
+            "categoria_geral": categoria_geral,
+            "cor": getattr(budget, 'cor', None),
             "mes_referencia": mes_referencia,
             "valor_planejado": float(budget.valor_planejado),
             "valor_realizado": valor_realizado,
@@ -199,21 +290,34 @@ class BudgetService:
         for budget_data in budgets:
             grupo = budget_data["grupo"]
             valor_planejado = budget_data["valor_planejado"]
+            cor = budget_data.get("cor")
+            budget_id = budget_data.get("id")
             
-            # Verificar se já existe
-            budget_existente = self.db.query(BudgetPlanning).filter(
-                BudgetPlanning.user_id == user_id,
-                BudgetPlanning.grupo == grupo,
-                BudgetPlanning.mes_referencia == mes_referencia
-            ).first()
+            # Se id fornecido, buscar por id; senão por grupo+mes
+            if budget_id:
+                budget_existente = self.db.query(BudgetPlanning).filter(
+                    BudgetPlanning.id == budget_id,
+                    BudgetPlanning.user_id == user_id
+                ).first()
+                if budget_existente:
+                    budget_existente.grupo = grupo  # permite alterar grupo
+            else:
+                budget_existente = self.db.query(BudgetPlanning).filter(
+                    BudgetPlanning.user_id == user_id,
+                    BudgetPlanning.grupo == grupo,
+                    BudgetPlanning.mes_referencia == mes_referencia
+                ).first()
             
             if budget_existente:
-                # Atualizar
+                # Atualizar (também por id se fornecido)
                 budget_existente.valor_planejado = valor_planejado
+                if cor is not None:
+                    budget_existente.cor = cor
                 self.db.flush()
                 resultado.append({
                     "id": budget_existente.id,
                     "grupo": budget_existente.grupo,
+                    "cor": getattr(budget_existente, 'cor', None),
                     "mes_referencia": budget_existente.mes_referencia,
                     "valor_planejado": float(budget_existente.valor_planejado)
                 })
@@ -223,13 +327,15 @@ class BudgetService:
                     user_id=user_id,
                     grupo=grupo,
                     mes_referencia=mes_referencia,
-                    valor_planejado=valor_planejado
+                    valor_planejado=valor_planejado,
+                    cor=cor
                 )
                 self.db.add(novo_budget)
                 self.db.flush()
                 resultado.append({
                     "id": novo_budget.id,
                     "grupo": novo_budget.grupo,
+                    "cor": getattr(novo_budget, 'cor', None),
                     "mes_referencia": novo_budget.mes_referencia,
                     "valor_planejado": float(novo_budget.valor_planejado)
                 })
@@ -237,26 +343,31 @@ class BudgetService:
         self.db.commit()
         return resultado
     
-    def _calcular_valor_realizado_grupo(self, user_id: int, grupo: str, mes_referencia: str) -> float:
+    def _calcular_valor_realizado_grupo(
+        self, user_id: int, grupo: str, mes_referencia: str, categoria_geral: str = 'Despesa'
+    ) -> float:
         """
-        Calcula valor realizado de um grupo em um mês
+        Calcula valor realizado de um grupo em um mês.
+        Usa CategoriaGeral conforme categoria_geral do grupo (Despesa ou Investimentos).
         
         Args:
             user_id: ID do usuário
             grupo: Nome do grupo
             mes_referencia: Mês no formato YYYY-MM
+            categoria_geral: 'Despesa' ou 'Investimentos' (define qual CategoriaGeral filtrar)
             
         Returns:
             Valor realizado (float)
         """
         ano, mes = mes_referencia.split('-')
         mes_fatura = f"{ano}{mes}"  # YYYYMM
+        cat_geral = 'Investimentos' if categoria_geral == 'Investimentos' else 'Despesa'
         
         total = self.db.query(func.sum(JournalEntry.Valor)).filter(
             JournalEntry.user_id == user_id,
             JournalEntry.GRUPO == grupo,
             JournalEntry.MesFatura == mes_fatura,
-            JournalEntry.CategoriaGeral == 'Despesa',
+            JournalEntry.CategoriaGeral == cat_geral,
             JournalEntry.IgnorarDashboard == 0
         ).scalar()
         

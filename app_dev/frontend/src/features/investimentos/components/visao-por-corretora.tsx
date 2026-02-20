@@ -247,8 +247,8 @@ export function VisaoPorCorretora({ investimentos, totalGeral }: VisaoPorCorreto
                     </TableCell>
                     <TableCell className="text-center">
                       <div className="flex items-center justify-center gap-1 flex-wrap">
-                        {dado.tipos.slice(0, 2).map(tipo => (
-                          <Badge key={tipo} variant="outline" className="text-xs">
+                        {dado.tipos.slice(0, 2).map((tipo, i) => (
+                          <Badge key={`${tipo}-${i}`} variant="outline" className="text-xs">
                             {tipo}
                           </Badge>
                         ))}

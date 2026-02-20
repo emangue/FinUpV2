@@ -247,16 +247,35 @@ def list_grupos_disponiveis(
     db: Session = Depends(get_db)
 ):
     """
-    Retorna todos os grupos disponíveis da base_grupos_config para despesas
-    Útil para popular dropdowns de seleção
+    Retorna grupos da base_grupos_config para metas (Plano de Gastos + Plano de Investimentos).
+    Inclui: Despesa, Transferência (gastos) e Investimentos.
+    Útil para dropdown na criação de metas - grupo define automaticamente gastos vs investimentos.
     """
     from app.domains.grupos.models import BaseGruposConfig
     
     grupos = db.query(BaseGruposConfig.nome_grupo).filter(
-        BaseGruposConfig.categoria_geral == 'Despesa'
+        BaseGruposConfig.categoria_geral.in_(['Despesa', 'Transferência', 'Investimentos'])
     ).order_by(BaseGruposConfig.nome_grupo).all()
     
     return [g[0] for g in grupos]
+
+
+@router.get("/budget/planning/grupos-com-categoria", summary="Listar grupos com categoria_geral")
+def list_grupos_com_categoria(
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Retorna grupos com categoria_geral para filtro em cascata.
+    Permite: 1º dropdown (Despesa/Receita/Investimentos) → 2º dropdown (grupos filtrados).
+    """
+    from app.domains.grupos.models import BaseGruposConfig
+    
+    rows = db.query(BaseGruposConfig.nome_grupo, BaseGruposConfig.categoria_geral).filter(
+        BaseGruposConfig.categoria_geral.in_(['Despesa', 'Transferência', 'Receita', 'Investimentos'])
+    ).order_by(BaseGruposConfig.nome_grupo).all()
+    
+    return [{"nome_grupo": r[0], "categoria_geral": r[1]} for r in rows]
 
 
 @router.get("/budget/planning/subgrupos", summary="Subgrupos de um grupo no mês")

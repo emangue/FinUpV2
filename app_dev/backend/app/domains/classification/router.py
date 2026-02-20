@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.shared.dependencies import get_current_user_id
+from app.shared.dependencies import get_current_user_id, require_admin
 from .service import GenericClassificationService
 from .schemas import (
     GenericRuleCreate, GenericRuleUpdate, GenericRuleResponse,
@@ -46,7 +46,8 @@ def list_rules(
 def create_rule(
     rule_data: GenericRuleCreate,
     db: Session = Depends(get_db),
-    user_id: int = Depends(get_current_user_id)
+    user_id: int = Depends(get_current_user_id),
+    admin=Depends(require_admin),
 ):
     """Cria nova regra de classificação genérica"""
     service = GenericClassificationService(db)
@@ -79,7 +80,8 @@ def update_rule(
     rule_id: int,
     rule_data: GenericRuleUpdate,
     db: Session = Depends(get_db),
-    user_id: int = Depends(get_current_user_id)
+    user_id: int = Depends(get_current_user_id),
+    admin=Depends(require_admin),
 ):
     """Atualiza regra existente"""
     service = GenericClassificationService(db)
@@ -98,7 +100,8 @@ def update_rule(
 def delete_rule(
     rule_id: int,
     db: Session = Depends(get_db),
-    user_id: int = Depends(get_current_user_id)
+    user_id: int = Depends(get_current_user_id),
+    admin=Depends(require_admin),
 ):
     """Deleta regra"""
     service = GenericClassificationService(db)
@@ -128,7 +131,8 @@ def test_rules(
 def import_hardcoded_rules(
     import_data: GenericRuleImportRequest,
     db: Session = Depends(get_db),
-    user_id: int = Depends(get_current_user_id)
+    user_id: int = Depends(get_current_user_id),
+    admin=Depends(require_admin),
 ):
     """Importa regras hardcoded para a base de dados"""
     service = GenericClassificationService(db)

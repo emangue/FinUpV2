@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from app.core.database import get_db
-from app.shared.dependencies import get_current_user_id
+from app.shared.dependencies import get_current_user_id, require_admin
 from .service import ScreenVisibilityService
 from .schemas import (
     ScreenVisibilityResponse,
@@ -36,13 +36,13 @@ def list_screens(
 @router.get("/admin/all", response_model=List[ScreenVisibilityResponse])
 def list_all_screens_admin(
     db: Session = Depends(get_db),
-    user_id: int = Depends(get_current_user_id)
+    user_id: int = Depends(get_current_user_id),
+    admin=Depends(require_admin),
 ):
     """
     Lista TODAS as telas (endpoint admin)
     Usado na tela de configuração de visibilidade
     """
-    # TODO: Validar se user_id é admin
     service = ScreenVisibilityService(db)
     return service.list_all()
 
@@ -65,10 +65,10 @@ def get_screen(
 def create_screen(
     data: ScreenVisibilityCreate,
     db: Session = Depends(get_db),
-    user_id: int = Depends(get_current_user_id)
+    user_id: int = Depends(get_current_user_id),
+    admin=Depends(require_admin),
 ):
     """Cria nova tela (admin only)"""
-    # TODO: Validar se user_id é admin
     service = ScreenVisibilityService(db)
     return service.create(data)
 
@@ -78,10 +78,10 @@ def update_screen(
     id: int,
     data: ScreenVisibilityUpdate,
     db: Session = Depends(get_db),
-    user_id: int = Depends(get_current_user_id)
+    user_id: int = Depends(get_current_user_id),
+    admin=Depends(require_admin),
 ):
     """Atualiza tela existente (admin only)"""
-    # TODO: Validar se user_id é admin
     service = ScreenVisibilityService(db)
     return service.update(id, data)
 
@@ -90,10 +90,10 @@ def update_screen(
 def delete_screen(
     id: int,
     db: Session = Depends(get_db),
-    user_id: int = Depends(get_current_user_id)
+    user_id: int = Depends(get_current_user_id),
+    admin=Depends(require_admin),
 ):
     """Remove tela (admin only)"""
-    # TODO: Validar se user_id é admin
     service = ScreenVisibilityService(db)
     return service.delete(id)
 
@@ -102,12 +102,12 @@ def delete_screen(
 def reorder_screens(
     order_updates: dict,
     db: Session = Depends(get_db),
-    user_id: int = Depends(get_current_user_id)
+    user_id: int = Depends(get_current_user_id),
+    admin=Depends(require_admin),
 ):
     """
     Atualiza ordem de exibição de múltiplas telas
     Body: {"dashboard": 1, "transactions": 2, ...}
     """
-    # TODO: Validar se user_id é admin
     service = ScreenVisibilityService(db)
     return service.update_orders(order_updates)

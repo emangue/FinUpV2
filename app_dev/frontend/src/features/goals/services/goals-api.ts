@@ -13,6 +13,43 @@ import { Goal, GoalCreate, GoalUpdate } from '../types'
 
 const BASE_URL = `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}`
 
+/** Grupo com categoria_geral para filtro em cascata */
+export interface GrupoComCategoria {
+  nome_grupo: string
+  categoria_geral: string
+}
+
+/**
+ * Lista grupos com categoria_geral para dropdown em cascata.
+ * 1º dropdown: Despesa | Receita | Investimentos
+ * 2º dropdown: grupos filtrados pela categoria
+ */
+export async function fetchGruposComCategoria(): Promise<GrupoComCategoria[]> {
+  try {
+    const response = await fetchWithAuth(`${BASE_URL}/budget/planning/grupos-com-categoria`)
+    if (!response.ok) return []
+    return await response.json()
+  } catch (error) {
+    console.error('Erro ao buscar grupos com categoria:', error)
+    return []
+  }
+}
+
+/**
+ * Lista grupos disponíveis para criar metas (base_grupos_config)
+ * @deprecated Preferir fetchGruposComCategoria para formulário com filtro em cascata
+ */
+export async function fetchGruposDisponiveis(): Promise<string[]> {
+  try {
+    const response = await fetchWithAuth(`${BASE_URL}/budget/planning/grupos-disponiveis`)
+    if (!response.ok) return []
+    return await response.json()
+  } catch (error) {
+    console.error('Erro ao buscar grupos disponíveis:', error)
+    return []
+  }
+}
+
 /**
  * Lista todas as metas do usuário (budget_geral)
  * CORRETO: Retorna interface Goal exata do backend
@@ -35,19 +72,26 @@ export async function fetchGoals(selectedMonth?: Date): Promise<Goal[]> {
     // Backend retorna { mes_referencia, budgets: [...] }
     const budgets = data?.budgets ?? []
     
-    return budgets.map((b: any) => ({
-      id: b.id,
-      grupo: b.grupo,
-      mes_referencia: data.mes_referencia || mes_referencia,
-      valor_planejado: b.valor_planejado ?? 0,
-      valor_realizado: b.valor_realizado ?? 0,
-      percentual: b.percentual ?? 0,
-      ativo: b.ativo ?? 1,
-      valor_medio_3_meses: b.valor_medio_3_meses ?? 0,
-      user_id: 0,
-      created_at: '',
-      updated_at: ''
-    }))
+    return budgets.map((b: any) => {
+      const cat = b.categoria_geral || 'Despesa'
+      const planType = cat === 'Investimentos' ? 'investimentos' : 'gastos'
+      return {
+        id: b.id ?? null,
+        grupo: b.grupo,
+        mes_referencia: data.mes_referencia || mes_referencia,
+        valor_planejado: b.valor_planejado ?? 0,
+        valor_realizado: b.valor_realizado ?? 0,
+        percentual: b.percentual ?? 0,
+        ativo: b.ativo ?? 1,
+        valor_medio_3_meses: b.valor_medio_3_meses ?? 0,
+        categoria_geral: cat,
+        planType,
+        cor: b.cor ?? undefined,
+        user_id: 0,
+        created_at: '',
+        updated_at: ''
+      }
+    })
     
   } catch (error) {
     console.error('Erro ao buscar metas:', error)
@@ -65,6 +109,8 @@ export async function fetchGoalById(goalId: number, mesReferencia?: string): Pro
   
   if (response.ok) {
     const b = await response.json()
+    const cat = b.categoria_geral || 'Despesa'
+    const planType = cat === 'Investimentos' ? 'investimentos' : 'gastos'
     return {
       id: b.id,
       grupo: b.grupo,
@@ -74,6 +120,9 @@ export async function fetchGoalById(goalId: number, mesReferencia?: string): Pro
       percentual: b.percentual ?? 0,
       ativo: b.ativo ?? 1,
       valor_medio_3_meses: b.valor_medio_3_meses ?? 0,
+      categoria_geral: cat,
+      planType,
+      cor: b.cor ?? undefined,
       subgrupos: b.subgrupos ?? [],
       user_id: 0,
       created_at: '',
@@ -96,31 +145,36 @@ export async function fetchGoalById(goalId: number, mesReferencia?: string): Pro
 }
 
 /**
- * Cria nova meta (cria registro em budget_geral)
- * CORRETO: Usa bulk-upsert (backend não tem POST individual)
+ * Cria nova meta (cria registro em budget_planning)
+ * @param replicarParaAnoTodo Se true, cria a mesma meta em todos os meses do ano (mes_referencia até dezembro)
  */
-export async function createGoal(data: GoalCreate): Promise<Goal> {
-  const response = await fetchWithAuth(`${BASE_URL}/budget/planning/bulk-upsert`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      mes_referencia: data.mes_referencia,
-      budgets: [{
-        grupo: data.grupo,
-        valor_planejado: data.valor_planejado
-      }]
+export async function createGoal(
+  data: GoalCreate,
+  replicarParaAnoTodo: boolean = false
+): Promise<Goal> {
+  const budget = { grupo: data.grupo, valor_planejado: data.valor_planejado }
+  const [ano, mesInicial] = data.mes_referencia.split('-').map(Number)
+  const meses = replicarParaAnoTodo
+    ? Array.from({ length: 12 - mesInicial + 1 }, (_, i) => {
+        const m = mesInicial + i
+        return `${ano}-${String(m).padStart(2, '0')}`
+      })
+    : [data.mes_referencia]
+
+  const promises = meses.map((mesRef) =>
+    fetchWithAuth(`${BASE_URL}/budget/planning/bulk-upsert`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mes_referencia: mesRef, budgets: [budget] })
     })
-  })
-  
-  if (!response.ok) {
-    throw new Error(`Erro ao criar meta: ${response.statusText}`)
+  )
+  const responses = await Promise.all(promises)
+  const firstFail = responses.find((r) => !r.ok)
+  if (firstFail) {
+    throw new Error(`Erro ao criar meta: ${firstFail.statusText}`)
   }
-  
-  // bulk-upsert retorna array, pegamos primeiro item
-  const goals: Goal[] = await response.json()
-  return goals[0]
+  const firstData = await responses[0].json()
+  return firstData[0]
 }
 
 /**
@@ -138,7 +192,8 @@ export async function updateGoal(goalId: number, data: GoalUpdate): Promise<Goal
       budgets: [{
         id: goalId,
         grupo: data.grupo,
-        valor_planejado: data.valor_planejado
+        valor_planejado: data.valor_planejado,
+        ...(data.cor !== undefined && { cor: data.cor })
       }]
     })
   })

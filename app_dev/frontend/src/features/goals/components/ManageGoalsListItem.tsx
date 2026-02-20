@@ -63,7 +63,7 @@ export function ManageGoalsListItem({
     setValor(newValue)
     
     const numericValue = parseFloat(newValue) || 0
-    if (numericValue !== goal.valor_planejado) {
+    if (numericValue !== goal.valor_planejado && goal.id != null) {
       setValorMudou(true) // Mostra checkbox
       debouncedSave(goal.id.toString(), numericValue, aplicarAteFinAno)
     } else {
@@ -138,7 +138,7 @@ export function ManageGoalsListItem({
           <input
             type="checkbox"
             checked={isActive}
-            onChange={() => onToggle(goal.id.toString(), isActive)}
+            onChange={() => goal.id != null && onToggle(goal.id.toString(), isActive)}
             className="sr-only peer"
           />
           <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
@@ -146,7 +146,7 @@ export function ManageGoalsListItem({
 
         {/* Edit Button */}
         <button
-          onClick={() => onEdit(goal.id.toString())}
+          onClick={() => goal.id != null && onEdit(goal.id.toString())}
           className="text-gray-400 hover:text-blue-600 transition-colors"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -168,10 +168,10 @@ export function ManageGoalsListItem({
               type="checkbox"
               checked={aplicarAteFinAno}
               onChange={(e) => {
+                if (goal.id == null) return
                 setAplicarAteFinAno(e.target.checked)
-                // Reprocessa com nova opção
                 const numericValue = parseFloat(valor) || goal.valor_planejado
-                debouncedSave.cancel() // Cancela timer anterior
+                debouncedSave.cancel()
                 debouncedSave(goal.id.toString(), numericValue, e.target.checked)
               }}
               className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"

@@ -307,14 +307,14 @@ class TransactionMarker:
                 sequencia=sequencia
             )
             
-            # 5. Gerar IdParcela se tem parcela (usando mesma lógica de populate_id_parcela.py)
+            # 5. Gerar IdParcela se tem parcela
+            # FÓRMULA OBRIGATÓRIA: estab|valor|total|user_id (user_id SEMPRE no hash!)
             id_parcela = None
             if info_parcela and total_parcelas:
-                # IMPORTANTE: Usar estabelecimento NORMALIZADO para match com base_parcelas
-                # CRÍTICO: Incluir user_id no hash para isolar parcelas por usuário
                 import hashlib
                 estab_normalizado_parcela = normalizar_estabelecimento(estabelecimento_base)
                 chave = f"{estab_normalizado_parcela}|{valor_arredondado:.2f}|{total_parcelas}|{self.user_id}"
+                assert self.user_id is not None, "user_id OBRIGATÓRIO no hash IdParcela"
                 id_parcela = hashlib.md5(chave.encode()).hexdigest()[:16]
                 logger.debug(f"IdParcela: {id_parcela} para {estab_normalizado_parcela} {parcela_atual}/{total_parcelas} (user_id={self.user_id})")
                 logger.debug(f"  Chave IdParcela: '{chave}'")

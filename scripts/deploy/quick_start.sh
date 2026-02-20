@@ -1,49 +1,34 @@
 #!/bin/bash
 # Quick Start - Sistema Financeiro v5
-# Uso: ./quick_start.sh
+# Uso: ./quick_start.sh  (pode rodar de qualquer pasta)
 #
 # ⚠️ ATENÇÃO: Se você renomeou a pasta (ex: V5 → V6), execute ANTES:
 #   python check_version.py          # Valida versões
 #   python fix_version.py            # Corrige automaticamente
 #   (Ver .github/copilot-instructions.md para detalhes)
 
+# Ir para raiz do projeto (permite rodar de qualquer pasta)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+cd "$PROJECT_ROOT"
+
 echo "🚀 Iniciando servidores..."
+echo "   Projeto: $PROJECT_ROOT"
 echo ""
 
-# === VALIDAÇÃO DE PROCESSOS ÓRFÃOS ===
-echo "🔍 Verificando processos órfãos..."
+# === CONTAGEM INFORMATIVA (NUNCA mata processos por nome - evita matar Cursor/IDE) ===
+echo "🔍 Verificando processos..."
 
-# Contar processos Node (excluindo VS Code)
-NODE_COUNT=$(ps aux | grep node | grep -v grep | grep -v "Visual Studio Code" | grep -v "/Applications/" | wc -l | xargs)
+# Contar processos Node do PROJETO (excluindo IDEs: Cursor, VS Code, apps do sistema)
+NODE_COUNT=$(ps aux | grep node | grep -v grep | grep -v "Visual Studio Code" | grep -v "Cursor" | grep -v "/Applications/" | wc -l | xargs)
 
 # Contar processos Python/Uvicorn
 PYTHON_COUNT=$(ps aux | grep -E "(python.*run\.py|uvicorn)" | grep -v grep | wc -l | xargs)
 
-TOTAL=$((NODE_COUNT + PYTHON_COUNT))
-
-echo "   Node.js: $NODE_COUNT processos"
-echo "   Python:  $PYTHON_COUNT processos"
-echo "   Total:   $TOTAL processos"
+echo "   Node.js (projeto): $NODE_COUNT | Python: $PYTHON_COUNT"
 echo ""
 
-# Alertar e limpar se necessário
-if [ "$NODE_COUNT" -gt 10 ]; then
-    echo "🚨 ALERTA: Detectados $NODE_COUNT processos Node.js órfãos!"
-    echo "   Limpando automaticamente..."
-    pkill -9 node 2>/dev/null || true
-    sleep 1
-    echo "   ✅ Processos Node.js limpos"
-    echo ""
-elif [ "$NODE_COUNT" -gt 5 ]; then
-    echo "⚠️  AVISO: Mais processos Node.js ($NODE_COUNT) do que o esperado (2-5)"
-    echo "   Limpando automaticamente para evitar lentidão..."
-    ps aux | grep node | grep -v grep | grep -v "Visual Studio Code" | grep -v "/Applications/" | awk '{print $2}' | xargs kill -9 2>/dev/null || true
-    sleep 1
-    echo "   ✅ Processos excessivos limpos"
-    echo ""
-fi
-
-# Limpar portas específicas
+# Limpar APENAS portas específicas (seguro - não afeta Cursor/IDE)
 echo "🧹 Liberando portas 8000 e 3000-3005..."
 BACKEND_PROCS=$(lsof -ti:8000 2>/dev/null | wc -l | xargs)
 
@@ -66,19 +51,22 @@ done
 echo "   ✅ Portas liberadas (Backend: $BACKEND_PROCS, Frontend: $FRONTEND_TOTAL)"
 echo ""
 
+# Garantir que temp/ existe
+mkdir -p "$PROJECT_ROOT/temp/logs" "$PROJECT_ROOT/temp/pids"
+
 # Verificar se node_modules existe no frontend
-if [ ! -d "/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend/node_modules" ]; then
+if [ ! -d "$PROJECT_ROOT/app_dev/frontend/node_modules" ]; then
     echo "⚠️  node_modules não encontrado no frontend!"
     echo "   Executando npm install..."
-    cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/frontend
+    cd "$PROJECT_ROOT/app_dev/frontend"
     npm install > /dev/null 2>&1
-    cd ../..
+    cd "$PROJECT_ROOT"
     echo ""
 fi
 
 # Verificar se venv existe e está funcional
 echo "🔍 Verificando Python venv..."
-cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev
+cd "$PROJECT_ROOT/app_dev"
 if [ ! -f "venv/bin/activate" ]; then
     echo "⚠️  venv não encontrado! Criando novo ambiente virtual..."
     python3 -m venv venv
@@ -100,26 +88,26 @@ else
 fi
 echo ""
 
-# Backend (porta 8000)
-cd backend
-nohup python run.py > ../../temp/logs/backend.log 2>&1 &
+# Backend (porta 8000) - usa Python do venv explicitamente (nohup não herda source)
+cd "$PROJECT_ROOT/app_dev/backend"
+nohup "$PROJECT_ROOT/app_dev/venv/bin/python" run.py > "$PROJECT_ROOT/temp/logs/backend.log" 2>&1 &
 BACKEND_PID=$!
-echo $BACKEND_PID > ../../temp/pids/backend.pid
-cd ../..
+echo $BACKEND_PID > "$PROJECT_ROOT/temp/pids/backend.pid"
+cd "$PROJECT_ROOT"
 
 sleep 3
 
 # Frontend (porta 3000)
-cd app_dev/frontend
-nohup npm run dev > ../../temp/logs/frontend.log 2>&1 &
+cd "$PROJECT_ROOT/app_dev/frontend"
+nohup npm run dev > "$PROJECT_ROOT/temp/logs/frontend.log" 2>&1 &
 FRONTEND_PID=$!
-echo $FRONTEND_PID > ../../temp/pids/frontend.pid
-cd ../..
+echo $FRONTEND_PID > "$PROJECT_ROOT/temp/pids/frontend.pid"
+cd "$PROJECT_ROOT"
 
 sleep 2
 
 # === VALIDAÇÃO PÓS-INICIALIZAÇÃO ===
-FINAL_NODE=$(ps aux | grep node | grep -v grep | grep -v "Visual Studio Code" | grep -v "/Applications/" | wc -l | xargs)
+FINAL_NODE=$(ps aux | grep node | grep -v grep | grep -v "Visual Studio Code" | grep -v "Cursor" | grep -v "/Applications/" | wc -l | xargs)
 FINAL_PYTHON=$(ps aux | grep -E "(python.*run\.py|uvicorn)" | grep -v grep | wc -l | xargs)
 
 echo ""
@@ -141,8 +129,9 @@ else
 fi
 echo ""
 echo "📋 Logs:"
-echo "   tail -f temp/logs/backend.log"
-echo "   tail -f temp/logs/frontend.log"
+echo "   tail -f $PROJECT_ROOT/temp/logs/backend.log"
+echo "   tail -f $PROJECT_ROOT/temp/logs/frontend.log"
 echo ""
-echo "🛑 Para parar: ./scripts/deploy/quick_stop.sh"
+echo "🛑 Para parar:  $SCRIPT_DIR/quick_stop.sh"
+echo "🔄 Para reiniciar: $SCRIPT_DIR/quick_restart.sh"
 

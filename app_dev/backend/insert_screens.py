@@ -18,10 +18,7 @@ items = [
     ('settings-categorias', 'Gestão de Categorias', 'P', None, 76, 'settings', '/settings/categorias'),
     ('settings-grupos', 'Gestão de Grupos', 'P', None, 77, 'settings', '/settings/grupos'),
     ('settings-exclusoes', 'Regras de Exclusão', 'P', None, 78, 'settings', '/settings/exclusoes'),
-    ('admin', 'Administração', 'A', 'Shield', 80, None, '/admin'),
-    ('admin-contas', 'Contas', 'A', None, 81, 'admin', '/settings/admin'),
-    ('admin-bancos', 'Gestão de Bancos', 'A', None, 83, 'admin', '/settings/bancos'),
-    ('admin-backup', 'Backup', 'A', None, 84, 'admin', '/settings/backup')
+    # Telas admin removidas - usar app_admin (admin.meufinup.com.br)
 ]
 
 inserted = 0

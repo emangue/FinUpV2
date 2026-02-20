@@ -102,8 +102,10 @@ source scripts/deploy/load_credentials.sh
 | **Porta** | 5432 |
 | **Database** | finup_db |
 | **User** | finup_user |
-| **Password** | FinUp2026SecurePass |
-| **Connection string** | `postgresql://finup_user:FinUp2026SecurePass@127.0.0.1:5432/finup_db` |
+| **Password** | `$POSTGRES_PASSWORD` (variável em `.env` no servidor) |
+| **Connection string** | `postgresql://finup_user:$POSTGRES_PASSWORD@127.0.0.1:5432/finup_db` |
+
+> ⚠️ **Credenciais reais em `.env` no servidor. NUNCA commitar.**
 
 ### 2.4 URLs
 

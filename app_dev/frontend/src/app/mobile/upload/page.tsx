@@ -27,50 +27,30 @@ import { useBanks, useCreditCards, useUpload } from '@/features/upload/hooks';
 import { fetchCompatibility } from '@/features/upload/services/upload-api';
 import type { BankCompatibilityMap } from '@/features/upload/services/upload-api';
 import type { FormatAvailability } from '@/features/upload/components/format-selector';
-import { setAuthToken, isAuthenticated } from '@/core/utils/api-client';
+import { useAuth } from '@/contexts/AuthContext';
 import { API_ENDPOINTS } from '@/core/config/api.config';
 
 export default function UploadPage() {
   const router = useRouter();
+  const { isAuthenticated, loading: authLoading, login } = useAuth();
   const [authReady, setAuthReady] = useState(false);
-  
-  // 🚨 PALIATIVO - Auto-login para desenvolvimento
+
   useEffect(() => {
     const setupAuth = async () => {
-      if (isAuthenticated()) {
+      if (isAuthenticated) {
         setAuthReady(true);
         return;
       }
-
       try {
-        const response = await fetch(API_ENDPOINTS.AUTH.LOGIN, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: 'admin@financas.com',
-            password: 'cahriZqonby8'
-          })
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          console.group('✅ [MOBILE-UPLOAD] Auto-login bem-sucedido')
-          console.log('👤 Usuário:', data.user)
-          console.log('🔑 Token recebido (primeiros 30 chars):', data.access_token.substring(0, 30) + '...')
-          console.groupEnd()
-          setAuthToken(data.access_token);
-        } else {
-          console.error('❌ [MOBILE-UPLOAD] Falha no auto-login:', response.status, response.statusText)
-        }
-      } catch (err) {
-        console.error('[mobile-upload] Erro no auto-login:', err);
+        await login('admin@financas.com', 'cahriZqonby8');
+      } catch {
+        // Falha silenciosa - usuário pode fazer login manual
       } finally {
         setAuthReady(true);
       }
     };
-
-    setupAuth();
-  }, []);
+    if (!authLoading) setupAuth();
+  }, [isAuthenticated, authLoading, login]);
   
   // Hooks para dados reais
   const { banks, loading: loadingBanks } = useBanks();
@@ -137,23 +117,6 @@ export default function UploadPage() {
   };
 
   const handleSubmit = async () => {
-    console.group('🚀 [MOBILE-UPLOAD] handleSubmit iniciado')
-    console.log('📋 Formulário:', { 
-      banco: selectedBank, 
-      tipo: activeTab, 
-      formato: selectedFormat,
-      cartao: selectedCard, 
-      mes: selectedMonth, 
-      ano: selectedYear 
-    })
-    console.log('📎 Arquivo:', selectedFile ? { 
-      name: selectedFile.name, 
-      size: selectedFile.size, 
-      type: selectedFile.type 
-    } : 'NENHUM')
-    console.log('🔑 Autenticado?', isAuthenticated())
-    console.groupEnd()
-    
     // Validações
     if (!selectedBank) {
       alert('Por favor, selecione uma instituição financeira');

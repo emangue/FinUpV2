@@ -3,23 +3,24 @@ Router do domínio Auth.
 Endpoints FastAPI isolados aqui.
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Header, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from typing import Optional
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from app.core.database import get_db
+from app.core.config import settings
 from .service import AuthService
 from .jwt_utils import extract_user_id_from_token
 from .schemas import LoginRequest, TokenResponse, UserLoginResponse, LogoutRequest, ProfileUpdateRequest, PasswordChangeRequest
-from .jwt_utils import extract_user_id_from_token
 
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 limiter = Limiter(key_func=get_remote_address)
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login")
 @limiter.limit("5/minute")  # Máximo 5 tentativas de login por minuto
 def login(
     request: Request,
@@ -27,37 +28,51 @@ def login(
     db: Session = Depends(get_db)
 ):
     """
-    Autentica usuário e retorna token JWT
-    
-    **Rate Limit:** 5 tentativas por minuto (proteção contra brute force)
-    
-    - **email**: Email do usuário
-    - **password**: Senha do usuário
-    
-    Returns:
-        - access_token: Token JWT
-        - token_type: "bearer"
-        - user: Dados do usuário
+    Autentica usuário e retorna token JWT.
+    Define cookie httpOnly para maior segurança (não acessível via JS).
     """
     service = AuthService(db)
-    return service.login(credentials)
+    token_response = service.login(credentials)
+    data = {
+        "access_token": token_response.access_token,
+        "token_type": token_response.token_type,
+        "user": token_response.user.model_dump(),
+    }
+    response = JSONResponse(content=data)
+    # Cookie httpOnly: não acessível via JS (proteção XSS)
+    response.set_cookie(
+        key="auth_token",
+        value=token_response.access_token,
+        max_age=3600,
+        path="/",
+        secure=not settings.DEBUG,  # Secure em produção (HTTPS)
+        httponly=True,
+        samesite="strict",
+    )
+    return response
+
+
+def _get_token_from_request(request: Request, authorization: Optional[str]) -> Optional[str]:
+    """Extrai token de Authorization ou cookie auth_token."""
+    if authorization and authorization.startswith("Bearer "):
+        return authorization.replace("Bearer ", "")
+    return request.cookies.get("auth_token")
 
 
 @router.get("/me", response_model=UserLoginResponse)
 def get_current_user(
+    request: Request,
     db: Session = Depends(get_db),
     authorization: Optional[str] = Header(None)
 ):
     """
-    Retorna dados do usuário autenticado
-    
-    Requer token JWT válido no header Authorization
+    Retorna dados do usuário autenticado.
+    Aceita token em Authorization header ou cookie auth_token.
     """
-    # ✅ CORRIGIDO: Extrai user_id do JWT sem import circular
-    if not authorization or not authorization.startswith("Bearer "):
+    token = _get_token_from_request(request, authorization)
+    if not token:
         raise HTTPException(status_code=401, detail="Token de autenticação não fornecido")
     
-    token = authorization.replace("Bearer ", "")
     user_id = extract_user_id_from_token(token)
     
     if not user_id:
@@ -73,30 +88,27 @@ def logout(
     db: Session = Depends(get_db)
 ):
     """
-    Logout do usuário (invalidação de token)
-    
-    Por enquanto apenas retorna 204 (token é stateless)
-    Futuramente: blacklist de tokens
+    Logout do usuário. Remove cookie auth_token.
     """
-    # TODO: Implementar blacklist de tokens (Fase 6)
-    return None
+    response = JSONResponse(content={}, status_code=204)
+    response.delete_cookie(key="auth_token", path="/")
+    return response
 
 
-def get_user_id_from_token(authorization: Optional[str] = Header(None)) -> int:
+def get_user_id_from_token(
+    request: Request,
+    authorization: Optional[str] = Header(None),
+) -> int:
     """
-    Extrai user_id do token JWT no header Authorization
-    
-    Raises:
-        HTTPException 401: Se token não fornecido ou inválido
+    Extrai user_id do token JWT (header Authorization ou cookie auth_token).
     """
-    if not authorization or not authorization.startswith("Bearer "):
+    token = _get_token_from_request(request, authorization)
+    if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token não fornecido",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
-    token = authorization.replace("Bearer ", "")
     user_id = extract_user_id_from_token(token)
     
     if not user_id:

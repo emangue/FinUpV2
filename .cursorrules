@@ -130,6 +130,9 @@ const typography = {
 **SEMPRE:** Usar `safe_deploy.sh` antes de produção  
 **NUNCA:** Deploy sem backup, validação, ou testes
 
+### 7.1 Deploy e branches (alterações grandes)
+**SEMPRE:** Em alteração grande, criar branch **antes** de subir no servidor (ex.: `deploy/YYYY-MM-DD-nome` ou `feature/nome`). Subir e validar **nessa branch** no servidor. **Só depois** que der certo no servidor: fazer merge dessa branch na `main` e push da main. Assim a main só muda após validação no servidor; rollback = descartar a branch. O `safe_deploy.sh` oferece criar a branch automaticamente quando você está na main.
+
 ### 8. Backup
 **SEMPRE:** Rodar `backup_daily.sh` antes de modificações críticas  
 **NUNCA:** Modificar banco sem backup
@@ -224,6 +227,8 @@ git status  # Deve estar limpo
 
 # 3. Ligar servidores
 ./scripts/deploy/quick_start.sh
+
+# Reiniciar (stop + start): ./scripts/deploy/quick_restart.sh
 ```
 
 ### 2. Durante Desenvolvimento

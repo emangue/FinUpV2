@@ -17,9 +17,15 @@ import { Download } from 'lucide-react'
 import { MobileHeader } from '@/components/mobile/mobile-header'
 import { MonthScrollPicker } from '@/components/mobile/month-scroll-picker'
 import { YTDToggle, YTDToggleValue } from '@/components/mobile/ytd-toggle'
-import { WalletBalanceCard } from '@/features/dashboard/components/wallet-balance-card'
+import { KpiCards } from '@/features/dashboard/components/kpi-cards'
 import { BarChart } from '@/features/dashboard/components/bar-chart'
 import { DonutChart } from '@/features/dashboard/components/donut-chart'
+import { ExpenseGroupsBox } from '@/features/dashboard/components/expense-groups-box'
+import { GastosPorCartaoBox } from '@/features/dashboard/components/gastos-por-cartao-box'
+import { IncomeGroupsBox } from '@/features/dashboard/components/income-groups-box'
+import { PatrimonioTab } from '@/features/dashboard/components/patrimonio-tab'
+import { OrcamentoTab } from '@/features/dashboard/components/orcamento-tab'
+import { PlanoAposentadoriaTab } from '@/features/plano-aposentadoria/components/plano-aposentadoria-tab'
 import { useDashboardMetrics, useIncomeSources, useExpenseSources, useChartData } from '@/features/dashboard/hooks/use-dashboard'
 import { fetchLastMonthWithData } from '@/features/dashboard/services/dashboard-api'
 import { useRequireAuth } from '@/core/hooks/use-require-auth'
@@ -29,7 +35,8 @@ export default function DashboardMobilePage() {
   const isAuth = useRequireAuth() // 🔐 Hook de proteção de rota
   const [selectedMonth, setSelectedMonth] = useState<Date>(new Date())
   const [period, setPeriod] = useState<YTDToggleValue>('month')
-  const [activeTab, setActiveTab] = useState<'income' | 'expenses' | 'budget'>('income')
+  const [activeTab, setActiveTab] = useState<'resultado' | 'patrimonio' | 'orcamento' | 'plano'>('resultado')
+  const [resultadoToggle, setResultadoToggle] = useState<'receita' | 'despesas'>('receita')
 
   // Extrair year e month do selectedMonth
   const year = selectedMonth.getFullYear()
@@ -49,21 +56,12 @@ export default function DashboardMobilePage() {
 
   const isLoading = loadingMetrics || loadingSources || loadingExpenses || loadingChart
 
-  // Buscar último mês com dados - APENAS se autenticado
+  // Default: último mês com dados (journal_entries para resultado/orçamento)
   useEffect(() => {
     if (!isAuth) return
-    
-    async function loadLastMonth() {
-      try {
-        const lastMonth = await fetchLastMonthWithData()
-        console.log('✅ Último mês com dados:', lastMonth)
-        setSelectedMonth(new Date(lastMonth.year, lastMonth.month - 1, 1))
-      } catch (error: any) {
-        console.error('❌ Erro ao buscar último mês:', error)
-      }
-    }
-    
-    loadLastMonth()
+    fetchLastMonthWithData('transactions')
+      .then((lastMonth) => setSelectedMonth(new Date(lastMonth.year, lastMonth.month - 1, 1)))
+      .catch(() => {})
   }, [isAuth])
 
   // 🔐 Mostrar loading enquanto verifica autenticação (DEPOIS de todos os hooks)
@@ -81,39 +79,26 @@ export default function DashboardMobilePage() {
     )
   }
   
-  // Debug: Log de despesas
-  console.log('🎯 Dashboard Page - expenseSources:', expenseSources)
-  console.log('🎯 Dashboard Page - totalDespesas:', totalDespesas)
-  console.log('🎯 Dashboard Page - loadingExpenses:', loadingExpenses)
-
   return (
     <div className="flex flex-col h-screen bg-gray-50">
-      {/* Header */}
-      <MobileHeader
-        title="Dashboard"
-        leftAction={null}
-        rightActions={[
-          {
-            icon: <Download className="w-5 h-5" />,
-            label: 'Download',
-            onClick: () => console.log('Download clicked')
-          }
-        ]}
-      />
-
-      {/* Date display */}
-      <div className="bg-white px-6 py-2">
-        <p className="text-xs text-gray-400 text-right">
-          {selectedMonth.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}
-        </p>
+      {/* Scroll de meses fixo no topo + ícone Download compacto na mesma linha */}
+      <div className="sticky top-0 z-20 bg-white border-b border-gray-200 shrink-0">
+        <div className="flex items-center gap-2">
+          <div className="flex-1 min-w-0">
+            <MonthScrollPicker
+              selectedMonth={selectedMonth}
+              onMonthChange={setSelectedMonth}
+            />
+          </div>
+          <button
+            onClick={() => console.log('Download clicked')}
+            className="p-2 rounded-full text-gray-600 hover:bg-gray-100 hover:text-gray-900 shrink-0 mr-1"
+            aria-label="Download"
+          >
+            <Download className="w-5 h-5" />
+          </button>
+        </div>
       </div>
-
-      {/* Month Picker */}
-      <MonthScrollPicker
-        selectedMonth={selectedMonth}
-        onMonthChange={setSelectedMonth}
-        className="bg-white border-b border-gray-100"
-      />
 
       {/* YTD Toggle */}
       <div className="flex justify-center py-4 bg-white border-b border-gray-200">
@@ -131,62 +116,138 @@ export default function DashboardMobilePage() {
           </div>
         ) : (
           <>
-            {/* Wallet Balance Card */}
-            <WalletBalanceCard
-              balance={metrics?.saldo_periodo || 0}
-              changePercentage={metrics?.change_percentage}
-            />
+            {/* KPI Cards */}
+            <KpiCards metrics={metrics ?? null} />
 
             {/* Tabs */}
             <div className="flex gap-6 border-b border-gray-200 mb-6">
               <button
-                onClick={() => setActiveTab('income')}
+                onClick={() => setActiveTab('resultado')}
                 className={`pb-2 text-sm font-semibold transition-colors ${
-                  activeTab === 'income'
+                  activeTab === 'resultado'
                     ? 'text-gray-900 border-b-2 border-gray-900'
                     : 'text-gray-400 hover:text-gray-600'
                 }`}
               >
-                Receitas
+                Resultado
               </button>
               <button
-                onClick={() => setActiveTab('expenses')}
+                onClick={() => setActiveTab('patrimonio')}
                 className={`pb-2 text-sm font-medium transition-colors ${
-                  activeTab === 'expenses'
+                  activeTab === 'patrimonio'
                     ? 'text-gray-900 border-b-2 border-gray-900'
                     : 'text-gray-400 hover:text-gray-600'
                 }`}
               >
-                Despesas
+                Patrimônio
               </button>
               <button
-                onClick={() => setActiveTab('budget')}
+                onClick={() => setActiveTab('orcamento')}
                 className={`pb-2 text-sm font-medium transition-colors ${
-                  activeTab === 'budget'
+                  activeTab === 'orcamento'
                     ? 'text-gray-900 border-b-2 border-gray-900'
                     : 'text-gray-400 hover:text-gray-600'
                 }`}
               >
                 Orçamento
               </button>
+              <button
+                onClick={() => setActiveTab('plano')}
+                className={`pb-2 text-sm font-medium transition-colors ${
+                  activeTab === 'plano'
+                    ? 'text-gray-900 border-b-2 border-gray-900'
+                    : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                Plano
+              </button>
             </div>
 
-            {/* Income Trend Chart */}
-            <BarChart
-              data={chartData}
-              title="Tendência de Receitas"
-              totalValue={metrics?.total_receitas || 0}
-              selectedMonth={selectedMonth}
-            />
+            {/* Tab Resultado: Gráfico de barras + Toggle Receita/Despesas + Donuts */}
+            {activeTab === 'resultado' && (
+              <>
+                <BarChart
+                  data={chartData}
+                  title={resultadoToggle === 'receita' ? 'Tendência de Receitas' : 'Tendência de Despesas'}
+                  totalValue={resultadoToggle === 'receita' ? (metrics?.total_receitas || 0) : (metrics?.total_despesas || 0)}
+                  selectedMonth={selectedMonth}
+                />
 
-            {/* Donut Charts (Income/Expenses) */}
-            {(activeTab === 'income' || activeTab === 'expenses') && (
-              <DonutChart
-                activeTab={activeTab}
-                incomeSources={sources}
-                totalReceitas={totalReceitas}
-                expenseSources={expenseSources}
-                totalDespesas={totalDespesas}
+                {/* Toggle Receita / Despesas (abaixo do gráfico de barras) */}
+                <div className="flex gap-6 border-b border-gray-200 mb-4">
+                  <button
+                    onClick={() => setResultadoToggle('receita')}
+                    className={`pb-2 text-sm font-semibold transition-colors ${
+                      resultadoToggle === 'receita'
+                        ? 'text-gray-900 border-b-2 border-gray-900'
+                        : 'text-gray-400 hover:text-gray-600'
+                    }`}
+                  >
+                    Receita
+                  </button>
+                  <button
+                    onClick={() => setResultadoToggle('despesas')}
+                    className={`pb-2 text-sm font-medium transition-colors ${
+                      resultadoToggle === 'despesas'
+                        ? 'text-gray-900 border-b-2 border-gray-900'
+                        : 'text-gray-400 hover:text-gray-600'
+                    }`}
+                  >
+                    Despesas
+                  </button>
+                </div>
+
+                {resultadoToggle === 'receita' && (
+                  <>
+                    <DonutChart
+                      activeTab="income"
+                      incomeSources={sources}
+                      totalReceitas={totalReceitas}
+                      expenseSources={expenseSources}
+                      totalDespesas={totalDespesas}
+                    />
+                    <IncomeGroupsBox sources={sources} />
+                  </>
+                )}
+
+                {resultadoToggle === 'despesas' && (
+                  <>
+                    <DonutChart
+                      activeTab="expenses"
+                      incomeSources={sources}
+                      totalReceitas={totalReceitas}
+                      expenseSources={expenseSources}
+                      totalDespesas={totalDespesas}
+                    />
+                    <ExpenseGroupsBox sources={expenseSources} />
+                    <GastosPorCartaoBox
+                      year={year}
+                      month={month}
+                      monthLabel={
+                        month
+                          ? `${['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'][month - 1]}/${year}`
+                          : `${year}`
+                      }
+                    />
+                  </>
+                )}
+              </>
+            )}
+
+            {/* Tab Patrimônio */}
+            {activeTab === 'patrimonio' && (
+              <PatrimonioTab selectedMonth={selectedMonth} />
+            )}
+
+            {/* Tab Orçamento */}
+            {activeTab === 'orcamento' && (
+              <OrcamentoTab year={year} month={month} />
+            )}
+
+            {/* Tab Plano Aposentadoria */}
+            {activeTab === 'plano' && (
+              <PlanoAposentadoriaTab
+                patrimonioLiquido={metrics?.patrimonio_liquido_mes ?? undefined}
               />
             )}
 

@@ -5,15 +5,24 @@ Dependências para autenticação e usuários
 """
 from typing import Optional, TYPE_CHECKING
 from sqlalchemy.orm import Session
-from fastapi import Header, Depends, HTTPException, status
+from fastapi import Header, Depends, HTTPException, status, Request
 from app.core.database import get_db
 from app.domains.auth.jwt_utils import extract_user_id_from_token
 
 if TYPE_CHECKING:
     from app.domains.users.models import User
 
+def _get_token(authorization: Optional[str], request: Request) -> Optional[str]:
+    """Extrai token de Authorization header ou cookie auth_token."""
+    auth_val = authorization if isinstance(authorization, str) else None
+    if auth_val and auth_val.startswith("Bearer "):
+        return auth_val.replace("Bearer ", "")
+    cookie = request.cookies.get("auth_token")
+    return cookie
+
 def get_current_user_id(
-    authorization: Optional[str] = Header(None)
+    request: Request,
+    authorization: Optional[str] = Header(None),
 ) -> int:
     """
     🔒 FUNÇÃO PRINCIPAL DE AUTENTICAÇÃO
@@ -48,24 +57,13 @@ def get_current_user_id(
         ANTES: Função retornava user_id=1 hardcoded (INSEGURO!)
         DEPOIS: Sempre extrai user_id do JWT (SEGURO)
     """
-    # Validar presença do header Authorization
-    if not authorization:
+    token = _get_token(authorization, request)
+    if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token de autenticação não fornecido",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
-    # Validar formato do header
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Formato de token inválido (use: Bearer <token>)",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    # Extrair token
-    token = authorization.replace("Bearer ", "")
     
     # Extrair e validar user_id do token JWT
     try:
@@ -105,19 +103,15 @@ def get_current_user_id(
 # ============================================================================
 
 def get_current_user(
-    authorization: Optional[str] = Header(None),
+    user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ) -> "User":
     """
     🔒 Retorna o usuário autenticado completo (modelo User)
     
-    Usa get_current_user_id para extrair user_id do JWT,
+    Usa get_current_user_id para extrair user_id do JWT (header ou cookie),
     então busca o User completo no banco.
     
-    Args:
-        authorization: Header Authorization com JWT
-        db: Sessão do banco de dados
-        
     Returns:
         User: Modelo completo do usuário autenticado
         
@@ -128,7 +122,6 @@ def get_current_user(
     # Import aqui para evitar circular import
     from app.domains.users.models import User
     
-    user_id = get_current_user_id(authorization)
     user = db.query(User).filter(User.id == user_id).first()
     
     if not user:
@@ -141,8 +134,7 @@ def get_current_user(
 
 
 def require_admin(
-    authorization: Optional[str] = Header(None),
-    db: Session = Depends(get_db)
+    current_user: "User" = Depends(get_current_user)
 ) -> "User":
     """
     🔐 PROTEÇÃO ADMIN - Valida que usuário é administrador
@@ -150,10 +142,6 @@ def require_admin(
     Similar ao get_current_user, mas TAMBÉM verifica se role='admin'.
     Use esta dependency em endpoints que só admins devem acessar.
     
-    Args:
-        authorization: Header Authorization com JWT
-        db: Sessão do banco de dados
-        
     Returns:
         User: Modelo do usuário admin autenticado
         
@@ -161,16 +149,8 @@ def require_admin(
         HTTPException 401: Se token inválido
         HTTPException 403: Se usuário não é admin
         HTTPException 404: Se usuário não encontrado
-        
-    Examples:
-        ```python
-        @router.post("/admin/screens")
-        def update_screens(admin: User = Depends(require_admin)):
-            # Só admins chegam aqui
-            pass
-        ```
     """
-    user = get_current_user(authorization, db)
+    user = current_user
     
     if user.role != 'admin':
         raise HTTPException(

@@ -1134,6 +1134,10 @@ from ..users.models import User  # Import cruzado entre domínios
 from app.domains.categories import *  # Import * é proibido
 ```
 
+**4. EXCEÇÕES DOCUMENTADAS (Orquestradores/Agregadores):**
+- Domínios **orquestradores** (ex: upload) e **agregadores** (ex: dashboard) podem ter imports cruzados **documentados** em `domains/*/DOCS.md`.
+- Política completa: `docs/architecture/PROPOSTA_MODULARIDADE_PRAGMATICA.md`
+
 ### Quando Modificar um Domínio
 
 **Cenário:** Adicionar campo `categoria` em transações
@@ -2820,31 +2824,31 @@ O `safe_deploy.sh` **automaticamente** executa validação de paridade:
 
 ### ✅ Antes de Qualquer Deploy em Produção
 
-1. **Commitar tudo:**
+1. **Alteração grande: branch antes de subir no servidor.** Só depois que der certo no servidor, fazer merge na main. O `safe_deploy.sh` oferece criar a branch automaticamente (ex.: `deploy/YYYY-MM-DD-nome`) quando você está na main.
+
+2. **Commitar tudo:**
    ```bash
    git status  # Deve estar limpo
    ```
 
-2. **Rodar safe deploy:**
+3. **Rodar safe deploy:**
    ```bash
    ./scripts/deploy/safe_deploy.sh
    ```
 
-3. **Verificar changelog:**
+4. **Verificar changelog:**
    ```bash
    cat CHANGELOG.md | head -30
    ```
 
-4. **Fazer backup:**
+5. **Fazer backup:**
    ```bash
    ./scripts/deploy/backup_daily.sh
    ```
 
-5. **Push e deploy:**
-   ```bash
-   git push origin main
-   # SSH no servidor e fazer pull + migrations + restart
-   ```
+6. **Push e deploy:**
+   - Se estiver em branch de deploy/feature: `git push origin <branch>`; no servidor dar pull **dessa branch**, validar; só então merge na main e push.
+   - Se for direto na main (deploy pequeno): `git push origin main` e no servidor pull + migrations + restart.
 
 ### 🚫 NUNCA Fazer em Produção
 
@@ -2854,9 +2858,11 @@ O `safe_deploy.sh` **automaticamente** executa validação de paridade:
 - ❌ Deploy com mudanças uncommitted
 - ❌ Deploy sem validar paridade
 - ❌ Deploy sem atualizar changelog
+- ❌ Alteração grande direto na main: criar branch antes de subir; merge na main só após validar no servidor
 
 ### ✅ SEMPRE Fazer
 
+- ✅ Em alteração grande: criar branch (deploy/ ou feature/) antes de subir no servidor; merge na main só depois que der certo no servidor
 - ✅ Usar PostgreSQL local para dev sério
 - ✅ Gerar migrations para mudanças de schema
 - ✅ Rodar `safe_deploy.sh` antes de push

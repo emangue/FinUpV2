@@ -45,7 +45,7 @@ def upgrade() -> None:
     result = conn.execute(sa.text("""
         SELECT COUNT(*) as orfaos
         FROM base_marcacoes m
-        LEFT JOIN base_grupos_config g ON m.GRUPO = g.nome_grupo
+        LEFT JOIN base_grupos_config g ON m."GRUPO" = g.nome_grupo
         WHERE g.nome_grupo IS NULL
     """))
     orfaos = result.fetchone()[0]
@@ -61,11 +61,11 @@ def upgrade() -> None:
     # 2. Log de inconsistências (opcional - apenas informativo)
     result = conn.execute(sa.text("""
         SELECT 
-            m.GRUPO,
-            COUNT(DISTINCT m.TipoGasto) as tipos_diferentes
+            m."GRUPO",
+            COUNT(DISTINCT m."TipoGasto") as tipos_diferentes
         FROM base_marcacoes m
-        GROUP BY m.GRUPO
-        HAVING tipos_diferentes > 1
+        GROUP BY m."GRUPO"
+        HAVING COUNT(DISTINCT m."TipoGasto") > 1
     """))
     inconsistencias = result.fetchall()
     
@@ -82,15 +82,15 @@ def upgrade() -> None:
     conn.execute(sa.text("""
         CREATE TABLE base_marcacoes_new (
             id INTEGER NOT NULL PRIMARY KEY,
-            GRUPO VARCHAR(100) NOT NULL,
-            SUBGRUPO VARCHAR(100) NOT NULL
+            "GRUPO" VARCHAR(100) NOT NULL,
+            "SUBGRUPO" VARCHAR(100) NOT NULL
         )
     """))
     
     print("   Copiando dados (GRUPO + SUBGRUPO apenas)...")
     conn.execute(sa.text("""
-        INSERT INTO base_marcacoes_new (id, GRUPO, SUBGRUPO)
-        SELECT id, GRUPO, SUBGRUPO
+        INSERT INTO base_marcacoes_new (id, "GRUPO", "SUBGRUPO")
+        SELECT id, "GRUPO", "SUBGRUPO"
         FROM base_marcacoes
     """))
     
@@ -118,24 +118,24 @@ def downgrade() -> None:
     conn.execute(sa.text("""
         CREATE TABLE base_marcacoes_new (
             id INTEGER NOT NULL PRIMARY KEY,
-            GRUPO VARCHAR(100) NOT NULL,
-            SUBGRUPO VARCHAR(100) NOT NULL,
-            TipoGasto VARCHAR(100),
-            CategoriaGeral VARCHAR(100)
+            "GRUPO" VARCHAR(100) NOT NULL,
+            "SUBGRUPO" VARCHAR(100) NOT NULL,
+            "TipoGasto" VARCHAR(100),
+            "CategoriaGeral" VARCHAR(100)
         )
     """))
     
     print("   Copiando dados e populando de base_grupos_config...")
     conn.execute(sa.text("""
-        INSERT INTO base_marcacoes_new (id, GRUPO, SUBGRUPO, TipoGasto, CategoriaGeral)
+        INSERT INTO base_marcacoes_new (id, "GRUPO", "SUBGRUPO", "TipoGasto", "CategoriaGeral")
         SELECT 
             m.id,
-            m.GRUPO,
-            m.SUBGRUPO,
-            COALESCE(g.tipo_gasto_padrao, 'Ajustável') as TipoGasto,
-            COALESCE(g.categoria_geral, 'Despesa') as CategoriaGeral
+            m."GRUPO",
+            m."SUBGRUPO",
+            COALESCE(g.tipo_gasto_padrao, 'Ajustável') as "TipoGasto",
+            COALESCE(g.categoria_geral, 'Despesa') as "CategoriaGeral"
         FROM base_marcacoes m
-        LEFT JOIN base_grupos_config g ON m.GRUPO = g.nome_grupo
+        LEFT JOIN base_grupos_config g ON m."GRUPO" = g.nome_grupo
     """))
     
     print("   Substituindo tabela...")

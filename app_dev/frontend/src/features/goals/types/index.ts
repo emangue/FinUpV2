@@ -9,9 +9,12 @@
 
 export type GoalStatus = 'ativo' | 'concluido' | 'atrasado' | 'inativo'
 
+/** Tipo de plano: gastos ou investimentos (derivado de categoria_geral) */
+export type PlanType = 'gastos' | 'investimentos'
+
 export interface Goal {
-  // ✅ Campos REAIS retornados pelo backend (budget_planning)
-  id: number
+  // id pode ser null para grupos com gasto mas sem meta definida
+  id: number | null
   user_id?: number
   grupo: string                    // ANTES: categoria_geral - nome da meta/grupo
   mes_referencia: string           // Era "prazo" - formato YYYY-MM
@@ -20,6 +23,9 @@ export interface Goal {
   valor_realizado?: number         // Calculado pelo backend a partir de journal_entries
   percentual?: number              // Calculado pelo backend
   ativo?: number                   // 0=inativo, 1=ativo
+  categoria_geral?: string         // Despesa, Investimentos, Transferência, Receita (base_grupos_config)
+  planType?: PlanType              // 'gastos' | 'investimentos' - derivado de categoria_geral
+  cor?: string                     // Cor no donut (hex, ex: #3b82f6)
   subgrupos?: { subgrupo: string; valor: number; percentual: number }[]
   created_at?: string
   updated_at?: string
@@ -33,9 +39,10 @@ export interface GoalCreate {
 }
 
 export interface GoalUpdate {
-  grupo?: string              // ANTES: categoria_geral
+  grupo?: string
   mes_referencia?: string
   valor_planejado?: number
+  cor?: string                // Cor no gráfico donut (hex)
 }
 
 export interface LinkedBudget {

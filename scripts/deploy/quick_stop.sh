@@ -1,48 +1,66 @@
 #!/bin/bash
 # Quick Stop - Sistema Financeiro v5
-# Uso: ./quick_stop.sh
+# Uso: ./quick_stop.sh (pode rodar de qualquer pasta)
+#
+# Mata APENAS processos nas portas 8000 e 3000-3005.
+# Nunca mata processos por nome (evita afetar Cursor/IDE).
+
+# Ir para raiz do projeto
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+cd "$PROJECT_ROOT"
 
 echo "🛑 Parando servidores..."
+echo "   Projeto: $PROJECT_ROOT"
+echo ""
 
-# Função para matar processo e seus filhos
+# Função para matar processo e seus filhos (evita órfãos)
 kill_tree() {
     local pid=$1
-    local children=$(pgrep -P $pid)
+    [ -z "$pid" ] && return
+    local children=$(pgrep -P $pid 2>/dev/null)
     for child in $children; do
         kill_tree $child
     done
     kill -9 $pid 2>/dev/null || true
 }
 
-# Parar via PIDs (mata processo pai E filhos)
-if [ -f temp/pids/backend.pid ]; then
-    PID=$(cat temp/pids/backend.pid)
+# 1. Parar via PIDs salvos (mais limpo)
+if [ -f "$PROJECT_ROOT/temp/pids/backend.pid" ]; then
+    PID=$(cat "$PROJECT_ROOT/temp/pids/backend.pid")
     kill_tree $PID
-    echo "✅ Backend parado (PID: $PID + filhos)"
-    rm temp/pids/backend.pid
+    echo "✅ Backend parado (PID: $PID)"
+    rm -f "$PROJECT_ROOT/temp/pids/backend.pid"
 fi
 
-if [ -f temp/pids/frontend.pid ]; then
-    PID=$(cat temp/pids/frontend.pid)
+if [ -f "$PROJECT_ROOT/temp/pids/frontend.pid" ]; then
+    PID=$(cat "$PROJECT_ROOT/temp/pids/frontend.pid")
     kill_tree $PID
-    echo "✅ Frontend parado (PID: $PID + filhos)"
-    rm temp/pids/frontend.pid
+    echo "✅ Frontend parado (PID: $PID)"
+    rm -f "$PROJECT_ROOT/temp/pids/frontend.pid"
 fi
 
-# Garantir que portas estão livres (mata processos órfãos)
+if [ -f "$PROJECT_ROOT/temp/pids/admin.pid" ]; then
+    PID=$(cat "$PROJECT_ROOT/temp/pids/admin.pid")
+    kill_tree $PID
+    echo "✅ App Admin parado (PID: $PID)"
+    rm -f "$PROJECT_ROOT/temp/pids/admin.pid"
+fi
+
+# 2. Garantir portas livres (processos órfãos que não foram registrados)
 BACKEND_ORPHANS=$(lsof -ti:8000 2>/dev/null)
 if [ ! -z "$BACKEND_ORPHANS" ]; then
     echo "$BACKEND_ORPHANS" | xargs kill -9 2>/dev/null
-    echo "🧹 Limpos $(echo $BACKEND_ORPHANS | wc -w | xargs) processos órfãos na porta 8000"
+    echo "🧹 Limpos processos órfãos na porta 8000"
 fi
 
-# Frontend: limpar portas 3000-3005 (Next.js pode usar portas alternativas)
 for PORT in 3000 3001 3002 3003 3004 3005; do
     FRONTEND_ORPHANS=$(lsof -ti:$PORT 2>/dev/null)
     if [ ! -z "$FRONTEND_ORPHANS" ]; then
         echo "$FRONTEND_ORPHANS" | xargs kill -9 2>/dev/null
-        echo "🧹 Limpos $(echo $FRONTEND_ORPHANS | wc -w | xargs) processos órfãos na porta $PORT"
+        echo "🧹 Limpos processos órfãos na porta $PORT"
     fi
 done
 
-echo "✅ Portas 8000 e 3000-3005 liberadas"
+echo ""
+echo "✅ Servidores parados. Portas 8000 e 3000-3005 liberadas."

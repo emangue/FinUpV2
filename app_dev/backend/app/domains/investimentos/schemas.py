@@ -30,8 +30,8 @@ class InvestimentoPortfolioBase(BaseModel):
 
 
 class InvestimentoPortfolioCreate(InvestimentoPortfolioBase):
-    """Schema para criação de investimento"""
-    user_id: int
+    """Schema para criação de investimento. user_id é preenchido pelo backend."""
+    user_id: Optional[int] = None
 
 
 class InvestimentoPortfolioUpdate(BaseModel):
@@ -62,6 +62,13 @@ class InvestimentoPortfolioResponse(InvestimentoPortfolioBase):
 
     class Config:
         from_attributes = True
+
+
+class InvestimentoComHistoricoResponse(InvestimentoPortfolioResponse):
+    """Resposta com valores do histórico do mês (usado para ativos/passivos)"""
+    valor_total_mes: Optional[Decimal] = None
+    valor_unitario_mes: Optional[Decimal] = None
+    quantidade_mes: Optional[float] = None
 
 
 # ============================================================================
@@ -244,6 +251,16 @@ class RendimentoMensal(BaseModel):
     rendimento_mes: Decimal
     patrimonio_final: Decimal
     aporte_mes: Decimal
+
+
+class PatrimonioMensal(BaseModel):
+    """Patrimônio (ativos, passivos, PL) de um mês específico"""
+    ano: int
+    mes: int
+    anomes: int
+    ativos: float
+    passivos: float
+    patrimonio_liquido: float
 
 
 class ProjecaoCenario(BaseModel):

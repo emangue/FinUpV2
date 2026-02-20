@@ -33,16 +33,17 @@ from .domains.classification.router import router as classification_router
 from .domains.investimentos.router import router as investimentos_router
 
 # Cria app FastAPI
+# docs/redoc desabilitados em produção (segurança)
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
     description="API REST para Sistema de Finanças Pessoais - Arquitetura Modular",
-    docs_url="/docs",  # Swagger UI
-    redoc_url="/redoc"  # ReDoc
+    docs_url="/docs" if settings.DEBUG else None,
+    redoc_url="/redoc" if settings.DEBUG else None,
 )
 
 # Rate Limiting - Proteção contra abuso
-limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
+limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
