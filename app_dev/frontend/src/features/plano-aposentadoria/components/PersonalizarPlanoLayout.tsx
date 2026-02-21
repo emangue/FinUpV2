@@ -1,10 +1,14 @@
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { Pencil } from 'lucide-react'
 import type { AporteExtraordinario, PlanoProfile } from '../types'
 import { planProfiles } from '../lib/plan-profiles'
+import { salvarPlano, atualizarPlano, carregarPlano } from '../services/plano-api'
+import { useDashboardMetrics } from '@/features/dashboard/hooks/use-dashboard'
+import { fetchLastMonthWithData } from '@/features/dashboard/services/dashboard-api'
 
 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
@@ -17,18 +21,59 @@ function fF(v: number): string {
   return 'R$ ' + Math.round(v).toLocaleString('pt-BR')
 }
 
-export function PersonalizarPlanoLayout() {
+interface PersonalizarPlanoLayoutProps {
+  /** Sprint H: ID do cenário para edição. Sem ID = criar novo */
+  cenarioId?: number
+}
+
+export function PersonalizarPlanoLayout({ cenarioId }: PersonalizarPlanoLayoutProps) {
   const router = useRouter()
+  const hoje = new Date()
+  const { metrics } = useDashboardMetrics(hoje.getFullYear(), hoje.getMonth() + 1)
+  const patrimonioLiquido = metrics?.patrimonio_liquido_mes ?? 0
+
   const [age, setAge] = useState(35)
   const [retire, setRetire] = useState(65)
   const [aporte, setAporte] = useState(5000)
   const [retorno, setRetorno] = useState(10)
   const [inflacao, setInflacao] = useState(4.5)
-  const [patrimonio, setPatrimonio] = useState(760000)
+  const [patrimonio, setPatrimonio] = useState(760000) // Será sobrescrito por metrics ou carregarPlano
   const [rendaMensal, setRendaMensal] = useState(25000)
   const [extras, setExtras] = useState<AporteExtraordinario[]>([])
+  const [nomeCenario, setNomeCenario] = useState(`Plano ${new Date().getFullYear()}`)
   const [activeProfile, setActiveProfile] = useState<PlanoProfile>('moderado')
   const [showSuccess, setShowSuccess] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
+
+  const didInitPatrimonioFromMetrics = useRef(false)
+  useEffect(() => {
+    if (cenarioId || patrimonioLiquido <= 0 || didInitPatrimonioFromMetrics.current) return
+    didInitPatrimonioFromMetrics.current = true
+    setPatrimonio(patrimonioLiquido)
+  }, [patrimonioLiquido, cenarioId])
+
+  // Sprint H: Carregar cenário ao editar
+  useEffect(() => {
+    if (!cenarioId) return
+    setLoadError(null)
+    carregarPlano(cenarioId)
+      .then((data) => {
+        setAge(data.age)
+        setRetire(data.retire)
+        setAporte(data.aporte)
+        setRetorno(data.retorno)
+        setInflacao(data.inflacao)
+        setPatrimonio(data.patrimonio)
+        setRendaMensal(data.rendaMensal)
+        setExtras(data.extras)
+        setNomeCenario(data.cenario.nome_cenario || `Plano ${new Date().getFullYear()}`)
+        if (data.retorno >= 8 && data.retorno <= 12) setActiveProfile('moderado')
+        else if (data.retorno < 8) setActiveProfile('conservador')
+        else setActiveProfile('arrojado')
+      })
+      .catch((err) => setLoadError(err?.message ?? 'Erro ao carregar cenário'))
+  }, [cenarioId])
 
   const years = Math.max(1, retire - age)
   const months = years * 12
@@ -258,10 +303,18 @@ export function PersonalizarPlanoLayout() {
               />
             </svg>
           </button>
-          <h1 className="text-base font-semibold text-gray-900 flex-1">
-            Personalizar Meu Plano
-          </h1>
-          <span className="text-xs text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full font-medium">
+          <div className="flex-1 min-w-0 flex items-center gap-2">
+            <input
+              type="text"
+              value={nomeCenario}
+              onChange={(e) => setNomeCenario(e.target.value)}
+              placeholder="Nome do cenário"
+              className="flex-1 min-w-0 text-base font-semibold text-gray-900 bg-transparent border-b border-transparent hover:border-gray-200 focus:border-gray-400 outline-none focus:ring-0 px-1 py-0.5 rounded transition-colors"
+              aria-label="Nome do cenário"
+            />
+            <Pencil className="w-4 h-4 text-gray-400 shrink-0" aria-hidden />
+          </div>
+          <span className="text-xs text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full font-medium shrink-0">
             Simulador
           </span>
         </div>
@@ -1058,9 +1111,40 @@ export function PersonalizarPlanoLayout() {
         </div>
 
         <div className="sticky bottom-0 -mx-5 px-5 py-4 bg-gradient-to-t from-gray-50 via-gray-50 to-transparent">
+          {loadError && (
+            <p className="text-sm text-red-600 mb-2 text-center">{loadError}</p>
+          )}
           <button
-            onClick={() => setShowSuccess(true)}
-            className="w-full py-3.5 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-emerald-200"
+            onClick={async () => {
+              setSaving(true)
+              try {
+                const payload = {
+                  age,
+                  retire,
+                  patrimonio,
+                  rendaMensal,
+                  aporte,
+                  retorno,
+                  inflacao,
+                  extras,
+                  nomeCenario: nomeCenario.trim() || `Plano ${new Date().getFullYear()}`,
+                }
+                const { year, month } = await fetchLastMonthWithData('patrimonio')
+                const anomesPatrimonio = year * 100 + month
+                if (cenarioId) {
+                  await atualizarPlano(cenarioId, payload, patrimonioLiquido, anomesPatrimonio)
+                } else {
+                  await salvarPlano(payload, patrimonioLiquido, anomesPatrimonio)
+                }
+                setShowSuccess(true)
+              } catch (err) {
+                setLoadError(err instanceof Error ? err.message : 'Erro ao salvar')
+              } finally {
+                setSaving(false)
+              }
+            }}
+            disabled={saving}
+            className="w-full py-3.5 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-emerald-200 disabled:opacity-70"
           >
             <svg
               className="w-4 h-4"
@@ -1075,7 +1159,7 @@ export function PersonalizarPlanoLayout() {
                 d="M5 13l4 4L19 7"
               />
             </svg>
-            Salvar Meu Plano
+            {saving ? 'Salvando...' : cenarioId ? 'Atualizar Plano' : 'Salvar Meu Plano'}
           </button>
         </div>
       </div>

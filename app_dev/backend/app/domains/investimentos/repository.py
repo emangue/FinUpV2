@@ -14,7 +14,8 @@ from .models import (
     InvestimentoHistorico,
     InvestimentoCenario,
     AporteExtraordinario,
-    InvestimentoPlanejamento
+    InvestimentoPlanejamento,
+    CenarioProjecao,
 )
 
 
@@ -648,6 +649,56 @@ class InvestimentoRepository:
             self.db.commit()
             return True
         return False
+
+    def delete_projecao_by_cenario(self, cenario_id: int) -> int:
+        """Remove todas as projeções de um cenário. Retorna quantidade removida."""
+        deleted = self.db.query(CenarioProjecao).filter(
+            CenarioProjecao.cenario_id == cenario_id
+        ).delete()
+        self.db.commit()
+        return deleted
+
+    def bulk_create_projecao(
+        self,
+        cenario_id: int,
+        projecoes: List[Dict[str, Any]]
+    ) -> int:
+        """Insere projeções em lote. projecoes = [{mes_num, anomes, patrimonio, aporte}, ...]"""
+        objs = [
+            CenarioProjecao(
+                cenario_id=cenario_id,
+                mes_num=p['mes_num'],
+                anomes=p['anomes'],
+                patrimonio=Decimal(str(p['patrimonio'])),
+                aporte=Decimal(str(p.get('aporte', 0))),
+            )
+            for p in projecoes
+        ]
+        self.db.bulk_save_objects(objs)
+        self.db.commit()
+        return len(objs)
+
+    def get_projecao_by_cenario(
+        self,
+        cenario_id: int,
+        user_id: int
+    ) -> List[Dict[str, Any]]:
+        """Retorna projeções de um cenário (validando ownership)"""
+        cenario = self.get_cenario_by_id(cenario_id, user_id)
+        if not cenario:
+            return []
+        rows = self.db.query(CenarioProjecao).filter(
+            CenarioProjecao.cenario_id == cenario_id
+        ).order_by(CenarioProjecao.mes_num).all()
+        return [
+            {
+                'mes_num': r.mes_num,
+                'anomes': r.anomes,
+                'patrimonio': float(r.patrimonio),
+                'aporte': float(r.aporte) if r.aporte is not None else 0,
+            }
+            for r in rows
+        ]
 
     # ============================================================================
     # PLANEJAMENTO OPERATIONS

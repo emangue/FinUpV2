@@ -1,13 +1,17 @@
 'use client'
 
 /**
- * Tab Plano Aposentadoria - Card "Construa Seu Plano" (versão refatorada)
- * - Curva ascendente como elemento central (Bézier cúbica)
- * - Patrimônio (bottom-left) e Meta (top-right) posicionados na curva
- * - Timeline horizontal no topo com marcadores Hoje/Aposentadoria
+ * Tab Plano Aposentadoria - Sprint H
+ * Se existem cenários: mostra Central de Cenários (lista + criar/editar)
+ * Se não: mostra card "Construa Seu Plano"
  */
 
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { getCenarios } from '@/features/investimentos/services/investimentos-api'
+import type { InvestimentoCenario } from '@/features/investimentos/types'
+import { CentralCenarios } from './central-cenarios'
+import { PlanoChart } from './plano-chart'
 
 function formatCurrency(value: number) {
   if (value >= 1_000_000) return `R$ ${(value / 1_000_000).toFixed(1)} mi`
@@ -35,9 +39,48 @@ export function PlanoAposentadoriaTab({
   const valor = patrimonioLiquido ?? 0
   const idade = idadeAtual ?? 35
 
+  const [cenarios, setCenarios] = useState<InvestimentoCenario[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const fetchCenarios = useCallback(async () => {
+    try {
+      const list = await getCenarios(true)
+      setCenarios(list || [])
+    } catch {
+      setCenarios([])
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchCenarios()
+  }, [fetchCenarios])
+
   const handleCreate = () => {
     if (onCreatePlan) onCreatePlan()
     else router.push('/mobile/personalizar-plano')
+  }
+
+  // Sprint H: Se existem cenários, mostrar Central
+  if (loading) {
+    return (
+      <div className="rounded-2xl border border-gray-200 bg-white p-8 flex items-center justify-center min-h-[200px]">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600" />
+      </div>
+    )
+  }
+
+  if (cenarios.length > 0) {
+    const cenarioPrincipal = cenarios.find((c) => c.principal) ?? cenarios[0]
+    return (
+      <div className="space-y-4">
+        <PlanoChart cenarioId={cenarioPrincipal.id} />
+        <div className="rounded-2xl border border-gray-200 bg-white p-6">
+          <CentralCenarios cenarios={cenarios} onRefresh={fetchCenarios} />
+        </div>
+      </div>
+    )
   }
 
   const steps = [
@@ -49,6 +92,8 @@ export function PlanoAposentadoriaTab({
 
   return (
     <div className="space-y-4">
+      {/* Gráfico PL Realizado vs Plano (só realizado quando não há cenário) */}
+      <PlanoChart cenarioId={null} />
       {/* Card principal */}
       <div className="rounded-2xl border border-gray-200 bg-white px-6 pt-6 pb-5">
         {/* Header */}

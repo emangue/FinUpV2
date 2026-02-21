@@ -5,7 +5,7 @@
  * Agora usa fetchWithAuth() para enviar token JWT automaticamente
  */
 
-import { apiGet, apiPost, apiPatch, apiDelete, API_ENDPOINTS } from '@/core/config/api.config'
+import { apiGet, apiPost, apiPatch, apiPut, apiDelete, API_ENDPOINTS } from '@/core/config/api.config'
 import type {
   InvestimentoPortfolio,
   PortfolioResumo,
@@ -18,9 +18,11 @@ import type {
   TimelineFilters,
   CreateInvestimentoForm,
   CreateCenarioForm,
+  UpdateCenarioForm,
   InvestimentoHistorico,
   ParametrosSimulacao,
   SimulacaoCenario,
+  ProjecaoItem,
 } from '../types'
 
 // Usar a URL do config centralizado
@@ -155,9 +157,10 @@ export async function getPatrimonioTimeline(
  */
 export async function getCenarios(ativo?: boolean): Promise<InvestimentoCenario[]> {
   const params = new URLSearchParams()
-  if (ativo !== undefined) params.append('ativo', String(ativo))
+  // Só envia ativo quando false (evita 422 com ?ativo=true no FastAPI)
+  if (ativo === false) params.append('ativo', 'false')
 
-  const url = `${BASE_URL}/cenarios?${params.toString()}`
+  const url = params.toString() ? `${BASE_URL}/cenarios?${params.toString()}` : `${BASE_URL}/cenarios`
   return apiGet<InvestimentoCenario[]>(url)
 }
 
@@ -165,6 +168,29 @@ export async function createCenario(
   data: CreateCenarioForm
 ): Promise<InvestimentoCenario> {
   return apiPost<InvestimentoCenario>(`${BASE_URL}/cenarios`, data)
+}
+
+export async function getCenario(cenarioId: number): Promise<InvestimentoCenario> {
+  return apiGet<InvestimentoCenario>(`${BASE_URL}/cenarios/${cenarioId}`)
+}
+
+export async function updateCenario(
+  cenarioId: number,
+  data: UpdateCenarioForm
+): Promise<InvestimentoCenario> {
+  return apiPut<InvestimentoCenario>(`${BASE_URL}/cenarios/${cenarioId}`, data)
+}
+
+export async function getCenarioProjecao(
+  cenarioId: number,
+  recalc?: boolean
+): Promise<ProjecaoItem[]> {
+  const qs = recalc ? '?recalc=true' : ''
+  return apiGet<ProjecaoItem[]>(`${BASE_URL}/cenarios/${cenarioId}/projecao${qs}`)
+}
+
+export async function deleteCenario(cenarioId: number): Promise<void> {
+  return apiDelete<void>(`${BASE_URL}/cenarios/${cenarioId}`)
 }
 
 export async function simularCenario(cenarioId: number): Promise<SimulacaoCompleta> {
@@ -238,8 +264,8 @@ export async function criarCenario(data: {
  * Lista cenários salvos
  */
 export async function listarCenarios(ativo: boolean = true): Promise<any[]> {
-  // ✅ FASE 1 - Autenticação automática via apiGet
-  return apiGet<any[]>(`${BASE_URL}/cenarios?ativo=${ativo}`)
+  const suffix = ativo === false ? '?ativo=false' : ''
+  return apiGet<any[]>(`${BASE_URL}/cenarios${suffix}`)
 }
 
 /**

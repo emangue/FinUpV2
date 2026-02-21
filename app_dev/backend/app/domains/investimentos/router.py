@@ -115,6 +115,108 @@ def copiar_mes_anterior(
     return {"copiados": count, "anomes_destino": anomes_destino}
 
 
+# ============================================================================
+# CENARIOS - Rotas ANTES de /{investimento_id} para evitar conflito (cenarios ≠ id)
+# ============================================================================
+
+@router.post("/cenarios", response_model=schemas.InvestimentoCenarioResponse, status_code=201)
+def create_cenario(
+    data: schemas.InvestimentoCenarioCreateIn,
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id)
+):
+    """Cria novo cenário de simulação. user_id vem do token de autenticação."""
+    full_data = schemas.InvestimentoCenarioCreate(**data.model_dump(), user_id=user_id)
+    service = InvestimentoService(db)
+    return service.create_cenario(full_data)
+
+
+@router.get("/cenarios", response_model=List[schemas.InvestimentoCenarioResponse])
+def list_cenarios(
+    ativo: Optional[str] = Query(default="true", description="Apenas cenários ativos (true/false)"),
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id)
+):
+    """Lista cenários do usuário"""
+    ativo_bool = ativo.lower() in ("true", "1", "yes") if ativo else True
+    service = InvestimentoService(db)
+    return service.list_cenarios(user_id, ativo_bool)
+
+
+@router.get("/cenarios/{cenario_id}/simular", response_model=schemas.SimulacaoCompleta)
+def simular_cenario(
+    cenario_id: int,
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id)
+):
+    """Executa simulação completa de um cenário"""
+    service = InvestimentoService(db)
+    simulacao = service.simular_cenario(cenario_id, user_id)
+
+    if not simulacao:
+        raise HTTPException(status_code=404, detail="Cenário não encontrado")
+
+    return simulacao
+
+
+@router.get("/cenarios/{cenario_id}/projecao")
+def get_cenario_projecao(
+    cenario_id: int,
+    recalc: bool = Query(False, description="Forçar recálculo da projeção"),
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id)
+):
+    """Retorna projeção mês a mês do cenário"""
+    service = InvestimentoService(db)
+    return service.get_projecao(cenario_id, user_id, force_recalc=recalc)
+
+
+@router.get("/cenarios/{cenario_id}", response_model=schemas.InvestimentoCenarioResponse)
+def get_cenario(
+    cenario_id: int,
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id)
+):
+    """Busca cenário por ID (para edição)"""
+    service = InvestimentoService(db)
+    cenario = service.get_cenario(cenario_id, user_id)
+    if not cenario:
+        raise HTTPException(status_code=404, detail="Cenário não encontrado")
+    return cenario
+
+
+@router.put("/cenarios/{cenario_id}", response_model=schemas.InvestimentoCenarioResponse)
+def update_cenario(
+    cenario_id: int,
+    data: schemas.InvestimentoCenarioUpdate,
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id)
+):
+    """Atualiza cenário e recalcula projeção mês a mês"""
+    service = InvestimentoService(db)
+    cenario = service.update_cenario(cenario_id, user_id, data)
+    if not cenario:
+        raise HTTPException(status_code=404, detail="Cenário não encontrado")
+    return cenario
+
+
+@router.delete("/cenarios/{cenario_id}", status_code=204)
+def delete_cenario(
+    cenario_id: int,
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id)
+):
+    """Deleta cenário (soft delete)"""
+    service = InvestimentoService(db)
+    ok = service.delete_cenario(cenario_id, user_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Cenário não encontrado")
+
+
+# ============================================================================
+# PORTFOLIO BY ID (rotas genéricas por último)
+# ============================================================================
+
 @router.get("/{investimento_id}", response_model=schemas.InvestimentoComHistoricoResponse)
 def get_investimento(
     investimento_id: int,
@@ -252,49 +354,6 @@ def delete_historico_mes(
             status_code=404,
             detail="Investimento ou histórico do mês não encontrado"
         )
-
-
-# ============================================================================
-# CENARIOS & SIMULACAO ENDPOINTS
-# ============================================================================
-
-@router.post("/cenarios", response_model=schemas.InvestimentoCenarioResponse, status_code=201)
-def create_cenario(
-    data: schemas.InvestimentoCenarioCreate,
-    db: Session = Depends(get_db),
-    user_id: int = Depends(get_current_user_id)
-):
-    """Cria novo cenário de simulação"""
-    data.user_id = user_id
-    service = InvestimentoService(db)
-    return service.create_cenario(data)
-
-
-@router.get("/cenarios", response_model=List[schemas.InvestimentoCenarioResponse])
-def list_cenarios(
-    ativo: Optional[bool] = Query(True, description="Apenas cenários ativos"),
-    db: Session = Depends(get_db),
-    user_id: int = Depends(get_current_user_id)
-):
-    """Lista cenários do usuário"""
-    service = InvestimentoService(db)
-    return service.list_cenarios(user_id, ativo)
-
-
-@router.get("/cenarios/{cenario_id}/simular", response_model=schemas.SimulacaoCompleta)
-def simular_cenario(
-    cenario_id: int,
-    db: Session = Depends(get_db),
-    user_id: int = Depends(get_current_user_id)
-):
-    """Executa simulação completa de um cenário"""
-    service = InvestimentoService(db)
-    simulacao = service.simular_cenario(cenario_id, user_id)
-
-    if not simulacao:
-        raise HTTPException(status_code=404, detail="Cenário não encontrado")
-
-    return simulacao
 
 
 # ============================================================================
