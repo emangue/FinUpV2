@@ -251,7 +251,7 @@ export default function DashboardMobilePage() {
               />
             )}
 
-            {/* Recent Transactions */}
+            {/* Recent Transactions - Sprint A: sem mensagem redundante (botão é autoexplicativo) */}
             <div className="border-t border-gray-100 pt-4 mt-6">
               <h3 className="text-sm font-bold text-gray-900 mb-3">Transações Recentes</h3>
               <button

@@ -307,6 +307,7 @@ export function PersonalizarPlanoLayout() {
             </div>
           </div>
 
+          {/* Sprint A: Idade atual editável via slider */}
           <div className="mb-4">
             <label className="text-[10px] text-gray-400 uppercase tracking-wide mb-1.5 block">
               Idade atual
