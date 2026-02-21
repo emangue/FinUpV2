@@ -67,6 +67,11 @@ class TransactionFilters(BaseModel):
     """Schema de filtros de transação"""
     year: Optional[int] = None
     month: Optional[int] = None
+    # Sprint F: período customizado (prioridade sobre year/month)
+    year_inicio: Optional[int] = None
+    month_inicio: Optional[int] = None
+    year_fim: Optional[int] = None
+    month_fim: Optional[int] = None
     estabelecimento: Optional[str] = None
     grupo: Optional[str] = None
     subgrupo: Optional[str] = None

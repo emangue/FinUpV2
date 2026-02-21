@@ -126,9 +126,13 @@ def get_grupos_com_media(
 @router.get("/list", response_model=TransactionListResponse)
 def list_transactions(
     page: int = Query(1, ge=1),
-    limit: int = Query(10, ge=1, le=100),
+    limit: int = Query(10, ge=1, le=500),
     year: Optional[int] = None,
     month: Optional[int] = None,
+    year_inicio: Optional[int] = Query(None, description="Sprint F: início do período"),
+    month_inicio: Optional[int] = Query(None, ge=1, le=12),
+    year_fim: Optional[int] = Query(None, description="Sprint F: fim do período"),
+    month_fim: Optional[int] = Query(None, ge=1, le=12),
     estabelecimento: Optional[str] = None,
     grupo: Optional[str] = None,
     subgrupo: Optional[str] = None,
@@ -149,6 +153,10 @@ def list_transactions(
     filters = TransactionFilters(
         year=year,
         month=month,
+        year_inicio=year_inicio,
+        month_inicio=month_inicio,
+        year_fim=year_fim,
+        month_fim=month_fim,
         estabelecimento=estabelecimento,
         grupo=grupo,
         subgrupo=subgrupo,
@@ -178,6 +186,10 @@ def get_tipos_gasto_com_media(
 def get_filtered_total(
     year: Optional[int] = None,
     month: Optional[int] = None,
+    year_inicio: Optional[int] = Query(None),
+    month_inicio: Optional[int] = Query(None, ge=1, le=12),
+    year_fim: Optional[int] = Query(None),
+    month_fim: Optional[int] = Query(None, ge=1, le=12),
     tipo: Optional[str] = None,
     categoria_geral: Optional[str] = None,
     tipo_gasto: Optional[List[str]] = Query(None),  # Aceita múltiplos valores
@@ -196,10 +208,14 @@ def get_filtered_total(
     service = TransactionService(db)
     
     filters = TransactionFilters(
-        year=year, 
-        month=month, 
-        tipo=tipo, 
-        categoria_geral=categoria_geral, 
+        year=year,
+        month=month,
+        year_inicio=year_inicio,
+        month_inicio=month_inicio,
+        year_fim=year_fim,
+        month_fim=month_fim,
+        tipo=tipo,
+        categoria_geral=categoria_geral,
         tipo_gasto=tipo_gasto,
         grupo=grupo,
         subgrupo=subgrupo,
@@ -210,6 +226,78 @@ def get_filtered_total(
     )
     
     return service.get_filtered_total(user_id, filters)
+
+
+def _build_filters_from_query(
+    year=None, month=None, year_inicio=None, month_inicio=None, year_fim=None, month_fim=None,
+    tipo=None, categoria_geral=None, tipo_gasto=None, grupo=None, subgrupo=None, subgrupo_null=None,
+    estabelecimento=None, search=None, cartao=None
+) -> TransactionFilters:
+    return TransactionFilters(
+        year=year, month=month,
+        year_inicio=year_inicio, month_inicio=month_inicio, year_fim=year_fim, month_fim=month_fim,
+        tipo=tipo, categoria_geral=categoria_geral, tipo_gasto=tipo_gasto,
+        grupo=grupo, subgrupo=subgrupo, subgrupo_null=subgrupo_null,
+        estabelecimento=estabelecimento, search=search, cartao=cartao
+    )
+
+
+@router.get("/resumo", summary="Sprint F: Resumo do período")
+def get_resumo(
+    year: Optional[int] = None,
+    month: Optional[int] = None,
+    year_inicio: Optional[int] = Query(None),
+    month_inicio: Optional[int] = Query(None, ge=1, le=12),
+    year_fim: Optional[int] = Query(None),
+    month_fim: Optional[int] = Query(None, ge=1, le=12),
+    grupo: Optional[str] = None,
+    subgrupo: Optional[str] = None,
+    subgrupo_null: Optional[bool] = Query(None),
+    estabelecimento: Optional[str] = None,
+    categoria_geral: Optional[str] = None,
+    search: Optional[str] = None,
+    cartao: Optional[str] = None,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """Sprint F: Resumo (total, quantidade, maior_gasto, media_por_dia) com filtros."""
+    service = TransactionService(db)
+    filters = _build_filters_from_query(
+        year=year, month=month,
+        year_inicio=year_inicio, month_inicio=month_inicio, year_fim=year_fim, month_fim=month_fim,
+        grupo=grupo, subgrupo=subgrupo, subgrupo_null=subgrupo_null,
+        estabelecimento=estabelecimento, categoria_geral=categoria_geral,
+        search=search, cartao=cartao
+    )
+    return service.get_resumo(user_id, filters)
+
+
+@router.get("/gastos-por-grupo")
+def get_gastos_por_grupo(
+    year: Optional[int] = None,
+    month: Optional[int] = None,
+    year_inicio: Optional[int] = Query(None),
+    month_inicio: Optional[int] = Query(None, ge=1, le=12),
+    year_fim: Optional[int] = Query(None),
+    month_fim: Optional[int] = Query(None, ge=1, le=12),
+    grupo: Optional[str] = None,
+    subgrupo: Optional[str] = None,
+    subgrupo_null: Optional[bool] = Query(None),
+    estabelecimento: Optional[str] = None,
+    search: Optional[str] = None,
+    cartao: Optional[str] = None,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """Sprint F: Gastos agregados por grupo (Despesa) com filtros."""
+    service = TransactionService(db)
+    filters = _build_filters_from_query(
+        year=year, month=month,
+        year_inicio=year_inicio, month_inicio=month_inicio, year_fim=year_fim, month_fim=month_fim,
+        grupo=grupo, subgrupo=subgrupo, subgrupo_null=subgrupo_null,
+        estabelecimento=estabelecimento, search=search, cartao=cartao
+    )
+    return service.get_gastos_por_grupo(user_id, filters)
 
 
 class PropagateInfoResponse(BaseModel):
