@@ -3,7 +3,7 @@
  * Sprint 3.2 - Dashboard Mobile Redesign
  * 
  * Gráfico de barras para receitas vs despesas
- * ATUALIZADO: Seguindo protótipo de referência com alturas fixas
+ * Suporta modo mensal (7 meses) e anual (por ano)
  */
 
 'use client'
@@ -11,41 +11,38 @@
 import { useState } from 'react'
 import type { ChartDataPoint } from '../types'
 
+export type BarChartMode = 'monthly' | 'yearly'
+
 interface BarChartProps {
   data: ChartDataPoint[]
   title: string
   totalValue: number
-  selectedMonth: Date  // Mês selecionado no scroll
+  selectedMonth: Date  // Mês selecionado no scroll (modo mensal)
+  selectedYear?: number  // Ano selecionado (modo anual)
+  mode?: BarChartMode
 }
 
-export function BarChart({ data, title, totalValue, selectedMonth }: BarChartProps) {
+export function BarChart({
+  data,
+  title,
+  totalValue,
+  selectedMonth,
+  selectedYear,
+  mode = 'monthly'
+}: BarChartProps) {
   const [hoveredBar, setHoveredBar] = useState<number | null>(null)
 
-  // Alturas FIXAS em pixels (como no protótipo de referência)
-  // Garante visualização consistente independente dos valores reais
-  const fixedHeights = [
-    { despesas: 50, receitas: 65 },   // Mês 1
-    { despesas: 62, receitas: 80 },   // Mês 2
-    { despesas: 75, receitas: 95 },   // Mês 3
-    { despesas: 58, receitas: 72 },   // Mês 4
-    { despesas: 88, receitas: 110 },  // Mês 5
-    { despesas: 98, receitas: 125 },  // Mês 6
-    { despesas: 70, receitas: 88 },   // Mês 7
-  ]
-
-  // Calcular últimos 7 meses baseado no mês selecionado
+  // Calcular últimos 7 meses baseado no mês selecionado (modo mensal)
   const generateLast7Months = () => {
     const months = []
     const current = new Date(selectedMonth)
     
-    // Começar 6 meses antes do selecionado
     for (let i = 6; i >= 0; i--) {
       const date = new Date(current.getFullYear(), current.getMonth() - i, 1)
       const yearStr = date.getFullYear()
       const monthStr = String(date.getMonth() + 1).padStart(2, '0')
       const dateKey = `${yearStr}-${monthStr}-01`
       
-      // Buscar dados reais da API pelo formato YYYY-MM-01
       const apiData = data.find(d => d.date === dateKey)
       
       months.push({
@@ -58,8 +55,10 @@ export function BarChart({ data, title, totalValue, selectedMonth }: BarChartPro
     return months
   }
 
-  // Calcular os últimos 7 meses dinamicamente (com dados da API quando disponíveis)
-  const displayData = generateLast7Months()
+  // Modo anual: usar data diretamente (já vem agregada por ano)
+  const displayData = mode === 'yearly'
+    ? data
+    : generateLast7Months()
 
   // Calcular alturas proporcionais baseadas nos valores reais
   const calculateProportionalHeights = () => {
@@ -100,7 +99,10 @@ export function BarChart({ data, title, totalValue, selectedMonth }: BarChartPro
 
   const formatDate = (dateStr: string) => {
     // dateStr format: YYYY-MM-DD
-    const [year, month, day] = dateStr.split('-')
+    const [year, month] = dateStr.split('-')
+    if (mode === 'yearly') {
+      return year
+    }
     const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
     return monthNames[parseInt(month) - 1]
   }
@@ -111,7 +113,9 @@ export function BarChart({ data, title, totalValue, selectedMonth }: BarChartPro
         <h3 className="text-sm font-bold text-gray-900">{title}</h3>
         <p className="text-lg font-bold text-gray-900">{formatCurrency(totalValue)}</p>
       </div>
-      <p className="text-xs text-gray-400 mb-4">Comparação Mensal</p>
+      <p className="text-xs text-gray-400 mb-4">
+        {mode === 'yearly' ? 'Comparação Anual' : 'Comparação Mensal'}
+      </p>
 
       {/* Bar Chart */}
       <div className="relative">

@@ -4,58 +4,83 @@
  * Dashboard Mobile - Redesigned
  * Sprint 3.2 - Substituição completa da tela antiga
  * 
- * Novo design baseado no protótipo "Insights":
- * - WalletBalanceCard com change percentage
- * - BarChart (receitas vs despesas mensal)
- * - DonutChart (fontes de receita)
- * - Integração com APIs novas (income-sources, metrics com change%)
+ * Aba Resultado: Mês, YTD e Ano
+ * - Mês: scroll de meses, gráfico mensal (últimos 7 meses)
+ * - YTD: scroll de anos, gráfico anual (Jan até mês mais recente do ano mais novo)
+ * - Ano: scroll de anos, gráfico anual (ano inteiro)
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Download } from 'lucide-react'
 import { MobileHeader } from '@/components/mobile/mobile-header'
 import { MonthScrollPicker } from '@/components/mobile/month-scroll-picker'
+import { YearScrollPicker } from '@/components/mobile/year-scroll-picker'
 import { YTDToggle, YTDToggleValue } from '@/components/mobile/ytd-toggle'
 import { BarChart } from '@/features/dashboard/components/bar-chart'
 import { GastosPorCartaoBox } from '@/features/dashboard/components/gastos-por-cartao-box'
 import { PatrimonioTab } from '@/features/dashboard/components/patrimonio-tab'
 import { OrcamentoTab } from '@/features/dashboard/components/orcamento-tab'
 import { PlanoAposentadoriaTab } from '@/features/plano-aposentadoria/components/plano-aposentadoria-tab'
-import { useDashboardMetrics, useIncomeSources, useExpenseSources, useChartData } from '@/features/dashboard/hooks/use-dashboard'
+import { useDashboardMetrics, useIncomeSources, useExpenseSources, useChartData, useChartDataYearly } from '@/features/dashboard/hooks/use-dashboard'
 import { fetchLastMonthWithData } from '@/features/dashboard/services/dashboard-api'
 import { useRequireAuth } from '@/core/hooks/use-require-auth'
+
+const YEARS_RANGE = 7 // Últimos N anos no scroll/gráfico anual
 
 export default function DashboardMobilePage() {
   const router = useRouter()
   const isAuth = useRequireAuth() // 🔐 Hook de proteção de rota
   const [selectedMonth, setSelectedMonth] = useState<Date>(new Date())
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear())
   const [period, setPeriod] = useState<YTDToggleValue>('month')
   const [activeTab, setActiveTab] = useState<'resultado' | 'patrimonio'>('resultado')
+  const [lastMonthWithData, setLastMonthWithData] = useState<{ year: number; month: number } | null>(null)
 
-  // Extrair year e month do selectedMonth
-  const year = selectedMonth.getFullYear()
+  // year/month/ytdMonth para métricas e OrcamentoTab
+  const year = period === 'month' ? selectedMonth.getFullYear() : selectedYear
   const month = period === 'month' ? selectedMonth.getMonth() + 1 : undefined
+  const ytdMonth = period === 'ytd' ? (lastMonthWithData?.month ?? undefined) : undefined
+
+  // Lista de anos para scroll/gráfico (YTD e Ano)
+  const yearsList = useMemo(() => {
+    const lastYear = lastMonthWithData?.year ?? new Date().getFullYear()
+    const result: number[] = []
+    for (let y = lastYear - YEARS_RANGE + 1; y <= lastYear; y++) {
+      result.push(y)
+    }
+    return result
+  }, [lastMonthWithData?.year])
 
   // ✅ TODOS OS HOOKS PRIMEIRO (antes de any return)
-  const { metrics, loading: loadingMetrics } = useDashboardMetrics(year, month)
+  const { metrics, loading: loadingMetrics } = useDashboardMetrics(year, month, ytdMonth)
   const { loading: loadingSources } = useIncomeSources(year, month)
   const { loading: loadingExpenses } = useExpenseSources(year, month)
   
-  // BarChart precisa de múltiplos meses
-  const year2025 = 2025
-  const year2026 = 2026
-  const { chartData: chartData2025 } = useChartData(year2025, undefined)
-  const { chartData: chartData2026, loading: loadingChart } = useChartData(year2026, undefined)
-  const chartData = [...chartData2025, ...chartData2026]
+  // Chart data: mensal (Mês) ou anual (YTD/Ano)
+  const { chartData: chartDataMonthly, loading: loadingChartMonthly } = useChartData(
+    selectedMonth.getFullYear(),
+    selectedMonth.getMonth() + 1
+  )
+  const { chartData: chartDataYearly, loading: loadingChartYearly } = useChartDataYearly(
+    yearsList,
+    period === 'ytd' ? (lastMonthWithData?.month ?? undefined) : undefined
+  )
+  
+  const chartData = period === 'month' ? chartDataMonthly : chartDataYearly
+  const loadingChart = period === 'month' ? loadingChartMonthly : loadingChartYearly
 
   const isLoading = loadingMetrics || loadingSources || loadingExpenses || loadingChart
 
-  // Default: último mês com dados (journal_entries para resultado/orçamento)
+  // Default: último mês com dados
   useEffect(() => {
     if (!isAuth) return
     fetchLastMonthWithData('transactions')
-      .then((lastMonth) => setSelectedMonth(new Date(lastMonth.year, lastMonth.month - 1, 1)))
+      .then((last) => {
+        setSelectedMonth(new Date(last.year, last.month - 1, 1))
+        setSelectedYear(last.year)
+        setLastMonthWithData(last)
+      })
       .catch(() => {})
   }, [isAuth])
 
@@ -76,14 +101,22 @@ export default function DashboardMobilePage() {
   
   return (
     <div className="flex flex-col h-screen bg-gray-50">
-      {/* Scroll de meses fixo no topo + ícone Download compacto na mesma linha */}
+      {/* Scroll de meses ou anos (conforme período) + ícone Download */}
       <div className="sticky top-0 z-20 bg-white border-b border-gray-200 shrink-0">
         <div className="flex items-center gap-2">
           <div className="flex-1 min-w-0">
-            <MonthScrollPicker
-              selectedMonth={selectedMonth}
-              onMonthChange={setSelectedMonth}
-            />
+            {period === 'month' ? (
+              <MonthScrollPicker
+                selectedMonth={selectedMonth}
+                onMonthChange={setSelectedMonth}
+              />
+            ) : (
+              <YearScrollPicker
+                years={yearsList}
+                selectedYear={selectedYear}
+                onYearChange={setSelectedYear}
+              />
+            )}
           </div>
           <button
             onClick={() => console.log('Download clicked')}
@@ -148,6 +181,8 @@ export default function DashboardMobilePage() {
                       title="Receitas vs Despesas"
                       totalValue={(metrics?.total_receitas || 0) + (metrics?.total_despesas || 0)}
                       selectedMonth={selectedMonth}
+                      selectedYear={selectedYear}
+                      mode={period === 'month' ? 'monthly' : 'yearly'}
                     />
                   }
                   gastosPorCartao={
@@ -157,7 +192,9 @@ export default function DashboardMobilePage() {
                       monthLabel={
                         month
                           ? `${['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'][month - 1]}/${year}`
-                          : `${year}`
+                          : period === 'ytd'
+                            ? `YTD ${year}`
+                            : `${year}`
                       }
                     />
                   }

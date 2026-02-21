@@ -92,31 +92,41 @@ class DashboardRepository:
                 return {"year": int(result.Ano), "month": int(result.Mes)}
         return {"year": datetime.now().year, "month": datetime.now().month}
     
-    def _build_date_filter(self, year: int, month: Optional[int] = None):
-        """Constrói filtro usando MesFatura
+    def _build_date_filter(self, year: int, month: Optional[int] = None, ytd_month: Optional[int] = None):
+        """Constrói filtro usando MesFatura/Ano/Mes
         
         Args:
             year: Ano a filtrar
-            month: Mês específico (1-12) ou None para ano inteiro
+            month: Mês específico (1-12) ou None para ano inteiro / YTD
+            ytd_month: Se informado com month=None, filtra Jan..ytd_month (YTD)
         """
-        # Se month=None, filtrar ano inteiro usando coluna Ano (Integer)
-        if month is None:
-            return JournalEntry.Ano == year
-        
-        # Com mês específico, usar MesFatura (formato YYYYMM)
-        mes_fatura = f"{year}{month:02d}"
-        return JournalEntry.MesFatura == mes_fatura
+        if month is not None:
+            # Mês específico
+            mes_fatura = f"{year}{month:02d}"
+            return JournalEntry.MesFatura == mes_fatura
+        if ytd_month is not None:
+            # YTD: Jan até ytd_month
+            return and_(JournalEntry.Ano == year, JournalEntry.Mes <= ytd_month)
+        # Ano inteiro
+        return JournalEntry.Ano == year
     
-    def get_metrics(self, user_id: int, year: int, month: Optional[int] = None) -> Dict:
+    def get_metrics(
+        self,
+        user_id: int,
+        year: int,
+        month: Optional[int] = None,
+        ytd_month: Optional[int] = None
+    ) -> Dict:
         """Calcula métricas principais
         
         Args:
             user_id: ID do usuário
             year: Ano a filtrar
-            month: Mês específico (1-12) ou None para ano inteiro
+            month: Mês específico (1-12) ou None para ano inteiro / YTD
+            ytd_month: Se informado com month=None, soma Jan..ytd_month (YTD)
         """
         # Filtro base - SEMPRE filtrar por IgnorarDashboard = 0
-        date_filter = self._build_date_filter(year, month)
+        date_filter = self._build_date_filter(year, month, ytd_month)
         base_query = self.db.query(JournalEntry).filter(
             JournalEntry.user_id == user_id,
             date_filter,
@@ -341,6 +351,56 @@ class DashboardRepository:
             })
         
         return months_data
+    
+    def get_chart_data_yearly(
+        self,
+        user_id: int,
+        years: List[int],
+        ytd_month: Optional[int] = None
+    ) -> List[Dict]:
+        """Retorna dados para gráfico por ano (receitas vs despesas).
+        
+        Args:
+            user_id: ID do usuário
+            years: Lista de anos a retornar (ex: [2023, 2024, 2025])
+            ytd_month: Se informado, soma apenas Jan..ytd_month de cada ano (YTD).
+                       Se None, soma o ano inteiro.
+        """
+        years_data = []
+        for target_year in sorted(years):
+            base_filter = [
+                JournalEntry.user_id == user_id,
+                JournalEntry.Ano == target_year,
+                JournalEntry.IgnorarDashboard == 0
+            ]
+            if ytd_month is not None:
+                base_filter.append(JournalEntry.Mes <= ytd_month)
+            
+            result = self.db.query(
+                func.sum(
+                    case(
+                        (JournalEntry.CategoriaGeral == 'Receita', JournalEntry.Valor),
+                        else_=0
+                    )
+                ).label('receitas'),
+                func.abs(
+                    func.sum(
+                        case(
+                            (JournalEntry.CategoriaGeral == 'Despesa', JournalEntry.Valor),
+                            else_=0
+                        )
+                    )
+                ).label('despesas')
+            ).filter(*base_filter).first()
+            
+            years_data.append({
+                "date": f"{target_year}-01-01",
+                "receitas": float(result.receitas or 0) if result else 0.0,
+                "despesas": float(result.despesas or 0) if result else 0.0,
+                "year": target_year
+            })
+        
+        return years_data
     
     def get_category_expenses(self, user_id: int, year: int, month: Optional[int] = None) -> List[Dict]:
         """Retorna despesas agrupadas por categoria

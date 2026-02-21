@@ -34,13 +34,16 @@ export async function fetchLastMonthWithData(
 /**
  * Busca métricas principais do dashboard
  * Nova feature: change_percentage (variação % vs mês anterior)
+ * ytdMonth: quando informado com month undefined, retorna YTD (Jan..ytdMonth)
  */
 export async function fetchDashboardMetrics(
   year: number,
-  month?: number
+  month?: number,
+  ytdMonth?: number
 ): Promise<DashboardMetrics> {
   const params = new URLSearchParams({ year: year.toString() })
   if (month) params.append('month', month.toString())
+  if (ytdMonth != null && month == null) params.append('ytd_month', ytdMonth.toString())
   
   const response = await fetchWithAuth(`${BASE_URL}/dashboard/metrics?${params}`)
   if (!response.ok) throw new Error(`Failed to fetch metrics: ${response.status}`)
@@ -66,7 +69,7 @@ export async function fetchIncomeSources(
 }
 
 /**
- * Busca dados para gráfico de área (receitas vs despesas)
+ * Busca dados para gráfico de área (receitas vs despesas) - modo mensal
  */
 export async function fetchChartData(
   year: number,
@@ -77,6 +80,26 @@ export async function fetchChartData(
   
   const response = await fetchWithAuth(`${BASE_URL}/dashboard/chart-data?${params}`)
   if (!response.ok) throw new Error(`Failed to fetch chart data: ${response.status}`)
+  
+  const result = await response.json()
+  return result.data || []
+}
+
+/**
+ * Busca dados para gráfico por ano (YTD ou ano inteiro)
+ * @param years - Lista de anos (ex: [2023, 2024, 2025])
+ * @param ytdMonth - Se informado, soma Jan..ytdMonth de cada ano (YTD). Se undefined, ano inteiro.
+ */
+export async function fetchChartDataYearly(
+  years: number[],
+  ytdMonth?: number
+): Promise<ChartDataPoint[]> {
+  if (!years.length) return []
+  const params = new URLSearchParams({ years: years.join(',') })
+  if (ytdMonth != null) params.append('ytd_month', ytdMonth.toString())
+  
+  const response = await fetchWithAuth(`${BASE_URL}/dashboard/chart-data-yearly?${params}`)
+  if (!response.ok) throw new Error(`Failed to fetch chart data yearly: ${response.status}`)
   
   const result = await response.json()
   return result.data || []

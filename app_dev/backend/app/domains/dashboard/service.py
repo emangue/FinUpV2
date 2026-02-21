@@ -2,6 +2,7 @@
 Domínio Dashboard - Service
 Lógica de negócio para dashboard
 """
+from typing import Optional, List
 from sqlalchemy.orm import Session
 from datetime import datetime
 
@@ -23,25 +24,43 @@ class DashboardService:
     def __init__(self, db: Session):
         self.repository = DashboardRepository(db)
     
-    def get_last_month_with_data(self, user_id: int):
-        """Retorna o último mês com dados (ano e mês)"""
-        result = self.repository.get_last_month_with_data(user_id)
+    def get_last_month_with_data(self, user_id: int, source: str = "transactions"):
+        """Retorna o último mês com dados (ano e mês). source: transactions ou patrimonio"""
+        result = self.repository.get_last_month_with_data(user_id, source)
         return result
     
-    def get_metrics(self, user_id: int, year: int, month: int = None) -> DashboardMetrics:
+    def get_metrics(
+        self,
+        user_id: int,
+        year: int,
+        month: int = None,
+        ytd_month: int = None
+    ) -> DashboardMetrics:
         """Retorna métricas principais do dashboard
         
         Args:
             user_id: ID do usuário
             year: Ano a filtrar
-            month: Mês específico (1-12) ou None para ano inteiro
+            month: Mês específico (1-12) ou None para ano inteiro / YTD
+            ytd_month: Se informado com month=None, soma Jan..ytd_month (YTD)
         """
-        data = self.repository.get_metrics(user_id, year, month)
+        data = self.repository.get_metrics(user_id, year, month, ytd_month)
         return DashboardMetrics(**data)
     
     def get_chart_data(self, user_id: int, year: int, month: int) -> ChartDataResponse:
         """Retorna dados para gráfico de área"""
         data = self.repository.get_chart_data(user_id, year, month)
+        chart_points = [ChartDataPoint(**point) for point in data]
+        return ChartDataResponse(data=chart_points)
+    
+    def get_chart_data_yearly(
+        self,
+        user_id: int,
+        years: List[int],
+        ytd_month: Optional[int] = None
+    ) -> ChartDataResponse:
+        """Retorna dados para gráfico por ano (YTD ou ano inteiro)"""
+        data = self.repository.get_chart_data_yearly(user_id, years, ytd_month)
         chart_points = [ChartDataPoint(**point) for point in data]
         return ChartDataResponse(data=chart_points)
     

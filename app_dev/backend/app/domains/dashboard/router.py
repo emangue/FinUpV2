@@ -24,41 +24,36 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 @router.get("/last-month-with-data")
 def get_last_month_with_data(
+    source: str = Query(default="transactions", description="transactions ou patrimonio"),
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
     """
     Retorna o último mês com dados (ano e mês) para o usuário.
-    Útil para inicializar o dashboard com dados reais.
+    source: transactions=journal_entries, patrimonio=investimentos_historico
     """
     service = DashboardService(db)
-    return service.get_last_month_with_data(user_id)
+    return service.get_last_month_with_data(user_id, source)
 
 
 @router.get("/metrics", response_model=DashboardMetrics)
 def get_metrics(
     year: int = Query(default=None, description="Ano (default: atual)"),
-    month: int = Query(default=None, description="Mês (default: None = ano todo)"),
+    month: Optional[int] = Query(default=None, description="Mês (1-12) ou None = ano todo / YTD)"),
+    ytd_month: Optional[int] = Query(default=None, description="YTD: mês limite (1-12). Se informado com month=None, soma Jan..ytd_month"),
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
     """
-    Retorna métricas principais do dashboard:
-    - Total de despesas
-    - Total de receitas
-    - Total de cartões
-    - Saldo do período
-    - Número de transações
-    
-    Se month=None, retorna soma do ano inteiro.
+    Retorna métricas principais do dashboard.
+    Se month=None e ytd_month informado: soma Jan..ytd_month (YTD).
+    Se month=None e ytd_month=None: ano inteiro.
     """
-    # Usar ano atual se não informado
     now = datetime.now()
     year = year or now.year
-    # month pode ser None (ano todo) ou número específico
     
     service = DashboardService(db)
-    return service.get_metrics(user_id, year, month)
+    return service.get_metrics(user_id, year, month, ytd_month)
 
 
 @router.get("/chart-data", response_model=ChartDataResponse)
@@ -70,7 +65,7 @@ def get_chart_data(
 ):
     """
     Retorna dados para gráfico de área:
-    - Receitas e despesas por dia do mês
+    - Receitas e despesas por mês (12 meses até o mês especificado)
     """
     # Usar mês/ano atual se não informado
     now = datetime.now()
@@ -79,6 +74,27 @@ def get_chart_data(
     
     service = DashboardService(db)
     return service.get_chart_data(user_id, year, month)
+
+
+@router.get("/chart-data-yearly", response_model=ChartDataResponse)
+def get_chart_data_yearly(
+    years: str = Query(..., description="Anos separados por vírgula (ex: 2023,2024,2025)"),
+    ytd_month: Optional[int] = Query(None, description="Mês limite para YTD (1-12). Se None, ano inteiro"),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Retorna dados para gráfico por ano:
+    - years: lista de anos (ex: 2023,2024,2025)
+    - ytd_month: se informado, soma Jan..ytd_month de cada ano (YTD)
+    - Se ytd_month=None, soma o ano inteiro
+    """
+    year_list = [int(y.strip()) for y in years.split(",") if y.strip()]
+    if not year_list:
+        raise HTTPException(status_code=400, detail="years é obrigatório")
+    
+    service = DashboardService(db)
+    return service.get_chart_data_yearly(user_id, year_list, ytd_month)
 
 
 @router.get("/categories", response_model=list[CategoryExpense])
