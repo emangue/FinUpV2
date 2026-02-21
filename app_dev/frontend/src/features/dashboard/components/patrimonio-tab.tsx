@@ -37,22 +37,18 @@ function formatCurrency(value: number) {
   }).format(value)
 }
 
-type PatrimonioSubTab = 'resultado' | 'plano'
-
 interface PatrimonioTabProps {
   selectedMonth: Date
-  /** Sprint G: no dashboard, mostra sub-abas Resultado | Plano */
   variant?: 'standalone' | 'dashboard'
-  /** Sprint G: conteúdo da sub-aba Plano (PlanoAposentadoriaTab) */
+  /** Conteúdo do plano de aposentadoria (PlanoChart + Central de Cenários) */
   planoAposentadoria?: React.ReactNode
-  /** Sprint G: métricas para exibir caixa Patrimônio dentro da aba */
+  /** Métricas para exibir caixa Patrimônio dentro da aba */
   metrics?: DashboardMetrics | null
 }
 
 type DistribuicaoToggle = 'ativo' | 'passivo'
 
 export function PatrimonioTab({ selectedMonth, variant = 'standalone', planoAposentadoria, metrics }: PatrimonioTabProps) {
-  const [subTab, setSubTab] = useState<PatrimonioSubTab>('resultado')
   const router = useRouter()
   const [data, setData] = useState<PatrimonioMensal[]>([])
   const [distribuicaoAtivo, setDistribuicaoAtivo] = useState<DistribuicaoTipo[]>([])
@@ -199,34 +195,6 @@ export function PatrimonioTab({ selectedMonth, variant = 'standalone', planoApos
         <KpiCards metrics={metrics} variant="patrimonio-only" />
       )}
 
-      {/* Sprint G: Sub-abas Resultado | Plano */}
-      {isDashboardVariant && planoAposentadoria && (
-        <div className="flex gap-6 border-b border-gray-200 mb-4">
-          <button
-            onClick={() => setSubTab('resultado')}
-            className={`pb-2 text-sm font-semibold transition-colors ${
-              subTab === 'resultado'
-                ? 'text-gray-900 border-b-2 border-gray-900'
-                : 'text-gray-400 hover:text-gray-600'
-            }`}
-          >
-            Resultado
-          </button>
-          <button
-            onClick={() => setSubTab('plano')}
-            className={`pb-2 text-sm font-medium transition-colors ${
-              subTab === 'plano'
-                ? 'text-gray-900 border-b-2 border-gray-900'
-                : 'text-gray-400 hover:text-gray-600'
-            }`}
-          >
-            Plano
-          </button>
-        </div>
-      )}
-
-      {(!isDashboardVariant || subTab === 'resultado') && (
-      <>
       {/* Gráfico */}
       <div className="rounded-xl border border-gray-200 bg-white p-4">
         <h3 className="text-sm font-semibold text-gray-900 mb-4">
@@ -322,11 +290,9 @@ export function PatrimonioTab({ selectedMonth, variant = 'standalone', planoApos
       </button>
         </CollapsibleContent>
       </Collapsible>
-      </>
-      )}
 
-      {/* Sprint G: Sub-aba Plano */}
-      {isDashboardVariant && subTab === 'plano' && planoAposentadoria}
+      {/* Plano de Aposentadoria (gráfico PL Realizado vs Plano + cenários) */}
+      {isDashboardVariant && planoAposentadoria}
     </div>
   )
 }

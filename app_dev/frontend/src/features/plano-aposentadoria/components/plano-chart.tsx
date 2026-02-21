@@ -128,6 +128,10 @@ export function PlanoChart({ cenarioId }: PlanoChartProps) {
       if (!byYear.has(ano)) byYear.set(ano, [])
       byYear.get(ano)!.push(p)
     }
+    const ultimoItemProj = projecao.length > 0 ? projecao[projecao.length - 1] : null
+    const ultimoAnomesProj = ultimoItemProj?.anomes ?? null
+    const ultimoAnoProj = ultimoAnomesProj != null ? Math.floor(ultimoAnomesProj / 100) : null
+
     byYear.forEach((items, ano) => {
       let patrimonio: number
       if (ano === anoAtual && anomesUltimoRealizado != null) {
@@ -135,7 +139,6 @@ export function PlanoChart({ cenarioId }: PlanoChartProps) {
         if (val != null) {
           patrimonio = val
         } else {
-          // Plano feito em jan: sem match exato (ex. plano começa em fev), usar valor do realizado em jan
           const realizadoJan = realizadoByYear.get(ano)
           if (realizadoJan != null) {
             patrimonio = realizadoJan
@@ -144,6 +147,10 @@ export function PlanoChart({ cenarioId }: PlanoChartProps) {
             patrimonio = typeof first.patrimonio === 'number' ? first.patrimonio : parseFloat(String(first.patrimonio)) || 0
           }
         }
+      } else if (ano === ultimoAnoProj && ultimoItemProj != null) {
+        patrimonio = typeof ultimoItemProj.patrimonio === 'number'
+          ? ultimoItemProj.patrimonio
+          : parseFloat(String(ultimoItemProj.patrimonio)) || 0
       } else {
         const last = [...items].sort((a, b) => b.anomes - a.anomes)[0]
         patrimonio = typeof last.patrimonio === 'number' ? last.patrimonio : parseFloat(String(last.patrimonio)) || 0
@@ -156,12 +163,32 @@ export function PlanoChart({ cenarioId }: PlanoChartProps) {
     planoByYearClean.forEach((_, a) => anos.add(a))
     const anosSorted = [...anos].sort((a, b) => a - b)
 
-    return anosSorted.map((ano) => ({
-      year: ano,
-      label: String(ano),
-      plRealizado: realizadoByYear.get(ano) ?? null,
-      plPlano: planoByYearClean.get(ano) ?? null,
-    }))
+    const mesUltimoRealizado = anomesUltimoRealizado != null && Math.floor(anomesUltimoRealizado / 100) === anoAtual
+      ? anomesUltimoRealizado % 100
+      : 12
+    const mesUltimoPlano = ultimoAnomesProj != null && ultimoAnoProj != null && Math.floor(ultimoAnomesProj / 100) === ultimoAnoProj
+      ? ultimoAnomesProj % 100
+      : 12
+
+    return anosSorted.map((ano) => {
+      let plPlano = planoByYearClean.get(ano) ?? null
+      if (ultimoAnoProj != null && ano > ultimoAnoProj) plPlano = null
+
+      let x = ano
+      if (ano === anoAtual && mesUltimoRealizado < 12) {
+        x = ano - 1 + mesUltimoRealizado / 12
+      } else if (ano === ultimoAnoProj && mesUltimoPlano < 12) {
+        x = ano - 1 + mesUltimoPlano / 12
+      }
+
+      return {
+        year: ano,
+        x,
+        label: String(ano),
+        plRealizado: realizadoByYear.get(ano) ?? null,
+        plPlano,
+      }
+    })
   }, [timeline, projecao, anoAtual])
 
   // Anos que aparecem no eixo X (ticks) - mostrar labels só nesses. SEMPRE chamar (Rules of Hooks)
@@ -175,6 +202,14 @@ export function PlanoChart({ cenarioId }: PlanoChartProps) {
     for (let y = first; y <= last; y += step) set.add(y)
     set.add(last)
     return set
+  }, [chartData])
+
+  const xDomain = useMemo(() => {
+    const xs = chartData.map((d) => d.x)
+    if (xs.length === 0) return [0, 1]
+    const min = Math.min(...xs)
+    const max = Math.max(...chartData.map((d) => d.year))
+    return [min, max] as [number, number]
   }, [chartData])
 
   if (loading) {
@@ -193,11 +228,13 @@ export function PlanoChart({ cenarioId }: PlanoChartProps) {
     )
   }
 
-  const dataWithNumbers = chartData.map((d) => ({
-    ...d,
-    plRealizadoNum: d.plRealizado ?? undefined,
-    plPlanoNum: d.plPlano ?? undefined,
-  }))
+  const dataWithNumbers = [...chartData]
+    .sort((a, b) => a.x - b.x)
+    .map((d) => ({
+      ...d,
+      plRealizadoNum: d.plRealizado ?? undefined,
+      plPlanoNum: d.plPlano ?? undefined,
+    }))
 
   const maxVal = Math.max(
     ...dataWithNumbers.flatMap((d) => [d.plRealizadoNum ?? 0, d.plPlanoNum ?? 0]),
@@ -213,6 +250,15 @@ export function PlanoChart({ cenarioId }: PlanoChartProps) {
   const showDot = (year: number) =>
     year === anoAtual || year === ultimoAnoProjecao
 
+  const ultimoRealizadoIndex = dataWithNumbers.reduce(
+    (last, d, i) => (d.plRealizadoNum != null ? i : last),
+    -1
+  )
+  const ultimoPlanoIndex = dataWithNumbers.reduce(
+    (last, d, i) => (d.plPlanoNum != null ? i : last),
+    -1
+  )
+
   const labelFormatter = (v: number) =>
     v >= 1_000_000 ? `${(v / 1_000_000).toFixed(1)}M` : v >= 1_000 ? `${Math.round(v / 1_000)}k` : String(v)
 
@@ -227,21 +273,27 @@ export function PlanoChart({ cenarioId }: PlanoChartProps) {
           >
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis
-              dataKey="label"
+              type="number"
+              dataKey="x"
+              domain={xDomain}
               tick={{ fontSize: 10 }}
-              ticks={[...anosNoEixoX].sort((a, b) => a - b).map(String)}
+              ticks={[...anosNoEixoX].sort((a, b) => a - b)}
+              tickFormatter={(v) => String(Math.round(v))}
             />
-            <YAxis
-              tick={{ fontSize: 10 }}
-              tickFormatter={(v) => (v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}k` : String(v))}
-              domain={[0, maxVal * 1.05]}
-            />
+            <YAxis hide domain={[0, maxVal * 1.05]} />
             <Tooltip
               formatter={(value: number, name: string) => [
                 formatCurrency(value),
                 name === 'plRealizadoNum' ? 'PL Realizado' : 'PL Plano',
               ]}
-              labelFormatter={(label) => `Ano ${label}`}
+              labelFormatter={(label, payload) => {
+                const x = typeof label === 'number' ? label : (payload?.[0]?.payload?.x ?? Number(label))
+                if (x === Math.floor(x)) return `Ano ${Math.round(x)}`
+                const year = Math.floor(x) + 1
+                const month = Math.min(12, Math.max(1, Math.round((x - Math.floor(x)) * 12)))
+                const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+                return `${MESES[month - 1] ?? 'Jan'} ${year}`
+              }}
               contentStyle={{
                 backgroundColor: 'white',
                 border: '1px solid #e5e7eb',
@@ -268,6 +320,7 @@ export function PlanoChart({ cenarioId }: PlanoChartProps) {
                 content={(props: { x?: number; y?: number; value?: number; index?: number; payload?: { year?: number } }) => {
                   const { x, y, value, index, payload } = props
                   if (value == null || x == null || y == null) return null
+                  if (index !== ultimoRealizadoIndex) return null
                   return (
                     <text key={payload?.year ?? index ?? value} x={x} y={y - 6} textAnchor="middle" fill="#b91c1c" fontSize={10} fontWeight={700}>
                       {labelFormatter(value)}
@@ -296,6 +349,7 @@ export function PlanoChart({ cenarioId }: PlanoChartProps) {
                 content={(props: { x?: number; y?: number; value?: number; index?: number; payload?: { year?: number } }) => {
                   const { x, y, value, index, payload } = props
                   if (value == null || x == null || y == null) return null
+                  if (index !== ultimoPlanoIndex) return null
                   return (
                     <text key={`plano-${payload?.year ?? index ?? value}`} x={x} y={y - 6} textAnchor="middle" fill="#9ca3af" fontSize={10} fontWeight={700}>
                       {labelFormatter(value)}
