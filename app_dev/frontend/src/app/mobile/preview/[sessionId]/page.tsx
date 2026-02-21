@@ -144,6 +144,7 @@ export default function PreviewPage({ params }: PreviewPageProps) {
     mesFatura: data.mes_fatura || 'N/A',
     totalLancamentos: data.totalRegistros || 0,
     somaTotal: somaTotal,
+    tipoDocumento: data.tipo_documento || 'fatura',
   };
 
   return (

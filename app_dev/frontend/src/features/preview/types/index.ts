@@ -55,6 +55,7 @@ export interface FileInfo {
   mesFatura: string;
   totalLancamentos: number;
   somaTotal: number;
+  tipoDocumento?: string; // 'fatura' | 'extrato' - Sprint D
 }
 
 // ============================================

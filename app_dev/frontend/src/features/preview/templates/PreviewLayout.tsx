@@ -60,6 +60,16 @@ import BottomActionBar from '../organisms/BottomActionBar';
 import ClassificationModal from '../molecules/ClassificationModal';
 import { API_CONFIG } from '@/core/config/api.config';
 import { fetchWithAuth } from '@/core/utils/api-client';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Button } from '@/components/ui/button';
 
 interface PreviewLayoutProps {
   sessionId: string;
@@ -76,6 +86,9 @@ export default function PreviewLayout({ sessionId, initialFileInfo, initialTrans
   const [gruposLoaded, setGruposLoaded] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
   const [, setGroupsRefreshKey] = useState(0);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
+  const [criarRegraExclusao, setCriarRegraExclusao] = useState(false);
 
   const fetchGruposSubgrupos = async () => {
     try {
@@ -250,6 +263,43 @@ export default function PreviewLayout({ sessionId, initialFileInfo, initialTrans
     }
   };
 
+  const handleDeleteClick = (transaction: Transaction) => {
+    setTransactionToDelete(transaction);
+    setCriarRegraExclusao(false);
+    setDeleteModalOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!transactionToDelete) return;
+    const previewId = transactionToDelete.id;
+    const baseUrl = `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/upload/preview/${sessionId}`;
+    try {
+      const params = new URLSearchParams({ excluir: '1' });
+      if (criarRegraExclusao) params.set('criar_regra', 'true');
+      const response = await fetchWithAuth(`${baseUrl}/${previewId}?${params}`, { method: 'PATCH' });
+      if (response.ok) {
+        setTransactions((prev) => {
+          const updated = prev.map((tx) => {
+            if (tx.items && tx.items.length > 0) {
+              const newItems = tx.items.filter((item) => item.id !== previewId);
+              if (newItems.length === 0) return null;
+              if (newItems.length === 1) return newItems[0];
+              return { ...tx, items: newItems, occurrences: newItems.length, value: newItems.reduce((s, i) => s + i.value, 0) };
+            }
+            return tx.id === previewId ? null : tx;
+          }).filter(Boolean) as Transaction[];
+          return regroupTransactions(updated);
+        });
+      }
+    } catch (err) {
+      console.error('Erro ao excluir:', err);
+      alert('Erro ao excluir. Tente novamente.');
+    } finally {
+      setDeleteModalOpen(false);
+      setTransactionToDelete(null);
+    }
+  };
+
   return (
     <div className="max-w-md mx-auto bg-white min-h-screen shadow-lg relative">
       <PreviewHeader onCancel={handleCancel} />
@@ -292,6 +342,7 @@ export default function PreviewLayout({ sessionId, initialFileInfo, initialTrans
             onEdit={handleEditTransaction}
             onBatchUpdate={handleBatchUpdate}
             onGroupAdded={handleGroupAdded}
+            onDelete={handleDeleteClick}
             existingGroups={GRUPOS}
           />
         </div>
@@ -316,6 +367,49 @@ export default function PreviewLayout({ sessionId, initialFileInfo, initialTrans
           onSave={handleSaveClassification}
         />
       )}
+
+      {/* Modal Excluir Transação - Sprint D (mobile) */}
+      <Dialog open={deleteModalOpen} onOpenChange={(open) => {
+        setDeleteModalOpen(open);
+        if (!open) setTransactionToDelete(null);
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Excluir transação</DialogTitle>
+            <DialogDescription>
+              Deseja excluir esta transação da importação?
+            </DialogDescription>
+          </DialogHeader>
+          {transactionToDelete && initialFileInfo && (
+            <div className="flex flex-col gap-4 py-2">
+              <p className="text-sm text-muted-foreground">
+                <strong>{transactionToDelete.description}</strong>
+              </p>
+              <div className="flex items-start space-x-2">
+                <Checkbox
+                  id="criar-regra"
+                  checked={criarRegraExclusao}
+                  onCheckedChange={(checked) => setCriarRegraExclusao(!!checked)}
+                />
+                <label
+                  htmlFor="criar-regra"
+                  className="text-sm leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                >
+                  Sempre excluir <strong>{transactionToDelete.description}</strong> para {initialFileInfo.banco} + {initialFileInfo.tipoDocumento === 'extrato' ? 'extrato' : 'fatura'} em futuros imports
+                </label>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteConfirm}>
+              Excluir
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

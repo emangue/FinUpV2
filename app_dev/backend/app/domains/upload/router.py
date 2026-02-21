@@ -3,7 +3,7 @@ Domínio Upload - Router
 Endpoints HTTP - apenas validação e chamadas de service
 """
 from typing import List, Optional
-from fastapi import APIRouter, Depends, UploadFile, File, Form
+from fastapi import APIRouter, Depends, UploadFile, File, Form, Query
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -199,11 +199,13 @@ async def update_preview_classification(
     grupo: str = None,
     subgrupo: str = None,
     excluir: int = None,
+    criar_regra: bool = Query(False, description="Sprint D: criar regra em transacoes_exclusao para sempre excluir"),
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
     """
-    Atualiza classificação (grupo/subgrupo) ou marca exclusão de um registro de preview
+    Atualiza classificação (grupo/subgrupo) ou marca exclusão de um registro de preview.
+    Sprint D: se criar_regra=True e excluir=1, cria TransacaoExclusao (banco+tipo_documento).
     """
     service = UploadService(db)
     return service.update_preview_classification(
@@ -212,6 +214,7 @@ async def update_preview_classification(
         grupo=grupo,
         subgrupo=subgrupo,
         excluir=excluir,
+        criar_regra=criar_regra,
         user_id=user_id
     )
 
