@@ -213,14 +213,54 @@ export async function fetchBudgetVsActual(
 }
 
 /**
+ * Busca aporte planejado (regular + extraordinário) do cenário principal para o mês.
+ * Usa CenarioProjecao da base (inclui aportes extraordinários como 13º, bônus em abril, etc).
+ */
+export async function fetchAportePrincipalPorMes(
+  year: number,
+  month: number
+): Promise<number> {
+  try {
+    const params = new URLSearchParams({ year: year.toString(), month: month.toString() })
+    const response = await fetchWithAuth(`${BASE_URL}/investimentos/cenarios/principal/aporte-mes?${params}`)
+    if (!response.ok) return 0
+    const data: { aporte?: number } = await response.json()
+    return data.aporte ?? 0
+  } catch {
+    return 0
+  }
+}
+
+/**
+ * Soma aportes planejados do cenário principal para ano ou YTD (Jan..ytdMonth).
+ */
+export async function fetchAportePrincipalPeriodo(
+  year: number,
+  ytdMonth?: number
+): Promise<number> {
+  try {
+    const params = new URLSearchParams({ year: year.toString() })
+    if (ytdMonth != null) params.append('ytd_month', ytdMonth.toString())
+    const response = await fetchWithAuth(`${BASE_URL}/investimentos/cenarios/principal/aporte-periodo?${params}`)
+    if (!response.ok) return 0
+    const data: { aporte?: number } = await response.json()
+    return data.aporte ?? 0
+  } catch {
+    return 0
+  }
+}
+
+/**
  * Busca Investimentos vs Plano para o tab Orçamento
  */
 export async function fetchOrcamentoInvestimentos(
   year: number,
-  month?: number
+  month?: number,
+  ytdMonth?: number
 ): Promise<OrcamentoInvestimentosResponse> {
   const params = new URLSearchParams({ year: year.toString() })
   if (month) params.append('month', month.toString())
+  if (ytdMonth != null && month == null) params.append('ytd_month', ytdMonth.toString())
 
   const response = await fetchWithAuth(`${BASE_URL}/dashboard/orcamento-investimentos?${params}`)
   if (!response.ok) throw new Error(`Failed to fetch orcamento investimentos: ${response.status}`)

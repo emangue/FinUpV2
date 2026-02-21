@@ -83,6 +83,15 @@ export interface InvestimentoCenario {
   created_at: string
   updated_at?: string
   aportes_extraordinarios: AporteExtraordinario[]
+  /** Sprint H: plano aposentadoria */
+  idade_atual?: number
+  idade_aposentadoria?: number
+  renda_mensal_alvo?: string
+  inflacao_aa?: string
+  retorno_aa?: string
+  anomes_inicio?: number
+  principal?: boolean
+  extras_json?: string
 }
 
 export interface AporteExtraordinario {
@@ -200,4 +209,38 @@ export interface CreateCenarioForm {
     valor: number
     descricao?: string
   }>
+  /** Sprint H: plano aposentadoria */
+  idade_atual?: number
+  idade_aposentadoria?: number
+  renda_mensal_alvo?: number
+  inflacao_aa?: number
+  retorno_aa?: number
+  anomes_inicio?: number
+  principal?: boolean
+  extras_json?: string
+}
+
+export interface UpdateCenarioForm {
+  nome_cenario?: string
+  descricao?: string
+  patrimonio_inicial?: number
+  rendimento_mensal_pct?: number
+  aporte_mensal?: number
+  periodo_meses?: number
+  idade_atual?: number
+  idade_aposentadoria?: number
+  renda_mensal_alvo?: number
+  inflacao_aa?: number
+  retorno_aa?: number
+  anomes_inicio?: number
+  principal?: boolean
+  extras_json?: string
+}
+
+export interface ProjecaoItem {
+  mes_num: number
+  anomes: number
+  patrimonio: number
+  /** Aporte planejado do mês (regular + extraordinário) - usado como meta/plano */
+  aporte: number
 }

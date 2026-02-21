@@ -689,8 +689,17 @@ class DashboardRepository:
             for r in results
         ]
     
-    def get_orcamento_investimentos(self, user_id: int, year: int, month: Optional[int] = None) -> Dict:
+    def get_orcamento_investimentos(
+        self,
+        user_id: int,
+        year: int,
+        month: Optional[int] = None,
+        ytd_month: Optional[int] = None
+    ) -> Dict:
         """Investimentos vs Plano: realizado (journal CategoriaGeral=Investimentos) vs planejado (budget grupos Investimentos)
+        
+        Args:
+            ytd_month: Se informado com month=None, soma Jan..ytd_month (YTD)
         
         Returns:
             total_investido, total_planejado, items: [{ grupo, valor, plano }]
@@ -719,6 +728,11 @@ class DashboardRepository:
             )
             if mes_ref:
                 q_budget = q_budget.filter(BudgetPlanning.mes_referencia == mes_ref)
+            elif ytd_month is not None:
+                q_budget = q_budget.filter(
+                    BudgetPlanning.mes_referencia >= f'{year}-01',
+                    BudgetPlanning.mes_referencia <= f'{year}-{ytd_month:02d}'
+                )
             else:
                 q_budget = q_budget.filter(BudgetPlanning.mes_referencia.like(f'{year}-%'))
             budgets = q_budget.all()
@@ -733,6 +747,9 @@ class DashboardRepository:
         ]
         if mes_fatura:
             filters.append(JournalEntry.MesFatura == mes_fatura)
+        elif ytd_month is not None:
+            filters.append(JournalEntry.Ano == year)
+            filters.append(JournalEntry.Mes <= ytd_month)
         else:
             filters.append(JournalEntry.Ano == year)
         

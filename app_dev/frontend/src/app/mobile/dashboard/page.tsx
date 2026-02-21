@@ -137,7 +137,7 @@ export default function DashboardMobilePage() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 overflow-y-auto bg-white px-6 pb-6">
+      <div className="flex-1 overflow-y-auto bg-white px-6 pt-6 pb-6">
         {isLoading ? (
           <div className="flex items-center justify-center py-10">
             <div className="text-gray-600">Carregando...</div>
@@ -175,11 +175,11 @@ export default function DashboardMobilePage() {
                   year={year}
                   month={month}
                   variant="resultado"
+                  metrics={metrics ? { total_receitas: metrics.total_receitas, total_despesas: metrics.total_despesas } : null}
+                  ytdMonth={period === 'ytd' ? lastMonthWithData?.month : undefined}
                   insertBetweenResumoAndRest={
                     <BarChart
                       data={chartData}
-                      title="Receitas vs Despesas"
-                      totalValue={(metrics?.total_receitas || 0) + (metrics?.total_despesas || 0)}
                       selectedMonth={selectedMonth}
                       selectedYear={selectedYear}
                       mode={period === 'month' ? 'monthly' : 'yearly'}

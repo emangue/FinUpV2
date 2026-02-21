@@ -196,6 +196,16 @@ export async function apiPatch<T>(url: string, data: any): Promise<T> {
 }
 
 /**
+ * Faz PUT request com autenticação automática
+ */
+export async function apiPut<T>(url: string, data: any): Promise<T> {
+  return fetchJsonWithAuth<T>(url, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+}
+
+/**
  * Faz DELETE request com autenticação automática
  * 
  * @param url - URL completa do endpoint

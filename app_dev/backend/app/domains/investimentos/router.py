@@ -143,6 +143,37 @@ def list_cenarios(
     return service.list_cenarios(user_id, ativo_bool)
 
 
+@router.get("/cenarios/principal/aporte-mes")
+def get_aporte_principal_por_mes(
+    year: int = Query(..., description="Ano (ex: 2026)"),
+    month: int = Query(..., ge=1, le=12, description="Mês (1-12)"),
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id)
+):
+    """
+    Retorna aporte planejado (regular + extraordinário) do cenário principal para o mês.
+    Usa CenarioProjecao quando disponível (inclui aportes extraordinários).
+    """
+    service = InvestimentoService(db)
+    aporte = service.get_aporte_principal_por_mes(user_id, year, month)
+    return {"aporte": aporte if aporte is not None else 0}
+
+
+@router.get("/cenarios/principal/aporte-periodo")
+def get_aporte_principal_periodo(
+    year: int = Query(..., description="Ano (ex: 2026)"),
+    ytd_month: Optional[int] = Query(None, ge=1, le=12, description="YTD: mês limite (1-12). Se None, ano inteiro"),
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id)
+):
+    """
+    Soma aportes planejados do cenário principal para ano ou YTD (Jan..ytd_month).
+    """
+    service = InvestimentoService(db)
+    aporte = service.get_aporte_principal_periodo(user_id, year, ytd_month)
+    return {"aporte": aporte if aporte is not None else 0}
+
+
 @router.get("/cenarios/{cenario_id}/simular", response_model=schemas.SimulacaoCompleta)
 def simular_cenario(
     cenario_id: int,

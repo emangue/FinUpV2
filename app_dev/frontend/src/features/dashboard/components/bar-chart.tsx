@@ -15,20 +15,23 @@ export type BarChartMode = 'monthly' | 'yearly'
 
 interface BarChartProps {
   data: ChartDataPoint[]
-  title: string
-  totalValue: number
+  title?: string
+  totalValue?: number
   selectedMonth: Date  // Mês selecionado no scroll (modo mensal)
   selectedYear?: number  // Ano selecionado (modo anual)
   mode?: BarChartMode
+  /** Se false, oculta título e valor (ex: "Receitas vs Despesas" + total) */
+  showHeader?: boolean
 }
 
 export function BarChart({
   data,
-  title,
-  totalValue,
+  title = '',
+  totalValue = 0,
   selectedMonth,
   selectedYear,
-  mode = 'monthly'
+  mode = 'monthly',
+  showHeader = false
 }: BarChartProps) {
   const [hoveredBar, setHoveredBar] = useState<number | null>(null)
 
@@ -109,10 +112,12 @@ export function BarChart({
 
   return (
     <div className="mb-6">
-      <div className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-bold text-gray-900">{title}</h3>
-        <p className="text-lg font-bold text-gray-900">{formatCurrency(totalValue)}</p>
-      </div>
+      {showHeader && (title || totalValue > 0) && (
+        <div className="flex items-center justify-between mb-2">
+          {title && <h3 className="text-sm font-bold text-gray-900">{title}</h3>}
+          {totalValue > 0 && <p className="text-lg font-bold text-gray-900">{formatCurrency(totalValue)}</p>}
+        </div>
+      )}
       <p className="text-xs text-gray-400 mb-4">
         {mode === 'yearly' ? 'Comparação Anual' : 'Comparação Mensal'}
       </p>

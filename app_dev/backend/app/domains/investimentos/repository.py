@@ -710,6 +710,63 @@ class InvestimentoRepository:
             for r in rows
         ]
 
+    def get_aporte_principal_por_mes(
+        self,
+        user_id: int,
+        year: int,
+        month: int
+    ) -> Optional[float]:
+        """
+        Retorna o aporte planejado (regular + extraordinário) do cenário principal
+        para um mês específico. Usa CenarioProjecao quando disponível.
+        Se não houver projeção para o mês, retorna aporte_mensal do cenário.
+        """
+        principal = self.db.query(InvestimentoCenario).filter(
+            InvestimentoCenario.user_id == user_id,
+            InvestimentoCenario.principal.is_(True),
+            InvestimentoCenario.ativo.is_(True)
+        ).first()
+        if not principal:
+            return None
+        anomes = year * 100 + month
+        proj = self.db.query(CenarioProjecao).filter(
+            CenarioProjecao.cenario_id == principal.id,
+            CenarioProjecao.anomes == anomes
+        ).first()
+        if proj and proj.aporte is not None:
+            return float(proj.aporte)
+        return float(principal.aporte_mensal or 0)
+
+    def get_aporte_principal_periodo(
+        self,
+        user_id: int,
+        year: int,
+        ytd_month: Optional[int] = None
+    ) -> Optional[float]:
+        """
+        Soma aportes planejados (regular + extraordinário) do cenário principal
+        para o ano. Se ytd_month informado, soma Jan..ytd_month (YTD).
+        """
+        principal = self.db.query(InvestimentoCenario).filter(
+            InvestimentoCenario.user_id == user_id,
+            InvestimentoCenario.principal.is_(True),
+            InvestimentoCenario.ativo.is_(True)
+        ).first()
+        if not principal:
+            return None
+        mes_fim = ytd_month if ytd_month is not None else 12
+        anomes_inicio = year * 100 + 1
+        anomes_fim = year * 100 + mes_fim
+        rows = self.db.query(CenarioProjecao).filter(
+            CenarioProjecao.cenario_id == principal.id,
+            CenarioProjecao.anomes >= anomes_inicio,
+            CenarioProjecao.anomes <= anomes_fim
+        ).all()
+        total = sum(float(r.aporte or 0) for r in rows)
+        if total > 0:
+            return total
+        return float(principal.aporte_mensal or 0) * mes_fim
+
     # ============================================================================
     # PLANEJAMENTO OPERATIONS
     # ============================================================================

@@ -16,7 +16,9 @@ from .schemas import (
     BudgetVsActualItem,
     CreditCardExpense,
     IncomeSource,
-    IncomeSourcesResponse
+    IncomeSourcesResponse,
+    OrcamentoInvestimentosResponse,
+    OrcamentoInvestimentosItem,
 )
 
 
@@ -124,5 +126,21 @@ class DashboardService:
         return IncomeSourcesResponse(
             sources=sources,
             total_receitas=total_receitas
+        )
+
+    def get_orcamento_investimentos(
+        self,
+        user_id: int,
+        year: int,
+        month: int = None,
+        ytd_month: int = None
+    ) -> OrcamentoInvestimentosResponse:
+        """Investimentos vs Plano: realizado vs planejado (ano, mês ou YTD)"""
+        data = self.repository.get_orcamento_investimentos(user_id, year, month, ytd_month)
+        items = [OrcamentoInvestimentosItem(**i) for i in data["items"]]
+        return OrcamentoInvestimentosResponse(
+            total_investido=data["total_investido"],
+            total_planejado=data["total_planejado"],
+            items=items
         )
 

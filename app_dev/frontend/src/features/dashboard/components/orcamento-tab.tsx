@@ -12,7 +12,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { ChevronDown } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { fetchIncomeSources, fetchCreditCards } from '../services/dashboard-api'
+import { fetchIncomeSources, fetchCreditCards, fetchAportePrincipalPorMes, fetchAportePrincipalPeriodo, fetchOrcamentoInvestimentos } from '../services/dashboard-api'
 import type { IncomeSource } from '../types'
 import { fetchGoals } from '@/features/goals/services/goals-api'
 import type { Goal } from '@/features/goals/types'
@@ -40,6 +40,10 @@ interface OrcamentoTabProps {
   insertBetweenResumoAndRest?: React.ReactNode
   /** Sprint G: componente GastosPorCartaoBox para collapse Cartões */
   gastosPorCartao?: React.ReactNode
+  /** Métricas do período (usadas no Resumo quando month undefined = ano/YTD) */
+  metrics?: { total_receitas: number; total_despesas: number } | null
+  /** YTD: mês limite (1-12). Quando month undefined e ytdMonth informado, usa Jan..ytdMonth para investimentos */
+  ytdMonth?: number
 }
 
 export function OrcamentoTab({
@@ -48,10 +52,14 @@ export function OrcamentoTab({
   variant = 'full',
   insertBetweenResumoAndRest,
   gastosPorCartao,
+  metrics: metricsProp,
+  ytdMonth: ytdMonthProp,
 }: OrcamentoTabProps) {
   const [receitas, setReceitas] = useState<{ sources: IncomeSource[]; total_receitas: number } | null>(null)
   const [goals, setGoals] = useState<Goal[]>([])
   const [cardsTotal, setCardsTotal] = useState<number | null>(null)
+  const [aportePrincipal, setAportePrincipal] = useState<number>(0)
+  const [totalInvestidoPeriodo, setTotalInvestidoPeriodo] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -59,34 +67,53 @@ export function OrcamentoTab({
       setLoading(true)
       try {
         const selectedMonth = new Date(year, (month ?? 1) - 1, 1)
-        const [inc, budgets, cards] = await Promise.all([
+        const mesRef = month ?? 1
+        const isAnoOuYtd = month == null
+        const results = await Promise.allSettled([
           fetchIncomeSources(year, month ?? undefined),
           fetchGoals(selectedMonth),
           fetchCreditCards(year, month ?? undefined),
+          isAnoOuYtd
+            ? fetchAportePrincipalPeriodo(year, ytdMonthProp)
+            : fetchAportePrincipalPorMes(year, mesRef),
+          isAnoOuYtd ? fetchOrcamentoInvestimentos(year, undefined, ytdMonthProp) : Promise.resolve(null),
         ])
-        setReceitas(inc)
-        setGoals(budgets)
-        setCardsTotal(cards.reduce((s, c) => s + c.total, 0))
+        const [inc, budgets, cards, aporte, orcInv] = results.map((r) =>
+          r.status === 'fulfilled' ? r.value : null
+        )
+        setReceitas(inc ?? null)
+        setGoals(budgets ?? [])
+        setCardsTotal(cards ? cards.reduce((s: number, c: { total: number }) => s + c.total, 0) : null)
+        setAportePrincipal(typeof aporte === 'number' ? aporte : 0)
+        setTotalInvestidoPeriodo(orcInv && typeof orcInv === 'object' && 'total_investido' in orcInv ? orcInv.total_investido : null)
       } catch {
         setReceitas(null)
         setGoals([])
         setCardsTotal(null)
+        setAportePrincipal(0)
+        setTotalInvestidoPeriodo(null)
       } finally {
         setLoading(false)
       }
     }
     load()
-  }, [year, month])
+  }, [year, month, ytdMonthProp])
 
   // Mesmos dados da tela Metas: separar por categoria_geral
   const goalsDespesas = goals.filter((g) => g.categoria_geral !== 'Investimentos')
   const goalsInvestimentos = goals.filter((g) => g.categoria_geral === 'Investimentos')
 
-  const totalDespesas = goalsDespesas.reduce((s, g) => s + (g.valor_realizado ?? 0), 0)
+  // Quando month undefined (ano/YTD), usar metrics para totais (goals = só 1 mês)
+  const useMetricsForResumo = month == null && metricsProp
+  const totalDespesas = useMetricsForResumo
+    ? (metricsProp?.total_despesas ?? 0)
+    : goalsDespesas.reduce((s, g) => s + (g.valor_realizado ?? 0), 0)
   const totalPlanejadoDesp = goalsDespesas.reduce((s, g) => s + (g.valor_planejado ?? 0), 0)
-  const totalInvestido = goalsInvestimentos.reduce((s, g) => s + (g.valor_realizado ?? 0), 0)
-  // Sprint E: totalPlanejadoInv vem do cenário (aporte_mensal). Sem API cenários ainda = 0 → CTA
-  const totalPlanejadoInv = 0
+  const totalInvestido = useMetricsForResumo && totalInvestidoPeriodo != null
+    ? totalInvestidoPeriodo
+    : goalsInvestimentos.reduce((s, g) => s + (g.valor_realizado ?? 0), 0)
+  // Aporte planejado vem do cenário principal (plano de aposentadoria na aba Patrimônio)
+  const totalPlanejadoInv = aportePrincipal
   const percentualDesp = totalPlanejadoDesp > 0 ? (totalDespesas / totalPlanejadoDesp) * 100 : 0
 
   const formatCurrency = (v: number) =>
@@ -105,13 +132,28 @@ export function OrcamentoTab({
     )
   }
 
-  const totalReceitas = receitas?.total_receitas ?? 0
+  const totalReceitas = useMetricsForResumo
+    ? (metricsProp?.total_receitas ?? 0)
+    : (receitas?.total_receitas ?? 0)
   const dentroDoPlanoDesp = totalPlanejadoDesp > 0 && percentualDesp <= 100
   const diffDesp = totalPlanejadoDesp - totalDespesas
   const investidoOk = totalPlanejadoInv > 0 && totalInvestido >= totalPlanejadoInv
+  const pctInvestidoVsPlano = totalPlanejadoInv > 0 ? (totalInvestido / totalPlanejadoInv) * 100 : 0
+  const vezesAcimaPlano = totalPlanejadoInv > 0 ? totalInvestido / totalPlanejadoInv : 0
 
   // Quando totalPlanejadoDesp é 0: mostrar "Dentro do plano" só se despesas também forem 0
   const badgeDentro = totalPlanejadoDesp > 0 ? dentroDoPlanoDesp : totalDespesas <= 0
+
+  // Label investimentos: % correto ou "X vezes o plano"
+  const labelInvestidos = totalPlanejadoInv > 0
+    ? investidoOk
+      ? vezesAcimaPlano > 1
+        ? vezesAcimaPlano >= 2
+          ? `${vezesAcimaPlano.toFixed(1).replace('.', ',')}x o plano`
+          : `${Math.round(pctInvestidoVsPlano)}% do plano`
+        : '100% do aporte'
+      : `${Math.round(pctInvestidoVsPlano)}% do aporte`
+    : 'sem plano'
 
   const isResultadoVariant = variant === 'resultado'
 
@@ -156,14 +198,12 @@ export function OrcamentoTab({
             <p className="text-[9px] font-medium mt-0.5">
               {totalPlanejadoInv > 0 ? (
                 investidoOk ? (
-                  <span className="text-emerald-500">100% do aporte</span>
+                  <span className="text-emerald-500">{labelInvestidos}</span>
                 ) : (
-                  <span className="text-amber-500">
-                    {Math.round((totalInvestido / totalPlanejadoInv) * 100)}% do aporte
-                  </span>
+                  <span className="text-amber-500">{labelInvestidos}</span>
                 )
               ) : (
-                <span className="text-gray-400">sem plano</span>
+                <span className="text-gray-400">{labelInvestidos}</span>
               )}
             </p>
           </div>
@@ -423,31 +463,41 @@ export function OrcamentoTab({
             <p className="text-[10px] text-gray-400 mb-4">
               Aporte planejado: {formatCurrency(totalPlanejadoInv)}/mês
             </p>
-            <div className="flex items-end gap-3 justify-center py-4 mb-4">
-              <div className="flex flex-col items-center gap-1.5">
-                <span className="text-xs font-bold text-blue-600">{formatCurrency(totalInvestido)}</span>
-                <div
-                  className="w-16 bg-blue-500 rounded-t-lg"
-                  style={{
-                    height: Math.min(100, Math.max(10, (totalInvestido / totalPlanejadoInv) * 100)),
-                  }}
-                />
-                <span className="text-[10px] text-gray-500">Investido</span>
-              </div>
-              <div className="flex flex-col items-center gap-1.5">
-                <span className="text-xs font-bold text-gray-400">{formatCurrency(totalPlanejadoInv)}</span>
-                <div
-                  className="w-16 bg-gray-200 rounded-t-lg border-2 border-dashed border-gray-300"
-                  style={{ height: 100 }}
-                />
-                <span className="text-[10px] text-gray-500">Planejado</span>
-              </div>
-            </div>
+            {(() => {
+              const maxVal = Math.max(totalInvestido, totalPlanejadoInv, 1)
+              const barMaxH = 120
+              const hInvestido = Math.max(8, (totalInvestido / maxVal) * barMaxH)
+              const hPlanejado = Math.max(8, (totalPlanejadoInv / maxVal) * barMaxH)
+              return (
+                <div className="flex items-end gap-3 justify-center py-4 mb-4">
+                  <div className="flex flex-col items-center gap-1.5">
+                    <span className="text-xs font-bold text-blue-600">{formatCurrency(totalInvestido)}</span>
+                    <div
+                      className="w-16 bg-blue-500 rounded-t-lg transition-all"
+                      style={{ height: hInvestido }}
+                    />
+                    <span className="text-[10px] text-gray-500">Investido</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-1.5">
+                    <span className="text-xs font-bold text-gray-400">{formatCurrency(totalPlanejadoInv)}</span>
+                    <div
+                      className="w-16 bg-gray-200 rounded-t-lg border-2 border-dashed border-gray-300 transition-all"
+                      style={{ height: hPlanejado }}
+                    />
+                    <span className="text-[10px] text-gray-500">Planejado</span>
+                  </div>
+                </div>
+              )
+            })()}
             {investidoOk && (
               <div className="flex items-center justify-center gap-2 py-3 bg-emerald-50 rounded-xl">
                 <span className="text-lg">✅</span>
                 <span className="text-xs font-semibold text-emerald-700">
-                  Aporte do mês realizado 100%!
+                  {vezesAcimaPlano > 1
+                    ? vezesAcimaPlano >= 2
+                      ? `${vezesAcimaPlano.toFixed(1).replace('.', ',')}x o plano!`
+                      : `${Math.round(pctInvestidoVsPlano)}% do plano!`
+                    : 'Aporte do mês realizado 100%!'}
                 </span>
               </div>
             )}

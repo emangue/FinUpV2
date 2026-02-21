@@ -563,6 +563,24 @@ class InvestimentoService:
             return None
         return schemas.InvestimentoCenarioResponse.model_validate(cenario)
 
+    def get_aporte_principal_por_mes(
+        self,
+        user_id: int,
+        year: int,
+        month: int
+    ) -> Optional[float]:
+        """Retorna aporte planejado (regular + extraordinário) do cenário principal para o mês."""
+        return self.repository.get_aporte_principal_por_mes(user_id, year, month)
+
+    def get_aporte_principal_periodo(
+        self,
+        user_id: int,
+        year: int,
+        ytd_month: Optional[int] = None
+    ) -> Optional[float]:
+        """Soma aportes do cenário principal para ano ou YTD (Jan..ytd_month)."""
+        return self.repository.get_aporte_principal_periodo(user_id, year, ytd_month)
+
     def update_cenario(
         self,
         cenario_id: int,

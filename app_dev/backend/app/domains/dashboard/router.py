@@ -16,7 +16,8 @@ from .schemas import (
     CategoryExpense,
     BudgetVsActualResponse,
     CreditCardExpense,
-    IncomeSourcesResponse
+    IncomeSourcesResponse,
+    OrcamentoInvestimentosResponse,
 )
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -198,6 +199,23 @@ def get_credit_card_expenses(
     
     service = DashboardService(db)
     return service.get_credit_card_expenses(user_id, year, month)
+
+
+@router.get("/orcamento-investimentos", response_model=OrcamentoInvestimentosResponse)
+def get_orcamento_investimentos(
+    year: int = Query(..., description="Ano"),
+    month: Optional[int] = Query(None, description="Mês (1-12) ou None = ano/YTD"),
+    ytd_month: Optional[int] = Query(None, description="YTD: mês limite (1-12). Se month=None e ytd_month informado, soma Jan..ytd_month"),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Investimentos vs Plano: total investido (journal) e planejado (budget).
+    month=None e ytd_month informado: YTD (Jan..ytd_month).
+    month=None e ytd_month=None: ano inteiro.
+    """
+    service = DashboardService(db)
+    return service.get_orcamento_investimentos(user_id, year, month, ytd_month)
 
 
 @router.get("/income-sources", response_model=IncomeSourcesResponse)

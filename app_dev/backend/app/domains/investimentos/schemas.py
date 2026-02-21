@@ -2,7 +2,7 @@
 Schemas Pydantic do domínio Investimentos.
 """
 from datetime import datetime, date
-from typing import Optional, List
+from typing import Optional, List, Any
 from decimal import Decimal
 from pydantic import BaseModel, Field, validator
 
@@ -151,10 +151,22 @@ class InvestimentoCenarioBase(BaseModel):
     periodo_meses: int = Field(default=120, ge=1, le=600)  # Até 50 anos
 
 
-class InvestimentoCenarioCreate(InvestimentoCenarioBase):
-    """Schema para criação de cenário"""
-    user_id: int
+class InvestimentoCenarioCreateIn(InvestimentoCenarioBase):
+    """Schema do body da requisição - SEM user_id (injetado pelo router)."""
     aportes_extraordinarios: List[AporteExtraordinarioCreate] = []
+    idade_atual: Optional[int] = None
+    idade_aposentadoria: Optional[int] = None
+    renda_mensal_alvo: Optional[Decimal] = None
+    inflacao_aa: Optional[Decimal] = None
+    retorno_aa: Optional[Decimal] = None
+    anomes_inicio: Optional[int] = None
+    principal: Optional[bool] = None
+    extras_json: Optional[str] = None
+
+
+class InvestimentoCenarioCreate(InvestimentoCenarioCreateIn):
+    """Schema completo para criação (com user_id injetado pelo router)."""
+    user_id: int  # Obrigatório após injetar no router
 
 
 class InvestimentoCenarioUpdate(BaseModel):
@@ -166,6 +178,14 @@ class InvestimentoCenarioUpdate(BaseModel):
     aporte_mensal: Optional[Decimal] = None
     periodo_meses: Optional[int] = None
     ativo: Optional[bool] = None
+    idade_atual: Optional[int] = None
+    idade_aposentadoria: Optional[int] = None
+    renda_mensal_alvo: Optional[Decimal] = None
+    inflacao_aa: Optional[Decimal] = None
+    retorno_aa: Optional[Decimal] = None
+    anomes_inicio: Optional[int] = None
+    principal: Optional[bool] = None
+    extras_json: Optional[str] = None
 
 
 class InvestimentoCenarioResponse(InvestimentoCenarioBase):
@@ -176,9 +196,25 @@ class InvestimentoCenarioResponse(InvestimentoCenarioBase):
     created_at: datetime
     updated_at: Optional[datetime]
     aportes_extraordinarios: List[AporteExtraordinarioResponse] = []
+    idade_atual: Optional[int] = None
+    idade_aposentadoria: Optional[int] = None
+    renda_mensal_alvo: Optional[Decimal] = None
+    inflacao_aa: Optional[Decimal] = None
+    retorno_aa: Optional[Decimal] = None
+    anomes_inicio: Optional[int] = None
+    principal: Optional[bool] = None
+    extras_json: Optional[str] = None
 
     class Config:
         from_attributes = True
+
+
+class CenarioProjecaoItem(BaseModel):
+    """Item de projeção mensal"""
+    mes_num: int
+    anomes: int
+    patrimonio: Decimal
+    aporte: Decimal = Field(default=Decimal('0'), description='Aporte planejado do mês (usado como meta/plano)')
 
 
 # ============================================================================
