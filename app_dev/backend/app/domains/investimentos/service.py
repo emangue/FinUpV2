@@ -540,9 +540,13 @@ class InvestimentoService:
         user_id: int,
         ativo: Optional[bool] = True
     ) -> List[schemas.InvestimentoCenarioResponse]:
-        """Lista cenários do usuário"""
+        """Lista cenários do usuário. Garante que só um tenha principal=True."""
         cenarios = self.repository.list_cenarios(user_id, ativo)
-
+        principals = [c for c in cenarios if c.principal]
+        if len(principals) > 1:
+            for c in principals[1:]:
+                c.principal = False
+            self.db.commit()
         return [
             schemas.InvestimentoCenarioResponse.model_validate(c)
             for c in cenarios
@@ -571,6 +575,8 @@ class InvestimentoService:
             return None
 
         dump = data.model_dump(exclude_unset=True)
+        if dump.get('principal') is True:
+            self.repository.clear_principal_except(user_id, cenario_id)
         for field, value in dump.items():
             setattr(cenario, field, value)
 

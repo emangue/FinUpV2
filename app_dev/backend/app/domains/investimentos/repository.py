@@ -635,6 +635,16 @@ class InvestimentoRepository:
         self.db.refresh(cenario)
         return cenario
 
+    def clear_principal_except(self, user_id: int, cenario_id: int) -> int:
+        """Remove principal de todos os cenários do usuário exceto o informado. Retorna qtd atualizados."""
+        updated = self.db.query(InvestimentoCenario).filter(
+            InvestimentoCenario.user_id == user_id,
+            InvestimentoCenario.id != cenario_id,
+            InvestimentoCenario.principal.is_(True)
+        ).update({InvestimentoCenario.principal: False})
+        self.db.commit()
+        return updated
+
     def update_cenario(self, cenario: InvestimentoCenario) -> InvestimentoCenario:
         """Atualiza cenário"""
         self.db.commit()

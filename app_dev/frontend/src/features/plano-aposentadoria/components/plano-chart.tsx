@@ -4,8 +4,8 @@
  * Gráfico PL Realizado vs Plano - por ano
  * - Vermelho: PL realizado (último mês do ano para passado, mês com último dado para ano atual)
  * - Cinza: PL plano (ano atual = mesmo mês do realizado; demais = último mês do ano)
+ * - Eixo X: ano como primeiro mês (tick "2026" = Jan 2026); x = ano + (mes-1)/12
  * - Bolas só no ano atual e último ponto da projeção
- * - Labels vermelhos em todos os pontos
  */
 
 import { useState, useEffect, useMemo } from 'react'
@@ -170,16 +170,16 @@ export function PlanoChart({ cenarioId }: PlanoChartProps) {
       ? ultimoAnomesProj % 100
       : 12
 
+    // Ano como primeiro mês: x = ano + (mes - 1) / 12
+    // Tick "2026" = Jan 2026; Dec 2025 = 2025.917. Elimina a necessidade de posicionamento fracionário especial.
     return anosSorted.map((ano) => {
       let plPlano = planoByYearClean.get(ano) ?? null
       if (ultimoAnoProj != null && ano > ultimoAnoProj) plPlano = null
 
-      let x = ano
-      if (ano === anoAtual && mesUltimoRealizado < 12) {
-        x = ano - 1 + mesUltimoRealizado / 12
-      } else if (ano === ultimoAnoProj && mesUltimoPlano < 12) {
-        x = ano - 1 + mesUltimoPlano / 12
-      }
+      let mes = 12
+      if (ano === anoAtual) mes = mesUltimoRealizado
+      else if (ano === ultimoAnoProj) mes = mesUltimoPlano
+      const x = ano + (mes - 1) / 12
 
       return {
         year: ano,
@@ -263,13 +263,13 @@ export function PlanoChart({ cenarioId }: PlanoChartProps) {
     v >= 1_000_000 ? `${(v / 1_000_000).toFixed(1)}M` : v >= 1_000 ? `${Math.round(v / 1_000)}k` : String(v)
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4">
+    <div className="rounded-xl border border-gray-200 bg-white p-4 pr-6 overflow-visible">
       <h3 className="text-sm font-semibold text-gray-900 mb-4">Evolução Patrimonial</h3>
-      <div className="h-56 w-full">
+      <div className="h-56 w-full min-w-0">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
             data={dataWithNumbers}
-            margin={{ top: 20, right: 10, left: 0, bottom: 5 }}
+            margin={{ top: 36, right: 16, left: 8, bottom: 8 }}
           >
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis
@@ -288,9 +288,8 @@ export function PlanoChart({ cenarioId }: PlanoChartProps) {
               ]}
               labelFormatter={(label, payload) => {
                 const x = typeof label === 'number' ? label : (payload?.[0]?.payload?.x ?? Number(label))
-                if (x === Math.floor(x)) return `Ano ${Math.round(x)}`
-                const year = Math.floor(x) + 1
-                const month = Math.min(12, Math.max(1, Math.round((x - Math.floor(x)) * 12)))
+                const year = Math.floor(x)
+                const month = Math.min(12, Math.max(1, Math.round((x - year) * 12) + 1))
                 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
                 return `${MESES[month - 1] ?? 'Jan'} ${year}`
               }}
@@ -332,13 +331,13 @@ export function PlanoChart({ cenarioId }: PlanoChartProps) {
             <Line
               type="monotone"
               dataKey="plPlanoNum"
-              stroke="#9ca3af"
+              stroke="#4b5563"
               strokeWidth={2}
               strokeDasharray="6 4"
               dot={(props) => {
                 const { cx, cy, payload, index } = props
                 if (cx == null || cy == null || !showDot(payload?.year)) return null
-                return <circle key={`plano-${payload?.year ?? index}`} cx={cx} cy={cy} r={3} fill="#9ca3af" />
+                return <circle key={`plano-${payload?.year ?? index}`} cx={cx} cy={cy} r={3} fill="#4b5563" />
               }}
               connectNulls={false}
               name="PL Plano"
@@ -351,7 +350,7 @@ export function PlanoChart({ cenarioId }: PlanoChartProps) {
                   if (value == null || x == null || y == null) return null
                   if (index !== ultimoPlanoIndex) return null
                   return (
-                    <text key={`plano-${payload?.year ?? index ?? value}`} x={x} y={y - 6} textAnchor="middle" fill="#9ca3af" fontSize={10} fontWeight={700}>
+                    <text key={`plano-${payload?.year ?? index ?? value}`} x={x} y={y - 6} textAnchor="middle" fill="#4b5563" fontSize={10} fontWeight={700}>
                       {labelFormatter(value)}
                     </text>
                   )
@@ -361,16 +360,16 @@ export function PlanoChart({ cenarioId }: PlanoChartProps) {
           </LineChart>
         </ResponsiveContainer>
       </div>
-      <div className="flex gap-4 mt-2 justify-center text-xs text-gray-600">
-        <span className="flex items-center gap-1.5">
+      <div className="flex flex-wrap gap-x-6 gap-y-2 mt-3 justify-center text-xs text-gray-600 w-full">
+        <span className="flex items-center gap-1.5 shrink-0">
           <span className="w-3 h-0.5 bg-red-700 rounded" />
           PL Realizado
         </span>
-        <span className="flex items-center gap-1.5">
-          <svg width="24" height="4" className="text-gray-400">
-            <line x1="0" y1="2" x2="24" y2="2" stroke="currentColor" strokeWidth="2" strokeDasharray="4 3" />
+        <span className="flex items-center gap-1.5 shrink-0">
+          <svg width="24" height="4" className="shrink-0">
+            <line x1="0" y1="2" x2="24" y2="2" stroke="#4b5563" strokeWidth="2" strokeDasharray="4 3" />
           </svg>
-          PL Plano
+          <span className="text-gray-600 font-medium">PL Plano</span>
         </span>
       </div>
 
