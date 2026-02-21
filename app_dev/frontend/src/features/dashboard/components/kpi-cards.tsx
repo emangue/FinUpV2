@@ -11,6 +11,8 @@ import type { DashboardMetrics } from '../types'
 
 interface KpiCardsProps {
   metrics: DashboardMetrics | null
+  /** Sprint G: exibir apenas o card Patrimônio (para tab Patrimônio) */
+  variant?: 'full' | 'patrimonio-only'
 }
 
 function formatCurrency(v: number) {
@@ -42,8 +44,90 @@ function formatPct(v: number) {
   return `${sign}${v.toFixed(1)}%`
 }
 
-export function KpiCards({ metrics }: KpiCardsProps) {
+export function KpiCards({ metrics, variant = 'full' }: KpiCardsProps) {
   if (!metrics) return null
+
+  const patrimonioCard = (
+    <div className="col-span-2 rounded-xl border border-gray-200 bg-white p-4">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2 text-gray-500 text-sm">
+          <Wallet className="w-4 h-4" />
+          Patrimônio
+        </div>
+        <span className="text-[10px] text-gray-400 font-medium">vs LM / vs Plan</span>
+      </div>
+      <div className="grid grid-cols-3 gap-3 text-center">
+        <div className="min-w-0">
+          <p className="text-xs text-gray-500 mb-1 flex items-center justify-center gap-1">
+            <TrendingUp className="w-3 h-3 shrink-0" />
+            Ativos
+          </p>
+          <p className={`text-sm font-semibold truncate ${(metrics.ativos_mes ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            {formatCompactCurrency(metrics.ativos_mes ?? 0)}
+          </p>
+          <p className="text-[10px] mt-0.5">
+            {metrics.ativos_change_percentage != null ? (
+              <span className={metrics.ativos_change_percentage >= 0 ? 'text-green-600' : 'text-red-600'}>
+                {formatPct(metrics.ativos_change_percentage)}
+              </span>
+            ) : (
+              <span className="text-gray-400">—</span>
+            )}
+          </p>
+        </div>
+        <div className="min-w-0 border-x border-gray-100">
+          <p className="text-xs text-gray-500 mb-1 flex items-center justify-center gap-1">
+            <ArrowDownRight className="w-3 h-3 shrink-0" />
+            Passivos
+          </p>
+          <p className={`text-sm font-semibold truncate ${(metrics.passivos_mes ?? 0) <= 0 ? 'text-red-600' : 'text-gray-900'}`}>
+            {formatCompactCurrency(metrics.passivos_mes ?? 0)}
+          </p>
+          <p className="text-[10px] mt-0.5">
+            {metrics.passivos_change_percentage != null ? (
+              <span className={metrics.passivos_change_percentage >= 0 ? 'text-green-600' : 'text-red-600'}>
+                {formatPct(metrics.passivos_change_percentage)}
+              </span>
+            ) : (
+              <span className="text-gray-400">—</span>
+            )}
+          </p>
+        </div>
+        <div className="min-w-0">
+          <p className="text-xs text-gray-500 mb-1 flex items-center justify-center gap-1">
+            <Wallet className="w-3 h-3 shrink-0" />
+            PL
+          </p>
+          <p className={`text-sm font-bold truncate ${(metrics.patrimonio_liquido_mes ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            {formatCompactCurrency(metrics.patrimonio_liquido_mes ?? 0)}
+          </p>
+          <p className="text-[10px] mt-0.5">
+            {metrics.patrimonio_change_percentage != null || metrics.patrimonio_vs_plano_percent != null ? (
+              <>
+                {metrics.patrimonio_change_percentage != null && (
+                  <span className={metrics.patrimonio_change_percentage >= 0 ? 'text-green-600' : 'text-red-600'}>
+                    {formatPct(metrics.patrimonio_change_percentage)}
+                  </span>
+                )}
+                {metrics.patrimonio_change_percentage != null && metrics.patrimonio_vs_plano_percent != null && (
+                  <span className="text-gray-400 mx-0.5">/</span>
+                )}
+                {metrics.patrimonio_vs_plano_percent != null && (
+                  <span className="text-gray-600">{metrics.patrimonio_vs_plano_percent}% plan</span>
+                )}
+              </>
+            ) : (
+              <span className="text-gray-400">—</span>
+            )}
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+
+  if (variant === 'patrimonio-only') {
+    return <div className="mb-6">{patrimonioCard}</div>
+  }
 
   return (
     <div className="grid grid-cols-2 gap-3 mb-6">
@@ -95,81 +179,7 @@ export function KpiCards({ metrics }: KpiCardsProps) {
       </div>
 
       {/* Patrimônio: Ativos, Passivos, PL - vs LM / vs Plan */}
-      <div className="col-span-2 rounded-xl border border-gray-200 bg-white p-4">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2 text-gray-500 text-sm">
-            <Wallet className="w-4 h-4" />
-            Patrimônio
-          </div>
-          <span className="text-[10px] text-gray-400 font-medium">vs LM / vs Plan</span>
-        </div>
-        <div className="grid grid-cols-3 gap-3 text-center">
-          <div className="min-w-0">
-            <p className="text-xs text-gray-500 mb-1 flex items-center justify-center gap-1">
-              <TrendingUp className="w-3 h-3 shrink-0" />
-              Ativos
-            </p>
-            <p className={`text-sm font-semibold truncate ${(metrics.ativos_mes ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {formatCompactCurrency(metrics.ativos_mes ?? 0)}
-            </p>
-            <p className="text-[10px] mt-0.5">
-              {metrics.ativos_change_percentage != null ? (
-                <span className={metrics.ativos_change_percentage >= 0 ? 'text-green-600' : 'text-red-600'}>
-                  {formatPct(metrics.ativos_change_percentage)}
-                </span>
-              ) : (
-                <span className="text-gray-400">—</span>
-              )}
-            </p>
-          </div>
-          <div className="min-w-0 border-x border-gray-100">
-            <p className="text-xs text-gray-500 mb-1 flex items-center justify-center gap-1">
-              <ArrowDownRight className="w-3 h-3 shrink-0" />
-              Passivos
-            </p>
-            <p className={`text-sm font-semibold truncate ${(metrics.passivos_mes ?? 0) <= 0 ? 'text-red-600' : 'text-gray-900'}`}>
-              {formatCompactCurrency(metrics.passivos_mes ?? 0)}
-            </p>
-            <p className="text-[10px] mt-0.5">
-              {metrics.passivos_change_percentage != null ? (
-                <span className={metrics.passivos_change_percentage >= 0 ? 'text-green-600' : 'text-red-600'}>
-                  {formatPct(metrics.passivos_change_percentage)}
-                </span>
-              ) : (
-                <span className="text-gray-400">—</span>
-              )}
-            </p>
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs text-gray-500 mb-1 flex items-center justify-center gap-1">
-              <Wallet className="w-3 h-3 shrink-0" />
-              PL
-            </p>
-            <p className={`text-sm font-bold truncate ${(metrics.patrimonio_liquido_mes ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {formatCompactCurrency(metrics.patrimonio_liquido_mes ?? 0)}
-            </p>
-            <p className="text-[10px] mt-0.5">
-              {metrics.patrimonio_change_percentage != null || metrics.patrimonio_vs_plano_percent != null ? (
-                <>
-                  {metrics.patrimonio_change_percentage != null && (
-                    <span className={metrics.patrimonio_change_percentage >= 0 ? 'text-green-600' : 'text-red-600'}>
-                      {formatPct(metrics.patrimonio_change_percentage)}
-                    </span>
-                  )}
-                  {metrics.patrimonio_change_percentage != null && metrics.patrimonio_vs_plano_percent != null && (
-                    <span className="text-gray-400 mx-0.5">/</span>
-                  )}
-                  {metrics.patrimonio_vs_plano_percent != null && (
-                    <span className="text-gray-600">{metrics.patrimonio_vs_plano_percent}% plan</span>
-                  )}
-                </>
-              ) : (
-                <span className="text-gray-400">—</span>
-              )}
-            </p>
-          </div>
-        </div>
-      </div>
+      {patrimonioCard}
     </div>
   )
 }

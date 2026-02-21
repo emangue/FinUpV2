@@ -17,12 +17,8 @@ import { Download } from 'lucide-react'
 import { MobileHeader } from '@/components/mobile/mobile-header'
 import { MonthScrollPicker } from '@/components/mobile/month-scroll-picker'
 import { YTDToggle, YTDToggleValue } from '@/components/mobile/ytd-toggle'
-import { KpiCards } from '@/features/dashboard/components/kpi-cards'
 import { BarChart } from '@/features/dashboard/components/bar-chart'
-import { DonutChart } from '@/features/dashboard/components/donut-chart'
-import { ExpenseGroupsBox } from '@/features/dashboard/components/expense-groups-box'
 import { GastosPorCartaoBox } from '@/features/dashboard/components/gastos-por-cartao-box'
-import { IncomeGroupsBox } from '@/features/dashboard/components/income-groups-box'
 import { PatrimonioTab } from '@/features/dashboard/components/patrimonio-tab'
 import { OrcamentoTab } from '@/features/dashboard/components/orcamento-tab'
 import { PlanoAposentadoriaTab } from '@/features/plano-aposentadoria/components/plano-aposentadoria-tab'
@@ -35,8 +31,7 @@ export default function DashboardMobilePage() {
   const isAuth = useRequireAuth() // 🔐 Hook de proteção de rota
   const [selectedMonth, setSelectedMonth] = useState<Date>(new Date())
   const [period, setPeriod] = useState<YTDToggleValue>('month')
-  const [activeTab, setActiveTab] = useState<'resultado' | 'patrimonio' | 'orcamento' | 'plano'>('resultado')
-  const [resultadoToggle, setResultadoToggle] = useState<'receita' | 'despesas'>('receita')
+  const [activeTab, setActiveTab] = useState<'resultado' | 'patrimonio'>('resultado')
 
   // Extrair year e month do selectedMonth
   const year = selectedMonth.getFullYear()
@@ -44,8 +39,8 @@ export default function DashboardMobilePage() {
 
   // ✅ TODOS OS HOOKS PRIMEIRO (antes de any return)
   const { metrics, loading: loadingMetrics } = useDashboardMetrics(year, month)
-  const { sources, totalReceitas, loading: loadingSources } = useIncomeSources(year, month)
-  const { sources: expenseSources, totalDespesas, loading: loadingExpenses } = useExpenseSources(year, month)
+  const { loading: loadingSources } = useIncomeSources(year, month)
+  const { loading: loadingExpenses } = useExpenseSources(year, month)
   
   // BarChart precisa de múltiplos meses
   const year2025 = 2025
@@ -116,10 +111,7 @@ export default function DashboardMobilePage() {
           </div>
         ) : (
           <>
-            {/* KPI Cards */}
-            <KpiCards metrics={metrics ?? null} />
-
-            {/* Tabs */}
+            {/* Tabs - Sprint G: 2 abas (Resultado, Patrimônio). Sem KpiCards em Resultado; caixa Patrimônio dentro da aba Patrimônio */}
             <div className="flex gap-6 border-b border-gray-200 mb-6">
               <button
                 onClick={() => setActiveTab('resultado')}
@@ -141,85 +133,24 @@ export default function DashboardMobilePage() {
               >
                 Patrimônio
               </button>
-              <button
-                onClick={() => setActiveTab('orcamento')}
-                className={`pb-2 text-sm font-medium transition-colors ${
-                  activeTab === 'orcamento'
-                    ? 'text-gray-900 border-b-2 border-gray-900'
-                    : 'text-gray-400 hover:text-gray-600'
-                }`}
-              >
-                Orçamento
-              </button>
-              <button
-                onClick={() => setActiveTab('plano')}
-                className={`pb-2 text-sm font-medium transition-colors ${
-                  activeTab === 'plano'
-                    ? 'text-gray-900 border-b-2 border-gray-900'
-                    : 'text-gray-400 hover:text-gray-600'
-                }`}
-              >
-                Plano
-              </button>
             </div>
 
-            {/* Tab Resultado: Gráfico de barras + Toggle Receita/Despesas + Donuts */}
+            {/* Tab Resultado: Resumo + Gráfico (sem Tendência) + Toggle Despesas|Receitas|Cartões + Investimentos + Transações */}
             {activeTab === 'resultado' && (
               <>
-                <BarChart
-                  data={chartData}
-                  title={resultadoToggle === 'receita' ? 'Tendência de Receitas' : 'Tendência de Despesas'}
-                  totalValue={resultadoToggle === 'receita' ? (metrics?.total_receitas || 0) : (metrics?.total_despesas || 0)}
-                  selectedMonth={selectedMonth}
-                />
-
-                {/* Toggle Receita / Despesas (abaixo do gráfico de barras) */}
-                <div className="flex gap-6 border-b border-gray-200 mb-4">
-                  <button
-                    onClick={() => setResultadoToggle('receita')}
-                    className={`pb-2 text-sm font-semibold transition-colors ${
-                      resultadoToggle === 'receita'
-                        ? 'text-gray-900 border-b-2 border-gray-900'
-                        : 'text-gray-400 hover:text-gray-600'
-                    }`}
-                  >
-                    Receita
-                  </button>
-                  <button
-                    onClick={() => setResultadoToggle('despesas')}
-                    className={`pb-2 text-sm font-medium transition-colors ${
-                      resultadoToggle === 'despesas'
-                        ? 'text-gray-900 border-b-2 border-gray-900'
-                        : 'text-gray-400 hover:text-gray-600'
-                    }`}
-                  >
-                    Despesas
-                  </button>
-                </div>
-
-                {resultadoToggle === 'receita' && (
-                  <>
-                    <DonutChart
-                      activeTab="income"
-                      incomeSources={sources}
-                      totalReceitas={totalReceitas}
-                      expenseSources={expenseSources}
-                      totalDespesas={totalDespesas}
+                <OrcamentoTab
+                  year={year}
+                  month={month}
+                  variant="resultado"
+                  insertBetweenResumoAndRest={
+                    <BarChart
+                      data={chartData}
+                      title="Receitas vs Despesas"
+                      totalValue={(metrics?.total_receitas || 0) + (metrics?.total_despesas || 0)}
+                      selectedMonth={selectedMonth}
                     />
-                    <IncomeGroupsBox sources={sources} />
-                  </>
-                )}
-
-                {resultadoToggle === 'despesas' && (
-                  <>
-                    <DonutChart
-                      activeTab="expenses"
-                      incomeSources={sources}
-                      totalReceitas={totalReceitas}
-                      expenseSources={expenseSources}
-                      totalDespesas={totalDespesas}
-                    />
-                    <ExpenseGroupsBox sources={expenseSources} />
+                  }
+                  gastosPorCartao={
                     <GastosPorCartaoBox
                       year={year}
                       month={month}
@@ -229,38 +160,37 @@ export default function DashboardMobilePage() {
                           : `${year}`
                       }
                     />
-                  </>
-                )}
+                  }
+                />
               </>
             )}
 
-            {/* Tab Patrimônio */}
+            {/* Tab Patrimônio: Caixa Patrimônio dentro da aba + sub-abas Resultado | Plano */}
             {activeTab === 'patrimonio' && (
-              <PatrimonioTab selectedMonth={selectedMonth} />
-            )}
-
-            {/* Tab Orçamento */}
-            {activeTab === 'orcamento' && (
-              <OrcamentoTab year={year} month={month} />
-            )}
-
-            {/* Tab Plano Aposentadoria */}
-            {activeTab === 'plano' && (
-              <PlanoAposentadoriaTab
-                patrimonioLiquido={metrics?.patrimonio_liquido_mes ?? undefined}
+              <PatrimonioTab
+                selectedMonth={selectedMonth}
+                variant="dashboard"
+                metrics={metrics ?? null}
+                planoAposentadoria={
+                  <PlanoAposentadoriaTab
+                    patrimonioLiquido={metrics?.patrimonio_liquido_mes ?? undefined}
+                  />
+                }
               />
             )}
 
-            {/* Recent Transactions - Sprint A: sem mensagem redundante (botão é autoexplicativo) */}
-            <div className="border-t border-gray-100 pt-4 mt-6">
-              <h3 className="text-sm font-bold text-gray-900 mb-3">Transações Recentes</h3>
-              <button
-                onClick={() => router.push('/mobile/transactions')}
-                className="w-full py-3 bg-gray-900 text-white rounded-xl font-semibold hover:bg-gray-800 transition-colors"
-              >
-                Ver Todas as Transações
-              </button>
-            </div>
+            {/* Transações Recentes - Sprint G: apenas na tab Resultado */}
+            {activeTab === 'resultado' && (
+              <div className="border-t border-gray-100 pt-4 mt-6">
+                <h3 className="text-sm font-bold text-gray-900 mb-3">Transações Recentes</h3>
+                <button
+                  onClick={() => router.push('/mobile/transactions')}
+                  className="w-full py-3 bg-gray-900 text-white rounded-xl font-semibold hover:bg-gray-800 transition-colors"
+                >
+                  Ver Todas as Transações
+                </button>
+              </div>
+            )}
           </>
         )}
       </div>
