@@ -207,37 +207,35 @@ export function CentralCenarios({ cenarios, onRefresh }: CentralCenariosProps) {
           const isPrincipal = c.id === (cenarios.find((x) => x.principal) ?? cenarios[0])?.id
           return (
           <Collapsible key={c.id} className="rounded-2xl border border-gray-200 bg-white overflow-hidden group">
-            <div className="flex items-center gap-3 p-4">
+            <div className="flex items-start gap-3 p-4">
               <CollapsibleTrigger asChild>
-                <button type="button" className="shrink-0 p-1 -m-1 rounded-lg hover:bg-gray-100 transition-colors">
+                <button type="button" className="shrink-0 p-1 -m-1 rounded-lg hover:bg-gray-100 transition-colors mt-0.5">
                   <ChevronDown className="w-5 h-5 text-gray-400 transition-transform group-data-[state=open]:rotate-180" />
                 </button>
               </CollapsibleTrigger>
               <CollapsibleTrigger asChild>
-                <div className="flex-1 min-w-0 flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity py-1">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-base font-semibold text-gray-900 flex items-center gap-2 flex-nowrap">
-                      <span className="whitespace-nowrap" title={c.nome_cenario || undefined}>
-                        {c.nome_cenario || 'Sem nome'}
+                <div className="flex-1 min-w-0 flex flex-col gap-1 cursor-pointer hover:opacity-80 transition-opacity py-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-base font-semibold text-gray-900 truncate" title={c.nome_cenario || undefined}>
+                      {c.nome_cenario || 'Sem nome'}
+                    </span>
+                    {isPrincipal && (
+                      <span className="text-[10px] font-medium text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded shrink-0">
+                        Padrão
                       </span>
-                      {isPrincipal && (
-                        <span className="text-[10px] font-medium text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
-                          Padrão
-                        </span>
-                      )}
-                    </p>
-                    <div className="flex flex-wrap gap-2 mt-1 text-xs text-gray-500">
-                      {c.idade_atual != null && (
-                        <span>Idade {c.idade_atual} → {c.idade_aposentadoria ?? '?'} anos</span>
-                      )}
-                      {c.renda_mensal_alvo != null && c.renda_mensal_alvo !== '' && (
-                        <span>• Meta {formatCurrency(parseFloat(String(c.renda_mensal_alvo)))}/mês</span>
-                      )}
-                    </div>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-xs text-gray-500">
+                    {c.idade_atual != null && (
+                      <span>Idade {c.idade_atual} → {c.idade_aposentadoria ?? '?'} anos</span>
+                    )}
+                    {c.renda_mensal_alvo != null && c.renda_mensal_alvo !== '' && (
+                      <span>• Meta {formatCurrency(parseFloat(String(c.renda_mensal_alvo)))}/mês</span>
+                    )}
                   </div>
                 </div>
               </CollapsibleTrigger>
-              <div className="flex items-center gap-1 shrink-0 relative z-10" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center gap-1 shrink-0 relative z-10 self-center" onClick={(e) => e.stopPropagation()}>
                 <button
                   type="button"
                   onPointerDown={(e) => e.stopPropagation()}
