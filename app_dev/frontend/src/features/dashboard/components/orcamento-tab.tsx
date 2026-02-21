@@ -216,16 +216,17 @@ export function OrcamentoTab({ year, month }: OrcamentoTabProps) {
                     : 'text-gray-500 font-medium'
               return (
                 <div key={cat.grupo}>
+                  {/* Sprint B: ordem [cor] [grupo] | [highlight] [realizado] / [planejado] */}
                   <div className="flex items-center justify-between mb-1.5">
-                    <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 shrink-0 min-w-0">
                       <div
                         className="w-2.5 h-2.5 rounded-full shrink-0"
                         style={{ backgroundColor: color }}
                       />
-                      <span className="text-sm text-gray-800">{cat.grupo}</span>
-                      <span className={`text-xs ${highlightClass}`}>{highlightText}</span>
+                      <span className="text-sm text-gray-800 truncate">{cat.grupo}</span>
                     </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+                      <span className={`text-xs ${highlightClass}`}>{highlightText}</span>
                       <span className="text-sm font-semibold text-gray-900">
                         {formatCurrency(realizado)}
                       </span>
