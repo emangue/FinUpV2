@@ -10,6 +10,7 @@ class GrupoCreate(BaseModel):
     nome_grupo: str = Field(..., description="Nome do grupo", min_length=1, max_length=100)
     tipo_gasto_padrao: str = Field(..., description="Tipo de gasto padrão (Fixo/Ajustável)")
     categoria_geral: str = Field(..., description="Categoria geral (Despesa/Receita/etc)")
+    cor: Optional[str] = Field(None, description="Cor hex (ex: #001D39)", max_length=7)
     
     class Config:
         from_attributes = True
@@ -19,6 +20,7 @@ class GrupoUpdate(BaseModel):
     nome_grupo: Optional[str] = Field(None, description="Nome do grupo", min_length=1, max_length=100)
     tipo_gasto_padrao: Optional[str] = Field(None, description="Tipo de gasto padrão")
     categoria_geral: Optional[str] = Field(None, description="Categoria geral")
+    cor: Optional[str] = Field(None, description="Cor hex (ex: #001D39)", max_length=7)
     
     class Config:
         from_attributes = True
@@ -29,6 +31,7 @@ class GrupoResponse(BaseModel):
     nome_grupo: str
     tipo_gasto_padrao: str
     categoria_geral: str
+    cor: Optional[str] = None
     
     class Config:
         from_attributes = True
