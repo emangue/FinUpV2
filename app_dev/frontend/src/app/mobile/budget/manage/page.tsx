@@ -104,10 +104,9 @@ export default function ManageGoalsPage() {
     router.push('/mobile/budget/new')
   }
 
-  // Apenas metas com id (budget_planning) - sem meta definida não aparece em gerenciar
+  // Sprint E: Apenas metas de gastos (Investimentos removido do budget)
   const goalsComMeta = goals.filter((g): g is Goal & { id: number } => g.id != null)
   const gastosGoals = goalsComMeta.filter((g) => (g.planType ?? 'gastos') === 'gastos')
-  const investimentosGoals = goalsComMeta.filter((g) => g.planType === 'investimentos')
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -164,45 +163,17 @@ export default function ManageGoalsPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                {/* Gastos Goals */}
-                {gastosGoals.length > 0 && (
-                  <>
-                    {gastosGoals.map((goal) => (
-                      <ManageGoalsListItem
-                        key={goal.id}
-                        goal={goal}
-                        isActive={activeStates[goal.id] ?? true}
-                        onToggle={handleToggle}
-                        onEdit={handleEdit}
-                        onUpdateValor={handleUpdateValor}
-                      />
-                    ))}
-                  </>
-                )}
-
-                {/* Divider if we have both types */}
-                {gastosGoals.length > 0 && investimentosGoals.length > 0 && (
-                  <div className="py-2">
-                    <div className="border-t border-gray-200"></div>
-                    <p className="text-xs text-gray-400 text-center py-2">Investimentos</p>
-                  </div>
-                )}
-
-                {/* Investimentos Goals */}
-                {investimentosGoals.length > 0 && (
-                  <>
-                    {investimentosGoals.map((goal) => (
-                      <ManageGoalsListItem
-                        key={goal.id}
-                        goal={goal}
-                        isActive={activeStates[goal.id] ?? true}
-                        onToggle={handleToggle}
-                        onEdit={handleEdit}
-                        onUpdateValor={handleUpdateValor}
-                      />
-                    ))}
-                  </>
-                )}
+                {/* Metas de Gastos (Sprint E: Investimentos removido) */}
+                {gastosGoals.map((goal) => (
+                  <ManageGoalsListItem
+                    key={goal.id}
+                    goal={goal}
+                    isActive={activeStates[goal.id] ?? true}
+                    onToggle={handleToggle}
+                    onEdit={handleEdit}
+                    onUpdateValor={handleUpdateValor}
+                  />
+                ))}
               </div>
             )}
 

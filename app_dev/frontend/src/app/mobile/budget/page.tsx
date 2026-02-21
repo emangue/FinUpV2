@@ -24,12 +24,10 @@ import { Suspense } from 'react'
 import { isSameMonth } from 'date-fns'
 import { Plus, Target as TargetIcon, Settings } from 'lucide-react'
 import { MonthScrollPicker } from '@/components/mobile/month-scroll-picker'
-import { GoalCard, DonutChart } from '@/features/goals/components'
+import { GoalListItem, DonutChart } from '@/features/goals/components'
 import { useGoals } from '@/features/goals/hooks/use-goals'
 import { fetchLastMonthWithData } from '@/features/dashboard/services/dashboard-api'
 
-
-type FilterOption = 'gastos' | 'investimentos'
 
 function parseMesFromUrl(mes: string | null): Date | null {
   if (!mes || !/^\d{4}-\d{2}$/.test(mes)) return null
@@ -84,19 +82,10 @@ function GoalsMobilePageContent() {
     return () => { cancelled = true }
   }, [mesFromUrl, router])
   const { goals, loading, error, refreshGoals } = useGoals(selectedMonth)
-  const [filterPlan, setFilterPlan] = React.useState<FilterOption>('gastos')
   
-  // Filtrar metas por plano (gastos vs investimentos)
+  // Sprint E: Apenas metas de gastos (Investimentos removido do budget)
   const filteredGoals = React.useMemo(() => {
-    return goals.filter(goal => (goal.planType ?? 'gastos') === filterPlan)
-  }, [goals, filterPlan])
-  
-  // Contar metas por plano
-  const planCounts = React.useMemo(() => {
-    return {
-      gastos: goals.filter(g => (g.planType ?? 'gastos') === 'gastos').length,
-      investimentos: goals.filter(g => g.planType === 'investimentos').length
-    }
+    return goals.filter((g) => (g.planType ?? 'gastos') === 'gastos')
   }, [goals])
   
   const handleGoalClick = (goal: { id: number | null; grupo: string; mes_referencia: string }) => {
@@ -148,40 +137,14 @@ function GoalsMobilePageContent() {
       
       {/* Conteúdo rolável - header e mês ficam fixos acima */}
       <div className="flex-1 min-h-0 overflow-y-auto">
-        {/* Donut Chart - Visão Geral */}
-        {!loading && goals.length > 0 && (
+        {/* Donut Chart - Visão Geral (apenas gastos) */}
+        {!loading && filteredGoals.length > 0 && (
           <div className="bg-white px-6 py-6 border-b border-gray-200">
-            <DonutChart goals={goals} selectedMonth={selectedMonth} />
+            <DonutChart goals={filteredGoals} selectedMonth={selectedMonth} />
           </div>
         )}
         
-        {/* Filtros: Gastos vs Investimentos */}
-        <div className="bg-white border-b border-gray-200 px-5 py-3">
-          <div className="flex items-center gap-2 overflow-x-auto">
-            <button
-              onClick={() => setFilterPlan('gastos')}
-              className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                filterPlan === 'gastos'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-600'
-              }`}
-            >
-              Gastos ({planCounts.gastos})
-            </button>
-            <button
-              onClick={() => setFilterPlan('investimentos')}
-              className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                filterPlan === 'investimentos'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-600'
-              }`}
-            >
-              Investimentos ({planCounts.investimentos})
-            </button>
-          </div>
-        </div>
-        
-        {/* Lista de Metas */}
+        {/* Lista de Metas - Sprint E: GoalListItem, sem toggle */}
         <div className="p-5">
         {loading ? (
           <div className="flex items-center justify-center py-10">
@@ -202,10 +165,11 @@ function GoalsMobilePageContent() {
           </div>
         ) : filteredGoals.length > 0 ? (
           <div className="space-y-4">
-            {filteredGoals.map((goal) => (
-              <GoalCard
+            {filteredGoals.map((goal, idx) => (
+              <GoalListItem
                 key={goal.id ?? goal.grupo}
                 goal={goal}
+                index={idx}
                 onClick={() => handleGoalClick(goal)}
               />
             ))}
@@ -214,26 +178,16 @@ function GoalsMobilePageContent() {
           <div className="flex flex-col items-center justify-center py-10">
             <TargetIcon className="w-16 h-16 text-gray-300 mb-4" />
             <div className="text-gray-500 text-center">
-              <div className="font-semibold mb-2">
-                {filterPlan === 'gastos'
-                  ? 'Nenhuma meta de gastos'
-                  : 'Nenhuma meta de investimentos'
-                }
-              </div>
+              <div className="font-semibold mb-2">Nenhuma meta de gastos</div>
               <div className="text-sm mb-4">
-                {filterPlan === 'gastos'
-                  ? 'Crie metas de gastos ou altere o filtro para investimentos'
-                  : 'Crie metas de investimentos ou altere o filtro para gastos'
-                }
+                Crie metas para acompanhar seus gastos por categoria
               </div>
-              {planCounts.gastos + planCounts.investimentos === 0 && (
-                <button
-                  onClick={handleCreateGoal}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium"
-                >
-                  Criar primeira meta
-                </button>
-              )}
+              <button
+                onClick={handleCreateGoal}
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium"
+              >
+                Criar primeira meta
+              </button>
             </div>
           </div>
         )}

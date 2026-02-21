@@ -4,9 +4,11 @@
  * OrcamentoTab - Tab Orçamento completo
  * Usa os MESMOS dados da tela Metas: GET /budget/planning (budget_planning + valor_realizado)
  * Layout: Resumo do Mês, Rendimentos, Despesas vs Plano, Investimentos vs Plano
+ * Sprint E: Investimentos vs Plano = aporte do cenário (única fonte); sem cenário = CTA
  */
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { fetchIncomeSources } from '../services/dashboard-api'
 import type { IncomeSource } from '../types'
 import { fetchGoals } from '@/features/goals/services/goals-api'
@@ -64,7 +66,8 @@ export function OrcamentoTab({ year, month }: OrcamentoTabProps) {
   const totalDespesas = goalsDespesas.reduce((s, g) => s + (g.valor_realizado ?? 0), 0)
   const totalPlanejadoDesp = goalsDespesas.reduce((s, g) => s + (g.valor_planejado ?? 0), 0)
   const totalInvestido = goalsInvestimentos.reduce((s, g) => s + (g.valor_realizado ?? 0), 0)
-  const totalPlanejadoInv = goalsInvestimentos.reduce((s, g) => s + (g.valor_planejado ?? 0), 0)
+  // Sprint E: totalPlanejadoInv vem do cenário (aporte_mensal). Sem API cenários ainda = 0 → CTA
+  const totalPlanejadoInv = 0
   const percentualDesp = totalPlanejadoDesp > 0 ? (totalDespesas / totalPlanejadoDesp) * 100 : 0
 
   const formatCurrency = (v: number) =>
@@ -248,63 +251,60 @@ export function OrcamentoTab({ year, month }: OrcamentoTabProps) {
         </div>
       </div>
 
-      {/* Investimentos vs Plano */}
+      {/* Investimentos vs Plano - Sprint E: fonte = cenário; sem cenário = CTA */}
       <div className="rounded-xl border border-gray-200 bg-white p-4">
         <div className="flex items-center justify-between mb-1">
           <h3 className="text-sm font-bold text-gray-900">Investimentos vs Plano</h3>
           <span className="text-sm font-bold text-blue-600">{formatCurrency(totalInvestido)}</span>
         </div>
-        <p className="text-[10px] text-gray-400 mb-4">
-          Aporte planejado: {formatCurrency(totalPlanejadoInv)}/mês
-        </p>
-        <div className="flex items-end gap-3 justify-center py-4 mb-4">
-          <div className="flex flex-col items-center gap-1.5">
-            <span className="text-xs font-bold text-blue-600">{formatCurrency(totalInvestido)}</span>
-            <div
-              className="w-16 bg-blue-500 rounded-t-lg"
-              style={{
-                height:
-                  totalPlanejadoInv > 0
-                    ? Math.min(100, Math.max(10, (totalInvestido / totalPlanejadoInv) * 100))
-                    : totalInvestido > 0
-                      ? 50
-                      : 10,
-              }}
-            />
-            <span className="text-[10px] text-gray-500">Investido</span>
-          </div>
-          <div className="flex flex-col items-center gap-1.5">
-            <span className="text-xs font-bold text-gray-400">{formatCurrency(totalPlanejadoInv)}</span>
-            <div
-              className="w-16 bg-gray-200 rounded-t-lg border-2 border-dashed border-gray-300"
-              style={{ height: 100 }}
-            />
-            <span className="text-[10px] text-gray-500">Planejado</span>
-          </div>
-        </div>
-        {investidoOk && totalPlanejadoInv > 0 && (
-          <div className="flex items-center justify-center gap-2 py-3 bg-emerald-50 rounded-xl mb-4">
-            <span className="text-lg">✅</span>
-            <span className="text-xs font-semibold text-emerald-700">
-              Aporte do mês realizado 100%!
-            </span>
-          </div>
-        )}
-        <div className="space-y-2.5">
-          {goalsInvestimentos.map((item, idx) => (
-            <div key={item.grupo} className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded bg-blue-100 flex items-center justify-center">
-                  <span className="text-[10px]">📊</span>
-                </div>
-                <span className="text-xs text-gray-700">{item.grupo}</span>
+        {totalPlanejadoInv > 0 ? (
+          <>
+            <p className="text-[10px] text-gray-400 mb-4">
+              Aporte planejado: {formatCurrency(totalPlanejadoInv)}/mês
+            </p>
+            <div className="flex items-end gap-3 justify-center py-4 mb-4">
+              <div className="flex flex-col items-center gap-1.5">
+                <span className="text-xs font-bold text-blue-600">{formatCurrency(totalInvestido)}</span>
+                <div
+                  className="w-16 bg-blue-500 rounded-t-lg"
+                  style={{
+                    height: Math.min(100, Math.max(10, (totalInvestido / totalPlanejadoInv) * 100)),
+                  }}
+                />
+                <span className="text-[10px] text-gray-500">Investido</span>
               </div>
-              <span className="text-xs font-semibold text-gray-900">
-                {formatCurrency(item.valor_realizado ?? 0)}
-              </span>
+              <div className="flex flex-col items-center gap-1.5">
+                <span className="text-xs font-bold text-gray-400">{formatCurrency(totalPlanejadoInv)}</span>
+                <div
+                  className="w-16 bg-gray-200 rounded-t-lg border-2 border-dashed border-gray-300"
+                  style={{ height: 100 }}
+                />
+                <span className="text-[10px] text-gray-500">Planejado</span>
+              </div>
             </div>
-          ))}
-        </div>
+            {investidoOk && (
+              <div className="flex items-center justify-center gap-2 py-3 bg-emerald-50 rounded-xl">
+                <span className="text-lg">✅</span>
+                <span className="text-xs font-semibold text-emerald-700">
+                  Aporte do mês realizado 100%!
+                </span>
+              </div>
+            )}
+          </>
+        ) : (
+          <Link
+            href="/mobile/personalizar-plano"
+            className="flex flex-col items-center justify-center gap-3 py-6 px-4 bg-blue-50 border border-blue-100 rounded-xl hover:bg-blue-100 transition-colors"
+          >
+            <span className="text-2xl">🎯</span>
+            <p className="text-sm font-semibold text-blue-900 text-center">
+              Crie seu plano de aposentadoria
+            </p>
+            <p className="text-xs text-blue-700 text-center">
+              Defina aporte mensal e acompanhe investimentos vs plano
+            </p>
+          </Link>
+        )}
       </div>
     </div>
   )
