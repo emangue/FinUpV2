@@ -121,13 +121,17 @@ _csvs_historico/
 *.backup_*
 *.db.backup*
 
-# Duplicatas acidentais (ex: "arquivo 2.py", "component 3.tsx")
+# Duplicatas acidentais (ex: "arquivo 2.py", "component 3.tsx", "page 3/")
 * 2.*
 * 3.*
-.cursorrules 2
-scripts/fix_cors_env.sh
 * 4.*
 * 5.*
+**/* 2/**
+**/* 3/**
+**/* 4/**
+**/* 5/**
+.cursorrules 2
+scripts/fix_cors_env.sh
 
 # Local backups folder (not for git)
 backups_local/
