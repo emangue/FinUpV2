@@ -1,8 +1,9 @@
 /**
- * Mobile Redirect Middleware
+ * Mobile Redirect Proxy
  *
  * Visão 100% mobile: sempre redireciona rotas desktop para /mobile/*
  * Desktop removido do deploy - ver _arquivo_desktop/
+ * Migrado de middleware para proxy (Next.js 16)
  */
 
 import { NextResponse } from 'next/server'
@@ -20,7 +21,7 @@ const MOBILE_ROUTES: Record<string, string> = {
 
 const EXCLUDE_PATHS = ['/api', '/_next', '/static', '/favicon.ico', '/login', '/auth', '/mobile']
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   if (EXCLUDE_PATHS.some((path) => pathname.startsWith(path))) {
@@ -37,16 +38,8 @@ export function middleware(request: NextRequest) {
   return NextResponse.next()
 }
 
-// Configurar quais rotas o middleware deve processar
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except:
-     * 1. /api routes
-     * 2. /_next (Next.js internals)
-     * 3. /_static (inside /public)
-     * 4. all root files inside /public (e.g. /favicon.ico)
-     */
     '/((?!api|_next|_static|_vercel|[\\w-]+\\.\\w+).*)',
   ],
 }

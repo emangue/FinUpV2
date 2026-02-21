@@ -78,12 +78,14 @@ export function OrcamentoTab({
             : fetchAportePrincipalPorMes(year, mesRef),
           isAnoOuYtd ? fetchOrcamentoInvestimentos(year, undefined, ytdMonthProp) : Promise.resolve(null),
         ])
-        const [inc, budgets, cards, aporte, orcInv] = results.map((r) =>
-          r.status === 'fulfilled' ? r.value : null
-        )
-        setReceitas(inc ?? null)
-        setGoals(budgets ?? [])
-        setCardsTotal(cards ? cards.reduce((s: number, c: { total: number }) => s + c.total, 0) : null)
+        const inc = results[0].status === 'fulfilled' ? results[0].value : null
+        const budgets = results[1].status === 'fulfilled' ? results[1].value : null
+        const cards = results[2].status === 'fulfilled' ? results[2].value : null
+        const aporte = results[3].status === 'fulfilled' ? results[3].value : null
+        const orcInv = results[4].status === 'fulfilled' ? results[4].value : null
+        setReceitas(inc && typeof inc === 'object' && 'sources' in inc ? inc : null)
+        setGoals(Array.isArray(budgets) ? budgets : [])
+        setCardsTotal(Array.isArray(cards) ? cards.reduce((s: number, c: { total: number }) => s + c.total, 0) : null)
         setAportePrincipal(typeof aporte === 'number' ? aporte : 0)
         setTotalInvestidoPeriodo(orcInv && typeof orcInv === 'object' && 'total_investido' in orcInv ? orcInv.total_investido : null)
       } catch {

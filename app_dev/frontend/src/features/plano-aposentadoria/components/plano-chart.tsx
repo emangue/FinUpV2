@@ -307,7 +307,7 @@ export function PlanoChart({ cenarioId }: PlanoChartProps) {
               strokeWidth={2}
               dot={(props) => {
                 const { cx, cy, payload, index } = props
-                if (cx == null || cy == null || !showDot(payload?.year)) return null
+                if (cx == null || cy == null || !showDot(payload?.year)) return <circle cx={0} cy={0} r={0} />
                 return <circle key={`realizado-${payload?.year ?? index}`} cx={cx} cy={cy} r={3} fill="#b91c1c" />
               }}
               connectNulls={false}
@@ -316,13 +316,13 @@ export function PlanoChart({ cenarioId }: PlanoChartProps) {
               <LabelList
                 dataKey="plRealizadoNum"
                 position="top"
-                content={(props: { x?: number; y?: number; value?: number; index?: number; payload?: { year?: number } }) => {
+                content={(props: { x?: number | string; y?: number | string; value?: number | string; index?: number; payload?: { year?: number } }) => {
                   const { x, y, value, index, payload } = props
-                  if (value == null || x == null || y == null) return null
-                  if (index !== ultimoRealizadoIndex) return null
+                  if (value == null || x == null || y == null) return <></>
+                  if (index !== ultimoRealizadoIndex) return <></>
                   return (
-                    <text key={payload?.year ?? index ?? value} x={x} y={y - 6} textAnchor="middle" fill="#b91c1c" fontSize={10} fontWeight={700}>
-                      {labelFormatter(value)}
+                    <text key={payload?.year ?? index ?? value} x={Number(x)} y={Number(y) - 6} textAnchor="middle" fill="#b91c1c" fontSize={10} fontWeight={700}>
+                      {labelFormatter(Number(value))}
                     </text>
                   )
                 }}
@@ -336,7 +336,7 @@ export function PlanoChart({ cenarioId }: PlanoChartProps) {
               strokeDasharray="6 4"
               dot={(props) => {
                 const { cx, cy, payload, index } = props
-                if (cx == null || cy == null || !showDot(payload?.year)) return null
+                if (cx == null || cy == null || !showDot(payload?.year)) return <circle cx={0} cy={0} r={0} />
                 return <circle key={`plano-${payload?.year ?? index}`} cx={cx} cy={cy} r={3} fill="#4b5563" />
               }}
               connectNulls={false}
@@ -345,13 +345,13 @@ export function PlanoChart({ cenarioId }: PlanoChartProps) {
               <LabelList
                 dataKey="plPlanoNum"
                 position="top"
-                content={(props: { x?: number; y?: number; value?: number; index?: number; payload?: { year?: number } }) => {
+                content={(props: { x?: number | string; y?: number | string; value?: number | string; index?: number; payload?: { year?: number } }) => {
                   const { x, y, value, index, payload } = props
-                  if (value == null || x == null || y == null) return null
-                  if (index !== ultimoPlanoIndex) return null
+                  if (value == null || x == null || y == null) return <></>
+                  if (index !== ultimoPlanoIndex) return <></>
                   return (
-                    <text key={`plano-${payload?.year ?? index ?? value}`} x={x} y={y - 6} textAnchor="middle" fill="#4b5563" fontSize={10} fontWeight={700}>
-                      {labelFormatter(value)}
+                    <text key={`plano-${payload?.year ?? index ?? value}`} x={Number(x)} y={Number(y) - 6} textAnchor="middle" fill="#4b5563" fontSize={10} fontWeight={700}>
+                      {labelFormatter(Number(value))}
                     </text>
                   )
                 }}

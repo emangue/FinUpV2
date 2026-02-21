@@ -108,6 +108,7 @@ export const API_ENDPOINTS = {
   SCREENS: {
     BASE: `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/screens`,
     LIST: `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/screens/list`,
+    ADMIN_ALL: `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/screens/admin/all`,
     BY_KEY: (key: string) => `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/screens/${key}`,
     UPDATE: (id: number) => `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/screens/${id}`,
   },
