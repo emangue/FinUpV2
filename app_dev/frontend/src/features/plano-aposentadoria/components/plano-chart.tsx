@@ -307,8 +307,9 @@ export function PlanoChart({ cenarioId }: PlanoChartProps) {
               strokeWidth={2}
               dot={(props) => {
                 const { cx, cy, payload, index } = props
-                if (cx == null || cy == null || !showDot(payload?.year)) return <circle cx={0} cy={0} r={0} />
-                return <circle key={`realizado-${payload?.year ?? index}`} cx={cx} cy={cy} r={3} fill="#b91c1c" />
+                const key = `realizado-${payload?.year ?? index ?? 'na'}`
+                if (cx == null || cy == null || !showDot(payload?.year)) return <circle key={key} cx={0} cy={0} r={0} />
+                return <circle key={key} cx={cx} cy={cy} r={3} fill="#b91c1c" />
               }}
               connectNulls={false}
               name="PL Realizado"
@@ -336,8 +337,9 @@ export function PlanoChart({ cenarioId }: PlanoChartProps) {
               strokeDasharray="6 4"
               dot={(props) => {
                 const { cx, cy, payload, index } = props
-                if (cx == null || cy == null || !showDot(payload?.year)) return <circle cx={0} cy={0} r={0} />
-                return <circle key={`plano-${payload?.year ?? index}`} cx={cx} cy={cy} r={3} fill="#4b5563" />
+                const key = `plano-${payload?.year ?? index ?? 'na'}`
+                if (cx == null || cy == null || !showDot(payload?.year)) return <circle key={key} cx={0} cy={0} r={0} />
+                return <circle key={key} cx={cx} cy={cy} r={3} fill="#4b5563" />
               }}
               connectNulls={false}
               name="PL Plano"
