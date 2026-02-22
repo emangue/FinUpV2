@@ -86,6 +86,34 @@ export async function fetchCreditCards(): Promise<CreditCard[]> {
 }
 
 /**
+ * Cria novo cartão de crédito para o usuário
+ */
+export async function createCard(data: {
+  nome_cartao: string;
+  final_cartao: string;
+  banco: string;
+}): Promise<CreditCard> {
+  const response = await fetchWithAuth(`${BASE_URL}/cards/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.detail || 'Erro ao criar cartão');
+  }
+
+  const card = await response.json();
+  return {
+    id: card.id.toString(),
+    bankId: card.banco,
+    lastDigits: card.final_cartao,
+    name: card.nome_cartao,
+  };
+}
+
+/**
  * Faz upload de arquivo e retorna sessionId
  */
 export async function uploadFile(formData: {

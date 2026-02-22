@@ -24,7 +24,7 @@ import {
   TabBar 
 } from '@/features/upload/components';
 import { useBanks, useCreditCards, useUpload } from '@/features/upload/hooks';
-import { fetchCompatibility } from '@/features/upload/services/upload-api';
+import { fetchCompatibility, createCard } from '@/features/upload/services/upload-api';
 import type { BankCompatibilityMap } from '@/features/upload/services/upload-api';
 import type { FormatAvailability } from '@/features/upload/components/format-selector';
 import { useAuth } from '@/contexts/AuthContext';
@@ -54,7 +54,7 @@ export default function UploadPage() {
   
   // Hooks para dados reais
   const { banks, loading: loadingBanks } = useBanks();
-  const { cards, loading: loadingCards } = useCreditCards();
+  const { cards, loading: loadingCards, refetch: refetchCards } = useCreditCards();
   const { upload, uploading, progress } = useUpload();
 
   // Compatibilidade de formatos por banco (desabilita TBD)
@@ -84,10 +84,11 @@ export default function UploadPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [password, setPassword] = useState('');  // Senha do PDF protegido
 
-  // Filtrar cartões pelo banco selecionado
-  const filteredCards = selectedBank
-    ? cards.filter((c) => c.bankId === selectedBank)
-    : cards;
+  // Estado do dialog: adicionar cartão
+  const [showAddCard, setShowAddCard] = useState(false);
+  const [newCardName, setNewCardName] = useState('');
+  const [newCardFinal, setNewCardFinal] = useState('');
+  const [addingCard, setAddingCard] = useState(false);
 
   // Resetar cartão selecionado quando o banco mudar
   useEffect(() => {
@@ -139,7 +140,39 @@ export default function UploadPage() {
   };
 
   const handleAddCard = () => {
-    alert('Funcionalidade de adicionar cartão será implementada em breve');
+    setNewCardName('');
+    setNewCardFinal('');
+    setShowAddCard(true);
+  };
+
+  const handleSaveNewCard = async () => {
+    if (!newCardName.trim()) {
+      alert('Por favor, informe o nome do cartão');
+      return;
+    }
+    if (newCardFinal.length !== 4 || !/^\d{4}$/.test(newCardFinal)) {
+      alert('O final do cartão deve ter exatamente 4 dígitos');
+      return;
+    }
+    if (!selectedBank) {
+      alert('Selecione uma instituição financeira antes de adicionar o cartão');
+      return;
+    }
+    try {
+      setAddingCard(true);
+      const newCard = await createCard({
+        nome_cartao: newCardName.trim(),
+        final_cartao: newCardFinal,
+        banco: selectedBank,
+      });
+      await refetchCards();
+      setSelectedCard(newCard.id);
+      setShowAddCard(false);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Erro ao adicionar cartão');
+    } finally {
+      setAddingCard(false);
+    }
   };
 
   const handleSubmit = async () => {
@@ -211,6 +244,65 @@ export default function UploadPage() {
 
   return (
     <div className="bg-gray-50 min-h-screen flex items-center justify-center p-4">
+
+      {/* Dialog: Adicionar Novo Cartão */}
+      {showAddCard && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
+            <h2 className="text-base font-bold text-gray-900 mb-1">Novo Cartão</h2>
+            {selectedBank && (
+              <p className="text-xs text-gray-400 mb-4">{selectedBank}</p>
+            )}
+
+            <div className="mb-4">
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Nome do Cartão <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={newCardName}
+                onChange={(e) => setNewCardName(e.target.value)}
+                placeholder="Ex: Itaú Mastercard Black"
+                autoFocus
+                className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm text-gray-700 focus:outline-none focus:border-gray-900 focus:ring-1 focus:ring-gray-900"
+              />
+            </div>
+
+            <div className="mb-6">
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Final do Cartão <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={4}
+                value={newCardFinal}
+                onChange={(e) => setNewCardFinal(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                placeholder="4 dígitos"
+                className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm text-gray-700 focus:outline-none focus:border-gray-900 focus:ring-1 focus:ring-gray-900 tracking-widest"
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowAddCard(false)}
+                disabled={addingCard}
+                className="flex-1 py-3 border border-gray-300 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveNewCard}
+                disabled={addingCard}
+                className="flex-1 py-3 bg-gray-900 rounded-xl text-sm font-bold text-white hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {addingCard ? 'Salvando...' : 'Adicionar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="w-full max-w-md mx-auto">
         
         {/* Header */}
