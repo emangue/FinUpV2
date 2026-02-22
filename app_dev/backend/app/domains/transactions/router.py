@@ -326,6 +326,13 @@ def get_gastos_por_subgrupo(
     return service.get_gastos_por_subgrupo(user_id, filters)
 
 
+class PropagateInfoResponse(BaseModel):
+    """Info para propagação de grupo/subgrupo"""
+    same_parcela_count: int = 0  # Outras transações com mesmo IdParcela (excluindo esta)
+    has_padrao: bool = False     # Existe padrão em base_padroes para esta transação
+    same_padrao_count: int = 0   # Transações que batem no mesmo padrão (excluindo esta)
+
+
 @router.get("/propagate-info/{transaction_id}", response_model=PropagateInfoResponse)
 def get_propagate_info(
     transaction_id: str,
