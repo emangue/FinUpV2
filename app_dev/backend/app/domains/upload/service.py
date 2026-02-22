@@ -26,6 +26,7 @@ from .schemas import (
 )
 from .history_schemas import UploadHistoryResponse, UploadHistoryListResponse
 from .processors import get_processor
+from .processors.raw.base import PasswordRequiredException
 from .processors.marker import TransactionMarker
 from .processors.classifier import CascadeClassifier
 from app.domains.exclusoes.models import TransacaoExclusao
