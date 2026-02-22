@@ -32,7 +32,7 @@ from typing import List, Optional, Tuple
 
 import pdfplumber
 
-from ..base import RawTransaction, BalanceValidation
+from ..base import RawTransaction, BalanceValidation, PasswordRequiredException
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +88,13 @@ def process_btg_fatura_pdf(
                 if text:
                     texto_completo += text + "\n"
     except Exception as e:
+        e_str = str(type(e).__name__) + str(e)
+        # Detectar: sem senha → PDFPasswordIncorrect; com senha errada → idem
+        if "PDFPasswordIncorrect" in e_str or "PdfminerException" in e_str or "password" in e_str.lower():
+            raise PasswordRequiredException(
+                filename=file_path.name,
+                wrong_password=bool(senha),
+            ) from e
         raise Exception(f"Falha ao abrir PDF '{file_path.name}': {e}") from e
 
     # Extrair metadados da fatura

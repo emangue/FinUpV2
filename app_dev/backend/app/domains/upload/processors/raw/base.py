@@ -3,6 +3,22 @@ Base dataclass for raw transactions
 Estrutura padronizada de transação após processamento bruto
 """
 
+
+class PasswordRequiredException(Exception):
+    """
+    Levantada quando um arquivo protegido por senha é aberto sem senha
+    (ou com senha incorreta). Capturada pelo service.py para retornar
+    HTTP 422 com code=PASSWORD_REQUIRED ao frontend.
+    """
+    def __init__(self, filename: str = "", wrong_password: bool = False):
+        self.filename = filename
+        self.wrong_password = wrong_password
+        msg = (
+            f"Senha incorreta para '{filename}'" if wrong_password
+            else f"O arquivo '{filename}' é protegido por senha"
+        )
+        super().__init__(msg)
+
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional

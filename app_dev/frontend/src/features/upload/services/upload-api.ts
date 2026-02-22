@@ -41,6 +41,16 @@ export async function fetchCompatibility(): Promise<BankCompatibilityMap> {
   return map;
 }
 
+/** Erro especial: arquivo protegido por senha */
+export class PasswordRequiredError extends Error {
+  wrongPassword: boolean;
+  constructor(message: string, wrongPassword = false) {
+    super(message);
+    this.name = 'PasswordRequiredError';
+    this.wrongPassword = wrongPassword;
+  }
+}
+
 /**
  * Lista todos os bancos disponíveis para upload
  */
@@ -183,9 +193,14 @@ export async function uploadFile(formData: {
     let errorDetail = 'Erro ao fazer upload do arquivo'
     try {
       const error = await response.json();
-      errorDetail = error.detail || errorDetail
+      // Arquivo protegido por senha → erro especial para o frontend tratar
+      if (response.status === 422 && error.detail?.code === 'PASSWORD_REQUIRED') {
+        throw new PasswordRequiredError(error.detail.message, error.detail.wrong_password);
+      }
+      errorDetail = error.detail?.message || error.detail || errorDetail
     } catch (e) {
-      const errorText = await response.text()
+      if (e instanceof PasswordRequiredError) throw e;
+      const errorText = await response.text().catch(() => '');
       errorDetail = errorText || errorDetail
     }
     throw new Error(errorDetail);

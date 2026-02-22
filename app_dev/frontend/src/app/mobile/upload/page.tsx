@@ -24,7 +24,7 @@ import {
   TabBar 
 } from '@/features/upload/components';
 import { useBanks, useCreditCards, useUpload } from '@/features/upload/hooks';
-import { fetchCompatibility, createCard } from '@/features/upload/services/upload-api';
+import { fetchCompatibility, createCard, PasswordRequiredError } from '@/features/upload/services/upload-api';
 import type { BankCompatibilityMap } from '@/features/upload/services/upload-api';
 import type { FormatAvailability } from '@/features/upload/components/format-selector';
 import { useAuth } from '@/contexts/AuthContext';
@@ -89,6 +89,11 @@ export default function UploadPage() {
   const [newCardName, setNewCardName] = useState('');
   const [newCardFinal, setNewCardFinal] = useState('');
   const [addingCard, setAddingCard] = useState(false);
+
+  // Estado do prompt: arquivo protegido por senha
+  const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
+  const [passwordPromptMsg, setPasswordPromptMsg] = useState('');
+  const [retryPassword, setRetryPassword] = useState('');
 
   // Resetar cartão selecionado quando o banco mudar
   useEffect(() => {
@@ -225,7 +230,63 @@ export default function UploadPage() {
       router.push(`/mobile/preview/${result.sessionId}`);
       
     } catch (error) {
+      if (error instanceof PasswordRequiredError) {
+        setPasswordPromptMsg(
+          error.wrongPassword
+            ? 'Senha incorreta. Por favor, verifique e tente novamente.'
+            : 'Este arquivo é protegido por senha. Informe a senha para continuar.'
+        );
+        setRetryPassword('');
+        setShowPasswordPrompt(true);
+        return;
+      }
       console.error('❌ [MOBILE-UPLOAD] Erro no upload:', error);
+      alert('Erro ao fazer upload. Por favor, tente novamente.');
+    }
+  };
+
+  const handleRetryWithPassword = async () => {
+    if (!retryPassword.trim()) {
+      alert('Por favor, informe a senha');
+      return;
+    }
+    // Atualizar o campo de senha e o formato para pdf-password (ou manter excel)
+    // Em seguida resubmeter
+    const isExcel = selectedFormat === 'excel';
+    if (!isExcel) setSelectedFormat('pdf-password');
+    setPassword(retryPassword);
+    setShowPasswordPrompt(false);
+
+    // Submeter diretamente com a nova senha
+    try {
+      let cartaoNome: string | undefined;
+      let cartaoFinal: string | undefined;
+      if (activeTab === 'fatura' && selectedCard) {
+        const cartao = cards.find(c => c.id.toString() === selectedCard);
+        if (cartao) { cartaoNome = cartao.name; cartaoFinal = cartao.lastDigits; }
+      }
+      const result = await upload({
+        file: selectedFile!,
+        banco: selectedBank,
+        tipo: activeTab,
+        cartaoId: activeTab === 'fatura' ? selectedCard : undefined,
+        cartaoNome,
+        cartaoFinal,
+        mes: activeTab === 'fatura' ? selectedMonth : undefined,
+        ano: activeTab === 'fatura' ? selectedYear : undefined,
+        formato: isExcel ? 'excel' : 'pdf-password',
+        senha: retryPassword,
+      });
+      console.log('✅ [MOBILE-UPLOAD] Upload com senha bem-sucedido! SessionId:', result.sessionId);
+      router.push(`/mobile/preview/${result.sessionId}`);
+    } catch (error) {
+      if (error instanceof PasswordRequiredError) {
+        setPasswordPromptMsg('Senha incorreta. Por favor, verifique e tente novamente.');
+        setRetryPassword('');
+        setShowPasswordPrompt(true);
+        return;
+      }
+      console.error('❌ [MOBILE-UPLOAD] Erro no retry:', error);
       alert('Erro ao fazer upload. Por favor, tente novamente.');
     }
   };
@@ -244,6 +305,54 @@ export default function UploadPage() {
 
   return (
     <div className="bg-gray-50 min-h-screen flex items-center justify-center p-4">
+
+      {/* Dialog: Arquivo protegido por senha */}
+      {showPasswordPrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
+            <div className="flex items-center gap-3 mb-2">
+              <span className="text-2xl">🔒</span>
+              <h2 className="text-base font-bold text-gray-900">Arquivo Protegido</h2>
+            </div>
+            <p className="text-sm text-gray-500 mb-4">{passwordPromptMsg}</p>
+
+            <div className="mb-6">
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Senha <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="password"
+                value={retryPassword}
+                onChange={(e) => setRetryPassword(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleRetryWithPassword()}
+                placeholder="Digite a senha do arquivo"
+                autoFocus
+                autoComplete="current-password"
+                className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm text-gray-700 focus:outline-none focus:border-gray-900 focus:ring-1 focus:ring-gray-900"
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                Para BTG: geralmente é o CPF sem pontos e traço
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowPasswordPrompt(false)}
+                className="flex-1 py-3 border border-gray-300 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleRetryWithPassword}
+                disabled={uploading}
+                className="flex-1 py-3 bg-gray-900 rounded-xl text-sm font-bold text-white hover:bg-gray-800 disabled:opacity-50"
+              >
+                {uploading ? 'Enviando...' : 'Confirmar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Dialog: Adicionar Novo Cartão */}
       {showAddCard && (

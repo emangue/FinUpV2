@@ -33,7 +33,7 @@ from typing import List, Optional, Tuple
 import msoffcrypto
 import openpyxl
 
-from ..base import RawTransaction, BalanceValidation
+from ..base import RawTransaction, BalanceValidation, PasswordRequiredException
 
 logger = logging.getLogger(__name__)
 
@@ -185,7 +185,15 @@ def _extract_total_fatura(rows: list) -> Optional[float]:
 
 def _open_workbook(file_path: Path, senha: Optional[str]) -> openpyxl.Workbook:
     """Abre workbook descriptografando com msoffcrypto se necessário."""
-    if senha:
+    # Verificar se o arquivo é criptografado independentemente de ter senha
+    with open(file_path, "rb") as f:
+        office_file = msoffcrypto.OfficeFile(f)
+        is_encrypted = office_file.is_encrypted()
+
+    if is_encrypted and not senha:
+        raise PasswordRequiredException(filename=file_path.name, wrong_password=False)
+
+    if is_encrypted and senha:
         try:
             with open(file_path, "rb") as f:
                 office_file = msoffcrypto.OfficeFile(f)
@@ -194,9 +202,10 @@ def _open_workbook(file_path: Path, senha: Optional[str]) -> openpyxl.Workbook:
                 office_file.decrypt(decrypted)
             return openpyxl.load_workbook(decrypted, read_only=True, data_only=True)
         except Exception as e:
-            raise Exception(f"Falha ao descriptografar '{file_path.name}' (senha errada?): {e}") from e
-    else:
-        return openpyxl.load_workbook(file_path, read_only=True, data_only=True)
+            # Senha incorreta
+            raise PasswordRequiredException(filename=file_path.name, wrong_password=True) from e
+
+    return openpyxl.load_workbook(file_path, read_only=True, data_only=True)
 
 
 def _find_sheet(wb: openpyxl.Workbook) -> str:

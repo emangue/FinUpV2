@@ -470,6 +470,21 @@ class UploadService:
                 
             return raw_transactions, balance_validation
             
+        except PasswordRequiredException as e:
+            logger.warning(f"🔒 Arquivo protegido por senha: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={
+                    "code": "PASSWORD_REQUIRED",
+                    "wrong_password": e.wrong_password,
+                    "message": (
+                        "Senha incorreta. Por favor, verifique e tente novamente."
+                        if e.wrong_password
+                        else "Este arquivo é protegido por senha. Por favor, informe a senha para continuar."
+                    ),
+                }
+            )
+
         except ValueError as e:
             # Erro de formato de arquivo (header não encontrado, estrutura incorreta)
             logger.warning(f"⚠️ Formato de arquivo inválido: {str(e)}")
