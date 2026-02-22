@@ -109,8 +109,8 @@ function TransactionsMobileContent() {
   const [detailSheetOpen, setDetailSheetOpen] = useState(false)
   // Se viemos do orçamento com grupo selecionado, abrir collapse de gastos por padrão
   const [gastosOpen, setGastosOpen] = useState(!!(fromOrcamento && urlGrupo))
-  // Abrir filtros por padrão se viemos de link externo ou há filtros ativos
-  const [filtrosOpen, setFiltrosOpen] = useState(!!(fromOrcamento || urlGrupo || urlYear))
+  // Filtros sempre fechados por padrão
+  const [filtrosOpen, setFiltrosOpen] = useState(false)
 
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -375,6 +375,153 @@ function TransactionsMobileContent() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pb-24 scrollbar-hide">
+        {/* Filtros Avançados */}
+        <div className="bg-white rounded-2xl border border-gray-200 mt-4 overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setFiltrosOpen(!filtrosOpen)}
+            className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50 transition-colors"
+          >
+            <span className="flex items-center gap-2">
+              <Filter className="w-4 h-4 text-gray-500" />
+              <h3 className="text-sm font-semibold text-gray-900">Filtros</h3>
+              {(grupoFilter || subgrupoFilter || categoriaGeral || !semFiltroPeriodo) && (
+                <span className="inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold text-white bg-blue-600 rounded-full">
+                  {[grupoFilter, subgrupoFilter, categoriaGeral, !semFiltroPeriodo].filter(Boolean).length}
+                </span>
+              )}
+            </span>
+            {filtrosOpen ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+          </button>
+          {filtrosOpen && (
+            <div className="px-4 pb-4 space-y-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={semFiltroPeriodo}
+                  onChange={(e) => setSemFiltroPeriodo(e.target.checked)}
+                  className="rounded border-gray-300"
+                />
+                <span className="text-sm text-gray-700">Todas as transações (sem filtro de período)</span>
+              </label>
+              {!semFiltroPeriodo && (
+                <>
+                  <div className="flex gap-2 p-1 bg-gray-100 rounded-lg">
+                    <button
+                      type="button"
+                      onClick={() => setTipoPeriodo('mes')}
+                      className={`flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                        tipoPeriodo === 'mes'
+                          ? 'bg-white text-gray-900 shadow-sm'
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      Mês específico
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTipoPeriodo('ano')}
+                      className={`flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                        tipoPeriodo === 'ano'
+                          ? 'bg-white text-gray-900 shadow-sm'
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      Ano inteiro
+                    </button>
+                  </div>
+                  {tipoPeriodo === 'mes' ? (
+                    <div className="flex gap-2">
+                      <select
+                        value={selectedMonth}
+                        onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                        className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2"
+                      >
+                        {MESES.map((m, i) => (
+                          <option key={m} value={i + 1}>
+                            {m}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={selectedYear}
+                        onChange={(e) => setSelectedYear(Number(e.target.value))}
+                        className="w-24 text-sm border border-gray-200 rounded-lg px-3 py-2"
+                      >
+                        {[now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2, now.getFullYear() - 3].map((y) => (
+                          <option key={y} value={y}>
+                            {y}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <select
+                      value={selectedYear}
+                      onChange={(e) => setSelectedYear(Number(e.target.value))}
+                      className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2"
+                    >
+                      {[now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2, now.getFullYear() - 3].map((y) => (
+                        <option key={y} value={y}>
+                          {y}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </>
+              )}
+              <div>
+                <label className="text-[10px] text-gray-500 block mb-1">Categoria geral</label>
+                <select
+                  value={categoriaGeral}
+                  onChange={(e) => setCategoriaGeral(e.target.value)}
+                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2"
+                >
+                  <option value="">Todas</option>
+                  <option value="Receita">Receita</option>
+                  <option value="Despesa">Despesa</option>
+                  <option value="Investimentos">Investimentos</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] text-gray-500 block mb-1">Grupo</label>
+                <select
+                  value={grupoFilter}
+                  onChange={(e) => {
+                    setGrupoFilter(e.target.value)
+                    setSubgrupoFilter('')
+                  }}
+                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2"
+                >
+                  <option value="">Todos</option>
+                  {[...new Set(gruposOptions.map((o) => o.grupo))].sort().map((g) => (
+                    <option key={g} value={g}>
+                      {g}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {grupoFilter && subgruposForGrupo.length > 0 && (
+                <div>
+                  <label className="text-[10px] text-gray-500 block mb-1">Subgrupo</label>
+                  <select
+                    value={subgrupoFilter}
+                    onChange={(e) => setSubgrupoFilter(e.target.value)}
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2"
+                  >
+                    <option value="">Todos</option>
+                    {subgruposForGrupo.map((s) => (
+                      <option key={s.value} value={s.value}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Resumo - Layout Fatura (como extrato-cartão) */}
         <div className="bg-white rounded-2xl border border-gray-200 p-5 mt-4 mb-4">
           <div className="flex items-center justify-between mb-4">
@@ -691,8 +838,6 @@ function TransactionsMobileContent() {
                   placeholder="Filtrar por nome"
                   className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2"
                 />
-              </div>
-            </div>
           )}
         </div>
 
