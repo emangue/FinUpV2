@@ -508,7 +508,18 @@ export function OrcamentoTab({
               const hInvestido = Math.max(8, (totalInvestido / maxVal) * barMaxH)
               const hPlanejado = Math.max(8, (totalPlanejadoInv / maxVal) * barMaxH)
               return (
-                <div className="flex items-end gap-3 justify-center py-4 mb-4">
+                <div 
+                  className="flex items-end gap-3 justify-center py-4 mb-4 cursor-pointer hover:bg-blue-50 active:bg-blue-100 rounded-lg transition-colors -mx-2 px-2"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => navegarParaTransacoes('Investimentos')}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      navegarParaTransacoes('Investimentos')
+                    }
+                  }}
+                >
                   <div className="flex flex-col items-center gap-1.5">
                     <span className="text-xs font-bold text-blue-600">{formatCurrency(totalInvestido)}</span>
                     <div
