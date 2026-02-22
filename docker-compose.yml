@@ -7,8 +7,8 @@ services:
     container_name: finup_postgres_dev
     environment:
       POSTGRES_USER: finup_user
-      POSTGRES_PASSWORD: finup_dev_password
-      POSTGRES_DB: finup_db_dev
+      POSTGRES_PASSWORD: finup_password_dev_2026
+      POSTGRES_DB: finup_db
     ports:
       - "5432:5432"
     volumes:
@@ -44,7 +44,7 @@ services:
       dockerfile: Dockerfile
     container_name: finup_backend_dev
     environment:
-      - DATABASE_URL=postgresql://finup_user:finup_dev_password@postgres:5432/finup_db_dev
+      - DATABASE_URL=postgresql://finup_user:finup_password_dev_2026@postgres:5432/finup_db
       - REDIS_URL=redis://redis:6379/0
       - DEBUG=true
       - BACKEND_CORS_ORIGINS=http://localhost:3000,http://localhost:3001
