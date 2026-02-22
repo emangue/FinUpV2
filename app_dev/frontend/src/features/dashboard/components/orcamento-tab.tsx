@@ -293,7 +293,14 @@ export function OrcamentoTab({
                           ? 'text-emerald-600 font-semibold'
                           : 'text-gray-500 font-medium'
                     return (
-                      <div key={cat.grupo}>
+                      <div
+                        key={cat.grupo}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => navegarParaTransacoes(cat.grupo)}
+                        onKeyDown={(e) => e.key === 'Enter' && navegarParaTransacoes(cat.grupo)}
+                        className="cursor-pointer rounded-xl hover:bg-gray-50 active:bg-gray-100 transition-colors -mx-2 px-2 py-1"
+                      >
                         <div className="flex items-center justify-between mb-1.5">
                           <div className="flex items-center gap-2 shrink-0 min-w-0">
                             <div
@@ -308,6 +315,7 @@ export function OrcamentoTab({
                               {formatCurrency(realizado)}
                             </span>
                             <span className="text-[9px] text-gray-400">/ {formatCurrency(planejado)}</span>
+                            <ChevronDown className="w-3.5 h-3.5 text-gray-400 -rotate-90 ml-0.5" />
                           </div>
                         </div>
                         <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
