@@ -1,4 +1,5 @@
 export { GoalCard } from './GoalCard'
+export { GoalListItem } from './GoalListItem'
 export { DonutChart } from './DonutChart'
 export { EditGoalModal } from './EditGoalModal'
 export type { EditGoalData } from './EditGoalModal'

@@ -22,11 +22,11 @@ import { mobileTypography } from '@/config/mobile-typography'
 import { mobileDimensions } from '@/config/mobile-dimensions'
 import { mobileAnimations } from '@/config/mobile-animations'
 
-export type YTDToggleValue = 'month' | 'ytd'
+export type YTDToggleValue = 'month' | 'ytd' | 'year'
 
 interface YTDToggleProps {
   /**
-   * Valor atual ('month' ou 'ytd')
+   * Valor atual ('month', 'ytd' ou 'year')
    */
   value: YTDToggleValue
   
@@ -41,6 +41,7 @@ interface YTDToggleProps {
   labels?: {
     month: string
     ytd: string
+    year: string
   }
   
   /**
@@ -54,7 +55,8 @@ export function YTDToggle({
   onChange,
   labels = {
     month: 'Mês',
-    ytd: 'Ano'
+    ytd: 'YTD',
+    year: 'Ano'
   },
   className
 }: YTDToggleProps) {
@@ -79,10 +81,10 @@ export function YTDToggle({
         onClick={() => onChange('month')}
         className={cn(
           // Base
-          'px-4 py-2 rounded-md',
+          'px-3 py-2 rounded-md',
           'font-semibold text-sm',
           'transition-all duration-200',
-          'min-w-[60px] min-h-[36px]', // Touch-friendly
+          'min-w-[52px] min-h-[36px]', // Touch-friendly
           
           // Estados
           value === 'month' ? [
@@ -103,7 +105,7 @@ export function YTDToggle({
         {labels.month}
       </button>
       
-      {/* Botão ANO (YTD) */}
+      {/* Botão YTD */}
       <button
         role="tab"
         aria-selected={value === 'ytd'}
@@ -111,10 +113,10 @@ export function YTDToggle({
         onClick={() => onChange('ytd')}
         className={cn(
           // Base
-          'px-4 py-2 rounded-md',
+          'px-3 py-2 rounded-md',
           'font-semibold text-sm',
           'transition-all duration-200',
-          'min-w-[60px] min-h-[36px]', // Touch-friendly
+          'min-w-[52px] min-h-[36px]', // Touch-friendly
           
           // Estados
           value === 'ytd' ? [
@@ -133,6 +135,38 @@ export function YTDToggle({
         }}
       >
         {labels.ytd}
+      </button>
+
+      {/* Botão ANO */}
+      <button
+        role="tab"
+        aria-selected={value === 'year'}
+        aria-controls="dashboard-content"
+        onClick={() => onChange('year')}
+        className={cn(
+          // Base
+          'px-3 py-2 rounded-md',
+          'font-semibold text-sm',
+          'transition-all duration-200',
+          'min-w-[52px] min-h-[36px]', // Touch-friendly
+          
+          // Estados
+          value === 'year' ? [
+            'bg-white text-black',
+            'shadow-sm',
+          ] : [
+            'bg-transparent text-gray-500',
+            'hover:text-gray-700',
+          ]
+        )}
+        style={{
+          fontSize: mobileTypography.frequency.fontSize,
+          fontWeight: value === 'year' ? 600 : 500,
+          lineHeight: mobileTypography.frequency.lineHeight,
+          ...mobileAnimations.button,
+        }}
+      >
+        {labels.year}
       </button>
     </div>
   )

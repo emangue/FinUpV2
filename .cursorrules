@@ -127,8 +127,9 @@ const typography = {
 **NUNCA:** Modificar schema SQL diretamente
 
 ### 7. Deploy
-**SEMPRE:** Usar `safe_deploy.sh` antes de produção  
-**NUNCA:** Deploy sem backup, validação, ou testes
+**SEMPRE:** Usar `./scripts/deploy/deploy.sh` (ou `deploy_build_local.sh` se OOM)  
+**NUNCA:** Deploy sem backup, validação, ou testes  
+**Doc:** `docs/deploy/DEPLOY_PROCESSO_CONSOLIDADO.md`
 
 ### 7.1 Deploy e branches (alterações grandes)
 **SEMPRE:** Em alteração grande, criar branch **antes** de subir no servidor (ex.: `deploy/YYYY-MM-DD-nome` ou `feature/nome`). Subir e validar **nessa branch** no servidor. **Só depois** que der certo no servidor: fazer merge dessa branch na `main` e push da main. Assim a main só muda após validação no servidor; rollback = descartar a branch. O `safe_deploy.sh` oferece criar a branch automaticamente quando você está na main.
@@ -248,25 +249,21 @@ git commit -m "feat(mobile): adiciona componente TrackerCard"
 
 ### 4. Antes de Deploy
 ```bash
-# 1. Rodar safe deploy
-./scripts/deploy/safe_deploy.sh
+# 1. Validar localmente
+git status -uno          # Deve estar limpo
+git push origin <branch> # Ex: feature/revisao-completa-do-app
 
-# 2. Push para GitHub
-git push origin main
+# 2. Não deve existir middleware.ts (apenas proxy.ts)
+#    Remover: app_dev/frontend/src/middleware.ts
 
-# 3. SSH no servidor e pull
-ssh minha-vps-hostinger
-cd /var/www/finup
-git pull origin main
+# 3. Deploy (um comando)
+./scripts/deploy/deploy.sh
 
-# 4. Aplicar migrations (se houver)
-cd app_dev/backend
-source venv/bin/activate
-alembic upgrade head
-
-# 5. Restart serviços
-systemctl restart finup-backend finup-frontend
+# Se OOM no build: ./scripts/deploy/deploy_build_local.sh
 ```
+
+**Scripts:** `deploy.sh` (padrão) | `deploy_build_local.sh` (alternativa OOM)  
+**Doc:** `docs/deploy/DEPLOY_PROCESSO_CONSOLIDADO.md`
 
 ---
 

@@ -8,14 +8,16 @@ import {
   fetchDashboardMetrics,
   fetchIncomeSources,
   fetchExpenseSources,
-  fetchChartData
+  fetchChartData,
+  fetchChartDataYearly
 } from '../services/dashboard-api'
 import type { DashboardMetrics, IncomeSource, ExpenseSource, ChartDataPoint } from '../types'
 
 /**
  * Hook para buscar métricas do dashboard
+ * ytdMonth: quando informado com month undefined, retorna YTD (Jan..ytdMonth)
  */
-export function useDashboardMetrics(year: number, month?: number) {
+export function useDashboardMetrics(year: number, month?: number, ytdMonth?: number) {
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
@@ -27,7 +29,7 @@ export function useDashboardMetrics(year: number, month?: number) {
       try {
         setLoading(true)
         setError(null)
-        const data = await fetchDashboardMetrics(year, month)
+        const data = await fetchDashboardMetrics(year, month, ytdMonth)
         if (!cancelled) setMetrics(data)
       } catch (err) {
         if (!cancelled) setError(err as Error)
@@ -38,7 +40,7 @@ export function useDashboardMetrics(year: number, month?: number) {
 
     load()
     return () => { cancelled = true }
-  }, [year, month])
+  }, [year, month, ytdMonth])
 
   return { metrics, loading, error }
 }
@@ -105,6 +107,45 @@ export function useChartData(year: number, month?: number) {
     load()
     return () => { cancelled = true }
   }, [year, month])
+
+  return { chartData, loading, error }
+}
+
+/**
+ * Hook para buscar dados do gráfico por ano (YTD ou ano inteiro)
+ */
+export function useChartDataYearly(
+  years: number[],
+  ytdMonth?: number
+) {
+  const [chartData, setChartData] = useState<ChartDataPoint[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<Error | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function load() {
+      if (!years.length) {
+        setChartData([])
+        setLoading(false)
+        return
+      }
+      try {
+        setLoading(true)
+        setError(null)
+        const data = await fetchChartDataYearly(years, ytdMonth)
+        if (!cancelled) setChartData(data)
+      } catch (err) {
+        if (!cancelled) setError(err as Error)
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    load()
+    return () => { cancelled = true }
+  }, [years.join(','), ytdMonth])
 
   return { chartData, loading, error }
 }

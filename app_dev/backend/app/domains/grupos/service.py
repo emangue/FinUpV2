@@ -118,8 +118,12 @@ class GrupoService:
         return {"message": f"Grupo '{existing.nome_grupo}' excluído com sucesso"}
     
     def get_opcoes(self) -> dict:
-        """Retorna opções disponíveis para formulários"""
+        """Retorna opções disponíveis para formulários (Sprint C: inclui paleta de cores)"""
         return {
             "tipos_gasto": self.repository.get_tipos_gasto_disponiveis(),
-            "categorias": self.repository.get_categorias_disponiveis()
+            "categorias": self.repository.get_categorias_disponiveis(),
+            "paleta_cores": [
+                "#001D39", "#0A4174", "#2D5A7B", "#49769F", "#4E8EA2",
+                "#5E9AB0", "#6EA2B3", "#7BBDE8", "#9AC9E8", "#BDD8E9", "#D4E8F0"
+            ]
         }

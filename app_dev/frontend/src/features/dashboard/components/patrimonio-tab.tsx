@@ -8,14 +8,17 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { RefreshCw, ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import {
   getPatrimonioTimeline,
   getDistribuicaoPorTipo,
 } from '@/features/investimentos/services/investimentos-api'
 import type { PatrimonioMensal, DistribuicaoTipo } from '@/features/investimentos/types'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { DistribuicaoLista } from './distribuicao-lista'
 import { PatrimonioChart } from './patrimonio-chart'
+import { KpiCards } from './kpi-cards'
+import type { DashboardMetrics } from '../types'
 
 function formatMes(anomes: number): string {
   const s = String(anomes)
@@ -36,11 +39,16 @@ function formatCurrency(value: number) {
 
 interface PatrimonioTabProps {
   selectedMonth: Date
+  variant?: 'standalone' | 'dashboard'
+  /** Conteúdo do plano de aposentadoria (PlanoChart + Central de Cenários) */
+  planoAposentadoria?: React.ReactNode
+  /** Métricas para exibir caixa Patrimônio dentro da aba */
+  metrics?: DashboardMetrics | null
 }
 
 type DistribuicaoToggle = 'ativo' | 'passivo'
 
-export function PatrimonioTab({ selectedMonth }: PatrimonioTabProps) {
+export function PatrimonioTab({ selectedMonth, variant = 'standalone', planoAposentadoria, metrics }: PatrimonioTabProps) {
   const router = useRouter()
   const [data, setData] = useState<PatrimonioMensal[]>([])
   const [distribuicaoAtivo, setDistribuicaoAtivo] = useState<DistribuicaoTipo[]>([])
@@ -178,8 +186,15 @@ export function PatrimonioTab({ selectedMonth }: PatrimonioTabProps) {
   const totalAtivos = distribuicaoAtivo.reduce((s, d) => s + toNum(d), 0)
   const totalPassivos = distribuicaoPassivo.reduce((s, d) => s + toNum(d), 0)
 
+  const isDashboardVariant = variant === 'dashboard'
+
   return (
     <div className="space-y-6">
+      {/* Sprint G: Caixa Patrimônio dentro da aba Patrimônio */}
+      {isDashboardVariant && metrics && (
+        <KpiCards metrics={metrics} variant="patrimonio-only" />
+      )}
+
       {/* Gráfico */}
       <div className="rounded-xl border border-gray-200 bg-white p-4">
         <h3 className="text-sm font-semibold text-gray-900 mb-4">
@@ -193,41 +208,49 @@ export function PatrimonioTab({ selectedMonth }: PatrimonioTabProps) {
         />
       </div>
 
-      {/* Toggle Ativo / Passivo + Atualizar */}
-      <div className="flex items-center justify-between gap-4 border-b border-gray-200 mb-4">
-        <div className="flex gap-6">
-        <button
-          onClick={() => setDistribuicaoToggle('ativo')}
-          className={
-            distribuicaoToggle === 'ativo'
-              ? 'pb-2 text-sm font-semibold text-gray-900 border-b-2 border-gray-900'
-              : 'pb-2 text-sm font-semibold text-gray-400 hover:text-gray-600'
-          }
-        >
-          Ativo
-        </button>
-        <button
-          onClick={() => setDistribuicaoToggle('passivo')}
-          className={
-            distribuicaoToggle === 'passivo'
-              ? 'pb-2 text-sm font-medium text-gray-900 border-b-2 border-gray-900'
-              : 'pb-2 text-sm font-medium text-gray-400 hover:text-gray-600'
-          }
-        >
-          Passivo
-        </button>
-        </div>
-        <button
-          onClick={fetchDistribuicao}
-          disabled={distribuicaoLoading}
-          className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 disabled:opacity-50"
-          title="Atualizar dados"
-        >
-          <RefreshCw className={`w-4 h-4 ${distribuicaoLoading ? 'animate-spin' : ''}`} />
-          Atualizar
-        </button>
-      </div>
-
+      {/* Distribuição por tipo - Collapsible */}
+      <Collapsible defaultOpen={false} className="group rounded-xl border border-gray-200 bg-white overflow-hidden">
+        <CollapsibleTrigger asChild>
+          <div className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors text-left cursor-pointer">
+            <div className="flex gap-6">
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => { e.stopPropagation(); setDistribuicaoToggle('ativo') }}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); setDistribuicaoToggle('ativo'); } }}
+                className={
+                  distribuicaoToggle === 'ativo'
+                    ? 'pb-0 text-sm font-semibold text-gray-900 border-b-2 border-gray-900 cursor-pointer'
+                    : 'pb-0 text-sm font-semibold text-gray-400 hover:text-gray-600 cursor-pointer'
+                }
+              >
+                Ativo
+              </span>
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => { e.stopPropagation(); setDistribuicaoToggle('passivo') }}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); setDistribuicaoToggle('passivo'); } }}
+                className={
+                  distribuicaoToggle === 'passivo'
+                    ? 'pb-0 text-sm font-medium text-gray-900 border-b-2 border-gray-900 cursor-pointer'
+                    : 'pb-0 text-sm font-medium text-gray-400 hover:text-gray-600 cursor-pointer'
+                }
+              >
+                Passivo
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-gray-900">
+                {distribuicaoToggle === 'ativo'
+                  ? formatCurrency(totalAtivos)
+                  : formatCurrency(totalPassivos)}
+              </span>
+              <ChevronDown className="w-5 h-5 text-gray-400 group-data-[state=open]:rotate-180 transition-transform" />
+            </div>
+          </div>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="px-4 pb-4">
       {/* Lista de distribuição */}
       {distribuicaoLoading && (
         <div className="rounded-xl border border-gray-200 bg-white p-6 flex justify-center">
@@ -265,6 +288,11 @@ export function PatrimonioTab({ selectedMonth }: PatrimonioTabProps) {
         Ver todos os investimentos
         <ChevronRight className="w-5 h-5 text-gray-400" />
       </button>
+        </CollapsibleContent>
+      </Collapsible>
+
+      {/* Plano de Aposentadoria (gráfico PL Realizado vs Plano + cenários) */}
+      {isDashboardVariant && planoAposentadoria}
     </div>
   )
 }

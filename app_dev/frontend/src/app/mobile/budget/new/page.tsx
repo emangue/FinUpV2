@@ -18,10 +18,10 @@ import { fetchGruposComCategoria } from '@/features/goals/services/goals-api'
 import { GoalCreate, GoalUpdate } from '@/features/goals/types'
 import { format } from 'date-fns'
 
+// Sprint E: Investimentos removido do budget (fonte = cenário de aposentadoria)
 const TIPOS_META = [
   { value: 'Despesa', label: 'Despesa' },
-  { value: 'Receita', label: 'Receita' },
-  { value: 'Investimentos', label: 'Investimentos' }
+  { value: 'Receita', label: 'Receita' }
 ] as const
 
 /** Mapeia categoria_geral do grupo para o tipo do 1º dropdown (Transferência → Despesa) */

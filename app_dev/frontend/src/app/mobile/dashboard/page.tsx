@@ -4,63 +4,83 @@
  * Dashboard Mobile - Redesigned
  * Sprint 3.2 - Substituição completa da tela antiga
  * 
- * Novo design baseado no protótipo "Insights":
- * - WalletBalanceCard com change percentage
- * - BarChart (receitas vs despesas mensal)
- * - DonutChart (fontes de receita)
- * - Integração com APIs novas (income-sources, metrics com change%)
+ * Aba Resultado: Mês, YTD e Ano
+ * - Mês: scroll de meses, gráfico mensal (últimos 7 meses)
+ * - YTD: scroll de anos, gráfico anual (Jan até mês mais recente do ano mais novo)
+ * - Ano: scroll de anos, gráfico anual (ano inteiro)
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Download } from 'lucide-react'
 import { MobileHeader } from '@/components/mobile/mobile-header'
 import { MonthScrollPicker } from '@/components/mobile/month-scroll-picker'
+import { YearScrollPicker } from '@/components/mobile/year-scroll-picker'
 import { YTDToggle, YTDToggleValue } from '@/components/mobile/ytd-toggle'
-import { KpiCards } from '@/features/dashboard/components/kpi-cards'
 import { BarChart } from '@/features/dashboard/components/bar-chart'
-import { DonutChart } from '@/features/dashboard/components/donut-chart'
-import { ExpenseGroupsBox } from '@/features/dashboard/components/expense-groups-box'
 import { GastosPorCartaoBox } from '@/features/dashboard/components/gastos-por-cartao-box'
-import { IncomeGroupsBox } from '@/features/dashboard/components/income-groups-box'
 import { PatrimonioTab } from '@/features/dashboard/components/patrimonio-tab'
 import { OrcamentoTab } from '@/features/dashboard/components/orcamento-tab'
 import { PlanoAposentadoriaTab } from '@/features/plano-aposentadoria/components/plano-aposentadoria-tab'
-import { useDashboardMetrics, useIncomeSources, useExpenseSources, useChartData } from '@/features/dashboard/hooks/use-dashboard'
+import { useDashboardMetrics, useIncomeSources, useExpenseSources, useChartData, useChartDataYearly } from '@/features/dashboard/hooks/use-dashboard'
 import { fetchLastMonthWithData } from '@/features/dashboard/services/dashboard-api'
 import { useRequireAuth } from '@/core/hooks/use-require-auth'
+
+const YEARS_RANGE = 7 // Últimos N anos no scroll/gráfico anual
 
 export default function DashboardMobilePage() {
   const router = useRouter()
   const isAuth = useRequireAuth() // 🔐 Hook de proteção de rota
   const [selectedMonth, setSelectedMonth] = useState<Date>(new Date())
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear())
   const [period, setPeriod] = useState<YTDToggleValue>('month')
-  const [activeTab, setActiveTab] = useState<'resultado' | 'patrimonio' | 'orcamento' | 'plano'>('resultado')
-  const [resultadoToggle, setResultadoToggle] = useState<'receita' | 'despesas'>('receita')
+  const [activeTab, setActiveTab] = useState<'resultado' | 'patrimonio'>('resultado')
+  const [lastMonthWithData, setLastMonthWithData] = useState<{ year: number; month: number } | null>(null)
 
-  // Extrair year e month do selectedMonth
-  const year = selectedMonth.getFullYear()
+  // year/month/ytdMonth para métricas e OrcamentoTab
+  const year = period === 'month' ? selectedMonth.getFullYear() : selectedYear
   const month = period === 'month' ? selectedMonth.getMonth() + 1 : undefined
+  const ytdMonth = period === 'ytd' ? (lastMonthWithData?.month ?? undefined) : undefined
+
+  // Lista de anos para scroll/gráfico (YTD e Ano)
+  const yearsList = useMemo(() => {
+    const lastYear = lastMonthWithData?.year ?? new Date().getFullYear()
+    const result: number[] = []
+    for (let y = lastYear - YEARS_RANGE + 1; y <= lastYear; y++) {
+      result.push(y)
+    }
+    return result
+  }, [lastMonthWithData?.year])
 
   // ✅ TODOS OS HOOKS PRIMEIRO (antes de any return)
-  const { metrics, loading: loadingMetrics } = useDashboardMetrics(year, month)
-  const { sources, totalReceitas, loading: loadingSources } = useIncomeSources(year, month)
-  const { sources: expenseSources, totalDespesas, loading: loadingExpenses } = useExpenseSources(year, month)
+  const { metrics, loading: loadingMetrics } = useDashboardMetrics(year, month, ytdMonth)
+  const { loading: loadingSources } = useIncomeSources(year, month)
+  const { loading: loadingExpenses } = useExpenseSources(year, month)
   
-  // BarChart precisa de múltiplos meses
-  const year2025 = 2025
-  const year2026 = 2026
-  const { chartData: chartData2025 } = useChartData(year2025, undefined)
-  const { chartData: chartData2026, loading: loadingChart } = useChartData(year2026, undefined)
-  const chartData = [...chartData2025, ...chartData2026]
+  // Chart data: mensal (Mês) ou anual (YTD/Ano)
+  const { chartData: chartDataMonthly, loading: loadingChartMonthly } = useChartData(
+    selectedMonth.getFullYear(),
+    selectedMonth.getMonth() + 1
+  )
+  const { chartData: chartDataYearly, loading: loadingChartYearly } = useChartDataYearly(
+    yearsList,
+    period === 'ytd' ? (lastMonthWithData?.month ?? undefined) : undefined
+  )
+  
+  const chartData = period === 'month' ? chartDataMonthly : chartDataYearly
+  const loadingChart = period === 'month' ? loadingChartMonthly : loadingChartYearly
 
   const isLoading = loadingMetrics || loadingSources || loadingExpenses || loadingChart
 
-  // Default: último mês com dados (journal_entries para resultado/orçamento)
+  // Default: último mês com dados
   useEffect(() => {
     if (!isAuth) return
     fetchLastMonthWithData('transactions')
-      .then((lastMonth) => setSelectedMonth(new Date(lastMonth.year, lastMonth.month - 1, 1)))
+      .then((last) => {
+        setSelectedMonth(new Date(last.year, last.month - 1, 1))
+        setSelectedYear(last.year)
+        setLastMonthWithData(last)
+      })
       .catch(() => {})
   }, [isAuth])
 
@@ -81,14 +101,22 @@ export default function DashboardMobilePage() {
   
   return (
     <div className="flex flex-col h-screen bg-gray-50">
-      {/* Scroll de meses fixo no topo + ícone Download compacto na mesma linha */}
+      {/* Scroll de meses ou anos (conforme período) + ícone Download */}
       <div className="sticky top-0 z-20 bg-white border-b border-gray-200 shrink-0">
         <div className="flex items-center gap-2">
           <div className="flex-1 min-w-0">
-            <MonthScrollPicker
-              selectedMonth={selectedMonth}
-              onMonthChange={setSelectedMonth}
-            />
+            {period === 'month' ? (
+              <MonthScrollPicker
+                selectedMonth={selectedMonth}
+                onMonthChange={setSelectedMonth}
+              />
+            ) : (
+              <YearScrollPicker
+                years={yearsList}
+                selectedYear={selectedYear}
+                onYearChange={setSelectedYear}
+              />
+            )}
           </div>
           <button
             onClick={() => console.log('Download clicked')}
@@ -109,17 +137,14 @@ export default function DashboardMobilePage() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 overflow-y-auto bg-white px-6 pb-6">
+      <div className="flex-1 overflow-y-auto bg-white px-6 pt-6 pb-6">
         {isLoading ? (
           <div className="flex items-center justify-center py-10">
             <div className="text-gray-600">Carregando...</div>
           </div>
         ) : (
           <>
-            {/* KPI Cards */}
-            <KpiCards metrics={metrics ?? null} />
-
-            {/* Tabs */}
+            {/* Tabs - Sprint G: 2 abas (Resultado, Patrimônio). Sem KpiCards em Resultado; caixa Patrimônio dentro da aba Patrimônio */}
             <div className="flex gap-6 border-b border-gray-200 mb-6">
               <button
                 onClick={() => setActiveTab('resultado')}
@@ -141,126 +166,68 @@ export default function DashboardMobilePage() {
               >
                 Patrimônio
               </button>
-              <button
-                onClick={() => setActiveTab('orcamento')}
-                className={`pb-2 text-sm font-medium transition-colors ${
-                  activeTab === 'orcamento'
-                    ? 'text-gray-900 border-b-2 border-gray-900'
-                    : 'text-gray-400 hover:text-gray-600'
-                }`}
-              >
-                Orçamento
-              </button>
-              <button
-                onClick={() => setActiveTab('plano')}
-                className={`pb-2 text-sm font-medium transition-colors ${
-                  activeTab === 'plano'
-                    ? 'text-gray-900 border-b-2 border-gray-900'
-                    : 'text-gray-400 hover:text-gray-600'
-                }`}
-              >
-                Plano
-              </button>
             </div>
 
-            {/* Tab Resultado: Gráfico de barras + Toggle Receita/Despesas + Donuts */}
+            {/* Tab Resultado: Resumo + Gráfico (sem Tendência) + Toggle Despesas|Receitas|Cartões + Investimentos + Transações */}
             {activeTab === 'resultado' && (
               <>
-                <BarChart
-                  data={chartData}
-                  title={resultadoToggle === 'receita' ? 'Tendência de Receitas' : 'Tendência de Despesas'}
-                  totalValue={resultadoToggle === 'receita' ? (metrics?.total_receitas || 0) : (metrics?.total_despesas || 0)}
-                  selectedMonth={selectedMonth}
-                />
-
-                {/* Toggle Receita / Despesas (abaixo do gráfico de barras) */}
-                <div className="flex gap-6 border-b border-gray-200 mb-4">
-                  <button
-                    onClick={() => setResultadoToggle('receita')}
-                    className={`pb-2 text-sm font-semibold transition-colors ${
-                      resultadoToggle === 'receita'
-                        ? 'text-gray-900 border-b-2 border-gray-900'
-                        : 'text-gray-400 hover:text-gray-600'
-                    }`}
-                  >
-                    Receita
-                  </button>
-                  <button
-                    onClick={() => setResultadoToggle('despesas')}
-                    className={`pb-2 text-sm font-medium transition-colors ${
-                      resultadoToggle === 'despesas'
-                        ? 'text-gray-900 border-b-2 border-gray-900'
-                        : 'text-gray-400 hover:text-gray-600'
-                    }`}
-                  >
-                    Despesas
-                  </button>
-                </div>
-
-                {resultadoToggle === 'receita' && (
-                  <>
-                    <DonutChart
-                      activeTab="income"
-                      incomeSources={sources}
-                      totalReceitas={totalReceitas}
-                      expenseSources={expenseSources}
-                      totalDespesas={totalDespesas}
+                <OrcamentoTab
+                  year={year}
+                  month={month}
+                  variant="resultado"
+                  metrics={metrics ? { total_receitas: metrics.total_receitas, total_despesas: metrics.total_despesas } : null}
+                  ytdMonth={period === 'ytd' ? lastMonthWithData?.month : undefined}
+                  insertBetweenResumoAndRest={
+                    <BarChart
+                      data={chartData}
+                      selectedMonth={selectedMonth}
+                      selectedYear={selectedYear}
+                      mode={period === 'month' ? 'monthly' : 'yearly'}
                     />
-                    <IncomeGroupsBox sources={sources} />
-                  </>
-                )}
-
-                {resultadoToggle === 'despesas' && (
-                  <>
-                    <DonutChart
-                      activeTab="expenses"
-                      incomeSources={sources}
-                      totalReceitas={totalReceitas}
-                      expenseSources={expenseSources}
-                      totalDespesas={totalDespesas}
-                    />
-                    <ExpenseGroupsBox sources={expenseSources} />
+                  }
+                  gastosPorCartao={
                     <GastosPorCartaoBox
                       year={year}
                       month={month}
                       monthLabel={
                         month
                           ? `${['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'][month - 1]}/${year}`
-                          : `${year}`
+                          : period === 'ytd'
+                            ? `YTD ${year}`
+                            : `${year}`
                       }
                     />
-                  </>
-                )}
+                  }
+                />
               </>
             )}
 
-            {/* Tab Patrimônio */}
+            {/* Tab Patrimônio: Caixa Patrimônio dentro da aba + sub-abas Resultado | Plano */}
             {activeTab === 'patrimonio' && (
-              <PatrimonioTab selectedMonth={selectedMonth} />
-            )}
-
-            {/* Tab Orçamento */}
-            {activeTab === 'orcamento' && (
-              <OrcamentoTab year={year} month={month} />
-            )}
-
-            {/* Tab Plano Aposentadoria */}
-            {activeTab === 'plano' && (
-              <PlanoAposentadoriaTab
-                patrimonioLiquido={metrics?.patrimonio_liquido_mes ?? undefined}
+              <PatrimonioTab
+                selectedMonth={selectedMonth}
+                variant="dashboard"
+                metrics={metrics ?? null}
+                planoAposentadoria={
+                  <PlanoAposentadoriaTab
+                    patrimonioLiquido={metrics?.patrimonio_liquido_mes ?? undefined}
+                  />
+                }
               />
             )}
 
-            {/* Recent Transactions */}
-            <div className="border-t border-gray-100 pt-4 mt-6">
-              <h3 className="text-sm font-bold text-gray-900 mb-3">Transações Recentes</h3>
-              <button
-                onClick={() => router.push('/mobile/transactions')}
-                className="w-full py-3 bg-gray-900 text-white rounded-xl font-semibold hover:bg-gray-800 transition-colors"
-              >
-                Ver Todas as Transações
-              </button>
-            </div>
+            {/* Transações Recentes - Sprint G: apenas na tab Resultado */}
+            {activeTab === 'resultado' && (
+              <div className="border-t border-gray-100 pt-4 mt-6">
+                <h3 className="text-sm font-bold text-gray-900 mb-3">Transações Recentes</h3>
+                <button
+                  onClick={() => router.push('/mobile/transactions')}
+                  className="w-full py-3 bg-gray-900 text-white rounded-xl font-semibold hover:bg-gray-800 transition-colors"
+                >
+                  Ver Todas as Transações
+                </button>
+              </div>
+            )}
           </>
         )}
       </div>

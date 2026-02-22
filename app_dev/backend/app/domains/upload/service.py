@@ -308,10 +308,11 @@ class UploadService:
         Aplica regras de exclusão da tabela transacoes_exclusao
         Remove transações que têm regras com acao='EXCLUIR'
         
-        Matching SIMPLIFICADO:
+        Matching (Sprint D):
         1. Normaliza nome da transação e regra (sem acentos, uppercase)
-        2. Se regra está contida no nome da transação → EXCLUIR
-        3. Ignora verificações de banco e tipo (aplicar em TODOS)
+        2. Se regra está contida no nome da transação → candidato a EXCLUIR
+        3. Se regra tem banco e/ou tipo_documento: match só quando o upload atual corresponde
+        4. Se regra tem banco/tipo null: aplica em TODOS (comportamento legado)
         """
         # Buscar regras ativas de exclusão
         exclusoes = self.db.query(TransacaoExclusao).filter(
@@ -324,11 +325,14 @@ class UploadService:
             logger.info("✅ Nenhuma regra de exclusão ativa")
             return raw_transactions
         
-        logger.info(f"🔍 Aplicando {len(exclusoes)} regras de exclusão para user_id={user_id}")
+        # Normalizar tipo_documento do upload: fatura->cartao, extrato->extrato
+        tipo_upload = (tipo_documento or '').lower()
+        tipo_upload_norm = 'cartao' if tipo_upload in ('fatura', 'cartao') else 'extrato'
+        
+        logger.info(f"🔍 Aplicando {len(exclusoes)} regras de exclusão (banco={banco}, tipo={tipo_upload_norm})")
         
         # Normalizar regras uma vez
         regras_normalizadas = [(regra, normalizar(regra.nome_transacao)) for regra in exclusoes]
-        logger.info(f"  📋 Regras: {[r[1] for r in regras_normalizadas]}")
         
         # Filtrar transações
         transactions_filtered = []
@@ -338,13 +342,20 @@ class UploadService:
             lancamento_norm = normalizar(transaction.lancamento)
             should_exclude = False
             
-            # Verificar cada regra
             for regra, regra_norm in regras_normalizadas:
-                if regra_norm in lancamento_norm:
-                    should_exclude = True
-                    excluded_count += 1
-                    logger.info(f"  ❌ EXCLUÍDO: '{transaction.lancamento}' (matched regra: '{regra.nome_transacao}')")
-                    break
+                if regra_norm not in lancamento_norm:
+                    continue
+                # Sprint D: match banco e tipo quando preenchidos na regra
+                if regra.banco is not None and regra.banco.strip():
+                    if (banco or '').strip() != regra.banco.strip():
+                        continue
+                if regra.tipo_documento is not None and regra.tipo_documento.strip() and regra.tipo_documento != 'ambos':
+                    if tipo_upload_norm != (regra.tipo_documento or '').strip().lower():
+                        continue
+                should_exclude = True
+                excluded_count += 1
+                logger.info(f"  ❌ EXCLUÍDO: '{transaction.lancamento}' (regra: '{regra.nome_transacao}')")
+                break
             
             if not should_exclude:
                 transactions_filtered.append(transaction)
@@ -1172,7 +1183,8 @@ class UploadService:
         grupo: Optional[str],
         subgrupo: Optional[str],
         excluir: Optional[int],
-        user_id: int
+        criar_regra: bool = False,
+        user_id: int = None,
     ):
         """
         Atualiza classificação manual (grupo/subgrupo) ou marca exclusão de um registro de preview
@@ -1217,6 +1229,30 @@ class UploadService:
         if excluir is not None:
             preview.excluir = excluir
             logger.info(f"  {'🗑️ Marcado para exclusão' if excluir == 1 else '✅ Desmarcado exclusão'}")
+        
+        # Sprint D: criar regra em transacoes_exclusao para sempre excluir em futuros imports
+        if criar_regra and excluir == 1:
+            tipo_doc = (preview.tipo_documento or '').lower()
+            tipo_exclusao = 'cartao' if tipo_doc in ('fatura', 'cartao') else 'extrato'
+            from app.domains.exclusoes.models import TransacaoExclusao
+            existing = self.db.query(TransacaoExclusao).filter(
+                TransacaoExclusao.user_id == user_id,
+                TransacaoExclusao.nome_transacao == preview.lancamento,
+                TransacaoExclusao.banco == (preview.banco or None),
+                TransacaoExclusao.tipo_documento == tipo_exclusao,
+                TransacaoExclusao.ativo == 1,
+            ).first()
+            if not existing:
+                nova_regra = TransacaoExclusao(
+                    nome_transacao=preview.lancamento,
+                    banco=preview.banco or None,
+                    tipo_documento=tipo_exclusao,
+                    user_id=user_id,
+                    acao='EXCLUIR',
+                    ativo=1,
+                )
+                self.db.add(nova_regra)
+                logger.info(f"  📋 Regra criada: sempre excluir '{preview.lancamento}' para {preview.banco}+{tipo_exclusao}")
         
         # Atualizar origem se foi modificado manualmente
         if grupo or subgrupo:

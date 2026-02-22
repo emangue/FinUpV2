@@ -139,14 +139,14 @@ echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAID2giK86YuhwkQ9eLcDzOXNRYN4C/kjtCHZi/J
 
 **COMANDOS CRÍTICOS NO SERVIDOR:**
 ```bash
-# Status dos serviços
-systemctl status finup-backend finup-frontend
+# ⚠️ systemctl NÃO funciona (provedor restringe) - usar alternativas abaixo
 
-# Logs em tempo real  
-journalctl -u finup-backend -f
+# Status dos processos (portas 3003 e 8000)
+ps aux | grep -E "node|uvicorn" | grep -v grep
 
 # Health check
 curl -s localhost:8000/api/health
+curl -s localhost:3003 | head -5
 
 # Navegar para projeto
 cd /var/www/finup
@@ -163,12 +163,8 @@ cd /var/www/finup
 ```bash
 ./scripts/deploy/validate_server_access.sh
 ```
-Este script verifica automaticamente:
-- ✅ SSH conecta sem problemas
-- ✅ Serviços finup ativos
-- ✅ Health check funcionando
-- ✅ Git local/servidor sincronizados
-- ✅ VS Code Remote pronto
+Este script verifica: SSH, health check, git sync.  
+*(Nota: systemctl pode falhar no servidor; serviços rodam via pkill+nohup.)*
 
 ---
 
@@ -2578,95 +2574,55 @@ mv app_dev/backend/.env.postgres app_dev/backend/.env
 
 ---
 
-## 🛡️ SAFE DEPLOY PROCESS - OBRIGATÓRIO ANTES DE PROD (IMPLEMENTADO 23/01/2026)
+## 🛡️ DEPLOY PROCESS - OBRIGATÓRIO ANTES DE PROD (ATUALIZADO 21/02/2026)
 
-**DOCUMENTAÇÃO COMPLETA:** [`docs/deploy/DEPLOY_PROCESS.md`](docs/deploy/DEPLOY_PROCESS.md)
+**DOCUMENTAÇÃO COMPLETA:** [`docs/deploy/DEPLOY_PROCESSO_CONSOLIDADO.md`](docs/deploy/DEPLOY_PROCESSO_CONSOLIDADO.md)
 
-### 🚀 Comandos de Deploy Disponíveis
+### 🚀 Scripts de Deploy (usar estes)
 
-```bash
-# 1. Deploy rápido (após commit+push)
-./scripts/deploy/quick_deploy.sh
+| Script | Quando usar |
+|--------|-------------|
+| **`./scripts/deploy/deploy.sh`** | Padrão – build na VM (requer RAM suficiente) |
+| **`./scripts/deploy/deploy_build_local.sh`** | Quando OOM no build – build local + tar para VM |
 
-# 2. Deploy seguro com validações completas
-./scripts/deploy/deploy_safe_v2.sh
+**Portas:** Frontend 3003 (meufinup.com.br) | Backend 8000 | **Restart:** pkill + nohup (systemctl não funciona)
 
-# 3. Deploy com migrations
-./scripts/deploy/deploy_safe_v2.sh --with-migrations
+### 📋 Checklist pré-deploy (validar antes)
 
-# 4. Guia e comandos úteis
-./scripts/deploy/deploy_help.sh
-```
+- [ ] `git status -uno` limpo
+- [ ] `git push origin <branch>` feito
+- [ ] Não existe `app_dev/frontend/src/middleware.ts` (apenas `proxy.ts`)
+- [ ] `npm run build` passa localmente (opcional)
+- [ ] SSH `minha-vps-hostinger` funcionando
 
-### 🎯 Validações Automáticas
-
-**Todos os scripts validam automaticamente:**
-1. ✅ **Git** - Status limpo, sem uncommitted changes
-2. ✅ **Sincronização** - Local igual ao GitHub (push realizado)
-3. ✅ **Sintaxe** - Python sem erros de sintaxe
-4. ✅ **Backup** - Backup automático do banco antes deploy
-5. ✅ **Health** - API respondendo após deploy
-6. ✅ **Autenticação** - Endpoints protegidos funcionando
-7. ✅ **SSH** - Conexão com servidor operacional
-
-### 🚨 Se Alguma Validação Falhar
-
-Os scripts **param imediatamente** e mostram o erro:
+### 🚀 Workflow de Deploy (um comando)
 
 ```bash
-❌ Há mudanças não commitadas!
-💡 Commit suas mudanças primeiro:
-   git add .
-   git commit -m 'sua mensagem'
-```
-
-**NUNCA pule validações** - elas previnem deploy quebrado e perda de sincronização!
-
-### 🚀 Workflow Completo de Deploy
-
-```bash
-# 1. Fazer mudanças no código
-# 2. Commitar
+# 1. Commit + push
 git add .
-git commit -m "feat: adiciona nova funcionalidade X"
+git commit -m "feat: adiciona X"
+git push origin <branch>   # ex: main ou feature/xxx
 
-# 3. Validar TUDO
-./scripts/deploy/safe_deploy.sh
+# 2. Deploy (script faz pull, migrations, build, restart)
+./scripts/deploy/deploy.sh
 
-# 4. Se tudo OK, push automático
-# (ou manual: git push origin main)
-
-# 5. No servidor (SSH)
-ssh user@servidor
-cd /var/www/finup
-git pull origin main
-
-# 6. Aplicar migrations
-cd app_dev/backend
-source venv/bin/activate
-alembic upgrade head
-
-# 7. Restart serviços
-systemctl restart finup-backend finup-frontend
-
-# 8. Verificar logs
-journalctl -u finup-backend -f
-journalctl -u finup-frontend -f
-
-# 9. Testar endpoints
-curl https://meufinup.com.br/api/health
+# Se OOM no build: ./scripts/deploy/deploy_build_local.sh
 ```
 
-### 📋 Checklist Manual (se script não disponível)
+### 🚨 Validações que o deploy.sh faz
 
-- [ ] ✅ Git: mudanças commitadas
-- [ ] ✅ Migrations: `alembic current` mostra última
-- [ ] ✅ Backend: `python -c "from app.main import app"`
-- [ ] ✅ Frontend: `npm run build` sem erros
-- [ ] ✅ Backup: `./scripts/deploy/backup_daily.sh`
-- [ ] ✅ Tests: rodar testes (se existirem)
-- [ ] ✅ Changelog: atualizado
-- [ ] ✅ Push: `git push origin main`
+- Git (status, remote, refs)
+- SSH conecta
+- Build na VM (ou sugere build local se OOM)
+- Restart via pkill + nohup (não systemctl)
+
+### 📋 Checklist manual (se script falhar)
+
+- [ ] Git: mudanças commitadas e push feito
+- [ ] Migrations: `alembic upgrade head` no servidor
+- [ ] Frontend: sem `middleware.ts`, só `proxy.ts`
+- [ ] Backup: `./scripts/deploy/backup_daily.sh` (opcional)
+- [ ] Health: `curl https://meufinup.com.br/api/health`
 
 ---
 
@@ -2693,10 +2649,9 @@ curl https://meufinup.com.br/api/health
 ./scripts/deploy/generate_changelog.sh --version 2.1.0
 ```
 
-**Automático (via safe_deploy.sh):**
+**Automático (via script):**
 ```bash
-# Changelog é gerado automaticamente no deploy
-./scripts/deploy/safe_deploy.sh
+./scripts/deploy/generate_changelog.sh
 ```
 
 ### 📋 Formato do CHANGELOG.md
@@ -2812,11 +2767,10 @@ base_marcacoes                               45         45     ✅ OK
 2. Aplicar migration: `alembic upgrade head`
 3. Validar novamente: `python scripts/testing/validate_parity.py`
 
-### 📋 Integração com Safe Deploy
+### 📋 Deploy consolidado
 
-O `safe_deploy.sh` **automaticamente** executa validação de paridade:
-- Se ambientes divergem → aviso + opção de continuar
-- Se paridade OK → deploy prossegue
+**Doc:** `docs/deploy/DEPLOY_PROCESSO_CONSOLIDADO.md`  
+**Scripts:** `deploy.sh` (padrão) | `deploy_build_local.sh` (alternativa OOM)
 
 ---
 
@@ -2824,51 +2778,38 @@ O `safe_deploy.sh` **automaticamente** executa validação de paridade:
 
 ### ✅ Antes de Qualquer Deploy em Produção
 
-1. **Alteração grande: branch antes de subir no servidor.** Só depois que der certo no servidor, fazer merge na main. O `safe_deploy.sh` oferece criar a branch automaticamente (ex.: `deploy/YYYY-MM-DD-nome`) quando você está na main.
+1. **Alteração grande: branch antes de subir.** Criar branch (deploy/ ou feature/), subir no servidor, validar; só então merge na main.
 
-2. **Commitar tudo:**
+2. **Validar localmente:**
    ```bash
-   git status  # Deve estar limpo
+   git status -uno          # Deve estar limpo
+   git push origin <branch>  # Push feito
    ```
 
-3. **Rodar safe deploy:**
+3. **Sem middleware.ts:** Manter apenas `proxy.ts` em `app_dev/frontend/src/`.
+
+4. **Deploy:**
    ```bash
-   ./scripts/deploy/safe_deploy.sh
+   ./scripts/deploy/deploy.sh
+   # Se OOM: ./scripts/deploy/deploy_build_local.sh
    ```
 
-4. **Verificar changelog:**
-   ```bash
-   cat CHANGELOG.md | head -30
-   ```
-
-5. **Fazer backup:**
-   ```bash
-   ./scripts/deploy/backup_daily.sh
-   ```
-
-6. **Push e deploy:**
-   - Se estiver em branch de deploy/feature: `git push origin <branch>`; no servidor dar pull **dessa branch**, validar; só então merge na main e push.
-   - Se for direto na main (deploy pequeno): `git push origin main` e no servidor pull + migrations + restart.
+5. **Opcional:** Backup `./scripts/deploy/backup_daily.sh` e changelog.
 
 ### 🚫 NUNCA Fazer em Produção
 
 - ❌ Modificar banco direto (sempre usar Alembic)
 - ❌ Deploy sem testar localmente
-- ❌ Deploy sem backup
 - ❌ Deploy com mudanças uncommitted
-- ❌ Deploy sem validar paridade
-- ❌ Deploy sem atualizar changelog
-- ❌ Alteração grande direto na main: criar branch antes de subir; merge na main só após validar no servidor
+- ❌ Deploy sem push
+- ❌ Manter `middleware.ts` (conflita com proxy)
+- ❌ Usar systemctl (não funciona; usar pkill+nohup via scripts)
 
 ### ✅ SEMPRE Fazer
 
-- ✅ Em alteração grande: criar branch (deploy/ ou feature/) antes de subir no servidor; merge na main só depois que der certo no servidor
-- ✅ Usar PostgreSQL local para dev sério
+- ✅ Em alteração grande: branch antes de subir; merge na main só após validar no servidor
+- ✅ Usar `deploy.sh` ou `deploy_build_local.sh` (não safe_deploy/safe_v2)
 - ✅ Gerar migrations para mudanças de schema
-- ✅ Rodar `safe_deploy.sh` antes de push
-- ✅ Validar paridade dev-prod
-- ✅ Criar tags git para releases
-- ✅ Manter changelog atualizado
 - ✅ Testar migrations em dev antes de prod
 
 ---

@@ -14,7 +14,8 @@ from .models import (
     InvestimentoHistorico,
     InvestimentoCenario,
     AporteExtraordinario,
-    InvestimentoPlanejamento
+    InvestimentoPlanejamento,
+    CenarioProjecao,
 )
 
 
@@ -634,6 +635,16 @@ class InvestimentoRepository:
         self.db.refresh(cenario)
         return cenario
 
+    def clear_principal_except(self, user_id: int, cenario_id: int) -> int:
+        """Remove principal de todos os cenários do usuário exceto o informado. Retorna qtd atualizados."""
+        updated = self.db.query(InvestimentoCenario).filter(
+            InvestimentoCenario.user_id == user_id,
+            InvestimentoCenario.id != cenario_id,
+            InvestimentoCenario.principal.is_(True)
+        ).update({InvestimentoCenario.principal: False})
+        self.db.commit()
+        return updated
+
     def update_cenario(self, cenario: InvestimentoCenario) -> InvestimentoCenario:
         """Atualiza cenário"""
         self.db.commit()
@@ -648,6 +659,113 @@ class InvestimentoRepository:
             self.db.commit()
             return True
         return False
+
+    def delete_projecao_by_cenario(self, cenario_id: int) -> int:
+        """Remove todas as projeções de um cenário. Retorna quantidade removida."""
+        deleted = self.db.query(CenarioProjecao).filter(
+            CenarioProjecao.cenario_id == cenario_id
+        ).delete()
+        self.db.commit()
+        return deleted
+
+    def bulk_create_projecao(
+        self,
+        cenario_id: int,
+        projecoes: List[Dict[str, Any]]
+    ) -> int:
+        """Insere projeções em lote. projecoes = [{mes_num, anomes, patrimonio, aporte}, ...]"""
+        objs = [
+            CenarioProjecao(
+                cenario_id=cenario_id,
+                mes_num=p['mes_num'],
+                anomes=p['anomes'],
+                patrimonio=Decimal(str(p['patrimonio'])),
+                aporte=Decimal(str(p.get('aporte', 0))),
+            )
+            for p in projecoes
+        ]
+        self.db.bulk_save_objects(objs)
+        self.db.commit()
+        return len(objs)
+
+    def get_projecao_by_cenario(
+        self,
+        cenario_id: int,
+        user_id: int
+    ) -> List[Dict[str, Any]]:
+        """Retorna projeções de um cenário (validando ownership)"""
+        cenario = self.get_cenario_by_id(cenario_id, user_id)
+        if not cenario:
+            return []
+        rows = self.db.query(CenarioProjecao).filter(
+            CenarioProjecao.cenario_id == cenario_id
+        ).order_by(CenarioProjecao.mes_num).all()
+        return [
+            {
+                'mes_num': r.mes_num,
+                'anomes': r.anomes,
+                'patrimonio': float(r.patrimonio),
+                'aporte': float(r.aporte) if r.aporte is not None else 0,
+            }
+            for r in rows
+        ]
+
+    def get_aporte_principal_por_mes(
+        self,
+        user_id: int,
+        year: int,
+        month: int
+    ) -> Optional[float]:
+        """
+        Retorna o aporte planejado (regular + extraordinário) do cenário principal
+        para um mês específico. Usa CenarioProjecao quando disponível.
+        Se não houver projeção para o mês, retorna aporte_mensal do cenário.
+        """
+        principal = self.db.query(InvestimentoCenario).filter(
+            InvestimentoCenario.user_id == user_id,
+            InvestimentoCenario.principal.is_(True),
+            InvestimentoCenario.ativo.is_(True)
+        ).first()
+        if not principal:
+            return None
+        anomes = year * 100 + month
+        proj = self.db.query(CenarioProjecao).filter(
+            CenarioProjecao.cenario_id == principal.id,
+            CenarioProjecao.anomes == anomes
+        ).first()
+        if proj and proj.aporte is not None:
+            return float(proj.aporte)
+        return float(principal.aporte_mensal or 0)
+
+    def get_aporte_principal_periodo(
+        self,
+        user_id: int,
+        year: int,
+        ytd_month: Optional[int] = None
+    ) -> Optional[float]:
+        """
+        Soma aportes planejados (regular + extraordinário) do cenário principal
+        para o ano. Se ytd_month informado, soma Jan..ytd_month (YTD).
+        """
+        principal = self.db.query(InvestimentoCenario).filter(
+            InvestimentoCenario.user_id == user_id,
+            InvestimentoCenario.principal.is_(True),
+            InvestimentoCenario.ativo.is_(True)
+        ).first()
+        if not principal:
+            return None
+        mes_fim = ytd_month if ytd_month is not None else 12
+        anomes_inicio = year * 100 + 1
+        anomes_fim = year * 100 + mes_fim
+        rows = self.db.query(CenarioProjecao).filter(
+            CenarioProjecao.cenario_id == principal.id,
+            CenarioProjecao.anomes >= anomes_inicio,
+            CenarioProjecao.anomes <= anomes_fim
+        ).all()
+        total = sum(float(r.aporte or 0) for r in rows)
+        if total > 0:
+            return total
+        return float(principal.aporte_mensal or 0) * mes_fim
 
     # ============================================================================
     # PLANEJAMENTO OPERATIONS

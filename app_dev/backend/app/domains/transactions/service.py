@@ -648,6 +648,14 @@ class TransactionService:
             "filters": filters.dict(exclude_none=True)
         }
     
+    def get_resumo(self, user_id: int, filters: TransactionFilters) -> dict:
+        """Sprint F: Resumo (total, quantidade, maior_gasto, media_por_dia)."""
+        return self.repository.get_resumo(user_id, filters)
+    
+    def get_gastos_por_grupo(self, user_id: int, filters: TransactionFilters) -> list:
+        """Sprint F: Agregação por grupo (Despesa) com filtros."""
+        return self.repository.get_gastos_por_grupo(user_id, filters)
+    
     def get_grupos_com_media(
         self,
         user_id: int,

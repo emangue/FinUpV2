@@ -105,7 +105,7 @@ export default function BudgetPage() {
         
         // Sobrescrever com valores do banco
         data.forEach((item: BudgetItem) => {
-          budgetMap[item.categoria_geral] = item.valor_planejado;
+          budgetMap[item.grupo] = item.valor_planejado;
         });
         
         console.log('Budget carregado:', Object.keys(budgetMap).length, 'grupos');
@@ -195,7 +195,7 @@ export default function BudgetPage() {
         const data = result.budgets || [];
         const budgetMap: Record<string, number> = {};
         data.forEach((item: BudgetItem) => {
-          budgetMap[item.categoria_geral] = item.valor_planejado;
+          budgetMap[item.grupo] = item.valor_planejado;
         });
         setBudgetData(budgetMap);
         setMessage({ type: 'success', text: `Dados copiados de ${meses[prevMonth - 1].label} ${prevYear}` });

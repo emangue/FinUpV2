@@ -1,11 +1,9 @@
 /**
  * Layout Mobile - Dashboard
- * Header fixo no topo com hamburger menu
+ * Usa o mesmo layout que /mobile/* (BottomNavigation)
  */
 
-import { SidebarProvider } from '@/components/ui/sidebar'
-import { AppSidebar } from '@/components/app-sidebar'
-import { BottomNav } from '@/components/mobile/bottom-nav'
+import { BottomNavigation } from '@/components/mobile/bottom-navigation'
 
 export default function MobileDashboardLayout({
   children,
@@ -13,12 +11,9 @@ export default function MobileDashboardLayout({
   children: React.ReactNode
 }) {
   return (
-    <SidebarProvider defaultOpen={false}>
-      <AppSidebar />
-      <main className="flex-1">
-        {children}
-        <BottomNav />
-      </main>
-    </SidebarProvider>
+    <div className="min-h-screen bg-white pb-20">
+      {children}
+      <BottomNavigation />
+    </div>
   )
 }

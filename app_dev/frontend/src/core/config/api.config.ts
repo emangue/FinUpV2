@@ -108,6 +108,7 @@ export const API_ENDPOINTS = {
   SCREENS: {
     BASE: `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/screens`,
     LIST: `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/screens/list`,
+    ADMIN_ALL: `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/screens/admin/all`,
     BY_KEY: (key: string) => `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/screens/${key}`,
     UPDATE: (id: number) => `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/screens/${id}`,
   },
@@ -191,6 +192,16 @@ export async function apiPost<T>(url: string, data: any): Promise<T> {
 export async function apiPatch<T>(url: string, data: any): Promise<T> {
   return fetchJsonWithAuth<T>(url, {
     method: 'PATCH',
+    body: JSON.stringify(data),
+  })
+}
+
+/**
+ * Faz PUT request com autenticação automática
+ */
+export async function apiPut<T>(url: string, data: any): Promise<T> {
+  return fetchJsonWithAuth<T>(url, {
+    method: 'PUT',
     body: JSON.stringify(data),
   })
 }

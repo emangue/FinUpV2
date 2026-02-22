@@ -1,6 +1,9 @@
-import { SidebarProvider } from "@/components/ui/sidebar"
-import { AppSidebar } from "@/components/app-sidebar"
-import { BottomNav } from '@/components/mobile/bottom-nav'
+/**
+ * Layout Mobile - Transações
+ * Usa o mesmo layout que /mobile/* (BottomNavigation)
+ */
+
+import { BottomNavigation } from '@/components/mobile/bottom-navigation'
 
 export default function TransactionsMobileLayout({
   children,
@@ -8,12 +11,9 @@ export default function TransactionsMobileLayout({
   children: React.ReactNode
 }) {
   return (
-    <SidebarProvider defaultOpen={false}>
-      <AppSidebar />
-      <main className="flex-1">
-        {children}
-        <BottomNav />
-      </main>
-    </SidebarProvider>
+    <div className="min-h-screen bg-white pb-20">
+      {children}
+      <BottomNavigation />
+    </div>
   )
 }

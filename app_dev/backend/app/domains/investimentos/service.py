@@ -2,9 +2,11 @@
 Service do domínio Investimentos.
 Toda lógica de negócio isolada aqui.
 """
+import json
 from typing import List, Optional, Dict, Any, Union
 from datetime import datetime, date
 from decimal import Decimal
+from calendar import monthrange
 from sqlalchemy.orm import Session
 
 from .repository import InvestimentoRepository
@@ -345,11 +347,93 @@ class InvestimentoService:
     # CENARIOS & SIMULACAO
     # ============================================================================
 
+    def _calcular_projecao_mensal(
+        self,
+        patrimonio_inicial: Decimal,
+        aporte_mensal: Decimal,
+        periodo_meses: int,
+        rendimento_mensal_pct: Decimal,
+        extras_json: Optional[str],
+        anomes_inicio: Optional[int]
+    ) -> List[Dict[str, Any]]:
+        """Calcula projeção mês a mês. Retorna [{mes_num, anomes, patrimonio}, ...]"""
+        from math import pow
+        rate = float(rendimento_mensal_pct)
+        p = float(patrimonio_inicial)
+        aporte = float(aporte_mensal)
+
+        # anomes_inicio: YYYYMM do primeiro mês (aportes começam aqui)
+        if anomes_inicio is None:
+            hoje = date.today()
+            anomes_inicio = hoje.year * 100 + hoje.month
+
+        # Extras: mesAno = mês calendário (1=Jan, 2=Fev, ..., 12=Dez), NÃO índice da projeção
+        # Regra: aporte de mês X só aplica quando a projeção chega em um mês calendário X
+        # Ex: plano inicia em Fev/2026 → aporte de Jan só em Jan/2027, não em Fev/2026
+        extra_map = {}
+        if extras_json:
+            try:
+                extras = json.loads(extras_json)
+                ano_base = anomes_inicio // 100
+                mes_base = anomes_inicio % 100
+                if isinstance(extras, list):
+                    for e in extras:
+                        mes_calendario = int(e.get('mesAno', e.get('mes_referencia', 12)))
+                        valor = float(e.get('valor', 0))
+                        rec = e.get('recorrencia', 'unico')
+                        interval_map = {'unico': 0, 'trimestral': 3, 'semestral': 6, 'anual': 12}
+                        interval = interval_map.get(rec, 0)
+                        first_match = (mes_calendario - mes_base) % 12
+                        # Se mes_calendario < mes_base (ex: Jan=1 < Fev=2), primeiro mês X está no ano seguinte
+                        mes_minimo = first_match if mes_calendario < mes_base else 0
+                        for mes in range(periodo_meses):
+                            total_meses = ano_base * 12 + mes_base - 1 + mes
+                            mes_real = (total_meses % 12) + 1
+                            if mes_real != mes_calendario:
+                                continue
+                            # Garantir: aporte de Jan não vai para Fev quando plano inicia em Fev
+                            if mes < mes_minimo:
+                                continue
+                            if interval == 0:
+                                extra_map[mes] = extra_map.get(mes, 0) + valor
+                                break
+                            ocorrencia = (mes - first_match) // 12
+                            val = valor
+                            if e.get('evoluir') and ocorrencia > 0:
+                                ev_val = float(e.get('evolucaoValor', 0))
+                                if e.get('evolucaoTipo') == 'percentual':
+                                    val = valor * pow(1 + ev_val / 100, ocorrencia)
+                                else:
+                                    val = valor + ev_val * ocorrencia
+                            extra_map[mes] = extra_map.get(mes, 0) + val
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        projecoes = []
+        for mes in range(periodo_meses):
+            extra = float(extra_map.get(mes, 0))
+            aporte_mes = aporte + extra  # Aporte total planejado (regular + extraordinário)
+            p = (p + aporte_mes) * (1 + rate)
+            # Calcular anomes real
+            ano = anomes_inicio // 100
+            mes_ref = anomes_inicio % 100
+            total_meses = ano * 12 + mes_ref - 1 + mes
+            ano_real = total_meses // 12
+            mes_real = (total_meses % 12) + 1
+            anomes = ano_real * 100 + mes_real
+            projecoes.append({
+                'mes_num': mes,
+                'anomes': anomes,
+                'patrimonio': Decimal(str(round(p, 2))),
+                'aporte': Decimal(str(round(aporte_mes, 2))),
+            })
+        return projecoes
+
     def create_cenario(
         self,
         data: schemas.InvestimentoCenarioCreate
     ) -> schemas.InvestimentoCenarioResponse:
-        """Cria novo cenário de simulação"""
+        """Cria novo cenário de simulação (Sprint H: plano aposentadoria)"""
         cenario = InvestimentoCenario(
             user_id=data.user_id,
             nome_cenario=data.nome_cenario,
@@ -357,15 +441,45 @@ class InvestimentoService:
             patrimonio_inicial=data.patrimonio_inicial,
             rendimento_mensal_pct=data.rendimento_mensal_pct,
             aporte_mensal=data.aporte_mensal,
-            periodo_meses=data.periodo_meses
+            periodo_meses=data.periodo_meses,
+            idade_atual=data.idade_atual,
+            idade_aposentadoria=data.idade_aposentadoria,
+            renda_mensal_alvo=data.renda_mensal_alvo,
+            inflacao_aa=data.inflacao_aa,
+            retorno_aa=data.retorno_aa,
+            anomes_inicio=data.anomes_inicio,
+            principal=data.principal or False,
+            extras_json=data.extras_json,
         )
 
-        # Adicionar aportes extraordinários
+        # Adicionar aportes extraordinários (legado - plano aposentadoria usa extras_json)
         for aporte_data in data.aportes_extraordinarios:
             aporte = AporteExtraordinario(**aporte_data.model_dump())
             cenario.aportes_extraordinarios.append(aporte)
 
         cenario = self.repository.create_cenario(cenario)
+
+        # Sprint H: Calcular e persistir projeção mês a mês
+        projecoes = self._calcular_projecao_mensal(
+            cenario.patrimonio_inicial,
+            cenario.aporte_mensal,
+            cenario.periodo_meses,
+            cenario.rendimento_mensal_pct,
+            cenario.extras_json,
+            cenario.anomes_inicio,
+        )
+        if projecoes:
+            self.repository.delete_projecao_by_cenario(cenario.id)
+            self.repository.bulk_create_projecao(cenario.id, [
+                {
+                    'mes_num': pr['mes_num'],
+                    'anomes': pr['anomes'],
+                    'patrimonio': float(pr['patrimonio']),
+                    'aporte': float(pr.get('aporte', 0)),
+                }
+                for pr in projecoes
+            ])
+
         return schemas.InvestimentoCenarioResponse.model_validate(cenario)
 
     def simular_cenario(
@@ -426,13 +540,139 @@ class InvestimentoService:
         user_id: int,
         ativo: Optional[bool] = True
     ) -> List[schemas.InvestimentoCenarioResponse]:
-        """Lista cenários do usuário"""
+        """Lista cenários do usuário. Garante que só um tenha principal=True."""
         cenarios = self.repository.list_cenarios(user_id, ativo)
-
+        principals = [c for c in cenarios if c.principal]
+        if len(principals) > 1:
+            for c in principals[1:]:
+                c.principal = False
+            self.db.commit()
         return [
             schemas.InvestimentoCenarioResponse.model_validate(c)
             for c in cenarios
         ]
+
+    def get_cenario(
+        self,
+        cenario_id: int,
+        user_id: int
+    ) -> Optional[schemas.InvestimentoCenarioResponse]:
+        """Busca cenário por ID"""
+        cenario = self.repository.get_cenario_by_id(cenario_id, user_id)
+        if not cenario:
+            return None
+        return schemas.InvestimentoCenarioResponse.model_validate(cenario)
+
+    def get_aporte_principal_por_mes(
+        self,
+        user_id: int,
+        year: int,
+        month: int
+    ) -> Optional[float]:
+        """Retorna aporte planejado (regular + extraordinário) do cenário principal para o mês."""
+        return self.repository.get_aporte_principal_por_mes(user_id, year, month)
+
+    def get_aporte_principal_periodo(
+        self,
+        user_id: int,
+        year: int,
+        ytd_month: Optional[int] = None
+    ) -> Optional[float]:
+        """Soma aportes do cenário principal para ano ou YTD (Jan..ytd_month)."""
+        return self.repository.get_aporte_principal_periodo(user_id, year, ytd_month)
+
+    def update_cenario(
+        self,
+        cenario_id: int,
+        user_id: int,
+        data: schemas.InvestimentoCenarioUpdate
+    ) -> Optional[schemas.InvestimentoCenarioResponse]:
+        """Atualiza cenário e recalcula projeção"""
+        cenario = self.repository.get_cenario_by_id(cenario_id, user_id)
+        if not cenario:
+            return None
+
+        dump = data.model_dump(exclude_unset=True)
+        if dump.get('principal') is True:
+            self.repository.clear_principal_except(user_id, cenario_id)
+        for field, value in dump.items():
+            setattr(cenario, field, value)
+
+        cenario = self.repository.update_cenario(cenario)
+
+        # Recalcular e persistir projeção
+        anomes_inicio = cenario.anomes_inicio
+        if anomes_inicio is None:
+            hoje = date.today()
+            anomes_inicio = hoje.year * 100 + hoje.month
+
+        projecoes = self._calcular_projecao_mensal(
+            cenario.patrimonio_inicial,
+            cenario.aporte_mensal,
+            cenario.periodo_meses,
+            cenario.rendimento_mensal_pct,
+            cenario.extras_json,
+            anomes_inicio,
+        )
+        if projecoes:
+            self.repository.delete_projecao_by_cenario(cenario.id)
+            self.repository.bulk_create_projecao(cenario.id, [
+                {
+                    'mes_num': pr['mes_num'],
+                    'anomes': pr['anomes'],
+                    'patrimonio': float(pr['patrimonio']),
+                    'aporte': float(pr.get('aporte', 0)),
+                }
+                for pr in projecoes
+            ])
+
+        return schemas.InvestimentoCenarioResponse.model_validate(cenario)
+
+    def get_projecao(
+        self,
+        cenario_id: int,
+        user_id: int,
+        force_recalc: bool = False
+    ) -> List[Dict[str, Any]]:
+        """Retorna projeção mês a mês de um cenário. Se vazia ou force_recalc, recalcula e persiste."""
+        if force_recalc:
+            self.repository.delete_projecao_by_cenario(cenario_id)
+        result = self.repository.get_projecao_by_cenario(cenario_id, user_id)
+        if result and not force_recalc:
+            return result
+        # Projeção vazia: recalcular e persistir (cenários antigos ou migração)
+        cenario = self.repository.get_cenario_by_id(cenario_id, user_id)
+        if not cenario:
+            return []
+        anomes_inicio = cenario.anomes_inicio
+        if anomes_inicio is None:
+            hoje = date.today()
+            anomes_inicio = hoje.year * 100 + hoje.month
+        projecoes = self._calcular_projecao_mensal(
+            cenario.patrimonio_inicial,
+            cenario.aporte_mensal,
+            cenario.periodo_meses,
+            cenario.rendimento_mensal_pct,
+            cenario.extras_json,
+            anomes_inicio,
+        )
+        if projecoes:
+            self.repository.delete_projecao_by_cenario(cenario_id)
+            self.repository.bulk_create_projecao(cenario_id, [
+                {
+                    'mes_num': pr['mes_num'],
+                    'anomes': pr['anomes'],
+                    'patrimonio': float(pr['patrimonio']),
+                    'aporte': float(pr.get('aporte', 0)),
+                }
+                for pr in projecoes
+            ])
+            return self.repository.get_projecao_by_cenario(cenario_id, user_id)
+        return []
+
+    def delete_cenario(self, cenario_id: int, user_id: int) -> bool:
+        """Deleta cenário (soft delete)"""
+        return self.repository.delete_cenario(cenario_id, user_id)
 
     # ============================================================================
     # PLANEJAMENTO

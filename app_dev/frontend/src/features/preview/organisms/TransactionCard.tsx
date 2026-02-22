@@ -7,16 +7,18 @@ import { CLASSIFICATION_SOURCE_LABELS, CLASSIFICATION_SOURCE_COLORS } from '../t
 import Badge from '../atoms/Badge';
 import IconButton from '../atoms/IconButton';
 import { AddGroupDialog } from '@/features/upload/components/add-group-dialog';
+import { Trash2 } from 'lucide-react';
 
 interface TransactionCardProps {
   transaction: Transaction;
   onEdit?: (transaction: Transaction) => void;
   onBatchUpdate?: (transactionId: string, grupo: string, subgrupo: string) => void;
   onGroupAdded?: () => void;
+  onDelete?: (transaction: Transaction) => void;
   existingGroups?: string[];
 }
 
-export default function TransactionCard({ transaction, onEdit, onBatchUpdate, onGroupAdded, existingGroups = [] }: TransactionCardProps) {
+export default function TransactionCard({ transaction, onEdit, onBatchUpdate, onGroupAdded, onDelete, existingGroups = [] }: TransactionCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedGrupo, setSelectedGrupo] = useState(transaction.grupo || '');
   const [selectedSubgrupo, setSelectedSubgrupo] = useState(transaction.subgrupo || '');
@@ -85,6 +87,20 @@ export default function TransactionCard({ transaction, onEdit, onBatchUpdate, on
                 <p className="font-semibold text-red-600 text-sm whitespace-nowrap">
                   {formatCurrency(transaction.value)}
                 </p>
+                {/* Botão excluir - Sprint D mobile */}
+                {!isGrouped && onDelete && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete(transaction);
+                    }}
+                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    title="Excluir transação"
+                    aria-label="Excluir transação"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
                 {/* Botão de edição sempre disponível para transações únicas */}
                 {!isGrouped && onEdit && (
                   <button
@@ -92,7 +108,7 @@ export default function TransactionCard({ transaction, onEdit, onBatchUpdate, on
                       e.stopPropagation();
                       onEdit(transaction);
                     }}
-                    className="text-gray-400 hover:text-blue-600 transition-colors"
+                    className="p-1.5 text-gray-400 hover:text-blue-600 transition-colors"
                     title={isClassified ? 'Reclassificar (muda origem para Manual)' : 'Classificar transação'}
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -208,13 +224,26 @@ export default function TransactionCard({ transaction, onEdit, onBatchUpdate, on
                 </div>
                 <div className="flex items-center gap-2">
                   <p className="font-semibold text-red-600 text-sm">{formatCurrency(item.value)}</p>
+                  {onDelete && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete(item);
+                      }}
+                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Excluir transação"
+                      aria-label="Excluir transação"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                   {onEdit && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         onEdit(item);
                       }}
-                      className="text-gray-400 hover:text-blue-600 transition-colors"
+                      className="p-1.5 text-gray-400 hover:text-blue-600 transition-colors"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path

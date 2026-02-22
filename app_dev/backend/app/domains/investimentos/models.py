@@ -101,8 +101,9 @@ class InvestimentoHistorico(Base):
 
 class InvestimentoCenario(Base):
     """
-    Cenários de simulação de crescimento patrimonial.
+    Cenários de simulação de crescimento patrimonial (plano de aposentadoria).
     Permite criar diferentes projeções com parâmetros customizáveis.
+    Sprint H: Novos campos para aposentadoria + extras_json.
     """
     __tablename__ = "investimentos_cenarios"
 
@@ -120,16 +121,48 @@ class InvestimentoCenario(Base):
     aporte_mensal = Column(Numeric(15, 2), default=0)
     periodo_meses = Column(Integer, default=120)  # 10 anos padrão
     
+    # Sprint H: Parâmetros aposentadoria
+    idade_atual = Column(Integer)
+    idade_aposentadoria = Column(Integer)
+    renda_mensal_alvo = Column(Numeric(15, 2))
+    inflacao_aa = Column(Numeric(6, 2))
+    retorno_aa = Column(Numeric(6, 2))
+    anomes_inicio = Column(Integer)  # YYYYMM primeiro mês da projeção
+    principal = Column(Boolean, default=False)
+    extras_json = Column(String)  # JSON com N aportes extraordinários (recorrência, evoluir, etc.)
+    
     # Controle
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, onupdate=datetime.utcnow)
     
     # Relacionamentos
     aportes_extraordinarios = relationship("AporteExtraordinario", back_populates="cenario", cascade="all, delete-orphan")
+    projecoes = relationship("CenarioProjecao", back_populates="cenario", cascade="all, delete-orphan")
     user = relationship("User", foreign_keys=[user_id])
     
     __table_args__ = (
         Index('idx_user_ativo_cenario', 'user_id', 'ativo'),
+    )
+
+
+class CenarioProjecao(Base):
+    """
+    Projeção mês a mês de um cenário de aposentadoria.
+    Sprint H: Armazena aporte planejado e patrimônio líquido por mês.
+    """
+    __tablename__ = "investimentos_cenario_projecao"
+
+    id = Column(Integer, primary_key=True, index=True)
+    cenario_id = Column(Integer, ForeignKey('investimentos_cenarios.id', ondelete='CASCADE'), nullable=False, index=True)
+    mes_num = Column(Integer, nullable=False)  # 0..periodo_meses
+    anomes = Column(Integer, nullable=False)  # YYYYMM
+    patrimonio = Column(Numeric(15, 2), nullable=False)
+    aporte = Column(Numeric(15, 2), nullable=True)  # Aporte planejado do mês (regular + extraordinário)
+
+    cenario = relationship("InvestimentoCenario", back_populates="projecoes")
+
+    __table_args__ = (
+        Index('idx_cenario_projecao_anomes', 'cenario_id', 'anomes', unique=True),
     )
 
 

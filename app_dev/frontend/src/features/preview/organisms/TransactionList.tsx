@@ -9,10 +9,11 @@ interface TransactionListProps {
   onEdit: (transaction: Transaction) => void;
   onBatchUpdate: (transactionId: string, grupo: string, subgrupo: string) => void;
   onGroupAdded?: () => void;
+  onDelete?: (transaction: Transaction) => void;
   existingGroups?: string[];
 }
 
-export default function TransactionList({ transactions, activeTab, onEdit, onBatchUpdate, onGroupAdded, existingGroups = [] }: TransactionListProps) {
+export default function TransactionList({ transactions, activeTab, onEdit, onBatchUpdate, onGroupAdded, onDelete, existingGroups = [] }: TransactionListProps) {
   const filteredTransactions = transactions.filter((tx) => {
     if (activeTab === 'all') return true;
     if (activeTab === 'classificadas') return tx.grupo && tx.subgrupo;
@@ -29,6 +30,7 @@ export default function TransactionList({ transactions, activeTab, onEdit, onBat
           onEdit={onEdit}
           onBatchUpdate={onBatchUpdate}
           onGroupAdded={onGroupAdded}
+          onDelete={onDelete}
           existingGroups={existingGroups}
         />
       ))}
