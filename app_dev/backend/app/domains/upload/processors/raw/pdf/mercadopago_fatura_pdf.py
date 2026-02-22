@@ -1,19 +1,20 @@
 """
 Processador para Fatura Mercado Pago — PDF
-Usa OCR (easyocr + PyMuPDF) para extrair texto legível das páginas.
+Usa OCR (rapidocr-onnxruntime + PyMuPDF) para extrair texto legível das páginas.
 
 O PDF do Mercado Pago usa fontes com mapeamento de caracteres corrompido:
 as descrições ficam ilegíveis com extração de texto convencional.
 OCR resolve isso renderizando cada página como imagem primeiro.
 
-DEPENDÊNCIAS (adicionar ao requirements.txt):
-    easyocr>=1.7.0         # OCR engine (instala PyTorch automaticamente)
-    PyMuPDF>=1.24.0        # renderização de PDF para imagem (fitz)
+DEPENDÊNCIAS:
+    rapidocr-onnxruntime>=1.4.0  # OCR leve baseado em ONNX (sem PyTorch)
+    PyMuPDF>=1.24.0              # renderização de PDF para imagem (fitz)
+    opencv-python                # dependência do rapidocr
 
 NOTA DE PERFORMANCE:
-    - Primeira execução: download de modelos easyocr (~100MB em ~/.EasyOCR/)
-    - Por página: ~3-8s (CPU) dependendo do hardware
-    - Por fatura: ~15-40s (5-7 páginas úteis)
+    - Sem download de modelos na primeira execução
+    - Por página: ~1-4s (CPU) dependendo do hardware
+    - Por fatura: ~8-20s (5-7 páginas úteis)
 
 RETORNO: Tuple[List[RawTransaction], BalanceValidation]
     - saldo_inicial=0.0 (fatura, sem saldo inicial)
@@ -35,18 +36,18 @@ from ..base import RawTransaction, BalanceValidation
 
 logger = logging.getLogger(__name__)
 
-# ─── Cache do leitor OCR (inicialização pesada: ~5s + download na primeira vez)
+# ─── Cache do leitor OCR (rapidocr: inicialização rápida, sem download)
 _ocr_reader = None
 
 
 def _get_reader():
-    """Retorna o leitor OCR inicializado (singleton)."""
+    """Retorna o leitor RapidOCR inicializado (singleton)."""
     global _ocr_reader
     if _ocr_reader is None:
-        import easyocr
-        logger.info("Inicializando easyocr (pode demorar na primeira execução)...")
-        _ocr_reader = easyocr.Reader(['pt', 'en'], gpu=False, verbose=False)
-        logger.info("easyocr pronto.")
+        from rapidocr_onnxruntime import RapidOCR
+        logger.info("Inicializando RapidOCR...")
+        _ocr_reader = RapidOCR()
+        logger.info("RapidOCR pronto.")
     return _ocr_reader
 
 
@@ -167,27 +168,51 @@ def _ocr_page_to_rows(reader, page) -> List[List[Tuple]]:
         Lista de linhas. Cada linha é uma lista de (bbox, text, conf)
         ordenada da esquerda para a direita.
     """
+    import numpy as np
     # Renderizar em 3x (≈216 DPI) — resolução suficiente para OCR preciso
     mat = fitz.Matrix(3.0, 3.0)
     pix = page.get_pixmap(matrix=mat)
     img_bytes = pix.tobytes('png')
 
-    results = reader.readtext(img_bytes, detail=1, paragraph=False)
+    # rapidocr retorna: List[ [bbox, text, score] ] ou None
+    result, elapse = reader(img_bytes)
+    if not result:
+        return []
+
+    # Normalizar para o mesmo formato que easyocr: (bbox, text, conf)
+    # rapidocr bbox: [[x1,y1],[x2,y1],[x2,y2],[x1,y2]]
+    normalized = []
+    for item in result:
+        bbox_raw, text, conf = item[0], item[1], item[2] if len(item) > 2 else 0.9
+        # Converter para lista de 4 pontos [[x1,y1],...] se vier como array
+        if hasattr(bbox_raw, 'tolist'):
+            bbox = [list(p) for p in bbox_raw.tolist()]
+        else:
+            bbox = [list(p) for p in bbox_raw]
+        normalized.append((bbox, text, float(conf) if conf is not None else 0.9))
 
     # Agrupar por y (centro da bbox), tolerância de 25px na imagem 3x
-    return _group_by_row(results, y_tolerance=25)
+    return _group_by_row(normalized, y_tolerance=25)
 
 
 def _group_by_row(results, y_tolerance: int = 25) -> List[List[Tuple]]:
-    """Agrupa elementos OCR pelo eixo Y (mesma linha visual)."""
+    """
+    Agrupa elementos OCR pelo eixo Y (mesma linha visual).
+    Compatível com bbox de 4 pontos: [[x1,y1],[x2,y1],[x2,y2],[x1,y2]]
+    """
+    if not results:
+        return []
+
     items = list(enumerate(results))
-    items_sorted = sorted(items, key=lambda x: x[1][0][0][1])  # sort by y_top
+    # bbox[0][1] = y do ponto superior-esquerdo
+    items_sorted = sorted(items, key=lambda x: x[1][0][0][1])
     used = [False] * len(results)
     rows = []
 
     for i, (orig_i, (bbox, text, conf)) in enumerate(items_sorted):
         if used[orig_i]:
             continue
+        # Centro Y entre ponto 0 (top) e ponto 2 (bottom)
         y_center = (bbox[0][1] + bbox[2][1]) / 2
         row = [(bbox, text, conf)]
         used[orig_i] = True
