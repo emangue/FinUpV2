@@ -838,6 +838,8 @@ function TransactionsMobileContent() {
                   placeholder="Filtrar por nome"
                   className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2"
                 />
+              </div>
+            </div>
           )}
         </div>
 
