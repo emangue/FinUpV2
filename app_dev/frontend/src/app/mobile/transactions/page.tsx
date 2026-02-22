@@ -788,6 +788,7 @@ function TransactionsMobileContent() {
           fetchTransactions()
           fetchResumo()
           if (gastosOpen) fetchGastosPorGrupo()
+          if (gastosOpen && grupoFilter) fetchSubgruposGastos()
         }}
       />
 
