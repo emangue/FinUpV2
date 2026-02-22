@@ -110,7 +110,8 @@ function TransactionsMobileContent() {
   const [detailSheetOpen, setDetailSheetOpen] = useState(false)
   // Se viemos do orçamento com grupo selecionado, abrir collapse de gastos por padrão
   const [gastosOpen, setGastosOpen] = useState(!!(fromOrcamento && urlGrupo))
-  const [filtrosOpen, setFiltrosOpen] = useState(false)
+  // Abrir filtros por padrão se viemos de link externo ou há filtros ativos
+  const [filtrosOpen, setFiltrosOpen] = useState(!!(fromOrcamento || urlGrupo || urlYear))
 
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -548,11 +549,16 @@ function TransactionsMobileContent() {
           <button
             type="button"
             onClick={() => setFiltrosOpen(!filtrosOpen)}
-            className="w-full flex items-center justify-between p-4 text-left"
+            className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50 transition-colors"
           >
             <span className="flex items-center gap-2">
               <Filter className="w-4 h-4 text-gray-500" />
               <h3 className="text-sm font-semibold text-gray-900">Filtros</h3>
+              {(grupoFilter || subgrupoFilter || categoriaGeral || !semFiltroPeriodo) && (
+                <span className="inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold text-white bg-blue-600 rounded-full">
+                  {[grupoFilter, subgrupoFilter, categoriaGeral, !semFiltroPeriodo].filter(Boolean).length}
+                </span>
+              )}
             </span>
             {filtrosOpen ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
           </button>
