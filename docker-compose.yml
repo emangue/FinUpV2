@@ -1,0 +1,127 @@
+version: '3.8'
+
+services:
+  # ==========================================
+  # PostgreSQL - Banco de dados
+  # ==========================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: finup_postgres_dev
+    environment:
+      POSTGRES_USER: finup_user
+      POSTGRES_PASSWORD: finup_dev_password
+      POSTGRES_DB: finup_db_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U finup_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==========================================
+  # Redis - Cache/Queue (opcional)
+  # ==========================================
+  redis:
+    image: redis:7-alpine
+    container_name: finup_redis_dev
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # ==========================================
+  # Backend - FastAPI (compartilhado por ambos frontends)
+  # ==========================================
+  backend:
+    build:
+      context: ./app_dev/backend
+      dockerfile: Dockerfile
+    container_name: finup_backend_dev
+    environment:
+      - DATABASE_URL=postgresql://finup_user:finup_dev_password@postgres:5432/finup_db_dev
+      - REDIS_URL=redis://redis:6379/0
+      - DEBUG=true
+      - BACKEND_CORS_ORIGINS=http://localhost:3000,http://localhost:3001
+      - JWT_SECRET_KEY=dev_secret_key_change_in_production
+    ports:
+      - "8000:8000"
+    volumes:
+      # Hot reload: monta código como volume
+      - ./app_dev/backend:/app
+      # Persistir uploads
+      - backend_uploads:/app/uploads
+      # Persistir backups
+      - backend_backups:/app/database/backups_daily
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >
+      uvicorn app.main:app 
+      --host 0.0.0.0 
+      --port 8000 
+      --reload
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ==========================================
+  # Frontend App - Next.js (usuário final)
+  # ==========================================
+  frontend-app:
+    build:
+      context: ./app_dev/frontend
+      dockerfile: Dockerfile.dev
+    container_name: finup_frontend_app_dev
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - CHOKIDAR_USEPOLLING=true  # Hot reload no macOS
+    ports:
+      - "3000:3000"
+    volumes:
+      # Hot reload
+      - ./app_dev/frontend:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - backend
+    command: npm run dev
+
+  # ==========================================
+  # Frontend Admin - Next.js (painel admin)
+  # ==========================================
+  frontend-admin:
+    build:
+      context: ./app_admin/frontend
+      dockerfile: Dockerfile.dev
+    container_name: finup_frontend_admin_dev
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - CHOKIDAR_USEPOLLING=true  # Hot reload no macOS
+    ports:
+      - "3001:3000"  # Admin na porta 3001 do host
+    volumes:
+      # Hot reload
+      - ./app_admin/frontend:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - backend
+    command: npm run dev
+
+volumes:
+  postgres_data:
+  redis_data:
+  backend_uploads:
+  backend_backups:

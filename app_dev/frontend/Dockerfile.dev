@@ -1,0 +1,21 @@
+# ============================================
+# Dockerfile.dev - Desenvolvimento com hot reload
+# ============================================
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copiar package files
+COPY package*.json ./
+
+# Instalar dependências
+RUN npm ci
+
+# Copiar código (via volume em docker-compose)
+COPY . .
+
+# Porta
+EXPOSE 3000
+
+# Comando
+CMD ["npm", "run", "dev"]
