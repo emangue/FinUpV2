@@ -334,7 +334,7 @@ class TransactionRepository:
         """Agregação por SUBGRUPO de um grupo específico (Despesa) com filtros."""
         query = self.db.query(
             JournalEntry.SUBGRUPO,
-            func.sum(func.abs(JournalEntry.Valor)).label('total')
+            func.sum(JournalEntry.Valor).label('total')
         ).filter(
             JournalEntry.user_id == user_id,
             JournalEntry.CategoriaGeral == 'Despesa',
@@ -354,7 +354,7 @@ class TransactionRepository:
         rows = (
             query
             .group_by(JournalEntry.SUBGRUPO)
-            .order_by(func.sum(func.abs(JournalEntry.Valor)).desc())
+            .order_by(func.abs(func.sum(JournalEntry.Valor)).desc())
             .all()
         )
         return [{"grupo": r.SUBGRUPO or 'Sem subgrupo', "total": float(r.total)} for r in rows]
