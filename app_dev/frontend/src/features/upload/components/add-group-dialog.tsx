@@ -11,6 +11,7 @@ import * as React from "react"
 import { Plus, Loader2 } from "lucide-react"
 import { fetchWithAuth } from "@/core/utils/api-client"
 import { API_CONFIG } from "@/core/config/api.config"
+import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -104,7 +105,7 @@ export function AddGroupDialog({ onGroupAdded, existingGroups = [], compact = fa
           throw new Error(error.detail || "Erro ao criar grupo")
         }
 
-        alert(`✅ Grupo criado: ${nomeGrupo} / ${nomeSubgrupo}`)
+        toast.success(`Grupo criado: ${nomeGrupo} / ${nomeSubgrupo}`)
         onCreated?.(nomeGrupo.trim(), nomeSubgrupo.trim())
       } else {
         // Criar subgrupo para grupo existente
@@ -124,7 +125,7 @@ export function AddGroupDialog({ onGroupAdded, existingGroups = [], compact = fa
           throw new Error(error.detail || "Erro ao criar subgrupo")
         }
 
-        alert(`✅ Subgrupo criado: ${nomeSubgrupoNovo} → ${grupoSelecionado}`)
+        toast.success(`Subgrupo criado: ${nomeSubgrupoNovo} → ${grupoSelecionado}`)
         onCreated?.(grupoSelecionado, nomeSubgrupoNovo.trim())
       }
 
@@ -133,7 +134,7 @@ export function AddGroupDialog({ onGroupAdded, existingGroups = [], compact = fa
       resetForm()
       onGroupAdded()
     } catch (error) {
-      alert(`❌ Erro: ${error instanceof Error ? error.message : "Erro desconhecido"}`)
+      toast.error(error instanceof Error ? error.message : 'Erro desconhecido')
     } finally {
       setLoading(false)
     }

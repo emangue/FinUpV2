@@ -1,5 +1,7 @@
 'use client'
 
+import { toast } from 'sonner'
+
 /**
  * Create/Edit Goal Page
  * Página para criar ou editar uma meta
@@ -153,7 +155,7 @@ function CreateEditGoalContent() {
       router.push('/mobile/budget')
     } catch (error) {
       console.error('Erro ao salvar meta:', error)
-      alert('Erro ao salvar meta. Tente novamente.')
+      toast.error('Erro ao salvar meta. Tente novamente.')
     } finally {
       setSaving(false)
     }

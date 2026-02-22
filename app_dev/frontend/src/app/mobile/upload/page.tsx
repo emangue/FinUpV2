@@ -13,6 +13,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import { TabType, FileFormat } from '@/features/upload/types';
 import { months, years, fileFormats } from '@/features/upload/mocks/mockUploadData';
 import { 
@@ -152,15 +153,15 @@ export default function UploadPage() {
 
   const handleSaveNewCard = async () => {
     if (!newCardName.trim()) {
-      alert('Por favor, informe o nome do cartão');
+      toast.error('Por favor, informe o nome do cartão');
       return;
     }
     if (newCardFinal.length !== 4 || !/^\d{4}$/.test(newCardFinal)) {
-      alert('O final do cartão deve ter exatamente 4 dígitos');
+      toast.error('O final do cartão deve ter exatamente 4 dígitos');
       return;
     }
     if (!selectedBank) {
-      alert('Selecione uma instituição financeira antes de adicionar o cartão');
+      toast.error('Selecione uma instituição financeira antes de adicionar o cartão');
       return;
     }
     try {
@@ -174,7 +175,7 @@ export default function UploadPage() {
       setSelectedCard(newCard.id);
       setShowAddCard(false);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Erro ao adicionar cartão');
+      toast.error(err instanceof Error ? err.message : 'Erro ao adicionar cartão');
     } finally {
       setAddingCard(false);
     }
@@ -187,15 +188,15 @@ export default function UploadPage() {
       return;
     }
     if (activeTab === 'fatura' && !selectedCard) {
-      alert('Por favor, selecione um cartão de crédito');
+      toast.error('Por favor, selecione um cartão de crédito');
       return;
     }
     if (!selectedFile) {
-      alert('Por favor, selecione um arquivo');
+      toast.error('Por favor, selecione um arquivo');
       return;
     }
     if (selectedFormat === 'pdf-password' && !password.trim()) {
-      alert('Por favor, informe a senha do PDF protegido');
+      toast.error('Por favor, informe a senha do PDF protegido');
       return;
     }
     

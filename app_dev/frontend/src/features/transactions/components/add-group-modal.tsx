@@ -1,7 +1,8 @@
 "use client"
 
 import * as React from "react"
-import { fetchWithAuth } from '@/core/utils/api-client';  // ✅ FASE 3 - Autenticação obrigatória
+import { fetchWithAuth } from '@/core/utils/api-client';
+import { toast } from 'sonner'
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -101,7 +102,7 @@ export function AddGroupModal({
 
   const handleSave = async () => {
     if (!nome.trim()) {
-      alert('Por favor, insira um nome')
+      toast.error('Por favor, insira um nome')
       return
     }
 
@@ -126,11 +127,11 @@ export function AddGroupModal({
       } else {
         // Criar SUBGRUPO na base_marcacoes
         if (!grupo) {
-          alert('Selecione um grupo primeiro')
+          toast.error('Selecione um grupo primeiro')
           return
         }
         if (!tipoGasto) {
-          alert('Selecione um tipo de gasto')
+          toast.error('Selecione um tipo de gasto')
           return
         }
 
@@ -156,7 +157,7 @@ export function AddGroupModal({
       onSuccess()
       onOpenChange(false)
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Erro ao criar ' + (tipo === 'grupo' ? 'grupo' : 'subgrupo'))
+      toast.error(error instanceof Error ? error.message : 'Erro ao criar ' + (tipo === 'grupo' ? 'grupo' : 'subgrupo'))
     } finally {
       setLoading(false)
     }

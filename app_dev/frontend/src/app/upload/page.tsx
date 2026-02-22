@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { toast } from 'sonner'
 import { Button } from "@/components/ui/button"
 import { UploadDialog } from "@/features/upload"
 import { Upload, FileText, PlusCircle, CheckCircle, XCircle, Clock, FileX, Trash2 } from "lucide-react"
@@ -142,7 +143,7 @@ export default function UploadPage() {
       fetchUploadHistory()
     } catch (err) {
       console.error('Erro ao excluir upload:', err)
-      alert(err instanceof Error ? err.message : 'Erro ao excluir upload')
+      toast.error(err instanceof Error ? err.message : 'Erro ao excluir upload')
     } finally {
       setDeleting(false)
     }

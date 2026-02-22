@@ -14,8 +14,18 @@
 
 import * as React from 'react'
 import { X } from 'lucide-react'
+import { toast } from 'sonner'
 import { Goal } from '../types'
 import { GOAL_COLORS } from '../lib/colors'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
 
 interface EditGoalModalProps {
   goal: Goal
@@ -41,6 +51,7 @@ export function EditGoalModal({ goal, isOpen, onClose, onSave, onDelete }: EditG
   const [aplicarFuturos, setAplicarFuturos] = React.useState(false)
   const [isLoading, setIsLoading] = React.useState(false)
   const [isDeleting, setIsDeleting] = React.useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false)
 
   // Reset form when goal changes
   React.useEffect(() => {
@@ -53,13 +64,13 @@ export function EditGoalModal({ goal, isOpen, onClose, onSave, onDelete }: EditG
 
   const handleSave = async () => {
     if (!nome.trim()) {
-      alert('Nome é obrigatório')
+      toast.error('Nome é obrigatório')
       return
     }
 
     const orcamentoNum = parseFloat(orcamento)
     if (isNaN(orcamentoNum) || orcamentoNum <= 0) {
-      alert('Orçamento deve ser maior que zero')
+      toast.error('Orçamento deve ser maior que zero')
       return
     }
 
@@ -75,26 +86,25 @@ export function EditGoalModal({ goal, isOpen, onClose, onSave, onDelete }: EditG
       onClose()
     } catch (error) {
       console.error('Erro ao salvar meta:', error)
-      alert('Erro ao salvar meta. Tente novamente.')
+      toast.error('Erro ao salvar meta. Tente novamente.')
     } finally {
       setIsLoading(false)
     }
   }
 
-  const handleDelete = async () => {
-    const confirmacao = confirm(
-      `Deseja realmente excluir a meta "${nome}"?\n\nEsta ação não pode ser desfeita.`
-    )
-    
-    if (!confirmacao) return
+  const handleDelete = () => {
+    setShowDeleteConfirm(true)
+  }
 
+  const handleConfirmDelete = async () => {
+    setShowDeleteConfirm(false)
     setIsDeleting(true)
     try {
       await onDelete()
       onClose()
     } catch (error) {
       console.error('Erro ao excluir meta:', error)
-      alert('Erro ao excluir meta. Tente novamente.')
+      toast.error('Erro ao excluir meta. Tente novamente.')
     } finally {
       setIsDeleting(false)
     }
@@ -287,6 +297,26 @@ export function EditGoalModal({ goal, isOpen, onClose, onSave, onDelete }: EditG
           </button>
         </div>
       </div>
+
+      {/* Dialog de confirmação de exclusão */}
+      <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Excluir meta</DialogTitle>
+            <DialogDescription>
+              Deseja realmente excluir a meta &ldquo;{nome}&rdquo;? Esta ação não pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeleteConfirm(false)}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={handleConfirmDelete} disabled={isDeleting}>
+              {isDeleting ? 'Excluindo...' : 'Excluir'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

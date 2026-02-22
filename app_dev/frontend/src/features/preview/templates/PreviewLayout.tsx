@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import { Transaction, TabFilter, ClassificationData, FileInfo, ClassificationSource } from '../types';
 
 /**
@@ -151,7 +152,7 @@ export default function PreviewLayout({ sessionId, initialFileInfo, initialTrans
       );
     } catch (err) {
       console.error('Erro ao salvar classificação:', err);
-      alert('Erro ao salvar. Tente novamente.');
+      toast.error('Erro ao salvar. Tente novamente.');
       return;
     }
 
@@ -202,7 +203,7 @@ export default function PreviewLayout({ sessionId, initialFileInfo, initialTrans
       );
     } catch (err) {
       console.error('Erro ao salvar classificação no preview:', err);
-      alert('Erro ao salvar. Tente novamente.');
+      toast.error('Erro ao salvar. Tente novamente.');
       return;
     }
 
@@ -299,7 +300,7 @@ export default function PreviewLayout({ sessionId, initialFileInfo, initialTrans
       }
     } catch (err) {
       console.error('Erro ao excluir:', err);
-      alert('Erro ao excluir. Tente novamente.');
+      toast.error('Erro ao excluir. Tente novamente.');
     } finally {
       setDeleteModalOpen(false);
       setTransactionToDelete(null);

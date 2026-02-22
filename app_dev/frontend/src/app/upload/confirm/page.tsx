@@ -3,6 +3,7 @@
 import * as React from "react"
 import { Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
+import { toast } from 'sonner'
 import DashboardLayout from "@/components/dashboard-layout"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -100,6 +101,7 @@ function ConfirmarUploadPageContent() {
   const [transactions, setTransactions] = React.useState<PreviewTransaction[]>([])
   const [loading, setLoading] = React.useState(true)
   const [saving, setSaving] = React.useState(false)
+  const [showConfirmDialog, setShowConfirmDialog] = React.useState(false)
   
   // Estados para edição
   const [editModalOpen, setEditModalOpen] = React.useState(false)
@@ -224,17 +226,20 @@ function ConfirmarUploadPageContent() {
     setEditingTransaction(null)
   }
 
-  const handleSaveTransactions = async () => {
+  const handleSaveTransactions = () => {
     const selectedTransactions = transactions.filter(t => t.selected)
     
     if (selectedTransactions.length === 0) {
-      alert('Selecione pelo menos uma transação para salvar')
+      toast.error('Selecione pelo menos uma transação para salvar')
       return
     }
 
-    if (!confirm(`Confirma o salvamento de ${selectedTransactions.length} transações?`)) {
-      return
-    }
+    setShowConfirmDialog(true)
+  }
+
+  const handleDoSave = async () => {
+    setShowConfirmDialog(false)
+    const selectedTransactions = transactions.filter(t => t.selected)
 
     try {
       setSaving(true)
@@ -247,11 +252,11 @@ function ConfirmarUploadPageContent() {
       // Simular delay
       await new Promise(resolve => setTimeout(resolve, 2000))
       
-      alert('Transações salvas com sucesso!')
+      toast.success('Transações salvas com sucesso!')
       router.push('/transactions')
     } catch (error) {
       console.error('Erro ao salvar transações:', error)
-      alert('Erro ao salvar transações. Tente novamente.')
+      toast.error('Erro ao salvar transações. Tente novamente.')
     } finally {
       setSaving(false)
     }
@@ -597,6 +602,28 @@ function ConfirmarUploadPageContent() {
               </Button>
               <Button onClick={handleSaveEdit}>
                 Salvar Alterações
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Dialog de confirmação de salvamento */}
+        <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Confirmar salvamento</DialogTitle>
+              <DialogDescription>
+                Você está prestes a salvar{' '}
+                <strong>{transactions.filter(t => t.selected).length} transações</strong>.
+                Deseja continuar?
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowConfirmDialog(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleDoSave} disabled={saving}>
+                {saving ? 'Salvando...' : 'Confirmar salvamento'}
               </Button>
             </DialogFooter>
           </DialogContent>

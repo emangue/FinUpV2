@@ -20,14 +20,16 @@ export default function ClassificationModal({
 }: ClassificationModalProps) {
   const [grupo, setGrupo] = useState('');
   const [subgrupo, setSubgrupo] = useState('');
+  const [error, setError] = useState('');
 
   if (!isOpen) return null;
 
   const handleSave = () => {
     if (!grupo || !subgrupo) {
-      alert('⚠️ Por favor, selecione grupo e subgrupo');
+      setError('Por favor, selecione grupo e subgrupo');
       return;
     }
+    setError('');
     onSave({ grupo, subgrupo });
     setGrupo('');
     setSubgrupo('');
@@ -106,6 +108,13 @@ export default function ClassificationModal({
             </select>
           </div>
         </div>
+
+        {error && (
+          <p className="text-sm text-red-600 flex items-center gap-1 mt-1">
+            <span>⚠️</span>
+            {error}
+          </p>
+        )}
 
         <Button
           onClick={handleSave}
