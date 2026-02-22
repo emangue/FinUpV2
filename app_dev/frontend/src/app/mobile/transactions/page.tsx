@@ -85,10 +85,9 @@ function TransactionsMobileContent() {
   const now = new Date()
   // Se viemos com year+month na URL, ativa filtro de período automaticamente
   const [semFiltroPeriodo, setSemFiltroPeriodo] = useState(urlYear == null)
-  const [yearInicio, setYearInicio] = useState(urlYear ?? now.getFullYear())
-  const [monthInicio, setMonthInicio] = useState(urlMonth ?? 1)
-  const [yearFim, setYearFim] = useState(urlYear ?? now.getFullYear())
-  const [monthFim, setMonthFim] = useState(urlMonth ?? (now.getMonth() + 1))
+  const [tipoPeriodo, setTipoPeriodo] = useState<'mes' | 'ano'>(urlMonth ? 'mes' : 'ano')
+  const [selectedYear, setSelectedYear] = useState(urlYear ?? now.getFullYear())
+  const [selectedMonth, setSelectedMonth] = useState(urlMonth ?? (now.getMonth() + 1))
 
   const [searchQuery, setSearchQuery] = useState('')
   const [searchDebounced, setSearchDebounced] = useState('')
@@ -135,19 +134,15 @@ function TransactionsMobileContent() {
       estabelecimento: estabelecimentoFilter || undefined,
     }
     if (!semFiltroPeriodo) {
-      const isSingleMonth = yearInicio === yearFim && monthInicio === monthFim
-      if (isSingleMonth) {
-        base.year = yearInicio
-        base.month = monthInicio
+      if (tipoPeriodo === 'mes') {
+        base.year = selectedYear
+        base.month = selectedMonth
       } else {
-        base.year_inicio = yearInicio
-        base.month_inicio = monthInicio
-        base.year_fim = yearFim
-        base.month_fim = monthFim
+        base.year = selectedYear
       }
     }
     return base
-  }, [semFiltroPeriodo, yearInicio, monthInicio, yearFim, monthFim, searchDebounced, categoriaGeral, grupoFilter, subgrupoFilter, estabelecimentoFilter])
+  }, [semFiltroPeriodo, tipoPeriodo, selectedYear, selectedMonth, searchDebounced, categoriaGeral, grupoFilter, subgrupoFilter, estabelecimentoFilter])
 
   const fetchTransactions = useCallback(async () => {
     const BASE = `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/transactions`
@@ -342,9 +337,9 @@ function TransactionsMobileContent() {
                 onClick={() => setSemFiltroPeriodo(true)}
                 className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium hover:bg-blue-200 transition-colors"
               >
-                {yearInicio === yearFim && monthInicio === monthFim
-                  ? `${MESES[monthInicio - 1]}/${yearInicio}`
-                  : `${MESES[monthInicio - 1]}/${yearInicio} – ${MESES[monthFim - 1]}/${yearFim}`}
+                {tipoPeriodo === 'mes' 
+                  ? `${MESES[selectedMonth - 1]}/${selectedYear}`
+                  : selectedYear}
                 <span className="ml-0.5 text-blue-500">×</span>
               </button>
             )}
@@ -387,18 +382,18 @@ function TransactionsMobileContent() {
               <p className="text-xs text-gray-500 font-medium">
                 {semFiltroPeriodo ? (
                   'Todas as transações'
-                ) : yearInicio === yearFim && monthInicio === monthFim ? (
+                ) : tipoPeriodo === 'mes' ? (
                   <>
                     Resumo de{' '}
                     <strong>
-                      {MESES[monthInicio - 1]}/{yearInicio}
+                      {MESES[selectedMonth - 1]}/{selectedYear}
                     </strong>
                   </>
                 ) : (
                   <>
-                    Período{' '}
+                    Ano{' '}
                     <strong>
-                      {MESES[monthInicio - 1]}/{yearInicio} a {MESES[monthFim - 1]}/{yearFim}
+                      {selectedYear}
                     </strong>
                   </>
                 )}
@@ -574,62 +569,70 @@ function TransactionsMobileContent() {
                 <span className="text-sm text-gray-700">Todas as transações (sem filtro de período)</span>
               </label>
               {!semFiltroPeriodo && (
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[10px] text-gray-500 block mb-1">De</label>
-                  <div className="flex gap-1">
-                    <select
-                      value={monthInicio}
-                      onChange={(e) => setMonthInicio(Number(e.target.value))}
-                      className="flex-1 text-sm border border-gray-200 rounded-lg px-2 py-1.5"
+                <>
+                  <div className="flex gap-2 p-1 bg-gray-100 rounded-lg">
+                    <button
+                      type="button"
+                      onClick={() => setTipoPeriodo('mes')}
+                      className={`flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                        tipoPeriodo === 'mes'
+                          ? 'bg-white text-gray-900 shadow-sm'
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
                     >
-                      {MESES.map((m, i) => (
-                        <option key={m} value={i + 1}>
-                          {m}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      value={yearInicio}
-                      onChange={(e) => setYearInicio(Number(e.target.value))}
-                      className="w-20 text-sm border border-gray-200 rounded-lg px-2 py-1.5"
+                      Mês específico
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTipoPeriodo('ano')}
+                      className={`flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                        tipoPeriodo === 'ano'
+                          ? 'bg-white text-gray-900 shadow-sm'
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
                     >
-                      {[now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2].map((y) => (
+                      Ano inteiro
+                    </button>
+                  </div>
+                  {tipoPeriodo === 'mes' ? (
+                    <div className="flex gap-2">
+                      <select
+                        value={selectedMonth}
+                        onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                        className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2"
+                      >
+                        {MESES.map((m, i) => (
+                          <option key={m} value={i + 1}>
+                            {m}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={selectedYear}
+                        onChange={(e) => setSelectedYear(Number(e.target.value))}
+                        className="w-24 text-sm border border-gray-200 rounded-lg px-3 py-2"
+                      >
+                        {[now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2, now.getFullYear() - 3].map((y) => (
+                          <option key={y} value={y}>
+                            {y}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <select
+                      value={selectedYear}
+                      onChange={(e) => setSelectedYear(Number(e.target.value))}
+                      className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2"
+                    >
+                      {[now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2, now.getFullYear() - 3].map((y) => (
                         <option key={y} value={y}>
                           {y}
                         </option>
                       ))}
                     </select>
-                  </div>
-                </div>
-                <div>
-                  <label className="text-[10px] text-gray-500 block mb-1">Até</label>
-                  <div className="flex gap-1">
-                    <select
-                      value={monthFim}
-                      onChange={(e) => setMonthFim(Number(e.target.value))}
-                      className="flex-1 text-sm border border-gray-200 rounded-lg px-2 py-1.5"
-                    >
-                      {MESES.map((m, i) => (
-                        <option key={m} value={i + 1}>
-                          {m}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      value={yearFim}
-                      onChange={(e) => setYearFim(Number(e.target.value))}
-                      className="w-20 text-sm border border-gray-200 rounded-lg px-2 py-1.5"
-                    >
-                      {[now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2].map((y) => (
-                        <option key={y} value={y}>
-                          {y}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              </div>
+                  )}
+                </>
               )}
               <div>
                 <label className="text-[10px] text-gray-500 block mb-1">Categoria geral</label>
