@@ -67,12 +67,32 @@ export default function UploadPage() {
   const [activeTab, setActiveTab] = useState<TabType>('fatura');
   const [selectedBank, setSelectedBank] = useState('');
   const [selectedCard, setSelectedCard] = useState('');
+
+  // Filtrar cartões pelo banco selecionado (card.bankId = card.banco no backend)
+  // Busca bidirecional: "Banco Itaú" deve casar com seleção "Itaú" (e vice-versa)
+  const filteredCards = selectedBank
+    ? cards.filter(c => {
+        const cardBank = c.bankId.toLowerCase();
+        const selBank = selectedBank.toLowerCase();
+        return cardBank === selBank || cardBank.includes(selBank) || selBank.includes(cardBank);
+      })
+    : cards;
   const [selectedYear, setSelectedYear] = useState(2026);
   const [selectedMonth, setSelectedMonth] = useState('Fevereiro');
   const [selectedFormat, setSelectedFormat] = useState<FileFormat>('csv');
   const [fileName, setFileName] = useState('Nenhum...');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [password, setPassword] = useState('');  // Senha do PDF protegido
+
+  // Filtrar cartões pelo banco selecionado
+  const filteredCards = selectedBank
+    ? cards.filter((c) => c.bankId === selectedBank)
+    : cards;
+
+  // Resetar cartão selecionado quando o banco mudar
+  useEffect(() => {
+    setSelectedCard('');
+  }, [selectedBank]);
 
   const handleFileChange = (file: File | null) => {
     if (file) {
@@ -112,6 +132,11 @@ export default function UploadPage() {
       if (first) setSelectedFormat(first);
     }
   }, [selectedBank, compatibility, selectedFormat]);
+
+  const handleBankChange = (bank: string) => {
+    setSelectedBank(bank);
+    setSelectedCard('');  // Resetar cartão ao trocar banco
+  };
 
   const handleAddCard = () => {
     alert('Funcionalidade de adicionar cartão será implementada em breve');
@@ -223,7 +248,7 @@ export default function UploadPage() {
             <BankSelector 
               banks={banks}
               value={selectedBank}
-              onChange={setSelectedBank}
+              onChange={handleBankChange}
               required
             />
           )}
@@ -235,7 +260,7 @@ export default function UploadPage() {
                 <div className="mb-6 text-center text-gray-500">Carregando cartões...</div>
               ) : (
                 <CardSelector 
-                  cards={cards}
+                  cards={filteredCards}
                   value={selectedCard}
                   onChange={setSelectedCard}
                   onAddNew={handleAddCard}
