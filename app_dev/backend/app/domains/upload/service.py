@@ -56,7 +56,8 @@ class UploadService:
         tipo_documento: str = "fatura",
         formato: str = "csv",
         skip_cleanup: bool = False,
-        shared_session_id: str = None
+        shared_session_id: str = None,
+        senha: str = None
     ) -> UploadPreviewResponse:
         """
         Processa arquivo em 3 fases com salvamento incremental
@@ -172,7 +173,8 @@ class UploadService:
                     file.filename,
                     cartao,
                     final_cartao,
-                    mes_fatura
+                    mes_fatura,
+                    senha
                 )
                 logger.info(f"  ✅ {len(raw_transactions)} transações brutas processadas")
                 
@@ -397,7 +399,8 @@ class UploadService:
         nome_arquivo: str,
         nome_cartao: str = None,
         final_cartao: str = None,
-        mes_fatura_input: str = None
+        mes_fatura_input: str = None,
+        senha: str = None
     ):
         """
         Fase 1: Processa arquivo bruto usando processadores específicos
@@ -434,7 +437,8 @@ class UploadService:
                 file_path_obj,
                 nome_arquivo,
                 nome_cartao,
-                final_cartao
+                final_cartao,
+                **({'senha': senha} if senha else {})
             )
             
             # Verificar se retornou tupla (extrato com validação) ou lista (fatura)

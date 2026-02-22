@@ -72,6 +72,7 @@ export default function UploadPage() {
   const [selectedFormat, setSelectedFormat] = useState<FileFormat>('csv');
   const [fileName, setFileName] = useState('Nenhum...');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [password, setPassword] = useState('');  // Senha do PDF protegido
 
   const handleFileChange = (file: File | null) => {
     if (file) {
@@ -130,6 +131,10 @@ export default function UploadPage() {
       alert('Por favor, selecione um arquivo');
       return;
     }
+    if (selectedFormat === 'pdf-password' && !password.trim()) {
+      alert('Por favor, informe a senha do PDF protegido');
+      return;
+    }
     
     try {
       // Buscar dados completos do cartão selecionado
@@ -153,7 +158,8 @@ export default function UploadPage() {
         cartaoFinal,  // ✅ Enviar final do cartão
         mes: activeTab === 'fatura' ? selectedMonth : undefined,
         ano: activeTab === 'fatura' ? selectedYear : undefined,
-        formato: selectedFormat
+        formato: selectedFormat,
+        senha: selectedFormat === 'pdf-password' ? password : undefined,  // ✅ Senha apenas para pdf-password
       });
       
       // ✅ Redirecionar para preview MOBILE com sessionId
@@ -258,6 +264,26 @@ export default function UploadPage() {
             formatAvailability={Object.keys(formatAvailability).length > 0 ? formatAvailability : undefined}
             bankNotSelected={!selectedBank}
           />
+
+          {/* Senha do PDF (apenas quando formato pdf-password estiver selecionado) */}
+          {selectedFormat === 'pdf-password' && (
+            <div className="mb-6">
+              <label className="block text-sm font-bold text-gray-900 mb-2">
+                Senha do PDF <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Digite a senha do arquivo PDF"
+                autoComplete="current-password"
+                className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm text-gray-700 focus:outline-none focus:border-gray-900 focus:ring-1 focus:ring-gray-900"
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                Necessária para PDFs do Itaú ou BTG Pactual protegidos por senha
+              </p>
+            </div>
+          )}
           
           {/* Arquivo */}
           <FileInput 

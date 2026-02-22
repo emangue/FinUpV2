@@ -98,6 +98,7 @@ export async function uploadFile(formData: {
   mes?: string;
   ano?: number;
   formato: string;
+  senha?: string;  // Senha do PDF protegido (opcional)
 }): Promise<{ sessionId: string }> {
   const body = new FormData();
   body.append('file', formData.file);
@@ -113,6 +114,11 @@ export async function uploadFile(formData: {
     'ofx': 'OFX'
   };
   body.append('formato', formatoMap[formData.formato] || 'CSV');
+  
+  // Senha do PDF (apenas quando formato é pdf-password)
+  if (formData.senha) {
+    body.append('senha', formData.senha);
+  }
   
   // mesFatura é obrigatório no formato YYYY-MM
   if (formData.mes && formData.ano) {

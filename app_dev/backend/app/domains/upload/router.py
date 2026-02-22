@@ -28,6 +28,7 @@ async def upload_preview(
     mesFatura: str = Form(...),
     tipoDocumento: str = Form("fatura"),
     formato: str = Form("csv"),
+    senha: Optional[str] = Form(None),
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
@@ -35,12 +36,13 @@ async def upload_preview(
     Recebe arquivo, processa e salva em preview_transacoes
     
     **Parâmetros:**
-    - file: Arquivo CSV/XLS
+    - file: Arquivo CSV/XLS/PDF
     - banco: Nome do banco (ex: 'itau', 'btg')
     - cartao: Nome do cartão (opcional)
     - mesFatura: Mês da fatura no formato YYYY-MM
     - tipoDocumento: 'fatura' ou 'extrato'
-    - formato: 'csv', 'xls', 'xlsx'
+    - formato: 'csv', 'excel', 'pdf', 'ofx'
+    - senha: Senha do PDF (opcional, apenas para PDFs protegidos)
     
     **Retorna:**
     - sessionId: ID único da sessão de preview
@@ -55,7 +57,8 @@ async def upload_preview(
         cartao=cartao,
         tipo_documento=tipoDocumento,
         formato=formato,
-        final_cartao=final_cartao
+        final_cartao=final_cartao,
+        senha=senha
     )
 
 @router.post("/batch", response_model=dict)
