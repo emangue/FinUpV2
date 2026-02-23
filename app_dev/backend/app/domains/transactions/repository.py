@@ -329,3 +329,32 @@ class TransactionRepository:
             )
         rows = query.group_by(JournalEntry.GRUPO).order_by(func.sum(func.abs(JournalEntry.Valor)).desc()).all()
         return [{"grupo": r.GRUPO, "total": float(r.total)} for r in rows]
+
+    def get_gastos_por_subgrupo(self, user_id: int, filters: "TransactionFilters") -> list:
+        """Agregação por SUBGRUPO de um grupo específico (Despesa) com filtros."""
+        query = self.db.query(
+            JournalEntry.SUBGRUPO,
+            func.sum(JournalEntry.Valor).label('total')
+        ).filter(
+            JournalEntry.user_id == user_id,
+            JournalEntry.CategoriaGeral == 'Despesa',
+        )
+        if filters.grupo:
+            query = query.filter(JournalEntry.GRUPO == filters.grupo)
+        query = self._apply_period_filters(query, filters)
+        if filters.estabelecimento:
+            query = query.filter(JournalEntry.Estabelecimento.ilike(f"%{filters.estabelecimento}%"))
+        if filters.search:
+            query = query.filter(
+                or_(
+                    JournalEntry.Estabelecimento.ilike(f"%{filters.search}%"),
+                    JournalEntry.SUBGRUPO.ilike(f"%{filters.search}%"),
+                )
+            )
+        rows = (
+            query
+            .group_by(JournalEntry.SUBGRUPO)
+            .order_by(func.abs(func.sum(JournalEntry.Valor)).desc())
+            .all()
+        )
+        return [{"grupo": r.SUBGRUPO or 'Sem subgrupo', "total": float(r.total)} for r in rows]

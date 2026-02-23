@@ -655,7 +655,11 @@ class TransactionService:
     def get_gastos_por_grupo(self, user_id: int, filters: TransactionFilters) -> list:
         """Sprint F: Agregação por grupo (Despesa) com filtros."""
         return self.repository.get_gastos_por_grupo(user_id, filters)
-    
+
+    def get_gastos_por_subgrupo(self, user_id: int, filters: TransactionFilters) -> list:
+        """Agregação por subgrupo de um grupo específico (Despesa) com filtros."""
+        return self.repository.get_gastos_por_subgrupo(user_id, filters)
+
     def get_grupos_com_media(
         self,
         user_id: int,

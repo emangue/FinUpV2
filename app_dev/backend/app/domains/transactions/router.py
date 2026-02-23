@@ -300,6 +300,31 @@ def get_gastos_por_grupo(
     return service.get_gastos_por_grupo(user_id, filters)
 
 
+@router.get("/gastos-por-subgrupo")
+def get_gastos_por_subgrupo(
+    year: Optional[int] = None,
+    month: Optional[int] = None,
+    year_inicio: Optional[int] = Query(None),
+    month_inicio: Optional[int] = Query(None, ge=1, le=12),
+    year_fim: Optional[int] = Query(None),
+    month_fim: Optional[int] = Query(None, ge=1, le=12),
+    grupo: Optional[str] = None,
+    estabelecimento: Optional[str] = None,
+    search: Optional[str] = None,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """Gastos agregados por subgrupo de um grupo específico (Despesa) com filtros."""
+    service = TransactionService(db)
+    filters = _build_filters_from_query(
+        year=year, month=month,
+        year_inicio=year_inicio, month_inicio=month_inicio, year_fim=year_fim, month_fim=month_fim,
+        grupo=grupo, subgrupo=None, subgrupo_null=None,
+        estabelecimento=estabelecimento, search=search, cartao=None
+    )
+    return service.get_gastos_por_subgrupo(user_id, filters)
+
+
 class PropagateInfoResponse(BaseModel):
     """Info para propagação de grupo/subgrupo"""
     same_parcela_count: int = 0  # Outras transações com mesmo IdParcela (excluindo esta)
