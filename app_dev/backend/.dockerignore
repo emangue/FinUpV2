@@ -37,9 +37,6 @@ Thumbs.db
 .git/
 .gitignore
 
-# Migrations (já aplicadas)
-migrations/
-
 # Env
 .env
 .env.local
