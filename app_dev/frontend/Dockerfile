@@ -1,17 +1,10 @@
 # ============================================
-# Stage 1: Dependencies
-# ============================================
-FROM node:20-alpine AS deps
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --only=production
-
-# ============================================
-# Stage 2: Builder
+# Stage 1: Builder (todos os deps incl. devDependencies para next.config.ts)
 # ============================================
 FROM node:20-alpine AS builder
 WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
+COPY package*.json ./
+RUN npm ci
 COPY . .
 
 # Build Next.js (standalone output para imagem menor)
