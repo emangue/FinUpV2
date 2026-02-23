@@ -9,6 +9,7 @@
  */
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ChevronDown } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
@@ -62,6 +63,20 @@ export function OrcamentoTab({
   const [totalInvestidoPeriodo, setTotalInvestidoPeriodo] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
 
+  const router = useRouter()
+
+  const navegarParaTransacoes = (grupo: string, subgrupo?: string) => {
+    const params = new URLSearchParams({ grupo, from: 'orcamento' })
+    if (month != null) {
+      params.set('year', String(year))
+      params.set('month', String(month))
+    } else {
+      params.set('year', String(year))
+    }
+    if (subgrupo) params.set('subgrupo', subgrupo)
+    router.push(`/mobile/transactions?${params.toString()}`)
+  }
+
   useEffect(() => {
     const load = async () => {
       setLoading(true)
@@ -102,7 +117,12 @@ export function OrcamentoTab({
   }, [year, month, ytdMonthProp])
 
   // Mesmos dados da tela Metas: separar por categoria_geral
-  const goalsDespesas = goals.filter((g) => g.categoria_geral !== 'Investimentos')
+  const goalsDespesasRaw = goals.filter((g) => g.categoria_geral !== 'Investimentos')
+  const goalsDespesas = [...goalsDespesasRaw].sort((a, b) => {
+    const diffR = (b.valor_realizado ?? 0) - (a.valor_realizado ?? 0)
+    if (diffR !== 0) return diffR
+    return (b.valor_planejado ?? 0) - (a.valor_planejado ?? 0)
+  })
   const goalsInvestimentos = goals.filter((g) => g.categoria_geral === 'Investimentos')
 
   // Quando month undefined (ano/YTD), usar metrics para totais (goals = só 1 mês)
@@ -272,7 +292,14 @@ export function OrcamentoTab({
                           ? 'text-emerald-600 font-semibold'
                           : 'text-gray-500 font-medium'
                     return (
-                      <div key={cat.grupo}>
+                      <div
+                        key={cat.grupo}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => navegarParaTransacoes(cat.grupo)}
+                        onKeyDown={(e) => e.key === 'Enter' && navegarParaTransacoes(cat.grupo)}
+                        className="cursor-pointer rounded-xl hover:bg-gray-50 active:bg-gray-100 transition-colors -mx-2 px-2 py-1"
+                      >
                         <div className="flex items-center justify-between mb-1.5">
                           <div className="flex items-center gap-2 shrink-0 min-w-0">
                             <div
@@ -287,6 +314,7 @@ export function OrcamentoTab({
                               {formatCurrency(realizado)}
                             </span>
                             <span className="text-[9px] text-gray-400">/ {formatCurrency(planejado)}</span>
+                            <ChevronDown className="w-3.5 h-3.5 text-gray-300 -rotate-90" />
                           </div>
                         </div>
                         <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
@@ -420,7 +448,14 @@ export function OrcamentoTab({
                         ? 'text-emerald-600 font-semibold'
                         : 'text-gray-500 font-medium'
                   return (
-                    <div key={cat.grupo}>
+                    <div
+                      key={cat.grupo}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => navegarParaTransacoes(cat.grupo)}
+                      onKeyDown={(e) => e.key === 'Enter' && navegarParaTransacoes(cat.grupo)}
+                      className="cursor-pointer rounded-xl hover:bg-gray-50 active:bg-gray-100 transition-colors -mx-2 px-2 py-1"
+                    >
                       <div className="flex items-center justify-between mb-1.5">
                         <div className="flex items-center gap-2 shrink-0 min-w-0">
                           <div
@@ -435,6 +470,7 @@ export function OrcamentoTab({
                             {formatCurrency(realizado)}
                           </span>
                           <span className="text-[9px] text-gray-400">/ {formatCurrency(planejado)}</span>
+                          <ChevronDown className="w-3.5 h-3.5 text-gray-300 -rotate-90" />
                         </div>
                       </div>
                       <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
@@ -471,7 +507,22 @@ export function OrcamentoTab({
               const hInvestido = Math.max(8, (totalInvestido / maxVal) * barMaxH)
               const hPlanejado = Math.max(8, (totalPlanejadoInv / maxVal) * barMaxH)
               return (
-                <div className="flex items-end gap-3 justify-center py-4 mb-4">
+                <div
+                  className="flex items-end gap-3 justify-center py-4 mb-4 cursor-pointer hover:bg-blue-50 active:bg-blue-100 rounded-lg transition-colors -mx-2 px-2"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => {
+                    const anomes = year * 100 + (month ?? new Date().getMonth() + 1)
+                    router.push(`/mobile/investimentos?anomes=${anomes}`)
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      const anomes = year * 100 + (month ?? new Date().getMonth() + 1)
+                      router.push(`/mobile/investimentos?anomes=${anomes}`)
+                    }
+                  }}
+                >
                   <div className="flex flex-col items-center gap-1.5">
                     <span className="text-xs font-bold text-blue-600">{formatCurrency(totalInvestido)}</span>
                     <div
