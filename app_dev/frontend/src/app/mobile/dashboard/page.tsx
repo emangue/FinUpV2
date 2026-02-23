@@ -12,7 +12,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Download } from 'lucide-react'
+import { Download, Upload } from 'lucide-react'
 import { MobileHeader } from '@/components/mobile/mobile-header'
 import { MonthScrollPicker } from '@/components/mobile/month-scroll-picker'
 import { YearScrollPicker } from '@/components/mobile/year-scroll-picker'
@@ -121,6 +121,13 @@ export default function DashboardMobilePage() {
               />
             )}
           </div>
+          <button
+            onClick={() => router.push('/mobile/upload')}
+            className="p-2 rounded-full text-gray-600 hover:bg-gray-100 hover:text-gray-900 shrink-0"
+            aria-label="Upload"
+          >
+            <Upload className="w-5 h-5" />
+          </button>
           <button
             onClick={() => console.log('Download clicked')}
             className="p-2 rounded-full text-gray-600 hover:bg-gray-100 hover:text-gray-900 shrink-0 mr-1"
