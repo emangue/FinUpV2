@@ -14,6 +14,7 @@
 
 import * as React from 'react'
 import { X } from 'lucide-react'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { CategoryIcon } from '@/components/mobile/category-icon'
 import type { CategoryType } from '@/components/mobile/tracker-card'
@@ -57,7 +58,7 @@ export function BudgetEditBottomSheet({
     const numericValue = parseFloat(value)
     
     if (isNaN(numericValue) || numericValue < 0) {
-      alert('Por favor, insira um valor válido')
+      toast.error('Por favor, insira um valor válido')
       return
     }
     
@@ -67,7 +68,7 @@ export function BudgetEditBottomSheet({
       onClose()
     } catch (error) {
       console.error('Erro ao salvar meta:', error)
-      alert('Erro ao salvar meta. Tente novamente.')
+      toast.error('Erro ao salvar meta. Tente novamente.')
     } finally {
       setSaving(false)
     }

@@ -5,7 +5,7 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
-import { Home, List, Target, Upload, User } from 'lucide-react';
+import { Home, List, Target, Wallet, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export function BottomNavigation() {
@@ -16,7 +16,7 @@ export function BottomNavigation() {
     { id: 'dashboard', label: 'Dashboard', icon: Home, path: '/mobile/dashboard' },
     { id: 'transactions', label: 'Transações', icon: List, path: '/mobile/transactions' },
     { id: 'budget', label: 'Metas', icon: Target, path: '/mobile/budget' },
-    { id: 'upload', label: 'Upload', icon: Upload, path: '/mobile/upload' },
+    { id: 'carteira', label: 'Carteira', icon: Wallet, path: '/mobile/carteira' },
     { id: 'profile', label: 'Perfil', icon: User, path: '/mobile/profile' },
   ];
 

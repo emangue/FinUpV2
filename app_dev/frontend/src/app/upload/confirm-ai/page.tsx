@@ -3,6 +3,7 @@
 import * as React from "react"
 import { Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
+import { toast } from 'sonner'
 import DashboardLayout from "@/components/dashboard-layout"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -96,6 +97,7 @@ function UploadConfirmPageContent() {
   const [isProcessing, setIsProcessing] = React.useState(false)
   const [isConfirming, setIsConfirming] = React.useState(false)
   const [error, setError] = React.useState('')
+  const [showConfirmDialog, setShowConfirmDialog] = React.useState(false)
   
   // Estados para edição
   const [editModalOpen, setEditModalOpen] = React.useState(false)
@@ -266,17 +268,20 @@ function UploadConfirmPageContent() {
     setEditingTransaction(null)
   }
 
-  const handleConfirmTransactions = async () => {
+  const handleConfirmTransactions = () => {
     const selectedTransactions = transactions.filter(t => t.selected)
     
     if (selectedTransactions.length === 0) {
-      alert('Selecione pelo menos uma transação para confirmar')
+      toast.error('Selecione pelo menos uma transação para confirmar')
       return
     }
 
-    if (!confirm(`Confirma a importação de ${selectedTransactions.length} transações?`)) {
-      return
-    }
+    setShowConfirmDialog(true)
+  }
+
+  const handleDoConfirm = async () => {
+    setShowConfirmDialog(false)
+    const selectedTransactions = transactions.filter(t => t.selected)
 
     try {
       setIsConfirming(true)
@@ -312,12 +317,12 @@ function UploadConfirmPageContent() {
       const result = await response.json()
       console.log('Transações confirmadas:', result)
       
-      alert(`${result.inserted} transações importadas com sucesso!`)
+      toast.success(`${result.inserted} transações importadas com sucesso!`)
       router.push('/transactions')
       
     } catch (error) {
       console.error('Erro ao confirmar transações:', error)
-      alert('Erro ao confirmar transações: ' + (error as Error).message)
+      toast.error('Erro ao confirmar transações: ' + (error as Error).message)
     } finally {
       setIsConfirming(false)
     }
@@ -707,6 +712,28 @@ function UploadConfirmPageContent() {
               </Button>
               <Button onClick={handleSaveEdit}>
                 Salvar Alterações
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Dialog de confirmação de importação */}
+        <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Confirmar importação</DialogTitle>
+              <DialogDescription>
+                Você está prestes a importar{' '}
+                <strong>{transactions.filter(t => t.selected).length} transações</strong>.
+                Deseja continuar?
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowConfirmDialog(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleDoConfirm} disabled={isConfirming}>
+                {isConfirming ? 'Importando...' : 'Confirmar importação'}
               </Button>
             </DialogFooter>
           </DialogContent>

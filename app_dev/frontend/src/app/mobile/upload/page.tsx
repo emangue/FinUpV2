@@ -13,6 +13,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import { TabType, FileFormat } from '@/features/upload/types';
 import { months, years, fileFormats } from '@/features/upload/mocks/mockUploadData';
 import { 
@@ -24,7 +25,7 @@ import {
   TabBar 
 } from '@/features/upload/components';
 import { useBanks, useCreditCards, useUpload } from '@/features/upload/hooks';
-import { fetchCompatibility } from '@/features/upload/services/upload-api';
+import { fetchCompatibility, createCard, PasswordRequiredError } from '@/features/upload/services/upload-api';
 import type { BankCompatibilityMap } from '@/features/upload/services/upload-api';
 import type { FormatAvailability } from '@/features/upload/components/format-selector';
 import { useAuth } from '@/contexts/AuthContext';
@@ -54,7 +55,7 @@ export default function UploadPage() {
   
   // Hooks para dados reais
   const { banks, loading: loadingBanks } = useBanks();
-  const { cards, loading: loadingCards } = useCreditCards();
+  const { cards, loading: loadingCards, refetch: refetchCards } = useCreditCards();
   const { upload, uploading, progress } = useUpload();
 
   // Compatibilidade de formatos por banco (desabilita TBD)
@@ -67,11 +68,38 @@ export default function UploadPage() {
   const [activeTab, setActiveTab] = useState<TabType>('fatura');
   const [selectedBank, setSelectedBank] = useState('');
   const [selectedCard, setSelectedCard] = useState('');
+
+  // Filtrar cartões pelo banco selecionado (card.bankId = card.banco no backend)
+  // Busca bidirecional: "Banco Itaú" deve casar com seleção "Itaú" (e vice-versa)
+  const filteredCards = selectedBank
+    ? cards.filter(c => {
+        const cardBank = c.bankId.toLowerCase();
+        const selBank = selectedBank.toLowerCase();
+        return cardBank === selBank || cardBank.includes(selBank) || selBank.includes(cardBank);
+      })
+    : cards;
   const [selectedYear, setSelectedYear] = useState(2026);
   const [selectedMonth, setSelectedMonth] = useState('Fevereiro');
   const [selectedFormat, setSelectedFormat] = useState<FileFormat>('csv');
   const [fileName, setFileName] = useState('Nenhum...');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [password, setPassword] = useState('');  // Senha do PDF protegido
+
+  // Estado do dialog: adicionar cartão
+  const [showAddCard, setShowAddCard] = useState(false);
+  const [newCardName, setNewCardName] = useState('');
+  const [newCardFinal, setNewCardFinal] = useState('');
+  const [addingCard, setAddingCard] = useState(false);
+
+  // Estado do prompt: arquivo protegido por senha
+  const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
+  const [passwordPromptMsg, setPasswordPromptMsg] = useState('');
+  const [retryPassword, setRetryPassword] = useState('');
+
+  // Resetar cartão selecionado quando o banco mudar
+  useEffect(() => {
+    setSelectedCard('');
+  }, [selectedBank]);
 
   const handleFileChange = (file: File | null) => {
     if (file) {
@@ -112,8 +140,45 @@ export default function UploadPage() {
     }
   }, [selectedBank, compatibility, selectedFormat]);
 
+  const handleBankChange = (bank: string) => {
+    setSelectedBank(bank);
+    setSelectedCard('');  // Resetar cartão ao trocar banco
+  };
+
   const handleAddCard = () => {
-    alert('Funcionalidade de adicionar cartão será implementada em breve');
+    setNewCardName('');
+    setNewCardFinal('');
+    setShowAddCard(true);
+  };
+
+  const handleSaveNewCard = async () => {
+    if (!newCardName.trim()) {
+      toast.error('Por favor, informe o nome do cartão');
+      return;
+    }
+    if (newCardFinal.length !== 4 || !/^\d{4}$/.test(newCardFinal)) {
+      toast.error('O final do cartão deve ter exatamente 4 dígitos');
+      return;
+    }
+    if (!selectedBank) {
+      toast.error('Selecione uma instituição financeira antes de adicionar o cartão');
+      return;
+    }
+    try {
+      setAddingCard(true);
+      const newCard = await createCard({
+        nome_cartao: newCardName.trim(),
+        final_cartao: newCardFinal,
+        banco: selectedBank,
+      });
+      await refetchCards();
+      setSelectedCard(newCard.id);
+      setShowAddCard(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao adicionar cartão');
+    } finally {
+      setAddingCard(false);
+    }
   };
 
   const handleSubmit = async () => {
@@ -123,11 +188,15 @@ export default function UploadPage() {
       return;
     }
     if (activeTab === 'fatura' && !selectedCard) {
-      alert('Por favor, selecione um cartão de crédito');
+      toast.error('Por favor, selecione um cartão de crédito');
       return;
     }
     if (!selectedFile) {
-      alert('Por favor, selecione um arquivo');
+      toast.error('Por favor, selecione um arquivo');
+      return;
+    }
+    if (selectedFormat === 'pdf-password' && !password.trim()) {
+      toast.error('Por favor, informe a senha do PDF protegido');
       return;
     }
     
@@ -153,7 +222,8 @@ export default function UploadPage() {
         cartaoFinal,  // ✅ Enviar final do cartão
         mes: activeTab === 'fatura' ? selectedMonth : undefined,
         ano: activeTab === 'fatura' ? selectedYear : undefined,
-        formato: selectedFormat
+        formato: selectedFormat,
+        senha: selectedFormat === 'pdf-password' ? password : undefined,  // ✅ Senha apenas para pdf-password
       });
       
       // ✅ Redirecionar para preview MOBILE com sessionId
@@ -161,7 +231,63 @@ export default function UploadPage() {
       router.push(`/mobile/preview/${result.sessionId}`);
       
     } catch (error) {
+      if (error instanceof PasswordRequiredError) {
+        setPasswordPromptMsg(
+          error.wrongPassword
+            ? 'Senha incorreta. Por favor, verifique e tente novamente.'
+            : 'Este arquivo é protegido por senha. Informe a senha para continuar.'
+        );
+        setRetryPassword('');
+        setShowPasswordPrompt(true);
+        return;
+      }
       console.error('❌ [MOBILE-UPLOAD] Erro no upload:', error);
+      alert('Erro ao fazer upload. Por favor, tente novamente.');
+    }
+  };
+
+  const handleRetryWithPassword = async () => {
+    if (!retryPassword.trim()) {
+      alert('Por favor, informe a senha');
+      return;
+    }
+    // Atualizar o campo de senha e o formato para pdf-password (ou manter excel)
+    // Em seguida resubmeter
+    const isExcel = selectedFormat === 'excel';
+    if (!isExcel) setSelectedFormat('pdf-password');
+    setPassword(retryPassword);
+    setShowPasswordPrompt(false);
+
+    // Submeter diretamente com a nova senha
+    try {
+      let cartaoNome: string | undefined;
+      let cartaoFinal: string | undefined;
+      if (activeTab === 'fatura' && selectedCard) {
+        const cartao = cards.find(c => c.id.toString() === selectedCard);
+        if (cartao) { cartaoNome = cartao.name; cartaoFinal = cartao.lastDigits; }
+      }
+      const result = await upload({
+        file: selectedFile!,
+        banco: selectedBank,
+        tipo: activeTab,
+        cartaoId: activeTab === 'fatura' ? selectedCard : undefined,
+        cartaoNome,
+        cartaoFinal,
+        mes: activeTab === 'fatura' ? selectedMonth : undefined,
+        ano: activeTab === 'fatura' ? selectedYear : undefined,
+        formato: isExcel ? 'excel' : 'pdf-password',
+        senha: retryPassword,
+      });
+      console.log('✅ [MOBILE-UPLOAD] Upload com senha bem-sucedido! SessionId:', result.sessionId);
+      router.push(`/mobile/preview/${result.sessionId}`);
+    } catch (error) {
+      if (error instanceof PasswordRequiredError) {
+        setPasswordPromptMsg('Senha incorreta. Por favor, verifique e tente novamente.');
+        setRetryPassword('');
+        setShowPasswordPrompt(true);
+        return;
+      }
+      console.error('❌ [MOBILE-UPLOAD] Erro no retry:', error);
       alert('Erro ao fazer upload. Por favor, tente novamente.');
     }
   };
@@ -180,6 +306,113 @@ export default function UploadPage() {
 
   return (
     <div className="bg-gray-50 min-h-screen flex items-center justify-center p-4">
+
+      {/* Dialog: Arquivo protegido por senha */}
+      {showPasswordPrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
+            <div className="flex items-center gap-3 mb-2">
+              <span className="text-2xl">🔒</span>
+              <h2 className="text-base font-bold text-gray-900">Arquivo Protegido</h2>
+            </div>
+            <p className="text-sm text-gray-500 mb-4">{passwordPromptMsg}</p>
+
+            <div className="mb-6">
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Senha <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="password"
+                value={retryPassword}
+                onChange={(e) => setRetryPassword(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleRetryWithPassword()}
+                placeholder="Digite a senha do arquivo"
+                autoFocus
+                autoComplete="current-password"
+                className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm text-gray-700 focus:outline-none focus:border-gray-900 focus:ring-1 focus:ring-gray-900"
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                Para BTG: geralmente é o CPF sem pontos e traço
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowPasswordPrompt(false)}
+                className="flex-1 py-3 border border-gray-300 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleRetryWithPassword}
+                disabled={uploading}
+                className="flex-1 py-3 bg-gray-900 rounded-xl text-sm font-bold text-white hover:bg-gray-800 disabled:opacity-50"
+              >
+                {uploading ? 'Enviando...' : 'Confirmar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Dialog: Adicionar Novo Cartão */}
+      {showAddCard && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
+            <h2 className="text-base font-bold text-gray-900 mb-1">Novo Cartão</h2>
+            {selectedBank && (
+              <p className="text-xs text-gray-400 mb-4">{selectedBank}</p>
+            )}
+
+            <div className="mb-4">
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Nome do Cartão <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={newCardName}
+                onChange={(e) => setNewCardName(e.target.value)}
+                placeholder="Ex: Itaú Mastercard Black"
+                autoFocus
+                className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm text-gray-700 focus:outline-none focus:border-gray-900 focus:ring-1 focus:ring-gray-900"
+              />
+            </div>
+
+            <div className="mb-6">
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Final do Cartão <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={4}
+                value={newCardFinal}
+                onChange={(e) => setNewCardFinal(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                placeholder="4 dígitos"
+                className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm text-gray-700 focus:outline-none focus:border-gray-900 focus:ring-1 focus:ring-gray-900 tracking-widest"
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowAddCard(false)}
+                disabled={addingCard}
+                className="flex-1 py-3 border border-gray-300 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveNewCard}
+                disabled={addingCard}
+                className="flex-1 py-3 bg-gray-900 rounded-xl text-sm font-bold text-white hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {addingCard ? 'Salvando...' : 'Adicionar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="w-full max-w-md mx-auto">
         
         {/* Header */}
@@ -217,7 +450,7 @@ export default function UploadPage() {
             <BankSelector 
               banks={banks}
               value={selectedBank}
-              onChange={setSelectedBank}
+              onChange={handleBankChange}
               required
             />
           )}
@@ -229,7 +462,7 @@ export default function UploadPage() {
                 <div className="mb-6 text-center text-gray-500">Carregando cartões...</div>
               ) : (
                 <CardSelector 
-                  cards={cards}
+                  cards={filteredCards}
                   value={selectedCard}
                   onChange={setSelectedCard}
                   onAddNew={handleAddCard}
@@ -258,6 +491,26 @@ export default function UploadPage() {
             formatAvailability={Object.keys(formatAvailability).length > 0 ? formatAvailability : undefined}
             bankNotSelected={!selectedBank}
           />
+
+          {/* Senha do PDF (apenas quando formato pdf-password estiver selecionado) */}
+          {selectedFormat === 'pdf-password' && (
+            <div className="mb-6">
+              <label className="block text-sm font-bold text-gray-900 mb-2">
+                Senha do PDF <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Digite a senha do arquivo PDF"
+                autoComplete="current-password"
+                className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm text-gray-700 focus:outline-none focus:border-gray-900 focus:ring-1 focus:ring-gray-900"
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                Necessária para PDFs do Itaú ou BTG Pactual protegidos por senha
+              </p>
+            </div>
+          )}
           
           {/* Arquivo */}
           <FileInput 

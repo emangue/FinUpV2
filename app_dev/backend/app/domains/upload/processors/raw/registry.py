@@ -17,6 +17,9 @@ from .excel.mercadopago_extrato import process_mercadopago_extrato
 from .pdf.itau_extrato_pdf import process_itau_extrato_pdf
 from .pdf.itau_fatura_pdf import process_itau_fatura_pdf
 from .pdf.mercadopago_extrato_pdf import process_mercadopago_extrato_pdf
+from .pdf.btg_fatura_pdf import process_btg_fatura_pdf
+from .excel.btg_fatura_xlsx import process_btg_fatura_xlsx
+from .pdf.mercadopago_fatura_pdf import process_mercadopago_fatura_pdf
 
 logger = logging.getLogger(__name__)
 
@@ -44,11 +47,19 @@ PROCESSORS: dict[Tuple[str, str, str], ProcessorFunc] = {
     ('btg', 'extrato', 'excel'): process_btg_extrato,
     ('btg pactual', 'extrato', 'excel'): process_btg_extrato,
     ('btg-pactual', 'extrato', 'excel'): process_btg_extrato,  # Variação com hífen
+    # BTG Pactual - Fatura
+    ('btg', 'fatura', 'excel'): process_btg_fatura_xlsx,
+    ('btg pactual', 'fatura', 'excel'): process_btg_fatura_xlsx,
+    ('btg', 'fatura', 'pdf'): process_btg_fatura_pdf,
+    ('btg pactual', 'fatura', 'pdf'): process_btg_fatura_pdf,
     # Mercado Pago
     ('mercado pago', 'extrato', 'excel'): process_mercadopago_extrato,
     ('mercadopago', 'extrato', 'excel'): process_mercadopago_extrato,  # Variação sem espaço
     ('mercado pago', 'extrato', 'pdf'): _wrap_extrato_pdf(process_mercadopago_extrato_pdf),
     ('mercadopago', 'extrato', 'pdf'): _wrap_extrato_pdf(process_mercadopago_extrato_pdf),
+    # Mercado Pago - Fatura
+    ('mercado pago', 'fatura', 'pdf'): process_mercadopago_fatura_pdf,
+    ('mercadopago', 'fatura', 'pdf'): process_mercadopago_fatura_pdf,
 }
 
 

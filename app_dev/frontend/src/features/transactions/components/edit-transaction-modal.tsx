@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { toast } from 'sonner'
 import { fetchWithAuth } from '@/core/utils/api-client'  // ✅ FASE 3 - Autenticação obrigatória
 import { Button } from "@/components/ui/button"
 import {
@@ -119,11 +120,11 @@ export function EditTransactionModal({
       } else {
         const errorData = await response.json()
         console.error('Erro na resposta:', errorData)
-        alert('Erro ao salvar alterações')
+        toast.error('Erro ao salvar alterações')
       }
     } catch (error) {
       console.error('Erro ao salvar:', error)
-      alert('Erro ao salvar alterações')
+      toast.error('Erro ao salvar alterações')
     } finally {
       setLoading(false)
     }
@@ -145,11 +146,11 @@ export function EditTransactionModal({
       } else {
         const errorData = await response.json()
         console.error('Erro na resposta:', errorData)
-        alert('Erro ao excluir transação')
+        toast.error('Erro ao excluir transação')
       }
     } catch (error) {
       console.error('Erro ao excluir:', error)
-      alert('Erro ao excluir transação')
+      toast.error('Erro ao excluir transação')
     } finally {
       setDeleting(false)
     }

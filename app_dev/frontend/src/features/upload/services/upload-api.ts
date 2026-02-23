@@ -41,6 +41,16 @@ export async function fetchCompatibility(): Promise<BankCompatibilityMap> {
   return map;
 }
 
+/** Erro especial: arquivo protegido por senha */
+export class PasswordRequiredError extends Error {
+  wrongPassword: boolean;
+  constructor(message: string, wrongPassword = false) {
+    super(message);
+    this.name = 'PasswordRequiredError';
+    this.wrongPassword = wrongPassword;
+  }
+}
+
 /**
  * Lista todos os bancos disponíveis para upload
  */
@@ -86,6 +96,34 @@ export async function fetchCreditCards(): Promise<CreditCard[]> {
 }
 
 /**
+ * Cria novo cartão de crédito para o usuário
+ */
+export async function createCard(data: {
+  nome_cartao: string;
+  final_cartao: string;
+  banco: string;
+}): Promise<CreditCard> {
+  const response = await fetchWithAuth(`${BASE_URL}/cards/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.detail || 'Erro ao criar cartão');
+  }
+
+  const card = await response.json();
+  return {
+    id: card.id.toString(),
+    bankId: card.banco,
+    lastDigits: card.final_cartao,
+    name: card.nome_cartao,
+  };
+}
+
+/**
  * Faz upload de arquivo e retorna sessionId
  */
 export async function uploadFile(formData: {
@@ -98,6 +136,7 @@ export async function uploadFile(formData: {
   mes?: string;
   ano?: number;
   formato: string;
+  senha?: string;  // Senha do PDF protegido (opcional)
 }): Promise<{ sessionId: string }> {
   const body = new FormData();
   body.append('file', formData.file);
@@ -113,6 +152,11 @@ export async function uploadFile(formData: {
     'ofx': 'OFX'
   };
   body.append('formato', formatoMap[formData.formato] || 'CSV');
+  
+  // Senha do PDF (apenas quando formato é pdf-password)
+  if (formData.senha) {
+    body.append('senha', formData.senha);
+  }
   
   // mesFatura é obrigatório no formato YYYY-MM
   if (formData.mes && formData.ano) {
@@ -149,9 +193,14 @@ export async function uploadFile(formData: {
     let errorDetail = 'Erro ao fazer upload do arquivo'
     try {
       const error = await response.json();
-      errorDetail = error.detail || errorDetail
+      // Arquivo protegido por senha → erro especial para o frontend tratar
+      if (response.status === 422 && error.detail?.code === 'PASSWORD_REQUIRED') {
+        throw new PasswordRequiredError(error.detail.message, error.detail.wrong_password);
+      }
+      errorDetail = error.detail?.message || error.detail || errorDetail
     } catch (e) {
-      const errorText = await response.text()
+      if (e instanceof PasswordRequiredError) throw e;
+      const errorText = await response.text().catch(() => '');
       errorDetail = errorText || errorDetail
     }
     throw new Error(errorDetail);

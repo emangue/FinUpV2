@@ -1,6 +1,0 @@
-{
-  "/editar-meta/page": "app/editar-meta/page.js",
-  "/detalhes-meta/page": "app/detalhes-meta/page.js",
-  "/page": "app/page.js",
-  "/gerenciar-metas/page": "app/gerenciar-metas/page.js"
-}

@@ -168,6 +168,167 @@ Este script verifica: SSH, health check, git sync.
 
 ---
 
+### 🐳 DOCKER - AMBIENTE DE DESENVOLVIMENTO (IMPLEMENTADO 22/02/2026)
+
+**REGRA CRÍTICA:** Desenvolvimento agora é 100% Docker. NUNCA rodar servidores localmente sem Docker.
+
+**Por quê Docker?**
+- ✅ **Paridade dev ↔ prod:** Mesmo ambiente PostgreSQL, Redis, dependências
+- ✅ **Isolamento:** Sem conflitos de versões Python/Node/pacotes
+- ✅ **Reprodutibilidade:** `docker-compose up` e funciona sempre
+- ✅ **Multi-frontend:** App (3000) + Admin (3001) + Backend (8000)
+- ✅ **Hot reload preservado:** Mudanças refletem instantaneamente
+
+**🚀 Iniciar Ambiente Docker (COMANDO OBRIGATÓRIO):**
+
+```bash
+cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5
+./scripts/deploy/quick_start_docker.sh
+```
+
+**O que faz automaticamente:**
+- ✅ Inicia 5 containers: postgres, redis, backend, frontend-app, frontend-admin
+- ✅ Aguarda health checks (postgres e redis prontos)
+- ✅ Exibe URLs e credenciais de acesso
+- ✅ Preserva dados nos volumes Docker
+
+**🛑 Parar Ambiente Docker:**
+
+```bash
+./scripts/deploy/quick_stop_docker.sh  # Para containers, MANTÉM dados
+```
+
+**🔄 Reiniciar Após Mudanças:**
+
+```bash
+./scripts/deploy/quick_restart_docker.sh  # Reinicia todos os containers
+# OU reiniciar apenas um serviço:
+docker-compose restart backend
+docker-compose restart frontend-app
+```
+
+**📊 Arquitetura Docker:**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Frontend App (Next.js)          PORT 3000              │
+│  - Hot reload: volume mount app_dev/frontend/           │
+│  - CHOKIDAR_USEPOLLING=true (macOS)                     │
+└─────────────────────────────────────────────────────────┘
+         │
+         ▼
+┌─────────────────────────────────────────────────────────┐
+│  Frontend Admin (Next.js)        PORT 3001              │
+│  - Hot reload: volume mount app_admin/frontend/         │
+│  - CHOKIDAR_USEPOLLING=true (macOS)                     │
+└─────────────────────────────────────────────────────────┘
+         │
+         ▼
+┌─────────────────────────────────────────────────────────┐
+│  Backend (FastAPI + Uvicorn)     PORT 8000              │
+│  - Hot reload: volume mount app_dev/backend/            │
+│  - PostgreSQL: postgres:5432 (interno)                  │
+│  - Redis: redis:6379 (interno)                          │
+│  - CORS: localhost:3000, localhost:3001                 │
+└─────────────────────────────────────────────────────────┘
+         │                    │
+         ▼                    ▼
+┌──────────────────┐   ┌──────────────────┐
+│  PostgreSQL 16   │   │  Redis 7         │
+│  PORT 5432       │   │  PORT 6379       │
+│  Volume: postgres│   │  Volume: redis   │
+│  Dados: finup_db │   │  Cache + sessions│
+└──────────────────┘   └──────────────────┘
+```
+
+**📋 URLs de Acesso:**
+- Frontend App: http://localhost:3000
+- Frontend Admin: http://localhost:3001  
+- Backend API: http://localhost:8000
+- API Docs: http://localhost:8000/docs
+- Health Check: http://localhost:8000/api/health
+
+**🔐 Login Padrão:**
+- Email: `admin@financas.com`
+- Senha: `Admin123!`
+
+**🔧 Comandos Docker Úteis:**
+
+```bash
+# Ver status de todos os containers
+docker-compose ps
+
+# Ver logs (tempo real)
+docker-compose logs -f backend
+docker-compose logs -f frontend-app
+docker-compose logs -f frontend-admin
+
+# Executar comando no container
+docker exec -it finup_backend_dev bash
+docker exec -it finup_postgres_dev psql -U finup_user -d finup_db
+
+# Reconstruir imagens (após mudança em requirements.txt ou package.json)
+docker-compose build backend
+docker-compose build frontend-app
+
+# Reiniciar com rebuild
+docker-compose up -d --build
+
+# Limpar tudo (CUIDADO: apaga volumes/dados!)
+docker-compose down -v
+```
+
+**📂 Volumes Docker (Persistência de Dados):**
+
+```bash
+# Ver volumes criados
+docker volume ls | grep projetofinancasv5
+
+# Backup do volume PostgreSQL
+docker run --rm -v projetofinancasv5_postgres_data:/data -v $(pwd):/backup alpine tar czf /backup/postgres_backup.tar.gz /data
+
+# Restaurar volume PostgreSQL
+docker run --rm -v projetofinancasv5_postgres_data:/data -v $(pwd):/backup alpine tar xzf /backup/postgres_backup.tar.gz -C /
+```
+
+**🐛 Troubleshooting Docker:**
+
+```bash
+# Container não inicia
+docker-compose logs [service_name]
+
+# Porta ocupada
+lsof -ti:8000 | xargs kill -9  # Backend
+lsof -ti:3000 | xargs kill -9  # Frontend App
+lsof -ti:3001 | xargs kill -9  # Frontend Admin
+
+# Banco não conecta
+docker exec finup_postgres_dev psql -U finup_user -d finup_db -c "SELECT 1;"
+
+# Limpar cache de build
+docker-compose build --no-cache backend
+```
+
+**⚠️ PROIBIÇÕES COM DOCKER:**
+
+❌ **NUNCA** rodar `python run.py` ou `npm run dev` diretamente (sem Docker)
+❌ **NUNCA** usar SQLite local (`financas_dev.db`) - agora é PostgreSQL no Docker
+❌ **NUNCA** modificar containers rodando - modificar código local (hot reload funciona)
+❌ **NUNCA** fazer `docker-compose down -v` sem backup (apaga dados!)
+
+**✅ SEMPRE:**
+- Usar `./scripts/deploy/quick_start_docker.sh` para iniciar
+- Modificar código local (volumes montados = hot reload automático)
+- Commitar mudanças no git antes de testar deploy
+- Usar PostgreSQL via Docker (mesma configuração de produção)
+
+**📚 Documentação Completa Docker:**
+- Plano de migração: `docs/architecture/PLANO_MIGRACAO_DOCKER.md`
+- Guia de desenvolvimento: `docs/docker/GUIA_DESENVOLVIMENTO.md`
+- Resumo da implementação: `docs/docker/RESUMO_IMPLEMENTACAO.md`
+
+---
+
 2. **Instalar dependências só no servidor:**
    ```bash
    # ❌ ERRADO - requirements.txt fica desatualizado
@@ -442,47 +603,58 @@ sudo -u postgres psql -c "ALTER USER user WITH PASSWORD '$NEW_PASS';"
 
 ---
 
-### � ESTRUTURA DE PASTAS - REGRA OBRIGATÓRIA (NOVA ORGANIZAÇÃO 22/01/2026)
+### 📁 ESTRUTURA DE PASTAS - REGRA OBRIGATÓRIA (ATUALIZADO 22/02/2026)
 
-**REGRA CRÍTICA:** SEMPRE respeitar a estrutura organizada do projeto ao criar novos arquivos.
+**REGRA CRÍTICA:** SEMPRE respeitar a estrutura organizada ao criar novos arquivos. A raiz deve ter NO MÁXIMO 9 itens.
 
-**✅ ESTRUTURA OFICIAL:**
+**✅ ESTRUTURA OFICIAL DA RAIZ (9 itens fixos):**
 ```
-ProjetoFinancasV5/
-├── 📚 docs/                    # TODA documentação
-│   ├── architecture/           # Arquitetura, modularidade, performance
-│   ├── deploy/                # Deploy, servidores, VPS
-│   ├── features/              # Features, autenticação, marcações
-│   └── planning/              # Sprints, TODOs, relatórios
-│
-├── 🔧 scripts/                 # TODOS os scripts
-│   ├── database/              # Migrations, fixes, populações
-│   ├── deploy/                # quick_start, quick_stop, backup_daily, audit
-│   ├── maintenance/           # Limpeza, reorganização, pausas
-│   ├── migration/             # Migrações de dados, copiar usuários
-│   └── testing/               # Testes standalone, validações
-│
-├── 🗂️ temp/                    # Arquivos TEMPORÁRIOS (ignorados no git)
-│   ├── logs/                  # backend.log, frontend.log
-│   └── pids/                  # backend.pid, frontend.pid
-│
-├── 📱 app_dev/                 # Aplicação (backend + frontend)
-├── 📂 _arquivos_historicos/    # Histórico e backups
-└── 📖 README.md               # Documentação principal
+ProjetoFinancasV5/          ← MÁXIMO 9 itens aqui
+├── 📱 app_dev/             # Aplicação ativa (backend + frontend)
+├── 🖥️  app_admin/          # Painel admin (frontend separado)
+├── 📚 docs/                # TODA documentação do projeto
+├── 🔧 scripts/             # TODOS os scripts operacionais
+├── 🗂️  temp/               # Temporários: logs, PIDs (gitignored)
+├── 📦 _arquivos_historicos/ # Arquivo morto: protos, backups antigos
+├── 📖 README.md            # Documentação principal
+├── 📝 CHANGELOG.md         # Histórico de mudanças
+└── 🏷️  VERSION.md           # Versão atual do sistema
+```
+
+**✅ ESTRUTURA INTERNA DE docs/:**
+```
+docs/
+├── architecture/           # Arquitetura, modularidade, performance
+├── deploy/                 # Deploy, servidores, VPS, SSH
+├── features/               # Features (subpastas por feature)
+├── planning/               # Sprints, TODOs, relatórios
+├── templates/              # Templates PRD, TECH_SPEC, SPRINT, FIX
+├── workflow-kit/           # Metodologia de trabalho (WoW)
+└── guides/                 # Guias gerais
+```
+
+**✅ ESTRUTURA INTERNA DE scripts/:**
+```
+scripts/
+├── database/               # Migrations, fixes, populações do DB
+├── deploy/                 # quick_start, quick_stop, backup_daily
+├── maintenance/            # Limpeza, reorganização, pausas
+├── migration/              # Migrações de dados entre versões
+└── testing/                # Testes standalone, validações
 ```
 
 **🎯 REGRAS OBRIGATÓRIAS AO CRIAR ARQUIVOS:**
 
 1. **Documentação (.md):**
-   - ✅ SEMPRE em `docs/`
+   - ✅ SEMPRE em `docs/` na subpasta correta
    - Deploy/VPS → `docs/deploy/`
    - Arquitetura/DB → `docs/architecture/`
    - Features/Planos → `docs/features/`
    - Sprints/TODOs → `docs/planning/`
-   - ❌ NUNCA criar `.md` na raiz
+   - ❌ NUNCA criar `.md` na raiz do projeto
 
 2. **Scripts (.py, .sh):**
-   - ✅ SEMPRE em `scripts/`
+   - ✅ SEMPRE em `scripts/` na subpasta correta
    - Migrations/fixes DB → `scripts/database/`
    - Start/stop/backup → `scripts/deploy/`
    - Limpeza/manutenção → `scripts/maintenance/`
@@ -496,42 +668,97 @@ ProjetoFinancasV5/
    - ❌ NUNCA criar `.log` ou `.pid` na raiz
    - ⚠️ `temp/` está no `.gitignore`
 
-4. **Aplicação:**
+4. **Código da Aplicação:**
    - ✅ Backend → `app_dev/backend/`
    - ✅ Frontend → `app_dev/frontend/`
-   - ❌ NUNCA misturar com docs/scripts
+   - ✅ Admin → `app_admin/frontend/`
+   - ❌ NUNCA criar projetos Next.js/FastAPI soltos na raiz
+
+5. **Arquivos Históricos / Protos:**
+   - ✅ SEMPRE em `_arquivos_historicos/`
+   - ❌ NUNCA deixar protos antigos, backups, pastas "_backup_*" na raiz
 
 **🚫 PROIBIÇÕES ABSOLUTAS:**
-
 ```bash
 # ❌ NUNCA FAZER ISSO:
-touch STATUS_DEPLOY.md              # Criar .md na raiz
-touch fix_something.py              # Criar script na raiz
-echo "log" > backend.log            # Criar log na raiz
-echo "123" > backend.pid            # Criar PID na raiz
+touch STATUS_DEPLOY.md              # .md na raiz
+touch fix_something.py              # script na raiz
+echo "log" > backend.log            # log na raiz
+mkdir my_proto                      # projeto solto na raiz
+mkdir _backup_algo                  # backup na raiz
 
 # ✅ SEMPRE FAZER ASSIM:
 touch docs/deploy/STATUS_DEPLOY.md
 touch scripts/database/fix_something.py
 echo "log" > temp/logs/backend.log
-echo "123" > temp/pids/backend.pid
+mv my_proto _arquivos_historicos/my_proto
 ```
 
 **📋 Checklist Antes de Criar Arquivo:**
+- [ ] ✅ É documentação? → `docs/[subpasta]/`
+- [ ] ✅ É script? → `scripts/[subpasta]/`
+- [ ] ✅ É log/PID? → `temp/`
+- [ ] ✅ É código de app ativa? → `app_dev/` ou `app_admin/`
+- [ ] ✅ A raiz continua com ≤9 itens?
 
-- [ ] ✅ É documentação? → Vai em `docs/`
-- [ ] ✅ É script? → Vai em `scripts/`
-- [ ] ✅ É log/PID? → Vai em `temp/`
-- [ ] ✅ É código de aplicação? → Vai em `app_dev/`
-- [ ] ✅ Path está correto e categorizado?
+---
 
-**🔍 VALIDAÇÃO:**
+### 🔍 REAVALIAÇÃO PERIÓDICA DA RAIZ - OBRIGATÓRIO
 
-Se o usuário reportar "arquivos na raiz", SEMPRE:
-1. Verificar: `ls -1 | grep -E "\.(md|py|sh|log|pid)$"`
-2. Mover para local correto: `mv arquivo.md docs/categoria/`
-3. Atualizar referências em scripts
-4. Confirmar: `ls -1 | wc -l` (deve ter ~12 itens na raiz)
+**QUANDO EXECUTAR:** No início de cada sessão de trabalho E sempre que o usuário mencionar "pastas", "estrutura", "organização", ou "bagunça".
+
+**COMANDO DE DIAGNÓSTICO:**
+```bash
+# 1. Verificar contagem da raiz (deve ser ≤9)
+ls -1 /path/do/projeto | wc -l
+
+# 2. Listar itens na raiz
+ls -1 /path/do/projeto
+
+# 3. Buscar arquivos duplicados " 2" no projeto (exceto .next e historicos)
+find . -name "* 2.*" -not -path "./.git/*" -not -path "./_arquivos_historicos/*" -not -path "./.next/*" | sort
+
+# 4. Verificar se há arquivos proibidos na raiz
+ls -1 | grep -E "\.(md|py|sh|log|pid|db)$"
+```
+
+**AÇÕES OBRIGATÓRIAS SE RAIZ ESTIVER SUJA:**
+```bash
+# Mover .md soltos
+mv arquivo.md docs/categoria/
+
+# Mover scripts soltos
+mv script.py scripts/categoria/
+
+# Mover pastas "_backup_*" para histórico
+mv _backup_* _arquivos_historicos/backups_antigos/
+
+# Remover duplicatas " 2" (são cópias acidentais do macOS)
+find . -name "* 2.*" -not -path "./.git/*" -not -path "./_arquivos_historicos/*" -not -path "./.next/*" -delete
+
+# Mover protos/projetos soltos para histórico
+mv pasta_proto _arquivos_historicos/
+```
+
+**RESULTADO ESPERADO DA RAIZ:**
+```
+✅ app_admin/
+✅ app_dev/
+✅ docs/
+✅ scripts/
+✅ temp/
+✅ _arquivos_historicos/
+✅ CHANGELOG.md
+✅ README.md
+✅ VERSION.md
+Total: 9 itens
+```
+
+**🚫 SINAIS DE ALERTA (investigar imediatamente):**
+- `ls -1 | wc -l` > 9 → há algo sobrando
+- Arquivos " 2.md", " 2.py", " 2.tsx" → duplicatas macOS, deletar
+- Pastas `dashboard/`, `node_modules/`, `_backup_*` → mover/remover
+- Arquivos `.db`, `.log`, `.pid` na raiz → mover para `temp/` ou ignorar
 
 ---
 
@@ -1870,19 +2097,20 @@ tail -30 backend.log | grep -i error
 
 ---
 
-## 🐍 PYTHON VIRTUAL ENVIRONMENT - REGRA OBRIGATÓRIA (23/01/2026)
+## 🐍 PYTHON VIRTUAL ENVIRONMENT - REGRA OBRIGATÓRIA (ATUALIZADO 22/02/2026)
 
-**REGRA CRÍTICA:** Existem 2 venvs no projeto. SEMPRE usar o correto!
+**⚠️ IMPORTANTE:** Com Docker, você NÃO precisa mais ativar venv localmente para desenvolvimento!
 
-### ✅ venv OFICIAL (SEMPRE usar este)
+**Quando usar venv:**
+- ✅ **Scripts standalone** que NÃO rodam no Docker
+- ✅ **Servidor de produção** (`/var/www/finup/app_dev/venv`)
+- ❌ **Desenvolvimento local** - use Docker (`./scripts/deploy/quick_start_docker.sh`)
+
+**Se precisar rodar algo fora do Docker (raro):**
+
+### ✅ venv OFICIAL
 
 **Path:** `/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/venv`
-
-**Usado por:**
-- ✅ `quick_start.sh` - Backend em execução
-- ✅ `quick_stop.sh` - Parar backend
-- ✅ Servidor de produção (`/var/www/finup/app_dev/venv`)
-- ✅ Scripts Python que importam `from app.*`
 
 **Ativar:**
 ```bash
@@ -1895,22 +2123,17 @@ source venv/bin/activate
 **Path:** `/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/.venv`
 
 **Usado por:**
-- ⚠️ Scripts standalone que NÃO importam backend
-- ⚠️ Ferramentas de validação/testes
-
-**Problema:** Confusão ao rodar scripts Python que importam módulos do backend.
-
-**Solução:** SEMPRE usar `app_dev/venv` quando em dúvida.
+- Scripts de migração/validação que não dependem do backend
 
 ### 🚫 PROIBIÇÕES
 
 ```bash
-# ❌ ERRADO - Vai usar .venv da raiz e dar erro de import
-cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5
-source .venv/bin/activate
-python app_dev/backend/run.py  # ModuleNotFoundError!
+# ❌ ERRADO - Não rodar backend/frontend sem Docker
+cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev
+source venv/bin/activate
+python backend/run.py  # NÃO! Use Docker!
 
-# ✅ CORRETO - Usa app_dev/venv
+# ✅ CORRETO - Sempre usar Docker para desenvolvimento
 cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev
 source venv/bin/activate
 cd backend && python run.py  # OK!
@@ -2574,9 +2797,14 @@ mv app_dev/backend/.env.postgres app_dev/backend/.env
 
 ---
 
-## 🛡️ DEPLOY PROCESS - OBRIGATÓRIO ANTES DE PROD (ATUALIZADO 21/02/2026)
+## 🛡️ DEPLOY PROCESS - OBRIGATÓRIO ANTES DE PROD (ATUALIZADO 22/02/2026)
 
 **DOCUMENTAÇÃO COMPLETA:** [`docs/deploy/DEPLOY_PROCESSO_CONSOLIDADO.md`](docs/deploy/DEPLOY_PROCESSO_CONSOLIDADO.md)
+
+**⚠️ IMPORTANTE - DESENVOLVIMENTO COM DOCKER:**
+- **Local (dev):** Usar Docker 100% (`./scripts/deploy/quick_start_docker.sh`)
+- **Servidor (prod):** Ainda usa deploy tradicional (sem Docker por enquanto)
+- **Futura migração:** Servidor também será migrado para Docker (Fase 3 do plano)
 
 ### 🚀 Scripts de Deploy (usar estes)
 

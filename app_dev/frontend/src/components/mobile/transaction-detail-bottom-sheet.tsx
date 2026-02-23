@@ -13,6 +13,7 @@
 
 import * as React from 'react'
 import { X, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import {
   AlertDialog,
@@ -182,11 +183,11 @@ export function TransactionDetailBottomSheet({
         onClose()
       } else {
         const err = await res.json()
-        alert(err.detail || 'Erro ao salvar')
+        toast.error(err.detail || 'Erro ao salvar')
       }
     } catch (e) {
       console.error('Erro ao salvar:', e)
-      alert('Erro ao salvar. Tente novamente.')
+      toast.error('Erro ao salvar. Tente novamente.')
     } finally {
       setSaving(false)
     }
@@ -249,7 +250,7 @@ export function TransactionDetailBottomSheet({
       setDeleteDialogOpen(false)
     } catch (e) {
       console.error('Erro ao excluir:', e)
-      alert(e instanceof Error ? e.message : 'Erro ao excluir. Tente novamente.')
+      toast.error(e instanceof Error ? e.message : 'Erro ao excluir. Tente novamente.')
     } finally {
       setDeleting(false)
     }

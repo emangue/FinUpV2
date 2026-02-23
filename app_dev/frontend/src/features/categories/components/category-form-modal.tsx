@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { Category } from '../types'
+import { toast } from 'sonner'
 import {
   Dialog,
   DialogContent,
@@ -56,7 +57,7 @@ export function CategoryFormModal({ open, onOpenChange, category, onSave }: Cate
 
   const handleSave = async () => {
     if (!grupo.trim() || !subgrupo.trim() || !tipoGasto.trim()) {
-      alert('Todos os campos são obrigatórios')
+      toast.error('Todos os campos são obrigatórios')
       return
     }
 
@@ -70,7 +71,7 @@ export function CategoryFormModal({ open, onOpenChange, category, onSave }: Cate
       onOpenChange(false)
     } catch (error) {
       console.error('Erro ao salvar:', error)
-      alert('Erro ao salvar categoria')
+      toast.error('Erro ao salvar categoria')
     } finally {
       setSaving(false)
     }

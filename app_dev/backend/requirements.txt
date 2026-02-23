@@ -26,6 +26,9 @@ xlrd>=2.0.0
 
 # PDF Processing
 pdfplumber>=0.11.0
+msoffcrypto-tool>=4.12.0  # Decriptação de arquivos XLSX protegidos por senha (BTG fatura)
+PyMuPDF>=1.24.0            # Renderização de PDF para imagem (Mercado Pago OCR)
+rapidocr-onnxruntime>=1.4.0  # OCR leve via ONNX (Mercado Pago fatura PDF) — sem PyTorch
 
 # Email Validation
 email-validator>=2.0.0

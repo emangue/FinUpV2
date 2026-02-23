@@ -26,6 +26,7 @@ from .schemas import (
 )
 from .history_schemas import UploadHistoryResponse, UploadHistoryListResponse
 from .processors import get_processor
+from .processors.raw.base import PasswordRequiredException
 from .processors.marker import TransactionMarker
 from .processors.classifier import CascadeClassifier
 from app.domains.exclusoes.models import TransacaoExclusao
@@ -56,7 +57,8 @@ class UploadService:
         tipo_documento: str = "fatura",
         formato: str = "csv",
         skip_cleanup: bool = False,
-        shared_session_id: str = None
+        shared_session_id: str = None,
+        senha: str = None
     ) -> UploadPreviewResponse:
         """
         Processa arquivo em 3 fases com salvamento incremental
@@ -172,7 +174,8 @@ class UploadService:
                     file.filename,
                     cartao,
                     final_cartao,
-                    mes_fatura
+                    mes_fatura,
+                    senha
                 )
                 logger.info(f"  ✅ {len(raw_transactions)} transações brutas processadas")
                 
@@ -397,7 +400,8 @@ class UploadService:
         nome_arquivo: str,
         nome_cartao: str = None,
         final_cartao: str = None,
-        mes_fatura_input: str = None
+        mes_fatura_input: str = None,
+        senha: str = None
     ):
         """
         Fase 1: Processa arquivo bruto usando processadores específicos
@@ -434,7 +438,8 @@ class UploadService:
                 file_path_obj,
                 nome_arquivo,
                 nome_cartao,
-                final_cartao
+                final_cartao,
+                **({'senha': senha} if senha else {})
             )
             
             # Verificar se retornou tupla (extrato com validação) ou lista (fatura)
@@ -466,6 +471,21 @@ class UploadService:
                 
             return raw_transactions, balance_validation
             
+        except PasswordRequiredException as e:
+            logger.warning(f"🔒 Arquivo protegido por senha: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={
+                    "code": "PASSWORD_REQUIRED",
+                    "wrong_password": e.wrong_password,
+                    "message": (
+                        "Senha incorreta. Por favor, verifique e tente novamente."
+                        if e.wrong_password
+                        else "Este arquivo é protegido por senha. Por favor, informe a senha para continuar."
+                    ),
+                }
+            )
+
         except ValueError as e:
             # Erro de formato de arquivo (header não encontrado, estrutura incorreta)
             logger.warning(f"⚠️ Formato de arquivo inválido: {str(e)}")

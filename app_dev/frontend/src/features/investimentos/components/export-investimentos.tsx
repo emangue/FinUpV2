@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -175,10 +176,10 @@ export function ExportInvestimentos({ investimentos, filtrosAtivos }: ExportInve
       downloadFile(csv, filename, 'text/csv;charset=utf-8;')
       
       console.log(`✅ ${investimentos.length} investimentos exportados para CSV`)
-      alert(`Exportação concluída!\n${investimentos.length} investimentos exportados para CSV`)
+      toast.success(`${investimentos.length} investimentos exportados para CSV`)
     } catch (error) {
       console.error('Erro ao exportar CSV:', error)
-      alert('Erro na exportação. Não foi possível exportar os dados.')
+      toast.error('Não foi possível exportar os dados. Tente novamente.')
     } finally {
       setExporting(false)
     }
@@ -196,10 +197,10 @@ export function ExportInvestimentos({ investimentos, filtrosAtivos }: ExportInve
       downloadFile(excel, filename, 'application/vnd.ms-excel')
       
       console.log(`✅ ${investimentos.length} investimentos exportados para Excel`)
-      alert(`Exportação concluída!\n${investimentos.length} investimentos exportados para Excel`)
+      toast.success(`${investimentos.length} investimentos exportados para Excel`)
     } catch (error) {
       console.error('Erro ao exportar Excel:', error)
-      alert('Erro na exportação. Não foi possível exportar os dados.')
+      toast.error('Não foi possível exportar os dados. Tente novamente.')
     } finally {
       setExporting(false)
     }

@@ -1,0 +1,30 @@
+# Next.js
+.next/
+out/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+
+# Env
+.env
+.env.local
+.env.production.local
+
+# OS
+.DS_Store
+
+# Git
+.git/
+.gitignore
+
+# Build (será recriado)
+.next/
+out/

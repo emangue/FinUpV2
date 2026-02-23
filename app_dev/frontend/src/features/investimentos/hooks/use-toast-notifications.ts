@@ -4,6 +4,7 @@
  */
 
 import { useCallback } from 'react'
+import { toast } from 'sonner'
 
 type NotificationType = 'success' | 'error' | 'info' | 'warning'
 
@@ -15,13 +16,16 @@ interface ToastOptions {
 
 export function useToastNotifications() {
   const show = useCallback((type: NotificationType, options: ToastOptions) => {
-    // Implementação básica - pode ser expandida com biblioteca de toast
     console.log(`[${type.toUpperCase()}] ${options.title}`, options.description)
-    
-    // TODO: Integrar com biblioteca de toast (ex: sonner, react-hot-toast)
-    // Por enquanto, usar alert para feedback imediato
+    const desc = options.description
     if (type === 'error') {
-      alert(`Erro: ${options.title}\n${options.description || ''}`)
+      toast.error(options.title, { description: desc })
+    } else if (type === 'success') {
+      toast.success(options.title, { description: desc })
+    } else if (type === 'warning') {
+      toast.warning(options.title, { description: desc })
+    } else {
+      toast.info(options.title, { description: desc })
     }
   }, [])
 

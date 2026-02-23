@@ -23,6 +23,7 @@ export function useUpload() {
     mes?: string;
     ano?: number;
     formato: string;
+    senha?: string;  // Senha do PDF protegido (opcional)
   }) => {
     try {
       setUploading(true);

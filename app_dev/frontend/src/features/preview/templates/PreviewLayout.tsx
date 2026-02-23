@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import { Transaction, TabFilter, ClassificationData, FileInfo, ClassificationSource } from '../types';
 
 /**
@@ -89,6 +90,8 @@ export default function PreviewLayout({ sessionId, initialFileInfo, initialTrans
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
   const [criarRegraExclusao, setCriarRegraExclusao] = useState(false);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
 
   const fetchGruposSubgrupos = async () => {
     try {
@@ -149,7 +152,7 @@ export default function PreviewLayout({ sessionId, initialFileInfo, initialTrans
       );
     } catch (err) {
       console.error('Erro ao salvar classificação:', err);
-      alert('Erro ao salvar. Tente novamente.');
+      toast.error('Erro ao salvar. Tente novamente.');
       return;
     }
 
@@ -200,7 +203,7 @@ export default function PreviewLayout({ sessionId, initialFileInfo, initialTrans
       );
     } catch (err) {
       console.error('Erro ao salvar classificação no preview:', err);
-      alert('Erro ao salvar. Tente novamente.');
+      toast.error('Erro ao salvar. Tente novamente.');
       return;
     }
 
@@ -226,6 +229,7 @@ export default function PreviewLayout({ sessionId, initialFileInfo, initialTrans
     if (hasUnclassified) return;
     
     setIsConfirming(true);
+    setConfirmError(null);
     
     try {
       const response = await fetchWithAuth(
@@ -247,20 +251,23 @@ export default function PreviewLayout({ sessionId, initialFileInfo, initialTrans
       } else {
         const error = await response.json();
         console.error('❌ Erro ao confirmar upload:', error);
-        alert(`Erro ao confirmar importação: ${error.message || 'Erro desconhecido'}`);
+        setConfirmError(error.message || 'Erro ao confirmar importação. Tente novamente.');
       }
     } catch (error) {
       console.error('❌ Erro ao confirmar upload:', error);
-      alert('Erro ao confirmar importação. Tente novamente.');
+      setConfirmError('Erro ao confirmar importação. Tente novamente.');
     } finally {
       setIsConfirming(false);
     }
   };
 
   const handleCancel = () => {
-    if (confirm('Deseja cancelar a importação? Todas as alterações serão perdidas.')) {
-      alert('Importação cancelada');
-    }
+    setShowCancelDialog(true);
+  };
+
+  const handleCancelConfirm = () => {
+    setShowCancelDialog(false);
+    router.push('/mobile/upload');
   };
 
   const handleDeleteClick = (transaction: Transaction) => {
@@ -293,7 +300,7 @@ export default function PreviewLayout({ sessionId, initialFileInfo, initialTrans
       }
     } catch (err) {
       console.error('Erro ao excluir:', err);
-      alert('Erro ao excluir. Tente novamente.');
+      toast.error('Erro ao excluir. Tente novamente.');
     } finally {
       setDeleteModalOpen(false);
       setTransactionToDelete(null);
@@ -349,6 +356,17 @@ export default function PreviewLayout({ sessionId, initialFileInfo, initialTrans
       </div>
 
       {/* Bottom Action Bar */}
+      {confirmError && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 w-full max-w-md px-4 z-40">
+          <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-start gap-2 shadow-lg">
+            <span className="text-red-500 mt-0.5">⚠️</span>
+            <div className="flex-1">
+              <p className="text-sm text-red-700 font-medium">{confirmError}</p>
+            </div>
+            <button onClick={() => setConfirmError(null)} className="text-red-400 hover:text-red-600 text-lg leading-none">×</button>
+          </div>
+        </div>
+      )}
       <BottomActionBar 
         hasUnclassified={hasUnclassified} 
         onConfirm={handleConfirmImport}
@@ -367,6 +385,37 @@ export default function PreviewLayout({ sessionId, initialFileInfo, initialTrans
           onSave={handleSaveClassification}
         />
       )}
+
+      {/* Modal Cancelar Importação */}
+      <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+        <DialogContent className="max-w-sm rounded-2xl">
+          <DialogHeader className="text-left">
+            <div className="flex items-center gap-3 mb-1">
+              <span className="text-2xl">⚠️</span>
+              <DialogTitle>Cancelar importação?</DialogTitle>
+            </div>
+            <DialogDescription className="text-sm text-gray-500 leading-relaxed">
+              Todas as classificações feitas até agora serão perdidas e você voltará para a tela de upload.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-row gap-2 mt-2">
+            <Button
+              variant="outline"
+              className="flex-1 rounded-xl"
+              onClick={() => setShowCancelDialog(false)}
+            >
+              Continuar
+            </Button>
+            <Button
+              variant="destructive"
+              className="flex-1 rounded-xl"
+              onClick={handleCancelConfirm}
+            >
+              Cancelar importação
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal Excluir Transação - Sprint D (mobile) */}
       <Dialog open={deleteModalOpen} onOpenChange={(open) => {

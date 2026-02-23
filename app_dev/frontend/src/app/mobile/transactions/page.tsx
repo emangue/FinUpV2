@@ -75,16 +75,19 @@ function TransactionsMobileContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const fromMetas = searchParams.get('from') === 'metas'
+  const fromOrcamento = searchParams.get('from') === 'orcamento'
   const urlGoalId = searchParams.get('goalId')
   const urlGrupo = searchParams.get('grupo')
   const urlSubgrupo = searchParams.get('subgrupo')
+  const urlYear = searchParams.get('year') ? parseInt(searchParams.get('year')!) : null
+  const urlMonth = searchParams.get('month') ? parseInt(searchParams.get('month')!) : null
 
   const now = new Date()
-  const [semFiltroPeriodo, setSemFiltroPeriodo] = useState(true)
-  const [yearInicio, setYearInicio] = useState(now.getFullYear())
-  const [monthInicio, setMonthInicio] = useState(1)
-  const [yearFim, setYearFim] = useState(now.getFullYear())
-  const [monthFim, setMonthFim] = useState(now.getMonth() + 1)
+  // Se viemos com year+month na URL, ativa filtro de período automaticamente
+  const [semFiltroPeriodo, setSemFiltroPeriodo] = useState(urlYear == null)
+  const [tipoPeriodo, setTipoPeriodo] = useState<'mes' | 'ano'>(urlMonth ? 'mes' : 'ano')
+  const [selectedYear, setSelectedYear] = useState(urlYear ?? now.getFullYear())
+  const [selectedMonth, setSelectedMonth] = useState(urlMonth ?? (now.getMonth() + 1))
 
   const [searchQuery, setSearchQuery] = useState('')
   const [searchDebounced, setSearchDebounced] = useState('')
@@ -97,12 +100,16 @@ function TransactionsMobileContent() {
   const [resumo, setResumo] = useState<Resumo | null>(null)
   const [gastosPorGrupo, setGastosPorGrupo] = useState<GastosPorGrupo[]>([])
   const [gruposOptions, setGruposOptions] = useState<GrupoSubgrupoOption[]>([])
+  const [subgruposGastos, setSubgruposGastos] = useState<GastosPorGrupo[]>([])
+  const [subgruposLoading, setSubgruposLoading] = useState(false)
   const [loading, setLoading] = useState(true)
   const [resumoLoading, setResumoLoading] = useState(true)
   const [gastosLoading, setGastosLoading] = useState(false)
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
   const [detailSheetOpen, setDetailSheetOpen] = useState(false)
-  const [gastosOpen, setGastosOpen] = useState(false)
+  // Se viemos do orçamento com grupo selecionado, abrir collapse de gastos por padrão
+  const [gastosOpen, setGastosOpen] = useState(!!(fromOrcamento && urlGrupo))
+  // Filtros sempre fechados por padrão
   const [filtrosOpen, setFiltrosOpen] = useState(false)
 
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -127,19 +134,15 @@ function TransactionsMobileContent() {
       estabelecimento: estabelecimentoFilter || undefined,
     }
     if (!semFiltroPeriodo) {
-      const isSingleMonth = yearInicio === yearFim && monthInicio === monthFim
-      if (isSingleMonth) {
-        base.year = yearInicio
-        base.month = monthInicio
+      if (tipoPeriodo === 'mes') {
+        base.year = selectedYear
+        base.month = selectedMonth
       } else {
-        base.year_inicio = yearInicio
-        base.month_inicio = monthInicio
-        base.year_fim = yearFim
-        base.month_fim = monthFim
+        base.year = selectedYear
       }
     }
     return base
-  }, [semFiltroPeriodo, yearInicio, monthInicio, yearFim, monthFim, searchDebounced, categoriaGeral, grupoFilter, subgrupoFilter, estabelecimentoFilter])
+  }, [semFiltroPeriodo, tipoPeriodo, selectedYear, selectedMonth, searchDebounced, categoriaGeral, grupoFilter, subgrupoFilter, estabelecimentoFilter])
 
   const fetchTransactions = useCallback(async () => {
     const BASE = `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/transactions`
@@ -229,6 +232,31 @@ function TransactionsMobileContent() {
     if (filtrosOpen) fetchGruposOptions()
   }, [filtrosOpen, fetchGruposOptions])
 
+  // Busca gastos por subgrupo quando há grupo filtrado e o collapse está aberto
+  const fetchSubgruposGastos = useCallback(async () => {
+    if (!grupoFilter) { setSubgruposGastos([]); return }
+    const BASE = `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/transactions`
+    const q = buildQueryParams({ ...filters, grupo: grupoFilter })
+    try {
+      setSubgruposLoading(true)
+      const res = await fetchWithAuth(`${BASE}/gastos-por-subgrupo?${q}`)
+      if (res.ok) {
+        const data = await res.json()
+        setSubgruposGastos(Array.isArray(data) ? data : [])
+      } else {
+        setSubgruposGastos([])
+      }
+    } catch {
+      setSubgruposGastos([])
+    } finally {
+      setSubgruposLoading(false)
+    }
+  }, [filters, grupoFilter])
+
+  useEffect(() => {
+    if (gastosOpen && grupoFilter) fetchSubgruposGastos()
+  }, [gastosOpen, grupoFilter, fetchSubgruposGastos])
+
   const formatCurrency = (v: number) =>
     new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -274,14 +302,16 @@ function TransactionsMobileContent() {
     <div className="flex flex-col h-screen bg-gray-50">
       <MobileHeader
         title={urlGrupo ? `${urlGrupo}${urlSubgrupo && urlSubgrupo !== '__null__' ? ` › ${urlSubgrupo}` : ''}` : 'Transações'}
-        leftAction={fromMetas ? 'back' : null}
+        leftAction={fromMetas || fromOrcamento ? 'back' : null}
         onBack={
           fromMetas
             ? () => {
                 const target = urlGoalId ? `/mobile/budget/${urlGoalId}` : '/mobile/budget'
                 router.push(target)
               }
-            : undefined
+            : fromOrcamento
+              ? () => router.back()
+              : undefined
         }
       />
 
@@ -298,9 +328,200 @@ function TransactionsMobileContent() {
             aria-label="Buscar transações"
           />
         </div>
+
+        {/* Chips de filtros ativos */}
+        {(!semFiltroPeriodo || grupoFilter || subgrupoFilter || categoriaGeral) && (
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {!semFiltroPeriodo && (
+              <button
+                onClick={() => setSemFiltroPeriodo(true)}
+                className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium hover:bg-blue-200 transition-colors"
+              >
+                {tipoPeriodo === 'mes' 
+                  ? `${MESES[selectedMonth - 1]}/${selectedYear}`
+                  : selectedYear}
+                <span className="ml-0.5 text-blue-500">×</span>
+              </button>
+            )}
+            {grupoFilter && (
+              <button
+                onClick={() => { setGrupoFilter(''); setSubgrupoFilter('') }}
+                className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-medium hover:bg-purple-200 transition-colors"
+              >
+                {grupoFilter}
+                <span className="ml-0.5 text-purple-500">×</span>
+              </button>
+            )}
+            {subgrupoFilter && subgrupoFilter !== '__null__' && (
+              <button
+                onClick={() => setSubgrupoFilter('')}
+                className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs font-medium hover:bg-indigo-200 transition-colors"
+              >
+                {subgrupoFilter}
+                <span className="ml-0.5 text-indigo-500">×</span>
+              </button>
+            )}
+            {categoriaGeral && (
+              <button
+                onClick={() => setCategoriaGeral('')}
+                className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-200 text-gray-700 rounded-full text-xs font-medium hover:bg-gray-300 transition-colors"
+              >
+                {categoriaGeral}
+                <span className="ml-0.5 text-gray-500">×</span>
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pb-24 scrollbar-hide">
+        {/* Filtros Avançados */}
+        <div className="bg-white rounded-2xl border border-gray-200 mt-4 overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setFiltrosOpen(!filtrosOpen)}
+            className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50 transition-colors"
+          >
+            <span className="flex items-center gap-2">
+              <Filter className="w-4 h-4 text-gray-500" />
+              <h3 className="text-sm font-semibold text-gray-900">Filtros</h3>
+              {(grupoFilter || subgrupoFilter || categoriaGeral || !semFiltroPeriodo) && (
+                <span className="inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold text-white bg-blue-600 rounded-full">
+                  {[grupoFilter, subgrupoFilter, categoriaGeral, !semFiltroPeriodo].filter(Boolean).length}
+                </span>
+              )}
+            </span>
+            {filtrosOpen ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+          </button>
+          {filtrosOpen && (
+            <div className="px-4 pb-4 space-y-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={semFiltroPeriodo}
+                  onChange={(e) => setSemFiltroPeriodo(e.target.checked)}
+                  className="rounded border-gray-300"
+                />
+                <span className="text-sm text-gray-700">Todas as transações (sem filtro de período)</span>
+              </label>
+              {!semFiltroPeriodo && (
+                <>
+                  <div className="flex gap-2 p-1 bg-gray-100 rounded-lg">
+                    <button
+                      type="button"
+                      onClick={() => setTipoPeriodo('mes')}
+                      className={`flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                        tipoPeriodo === 'mes'
+                          ? 'bg-white text-gray-900 shadow-sm'
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      Mês específico
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTipoPeriodo('ano')}
+                      className={`flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                        tipoPeriodo === 'ano'
+                          ? 'bg-white text-gray-900 shadow-sm'
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      Ano inteiro
+                    </button>
+                  </div>
+                  {tipoPeriodo === 'mes' ? (
+                    <div className="flex gap-2">
+                      <select
+                        value={selectedMonth}
+                        onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                        className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2"
+                      >
+                        {MESES.map((m, i) => (
+                          <option key={m} value={i + 1}>
+                            {m}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={selectedYear}
+                        onChange={(e) => setSelectedYear(Number(e.target.value))}
+                        className="w-24 text-sm border border-gray-200 rounded-lg px-3 py-2"
+                      >
+                        {[now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2, now.getFullYear() - 3].map((y) => (
+                          <option key={y} value={y}>
+                            {y}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <select
+                      value={selectedYear}
+                      onChange={(e) => setSelectedYear(Number(e.target.value))}
+                      className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2"
+                    >
+                      {[now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2, now.getFullYear() - 3].map((y) => (
+                        <option key={y} value={y}>
+                          {y}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </>
+              )}
+              <div>
+                <label className="text-[10px] text-gray-500 block mb-1">Categoria geral</label>
+                <select
+                  value={categoriaGeral}
+                  onChange={(e) => setCategoriaGeral(e.target.value)}
+                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2"
+                >
+                  <option value="">Todas</option>
+                  <option value="Receita">Receita</option>
+                  <option value="Despesa">Despesa</option>
+                  <option value="Investimentos">Investimentos</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] text-gray-500 block mb-1">Grupo</label>
+                <select
+                  value={grupoFilter}
+                  onChange={(e) => {
+                    setGrupoFilter(e.target.value)
+                    setSubgrupoFilter('')
+                  }}
+                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2"
+                >
+                  <option value="">Todos</option>
+                  {[...new Set(gruposOptions.map((o) => o.grupo))].sort().map((g) => (
+                    <option key={g} value={g}>
+                      {g}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {grupoFilter && subgruposForGrupo.length > 0 && (
+                <div>
+                  <label className="text-[10px] text-gray-500 block mb-1">Subgrupo</label>
+                  <select
+                    value={subgrupoFilter}
+                    onChange={(e) => setSubgrupoFilter(e.target.value)}
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2"
+                  >
+                    <option value="">Todos</option>
+                    {subgruposForGrupo.map((s) => (
+                      <option key={s.value} value={s.value}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Resumo - Layout Fatura (como extrato-cartão) */}
         <div className="bg-white rounded-2xl border border-gray-200 p-5 mt-4 mb-4">
           <div className="flex items-center justify-between mb-4">
@@ -308,18 +529,18 @@ function TransactionsMobileContent() {
               <p className="text-xs text-gray-500 font-medium">
                 {semFiltroPeriodo ? (
                   'Todas as transações'
-                ) : yearInicio === yearFim && monthInicio === monthFim ? (
+                ) : tipoPeriodo === 'mes' ? (
                   <>
                     Resumo de{' '}
                     <strong>
-                      {MESES[monthInicio - 1]}/{yearInicio}
+                      {MESES[selectedMonth - 1]}/{selectedYear}
                     </strong>
                   </>
                 ) : (
                   <>
-                    Período{' '}
+                    Ano{' '}
                     <strong>
-                      {MESES[monthInicio - 1]}/{yearInicio} a {MESES[monthFim - 1]}/{yearFim}
+                      {selectedYear}
                     </strong>
                   </>
                 )}
@@ -351,49 +572,115 @@ function TransactionsMobileContent() {
           </div>
         </div>
 
-        {/* Gastos por Grupo */}
+        {/* Gastos por Grupo / Subgrupo */}
         <div className="bg-white rounded-2xl border border-gray-200 mt-4 overflow-hidden">
           <button
             type="button"
             onClick={() => setGastosOpen(!gastosOpen)}
             className="w-full flex items-center justify-between p-4 text-left"
           >
-            <h3 className="text-sm font-semibold text-gray-900">Gastos por Categoria</h3>
+            <h3 className="text-sm font-semibold text-gray-900">
+              {grupoFilter ? `Subgrupos — ${grupoFilter}` : 'Gastos por Categoria'}
+            </h3>
             {gastosOpen ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
           </button>
           {gastosOpen && (
             <div className="px-4 pb-4">
-              {gastosLoading ? (
-                <div className="h-16 flex items-center justify-center">
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900" />
-                </div>
-              ) : gastosPorGrupo.length > 0 ? (
-                <div className="space-y-3">
-                  {gastosPorGrupo.map((cat) => {
-                    const pct = totalGastos > 0 ? Math.round((cat.total / totalGastos) * 100) : 0
-                    const color = getGoalColor(cat.grupo, 0)
-                    return (
-                      <div key={cat.grupo} className="flex items-center gap-3">
-                        <div className="w-4 h-4 rounded-full shrink-0" style={{ backgroundColor: color }} />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs font-medium text-gray-700">{cat.grupo}</span>
-                            <span className="text-xs font-semibold text-gray-900">{formatCurrency(cat.total)}</span>
+              {/* Quando há grupo selecionado: mostra subgrupos clicáveis */}
+              {grupoFilter ? (
+                subgruposLoading ? (
+                  <div className="h-16 flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900" />
+                  </div>
+                ) : subgruposGastos.length > 0 ? (
+                  <div className="space-y-3">
+                    {subgruposGastos.map((sub) => {
+                      const totalSubs = subgruposGastos.reduce((s, g) => s + g.total, 0)
+                      const pct = totalSubs > 0 ? Math.round((sub.total / totalSubs) * 100) : 0
+                      const isActive = subgrupoFilter === sub.grupo
+                      return (
+                        <div
+                          key={sub.grupo}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => setSubgrupoFilter(isActive ? '' : sub.grupo)}
+                          onKeyDown={(e) => e.key === 'Enter' && setSubgrupoFilter(isActive ? '' : sub.grupo)}
+                          className={cn(
+                            'flex items-center gap-3 rounded-xl px-2 py-1.5 cursor-pointer transition-colors',
+                            isActive ? 'bg-indigo-50 ring-1 ring-indigo-200' : 'hover:bg-gray-50'
+                          )}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className={cn('text-xs font-medium', isActive ? 'text-indigo-700' : 'text-gray-700')}>
+                                {sub.grupo || 'Sem subgrupo'}
+                              </span>
+                              <span className="text-xs font-semibold text-gray-900">{formatCurrency(sub.total)}</span>
+                            </div>
+                            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                              <div
+                                className="h-full rounded-full transition-all"
+                                style={{ width: `${pct}%`, backgroundColor: isActive ? '#6366f1' : '#94a3b8' }}
+                              />
+                            </div>
                           </div>
-                          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                            <div
-                              className="h-full rounded-full transition-all"
-                              style={{ width: `${pct}%`, backgroundColor: color }}
-                            />
-                          </div>
+                          <span className="text-[10px] text-gray-400 w-8 text-right">{pct}%</span>
                         </div>
-                        <span className="text-[10px] text-gray-400 w-8 text-right">{pct}%</span>
-                      </div>
-                    )
-                  })}
-                </div>
+                      )
+                    })}
+                    {subgrupoFilter && (
+                      <button
+                        onClick={() => setSubgrupoFilter('')}
+                        className="w-full text-xs text-indigo-600 font-medium py-1.5 hover:text-indigo-800 transition-colors"
+                      >
+                        Limpar filtro de subgrupo
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-400 py-2">Sem subgrupos no período</p>
+                )
               ) : (
-                <p className="text-sm text-gray-400 py-2">Nenhum gasto no período</p>
+                /* Sem grupo selecionado: mostra categorias normais */
+                gastosLoading ? (
+                  <div className="h-16 flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900" />
+                  </div>
+                ) : gastosPorGrupo.length > 0 ? (
+                  <div className="space-y-3">
+                    {gastosPorGrupo.map((cat) => {
+                      const pct = totalGastos > 0 ? Math.round((cat.total / totalGastos) * 100) : 0
+                      const color = getGoalColor(cat.grupo, 0)
+                      return (
+                        <div
+                          key={cat.grupo}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => { setGrupoFilter(cat.grupo); setSubgrupoFilter('') }}
+                          onKeyDown={(e) => e.key === 'Enter' && (setGrupoFilter(cat.grupo), setSubgrupoFilter(''))}
+                          className="flex items-center gap-3 rounded-xl px-2 py-1.5 cursor-pointer hover:bg-gray-50 transition-colors"
+                        >
+                          <div className="w-4 h-4 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs font-medium text-gray-700">{cat.grupo}</span>
+                              <span className="text-xs font-semibold text-gray-900">{formatCurrency(cat.total)}</span>
+                            </div>
+                            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                              <div
+                                className="h-full rounded-full transition-all"
+                                style={{ width: `${pct}%`, backgroundColor: color }}
+                              />
+                            </div>
+                          </div>
+                          <span className="text-[10px] text-gray-400 w-8 text-right">{pct}%</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-400 py-2">Nenhum gasto no período</p>
+                )
               )}
             </div>
           )}
@@ -404,11 +691,16 @@ function TransactionsMobileContent() {
           <button
             type="button"
             onClick={() => setFiltrosOpen(!filtrosOpen)}
-            className="w-full flex items-center justify-between p-4 text-left"
+            className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50 transition-colors"
           >
             <span className="flex items-center gap-2">
               <Filter className="w-4 h-4 text-gray-500" />
               <h3 className="text-sm font-semibold text-gray-900">Filtros</h3>
+              {(grupoFilter || subgrupoFilter || categoriaGeral || !semFiltroPeriodo) && (
+                <span className="inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold text-white bg-blue-600 rounded-full">
+                  {[grupoFilter, subgrupoFilter, categoriaGeral, !semFiltroPeriodo].filter(Boolean).length}
+                </span>
+              )}
             </span>
             {filtrosOpen ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
           </button>
@@ -424,62 +716,70 @@ function TransactionsMobileContent() {
                 <span className="text-sm text-gray-700">Todas as transações (sem filtro de período)</span>
               </label>
               {!semFiltroPeriodo && (
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[10px] text-gray-500 block mb-1">De</label>
-                  <div className="flex gap-1">
-                    <select
-                      value={monthInicio}
-                      onChange={(e) => setMonthInicio(Number(e.target.value))}
-                      className="flex-1 text-sm border border-gray-200 rounded-lg px-2 py-1.5"
+                <>
+                  <div className="flex gap-2 p-1 bg-gray-100 rounded-lg">
+                    <button
+                      type="button"
+                      onClick={() => setTipoPeriodo('mes')}
+                      className={`flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                        tipoPeriodo === 'mes'
+                          ? 'bg-white text-gray-900 shadow-sm'
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
                     >
-                      {MESES.map((m, i) => (
-                        <option key={m} value={i + 1}>
-                          {m}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      value={yearInicio}
-                      onChange={(e) => setYearInicio(Number(e.target.value))}
-                      className="w-20 text-sm border border-gray-200 rounded-lg px-2 py-1.5"
+                      Mês específico
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTipoPeriodo('ano')}
+                      className={`flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                        tipoPeriodo === 'ano'
+                          ? 'bg-white text-gray-900 shadow-sm'
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
                     >
-                      {[now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2].map((y) => (
+                      Ano inteiro
+                    </button>
+                  </div>
+                  {tipoPeriodo === 'mes' ? (
+                    <div className="flex gap-2">
+                      <select
+                        value={selectedMonth}
+                        onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                        className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2"
+                      >
+                        {MESES.map((m, i) => (
+                          <option key={m} value={i + 1}>
+                            {m}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={selectedYear}
+                        onChange={(e) => setSelectedYear(Number(e.target.value))}
+                        className="w-24 text-sm border border-gray-200 rounded-lg px-3 py-2"
+                      >
+                        {[now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2, now.getFullYear() - 3].map((y) => (
+                          <option key={y} value={y}>
+                            {y}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <select
+                      value={selectedYear}
+                      onChange={(e) => setSelectedYear(Number(e.target.value))}
+                      className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2"
+                    >
+                      {[now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2, now.getFullYear() - 3].map((y) => (
                         <option key={y} value={y}>
                           {y}
                         </option>
                       ))}
                     </select>
-                  </div>
-                </div>
-                <div>
-                  <label className="text-[10px] text-gray-500 block mb-1">Até</label>
-                  <div className="flex gap-1">
-                    <select
-                      value={monthFim}
-                      onChange={(e) => setMonthFim(Number(e.target.value))}
-                      className="flex-1 text-sm border border-gray-200 rounded-lg px-2 py-1.5"
-                    >
-                      {MESES.map((m, i) => (
-                        <option key={m} value={i + 1}>
-                          {m}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      value={yearFim}
-                      onChange={(e) => setYearFim(Number(e.target.value))}
-                      className="w-20 text-sm border border-gray-200 rounded-lg px-2 py-1.5"
-                    >
-                      {[now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2].map((y) => (
-                        <option key={y} value={y}>
-                          {y}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              </div>
+                  )}
+                </>
               )}
               <div>
                 <label className="text-[10px] text-gray-500 block mb-1">Categoria geral</label>
@@ -644,6 +944,7 @@ function TransactionsMobileContent() {
           fetchTransactions()
           fetchResumo()
           if (gastosOpen) fetchGastosPorGrupo()
+          if (gastosOpen && grupoFilter) fetchSubgruposGastos()
         }}
       />
 
