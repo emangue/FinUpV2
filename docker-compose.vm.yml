@@ -1,0 +1,90 @@
+# =============================================================================
+# docker-compose.vm.yml — FinUp PRODUÇÃO para VMs com PostgreSQL externo
+# =============================================================================
+#
+# Diferença em relação ao docker-compose.prod.yml:
+#   - SEM containers postgres/redis — usa o PostgreSQL do HOST da VM
+#   - Backend com network_mode: host (alcança 127.0.0.1:5432 do host)
+#   - Frontends na bridge normal (3003 e 3001)
+#
+# Por quê network_mode: host no backend?
+#   PostgreSQL da VM escuta em 127.0.0.1:5432 (só loopback).
+#   Dentro de um container Docker, "localhost" é o próprio container.
+#   Com network_mode: host, o container compartilha o namespace de rede
+#   do host, então 127.0.0.1 == host real → conecta no postgres local.
+#
+# Uso na VM:
+#   1. Criar /var/www/finup/.env.prod (ver .env.prod.example)
+#   2. docker-compose -f docker-compose.vm.yml --env-file .env.prod build
+#   3. docker-compose -f docker-compose.vm.yml --env-file .env.prod up -d
+#   4. docker exec finup_backend_prod alembic upgrade head
+#
+# Deploy automático: ./scripts/deploy/deploy_docker_vm.sh
+# =============================================================================
+
+services:
+  # ==========================================
+  # Backend — FastAPI
+  # network_mode: host → acessa PostgreSQL em 127.0.0.1:5432 do host
+  # Nota: com host network, 'ports:' é ignorado.
+  # O backend ocupa diretamente a porta 8000 do host.
+  # ==========================================
+  backend:
+    build:
+      context: ./app_dev/backend
+      dockerfile: Dockerfile
+    container_name: finup_backend_prod
+    env_file: .env.prod
+    network_mode: host
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
+    volumes:
+      - backend_uploads:/app/uploads
+      - backend_backups:/app/database/backups_daily
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # ==========================================
+  # Frontend App — Next.js (usuário final)
+  # Nginx → 3003 → meufinup.com.br
+  # ==========================================
+  frontend-app:
+    build:
+      context: ./app_dev/frontend
+      dockerfile: Dockerfile
+      args:
+        # NEXT_PUBLIC_* são baked no bundle durante npm run build
+        - NEXT_PUBLIC_BACKEND_URL=${NEXT_PUBLIC_BACKEND_URL}
+    container_name: finup_frontend_app_prod
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    ports:
+      - "3003:3000"
+    restart: unless-stopped
+
+  # ==========================================
+  # Frontend Admin — Next.js (painel admin)
+  # Nginx → 3001 → admin.meufinup.com.br
+  # ==========================================
+  frontend-admin:
+    build:
+      context: ./app_admin/frontend
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_BACKEND_URL=${NEXT_PUBLIC_BACKEND_URL}
+    container_name: finup_frontend_admin_prod
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    ports:
+      - "3001:3000"
+    restart: unless-stopped
+
+volumes:
+  backend_uploads:
+  backend_backups:
