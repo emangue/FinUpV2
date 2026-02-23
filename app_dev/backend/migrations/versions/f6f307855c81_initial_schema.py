@@ -57,15 +57,16 @@ def upgrade() -> None:
         op.drop_index(op.f('ix_user_relationships_user_id'), table_name='user_relationships')
     
     # Dropar tabelas (se existirem)
-    for table in tables_to_drop:
-        if table in existing_tables:
-            op.drop_table(table)
-    op.drop_table('error_codes')
-    op.drop_table('categories')
-    op.drop_table('budget_planning_backup_20260115_204836')
-    op.drop_table('ignorar_estabelecimentos')
-    op.drop_index(op.f('ix_grupo_config_nome'), table_name='grupo_config')
-    op.drop_table('grupo_config')
+    # Comentado - não necessário para banco novo
+    # for table in tables_to_drop:
+    #     if table in existing_tables:
+    #         op.drop_table(table)
+    # op.drop_table('error_codes')
+    # op.drop_table('categories')
+    # op.drop_table('budget_planning_backup_20260115_204836')
+    # op.drop_table('ignorar_estabelecimentos')
+    # op.drop_index(op.f('ix_grupo_config_nome'), table_name='grupo_config')
+    # op.drop_table('grupo_config')
     op.alter_column('bank_format_compatibility', 'id',
                existing_type=sa.INTEGER(),
                nullable=False,
