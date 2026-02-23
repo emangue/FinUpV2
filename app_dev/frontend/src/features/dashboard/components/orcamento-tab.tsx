@@ -10,7 +10,6 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { ChevronDown } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { fetchIncomeSources, fetchCreditCards, fetchAportePrincipalPorMes, fetchAportePrincipalPeriodo, fetchOrcamentoInvestimentos } from '../services/dashboard-api'
@@ -56,7 +55,6 @@ export function OrcamentoTab({
   metrics: metricsProp,
   ytdMonth: ytdMonthProp,
 }: OrcamentoTabProps) {
-  const router = useRouter()
   const [receitas, setReceitas] = useState<{ sources: IncomeSource[]; total_receitas: number } | null>(null)
   const [goals, setGoals] = useState<Goal[]>([])
   const [cardsTotal, setCardsTotal] = useState<number | null>(null)
@@ -104,27 +102,8 @@ export function OrcamentoTab({
   }, [year, month, ytdMonthProp])
 
   // Mesmos dados da tela Metas: separar por categoria_geral
-  const goalsDespesasRaw = goals.filter((g) => g.categoria_geral !== 'Investimentos')
-  // Ordenar: realizado desc, depois planejado desc como desempate
-  const goalsDespesas = [...goalsDespesasRaw].sort((a, b) => {
-    const diffR = (b.valor_realizado ?? 0) - (a.valor_realizado ?? 0)
-    if (diffR !== 0) return diffR
-    return (b.valor_planejado ?? 0) - (a.valor_planejado ?? 0)
-  })
+  const goalsDespesas = goals.filter((g) => g.categoria_geral !== 'Investimentos')
   const goalsInvestimentos = goals.filter((g) => g.categoria_geral === 'Investimentos')
-
-  // Navegar para tela de transações filtrada por grupo + período
-  const navegarParaTransacoes = (grupo: string, subgrupo?: string) => {
-    const params = new URLSearchParams({ grupo, from: 'orcamento' })
-    if (month != null) {
-      params.set('year', String(year))
-      params.set('month', String(month))
-    } else {
-      params.set('year', String(year))
-    }
-    if (subgrupo) params.set('subgrupo', subgrupo)
-    router.push(`/mobile/transactions?${params.toString()}`)
-  }
 
   // Quando month undefined (ano/YTD), usar metrics para totais (goals = só 1 mês)
   const useMetricsForResumo = month == null && metricsProp
@@ -293,14 +272,7 @@ export function OrcamentoTab({
                           ? 'text-emerald-600 font-semibold'
                           : 'text-gray-500 font-medium'
                     return (
-                      <div
-                        key={cat.grupo}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => navegarParaTransacoes(cat.grupo)}
-                        onKeyDown={(e) => e.key === 'Enter' && navegarParaTransacoes(cat.grupo)}
-                        className="cursor-pointer rounded-xl hover:bg-gray-50 active:bg-gray-100 transition-colors -mx-2 px-2 py-1"
-                      >
+                      <div key={cat.grupo}>
                         <div className="flex items-center justify-between mb-1.5">
                           <div className="flex items-center gap-2 shrink-0 min-w-0">
                             <div
@@ -315,7 +287,6 @@ export function OrcamentoTab({
                               {formatCurrency(realizado)}
                             </span>
                             <span className="text-[9px] text-gray-400">/ {formatCurrency(planejado)}</span>
-                            <ChevronDown className="w-3.5 h-3.5 text-gray-400 -rotate-90 ml-0.5" />
                           </div>
                         </div>
                         <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
@@ -449,14 +420,7 @@ export function OrcamentoTab({
                         ? 'text-emerald-600 font-semibold'
                         : 'text-gray-500 font-medium'
                   return (
-                    <div
-                      key={cat.grupo}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => navegarParaTransacoes(cat.grupo)}
-                      onKeyDown={(e) => e.key === 'Enter' && navegarParaTransacoes(cat.grupo)}
-                      className="cursor-pointer rounded-xl hover:bg-gray-50 active:bg-gray-100 transition-colors -mx-2 px-2 py-1"
-                    >
+                    <div key={cat.grupo}>
                       <div className="flex items-center justify-between mb-1.5">
                         <div className="flex items-center gap-2 shrink-0 min-w-0">
                           <div
@@ -471,7 +435,6 @@ export function OrcamentoTab({
                             {formatCurrency(realizado)}
                           </span>
                           <span className="text-[9px] text-gray-400">/ {formatCurrency(planejado)}</span>
-                          <ChevronDown className="w-3.5 h-3.5 text-gray-300 -rotate-90" />
                         </div>
                       </div>
                       <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
@@ -508,18 +471,7 @@ export function OrcamentoTab({
               const hInvestido = Math.max(8, (totalInvestido / maxVal) * barMaxH)
               const hPlanejado = Math.max(8, (totalPlanejadoInv / maxVal) * barMaxH)
               return (
-                <div 
-                  className="flex items-end gap-3 justify-center py-4 mb-4 cursor-pointer hover:bg-blue-50 active:bg-blue-100 rounded-lg transition-colors -mx-2 px-2"
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => navegarParaTransacoes('Investimentos')}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault()
-                      navegarParaTransacoes('Investimentos')
-                    }
-                  }}
-                >
+                <div className="flex items-end gap-3 justify-center py-4 mb-4">
                   <div className="flex flex-col items-center gap-1.5">
                     <span className="text-xs font-bold text-blue-600">{formatCurrency(totalInvestido)}</span>
                     <div

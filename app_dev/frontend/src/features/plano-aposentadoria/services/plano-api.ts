@@ -129,7 +129,6 @@ export async function atualizarPlano(
     inflacao_aa: payload.inflacao,
     retorno_aa: payload.retorno,
     anomes_inicio: anomesInicio,
-    principal: true,
     extras_json: toExtrasJson(payload.extras),
   })
 }

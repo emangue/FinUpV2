@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { toast } from 'sonner'
 import { Pencil } from 'lucide-react'
 import type { AporteExtraordinario, PlanoProfile } from '../types'
 import { planProfiles } from '../lib/plan-profiles'
@@ -42,6 +42,7 @@ export function PersonalizarPlanoLayout({ cenarioId }: PersonalizarPlanoLayoutPr
   const [extras, setExtras] = useState<AporteExtraordinario[]>([])
   const [nomeCenario, setNomeCenario] = useState(`Plano ${new Date().getFullYear()}`)
   const [activeProfile, setActiveProfile] = useState<PlanoProfile>('moderado')
+  const [showSuccess, setShowSuccess] = useState(false)
   const [saving, setSaving] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
 
@@ -244,6 +245,40 @@ export function PersonalizarPlanoLayout({ cenarioId }: PersonalizarPlanoLayoutPr
   const formatRendaInput = (v: string) => {
     const raw = v.replace(/\D/g, '')
     if (raw) setRendaMensal(parseInt(raw))
+  }
+
+  if (showSuccess) {
+    return (
+      <div className="fixed inset-0 z-50 bg-white flex items-center justify-center max-w-[430px] mx-auto">
+        <div className="text-center px-8 animate-fade-in">
+          <div className="w-20 h-20 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-6">
+            <svg
+              className="w-10 h-10 text-emerald-600"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Plano Salvo! 🎉</h2>
+          <p className="text-sm text-gray-500 mb-8">
+            Seu plano de aposentadoria está configurado.
+          </p>
+          <Link
+            href="/mobile/dashboard"
+            className="inline-flex items-center gap-2 px-8 py-3.5 bg-gray-900 text-white rounded-xl text-sm font-semibold hover:bg-gray-800 transition-colors no-underline"
+          >
+            Voltar ao Dashboard
+          </Link>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -1101,10 +1136,7 @@ export function PersonalizarPlanoLayout({ cenarioId }: PersonalizarPlanoLayoutPr
                 } else {
                   await salvarPlano(payload, patrimonioLiquido, anomesPatrimonio)
                 }
-                toast.success(cenarioId ? 'Plano atualizado!' : 'Plano salvo! 🎉', {
-                  description: 'Visualizando a projeção do seu plano principal.',
-                })
-                router.push('/mobile/dashboard?tab=patrimonio')
+                setShowSuccess(true)
               } catch (err) {
                 setLoadError(err instanceof Error ? err.message : 'Erro ao salvar')
               } finally {
