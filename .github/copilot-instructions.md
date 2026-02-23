@@ -1053,40 +1053,36 @@ if tipo_documento == 'extrato':
 
 ---
 
-### �🗄️ BANCO DE DADOS ÚNICO - REGRA INVIOLÁVEL
+### 🗄️ BANCO DE DADOS - POSTGRESQL APENAS (Docker)
 
-**Path absoluto único para TODO o sistema:**
-```
-/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/backend/database/financas_dev.db
-```
+**O projeto usa EXCLUSIVAMENTE PostgreSQL via Docker. SQLite foi removido.**
 
-**Arquivos de configuração:**
-1. **Backend:** `app_dev/backend/app/core/config.py` → `DATABASE_PATH`
-2. **Frontend:** `app_dev/frontend/src/lib/db-config.ts` → `DB_ABSOLUTE_PATH`
+**Banco de desenvolvimento:**
+- **Host (dentro do container):** `postgres:5432`
+- **Host (scripts locais, fora do container):** `localhost:5432` (porta exposta)
+- **DB:** `finup_db` | **User:** `finup_user`
+- **URL Docker:** `postgresql://finup_user:finup_password_dev_2026@postgres:5432/finup_db`
+
+**Onde cada arquivo define o banco:**
+1. **Backend real (Docker):** `docker-compose.yml` → env `DATABASE_URL` do container
+2. **Scripts locais standalone:** `app_dev/backend/.env` → `DATABASE_URL=postgresql://...@localhost:5432/finup_db`
 
 **🚫 NUNCA:**
-- Criar outro banco de dados em QUALQUER local:
-  * ❌ `app_dev/financas.db`
-  * ❌ `app_dev/financas_dev.db`
-  * ❌ `app_dev/backend/financas.db`
-  * ❌ Qualquer variação de path
-- Usar paths relativos diferentes
-- Modificar apenas um dos arquivos
-- Criar cópias do banco
-- Fazer backup manual (usar scripts de backup)
+- Criar ou referenciar arquivos `.db` (SQLite não existe mais)
+- Adicionar fallback SQLite no código (`if not DATABASE_URL: sqlite://...`)
+- Deixar `DATABASE_URL` vazio ou sem valor no `.env`
+- Rodar `alembic` diretamente no terminal local (ver seção Alembic)
 
-**✅ SEMPRE:**
-- Usar path absoluto completo: `app_dev/backend/database/financas_dev.db`
-- Se mudar, mudar nos 2 arquivos simultaneamente
-- Testar backend E frontend após mudanças
-- Ver `DATABASE_CONFIG.md` para detalhes
-- Verificar `.gitignore` para ignorar duplicados
-
-**🔍 VERIFICAÇÃO PERIÓDICA:**
+**✅ Para acessar o banco:**
 ```bash
-# DEVE retornar APENAS 1 arquivo
-find app_dev -name "*.db" -type f | grep -v node_modules
-# Resultado esperado: app_dev/backend/database/financas_dev.db
+# psql interativo
+docker exec -it finup_postgres_dev psql -U finup_user -d finup_db
+
+# query rápida
+docker exec finup_postgres_dev psql -U finup_user -d finup_db -c "SELECT COUNT(*) FROM journal_entries;"
+
+# listar tabelas
+docker exec finup_postgres_dev psql -U finup_user -d finup_db -c "\dt"
 ```
 
 ---
@@ -2570,230 +2566,87 @@ python init_db.py
 
 ---
 
-## 🗄️ MIGRATIONS E ALEMBIC - REGRA OBRIGATÓRIA (IMPLEMENTADO 22/01/2026)
+## 🗄️ MIGRATIONS E ALEMBIC - REGRA OBRIGATÓRIA
 
-### ✅ Alembic Configurado e Operacional
+### ✅ Alembic Configurado — PostgreSQL apenas
 
 **Path:** `app_dev/backend/migrations/`
 
 **Alembic está configurado para:**
 - ✅ Auto-detectar todos os modelos SQLAlchemy
-- ✅ Suportar SQLite (dev) e PostgreSQL (prod)
+- ✅ PostgreSQL exclusivamente (SQLite removido)
 - ✅ Gerar migrations com `--autogenerate`
-- ✅ Sincronizar schema entre ambientes
+- ✅ Guard que bloqueia execução fora do Docker (impede acidente com SQLite)
 
 ### 🔄 Workflow de Migrations - SEMPRE SEGUIR
 
-**1. Modificar Modelo:**
+**1. Modificar o modelo Python:**
 ```python
 # app_dev/backend/app/domains/transactions/models.py
 class JournalEntry(Base):
-    # Adicionar novo campo
-    nova_coluna: str = Column(String, nullable=True)
+    nova_coluna = Column(String, nullable=True)
 ```
 
-**2. Gerar Migration:**
+**2. Gerar migration DENTRO do container:**
 ```bash
-cd app_dev/backend
-source ../../.venv/bin/activate
-alembic revision --autogenerate -m "adiciona_nova_coluna_journal"
+docker exec finup_backend_dev alembic revision --autogenerate -m "adiciona_nova_coluna_journal"
 ```
 
-**3. Revisar Migration Gerada:**
+**3. Revisar o arquivo gerado** (aparece em `app_dev/backend/migrations/versions/` via volume mount)
+
+**4. Aplicar migration DENTRO do container:**
 ```bash
-# Verificar arquivo criado em migrations/versions/
-ls -lrt migrations/versions/
-
-# Editar se necessário (adicionar defaults, validações, etc)
-```
-
-**4. Aplicar Migration:**
-```bash
-# Local (dev)
-alembic upgrade head
-
-# Produção (via SSH)
-ssh user@servidor "cd /var/www/finup/app_dev/backend && alembic upgrade head"
+docker exec finup_backend_dev alembic upgrade head
 ```
 
 **5. Validar:**
 ```bash
-# Verificar migration aplicada
-alembic current
-
-# Ver histórico
-alembic history
+docker exec finup_backend_dev alembic current
+docker exec finup_backend_dev alembic history
 ```
 
-### 🚫 NUNCA Modificar Schema Manualmente
-
-**❌ PROIBIDO:**
-```sql
--- NUNCA fazer isso diretamente no banco!
-ALTER TABLE journal_entries ADD COLUMN nova_coluna TEXT;
+**6. Commitar migration + modelo juntos:**
+```bash
+git add app_dev/backend/migrations/versions/ app_dev/backend/app/domains/*/models.py
+git commit -m "feat(db): adiciona nova_coluna em journal_entries"
 ```
 
-**✅ SEMPRE:**
-1. Modificar modelo Python
-2. Gerar migration com Alembic
-3. Aplicar migration
-4. Commitar código + migration file
-
-### 📋 Comandos Alembic Úteis
+### 🚫 NUNCA
 
 ```bash
-# Ver migration atual
-alembic current
+# ❌ NUNCA — roda fora do Docker, vai dar ERRO (guard ativo)
+cd app_dev/backend && alembic upgrade head
+cd app_dev/backend && alembic revision --autogenerate
 
-# Ver histórico de migrations
-alembic history --verbose
+# ❌ NUNCA modificar schema diretamente
+docker exec finup_postgres_dev psql ... -c "ALTER TABLE ..."
+```
 
-# Downgrade (reverter)
-alembic downgrade -1  # Volta 1 migration
-alembic downgrade <revision>  # Volta para revision específica
+### ✅ SEMPRE
 
-# Upgrade para versão específica
-alembic upgrade <revision>
-
-# Ver SQL da migration (sem executar)
-alembic upgrade head --sql
-
-# Criar migration vazia (para dados)
-alembic revision -m "popular_dados_iniciais"
+```bash
+# ✅ TODOS os comandos alembic via docker exec
+docker exec finup_backend_dev alembic upgrade head
+docker exec finup_backend_dev alembic downgrade -1
+docker exec finup_backend_dev alembic current
+docker exec finup_backend_dev alembic history --verbose
+docker exec finup_backend_dev alembic revision --autogenerate -m "descricao"
 ```
 
 ### 🔧 Migrations de Dados (Data Migrations)
-
-**Para popular/modificar dados (não schema):**
 
 ```python
 # migrations/versions/XXXX_popular_dados.py
 def upgrade():
     op.execute("""
-        INSERT INTO base_marcacoes (nome, categoria) 
+        INSERT INTO base_marcacoes (nome, categoria)
         VALUES ('Novo Grupo', 'Despesa')
     """)
 
 def downgrade():
-    op.execute("""
-        DELETE FROM base_marcacoes WHERE nome = 'Novo Grupo'
-    """)
+    op.execute("DELETE FROM base_marcacoes WHERE nome = 'Novo Grupo'")
 ```
 
----
-
-## 🔄 AMBIENTE ESPELHO - POSTGRESQL LOCAL (IMPLEMENTADO 22/01/2026)
-
-### 🎯 Por Que Usar PostgreSQL Local?
-
-**Vantagens de ambiente espelho:**
-- ✅ **100% paridade** com produção
-- ✅ **Detecta bugs** antes do deploy
-- ✅ **Testa migrations** com segurança
-- ✅ **Valida tipos** PostgreSQL vs SQLite
-- ✅ **Performance real** de queries
-
-**Desvantagens (menores):**
-- ⚠️ Setup inicial (instalar PostgreSQL)
-- ⚠️ Consumo de recursos (vs SQLite)
-- ⚠️ Complexidade de troubleshooting
-
-**Conclusão:** SEMPRE use PostgreSQL local para desenvolvimento sério.
-
-### 📦 Setup PostgreSQL Local
-
-**Opção 1: Postgres.app (macOS - recomendado):**
-```bash
-# Download de https://postgresapp.com
-# Arraste para /Applications
-# Inicie o app → crie server → pronto!
-```
-
-**Opção 2: Docker (multiplataforma):**
-```bash
-# docker-compose.yml na raiz do projeto
-version: '3.8'
-services:
-  postgres:
-    image: postgres:16
-    environment:
-      POSTGRES_USER: finup_user
-      POSTGRES_PASSWORD: sua_senha_dev
-      POSTGRES_DB: finup_db_dev
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-volumes:
-  postgres_data:
-
-# Iniciar
-docker-compose up -d postgres
-
-# Parar
-docker-compose down
-```
-
-**Opção 3: Homebrew (macOS):**
-```bash
-brew install postgresql@16
-brew services start postgresql@16
-
-# Criar database
-createdb finup_db_dev
-psql finup_db_dev -c "CREATE USER finup_user WITH PASSWORD 'sua_senha_dev';"
-psql finup_db_dev -c "GRANT ALL PRIVILEGES ON DATABASE finup_db_dev TO finup_user;"
-```
-
-### 🔧 Configurar Aplicação para PostgreSQL
-
-**1. Criar `.env` no backend:**
-```bash
-# app_dev/backend/.env
-DATABASE_URL=postgresql://finup_user:sua_senha_dev@localhost:5432/finup_db_dev
-```
-
-**2. Aplicar migrations:**
-```bash
-cd app_dev/backend
-source ../../.venv/bin/activate
-alembic upgrade head
-```
-
-**3. Migrar dados do SQLite:**
-```bash
-python scripts/migration/sqlite_to_postgres.py \
-  --source sqlite:///path/to/financas_dev.db \
-  --target postgresql://finup_user:senha@localhost/finup_db_dev
-```
-
-**4. Validar:**
-```bash
-# Backend deve iniciar normalmente
-./scripts/deploy/quick_start.sh
-
-# Verificar logs
-tail -f temp/logs/backend.log
-```
-
-### 🔄 Alternar Entre SQLite e PostgreSQL
-
-**SQLite (rápido para testes):**
-```bash
-# Remover/renomear .env
-mv app_dev/backend/.env app_dev/backend/.env.postgres
-# Reiniciar
-./scripts/deploy/quick_stop.sh && ./scripts/deploy/quick_start.sh
-```
-
-**PostgreSQL (paridade prod):**
-```bash
-# Restaurar .env
-mv app_dev/backend/.env.postgres app_dev/backend/.env
-# Reiniciar
-./scripts/deploy/quick_stop.sh && ./scripts/deploy/quick_start.sh
-```
 
 ---
 

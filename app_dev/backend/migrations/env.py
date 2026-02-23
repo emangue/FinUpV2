@@ -15,6 +15,18 @@ sys.path.insert(0, str(app_path))
 from app.core.config import settings
 from app.core.database import Base
 
+# ─── GUARD: bloqueia execução fora do Docker (SQLite acidental) ───────────────
+if not settings.DATABASE_URL.startswith("postgresql"):
+    raise RuntimeError(
+        "\n\n"
+        "🚨 ERRO: Alembic só pode rodar contra PostgreSQL (Docker)!\n"
+        "   DATABASE_URL atual: " + settings.DATABASE_URL + "\n\n"
+        "   Execute DENTRO do container:\n"
+        "   docker exec finup_backend_dev alembic upgrade head\n\n"
+        "   Nunca rode alembic diretamente no terminal local.\n"
+    )
+# ─────────────────────────────────────────────────────────────────────────────
+
 # Importar TODOS os modelos para garantir que sejam registrados no Base.metadata
 from app.domains.transactions.models import JournalEntry, BaseParcelas
 from app.domains.users.models import User
@@ -31,7 +43,8 @@ from app.domains.compatibility.models import BankFormatCompatibility
 from app.domains.classification.models import GenericClassificationRules
 from app.domains.investimentos.models import (
     InvestimentoPortfolio, InvestimentoHistorico,
-    InvestimentoCenario, AporteExtraordinario, InvestimentoPlanejamento
+    InvestimentoCenario, AporteExtraordinario, InvestimentoPlanejamento,
+    InvestimentoTransacao,
 )
 
 # this is the Alembic Config object, which provides

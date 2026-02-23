@@ -3,7 +3,6 @@ Configurações do Backend FastAPI
 """
 import os
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pathlib import Path
 from typing import Union
 
 class Settings(BaseSettings):
@@ -20,26 +19,15 @@ class Settings(BaseSettings):
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = False  # ✅ False por padrão (segurança)
     
-    # Database - Suporta SQLite (dev) e PostgreSQL (prod)
-    # ⚠️ IMPORTANTE: Este é o ÚNICO banco usado por TODA a aplicação
-    # Backend FastAPI e Frontend Next.js SEMPRE usam este arquivo
-    DATABASE_PATH: Path = Path("/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/backend/database/financas_dev.db")
-    
-    # PostgreSQL - Lido de variável de ambiente (Pydantic preenche automaticamente)
+    # Database — PostgreSQL obrigatório (Docker fornece via DATABASE_URL)
     # Formato: postgresql://user:password@host:port/database
-    # Exemplo: postgresql://finup_user:senha@localhost:5432/finup_db_dev
-    # Se não houver .env, usa SQLite como fallback
-    DATABASE_URL: str = ""
-    
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        # Se DATABASE_URL não foi fornecido, usa SQLite
-        if not self.DATABASE_URL:
-            self.DATABASE_URL = f"sqlite:///{self.DATABASE_PATH}"
-    
+    # Definido no docker-compose.yml → container backend
+    # ❌ SQLite não é mais suportado neste projeto
+    DATABASE_URL: str  # OBRIGATÓRIO — sem fallback SQLite
+
     @property
     def is_postgres(self) -> bool:
-        """Verifica se está usando PostgreSQL"""
+        """Sempre True — apenas PostgreSQL é suportado"""
         return self.DATABASE_URL.startswith("postgresql")
     
     # CORS - Aceita tanto lista quanto string separada por vírgulas

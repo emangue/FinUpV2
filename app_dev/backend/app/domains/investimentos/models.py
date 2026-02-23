@@ -190,6 +190,46 @@ class AporteExtraordinario(Base):
     cenario = relationship("InvestimentoCenario", back_populates="aportes_extraordinarios")
 
 
+class InvestimentoTransacao(Base):
+    """
+    Registro de transações de investimentos: aportes, resgates e rendimentos.
+    Tabela criada vazia – alimentação futura via upload/manual.
+    """
+    __tablename__ = "investimentos_transacoes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    investimento_id = Column(Integer, ForeignKey('investimentos_portfolio.id', ondelete='SET NULL'), nullable=True, index=True)
+
+    # Tipo de movimento
+    tipo = Column(String(30), nullable=False, index=True)  # 'aporte' | 'resgate' | 'rendimento' | 'transferencia'
+
+    # Valores
+    valor = Column(Numeric(15, 2), nullable=False)
+
+    # Temporal
+    data = Column(Date, nullable=False, index=True)
+    anomes = Column(Integer, nullable=False, index=True)  # YYYYMM
+
+    # Metadados
+    descricao = Column(String(500), nullable=True)
+    fonte = Column(String(30), default='manual')  # 'manual' | 'importado' | 'calculado'
+
+    # Controle
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, onupdate=datetime.utcnow)
+
+    # Relacionamentos
+    user = relationship("User", foreign_keys=[user_id])
+    investimento = relationship("InvestimentoPortfolio", foreign_keys=[investimento_id])
+
+    __table_args__ = (
+        Index('idx_transacao_user_anomes', 'user_id', 'anomes'),
+        Index('idx_transacao_user_tipo', 'user_id', 'tipo'),
+        Index('idx_transacao_investimento', 'investimento_id'),
+    )
+
+
 class InvestimentoPlanejamento(Base):
     """
     Planejamento e metas mensais de investimentos.
