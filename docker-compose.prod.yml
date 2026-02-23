@@ -1,0 +1,140 @@
+# =============================================================================
+# docker-compose.prod.yml — FinUp PRODUÇÃO (VM/VPS)
+# =============================================================================
+#
+# Diferenças em relação ao docker-compose.yml (dev):
+#   - PostgreSQL sem porta exposta externamente (apenas rede interna Docker)
+#   - Redis sem porta exposta externamente
+#   - Backend/Frontend usam Dockerfiles de produção (sem hot-reload)
+#   - Secrets via .env.prod (nunca commitado no git)
+#   - restart: unless-stopped em todos os serviços
+#   - Uvicorn sem --reload
+#   - Frontend build standalone (imagem ~80MB)
+#
+# Uso:
+#   Copiar .env.prod.example → .env.prod e preencher
+#   docker-compose -f docker-compose.prod.yml up -d --build
+#
+# Deploy automático: ./scripts/deploy/deploy_docker_vm.sh
+# =============================================================================
+
+services:
+  # ==========================================
+  # PostgreSQL - Banco de dados
+  # ATENÇÃO: SEM porta exposta — apenas rede interna Docker
+  # ==========================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: finup_postgres_prod
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    # ❌ SEM ports — banco não acessível externamente
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==========================================
+  # Redis - Cache/Sessões
+  # ATENÇÃO: SEM porta exposta — apenas rede interna Docker
+  # ==========================================
+  redis:
+    image: redis:7-alpine
+    container_name: finup_redis_prod
+    # ❌ SEM ports
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # ==========================================
+  # Backend - FastAPI (produção, sem --reload)
+  # ==========================================
+  backend:
+    build:
+      context: ./app_dev/backend
+      dockerfile: Dockerfile  # Dockerfile de prod (multi-stage)
+    container_name: finup_backend_prod
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - DEBUG=false
+      - BACKEND_CORS_ORIGINS=${BACKEND_CORS_ORIGINS}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persistir uploads e backups (NÃO montar código — sem hot-reload em prod)
+      - backend_uploads:/app/uploads
+      - backend_backups:/app/database/backups_daily
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    # Sem --reload em produção
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # ==========================================
+  # Frontend App - Next.js standalone (usuário final)
+  # Porta 3003 → Nginx proxy para meufinup.com.br
+  # ==========================================
+  frontend-app:
+    build:
+      context: ./app_dev/frontend
+      dockerfile: Dockerfile  # Dockerfile de prod (standalone)
+      args:
+        # NEXT_PUBLIC_* são baked no bundle durante npm run build
+        - NEXT_PUBLIC_BACKEND_URL=${NEXT_PUBLIC_BACKEND_URL}
+    container_name: finup_frontend_app_prod
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    ports:
+      - "3003:3000"  # Nginx aponta para 3003 → meufinup.com.br
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # ==========================================
+  # Frontend Admin - Next.js standalone (painel admin)
+  # Porta 3001 → Nginx proxy para admin.meufinup.com.br (se configurado)
+  # ==========================================
+  frontend-admin:
+    build:
+      context: ./app_admin/frontend
+      dockerfile: Dockerfile  # Dockerfile de prod (standalone)
+      args:
+        - NEXT_PUBLIC_BACKEND_URL=${NEXT_PUBLIC_BACKEND_URL}
+    container_name: finup_frontend_admin_prod
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    ports:
+      - "3001:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  backend_uploads:
+  backend_backups:

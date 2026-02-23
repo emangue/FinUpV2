@@ -110,6 +110,9 @@ _csvs_historico/
 .env.development.local
 .env.test.local
 .env.production.local
+# Exceção: templates de exemplo SÃO commitados (sem secrets reais)
+!.env.prod.example
+!.env.example
 
 # SSH e credenciais de servidor (NUNCA commitar)
 .ssh_password
