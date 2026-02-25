@@ -31,6 +31,9 @@ def normalizar_chave_padrao(padrao: str) -> str:
     Formatos:
     - Simples: "ESTABELECIMENTO"
     - Parcelado: "ESTABELECIMENTO|valor_total_centavos|total_parcelas"
+
+    v5: remove tudo que não é [A-Z0-9] da base do estabelecimento,
+    garantindo consistência com o estab_hash gerado pelo marker.py v5.
     """
     s = str(padrao or "").strip()
     if not s:
@@ -38,10 +41,10 @@ def normalizar_chave_padrao(padrao: str) -> str:
     
     parts = s.split("|")
     if len(parts) == 1:
-        return normalizar_estabelecimento(parts[0])
+        return re.sub(r'[^A-Z0-9]', '', parts[0].upper())
     
     # Parcelado
-    estab = normalizar_estabelecimento(parts[0])
+    estab = re.sub(r'[^A-Z0-9]', '', parts[0].upper())
     valor_tot_cent = re.sub(r'[^\d]', '', str(parts[1]))
     tot = str(parts[2] or "").zfill(2)
     
@@ -81,16 +84,21 @@ def montar_padrao(estabelecimento: str, valor: float, parcela_info: Optional[Dic
     
     IMPORTANTE: Retorna SEM faixa de valor. 
     A segmentação por faixa é feita posteriormente com " [faixa]"
+
+    v5: remove tudo que não é [A-Z0-9] da base (mesmo padrão do marker.py v5).
+    Para parcelados, extrai a base antes de normalizar.
     """
-    estab = normalizar_estabelecimento(estabelecimento)
-    
     if parcela_info:
+        # v5: extrair base sem a notação de parcela antes de normalizar
+        base = re.sub(r'\s*\(?\d{1,2}/\d{1,2}\)?\s*$', '', estabelecimento).strip()
+        estab = re.sub(r'[^A-Z0-9]', '', base.upper())
         tot = parcela_info['total']
         v_parc = abs(valor)
         v_tot = arred2(v_parc * tot)
         v_cent = round(v_tot * 100)
         return f"{estab}|{v_cent}|{str(tot).zfill(2)}"
     
+    estab = re.sub(r'[^A-Z0-9]', '', estabelecimento.upper())
     return estab
 
 
