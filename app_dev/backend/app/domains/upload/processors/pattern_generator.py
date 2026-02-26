@@ -495,15 +495,9 @@ def atualizar_base_padroes(db: Session, user_id: int, padroes: List[Dict]) -> Tu
                 padrao_existente.data_criacao = datetime.now()  # Atualiza timestamp
                 atualizados += 1
             else:
-                # ✅ CRIAR NOVO - Verifica duplicata antes
-                duplicata = db.query(BasePadroes).filter(
-                    BasePadroes.padrao_num == padrao_num
-                ).first()
-                
-                if duplicata:
-                    logger.warning(f"⚠️  Duplicata detectada (outro user?): {padrao_num}")
-                    continue
-                
+                # ✅ CRIAR NOVO
+                # Não há verificação cross-user: padrao_num é válido por user_id.
+                # O mesmo padrão (mesmo hash) pode existir para usuários diferentes.
                 novo_padrao = BasePadroes(
                     user_id=user_id,
                     **padrao_dict
