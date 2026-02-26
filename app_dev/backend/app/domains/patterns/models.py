@@ -2,7 +2,7 @@
 Domínio Patterns - Model
 Modelo de padrões de classificação automática
 """
-from sqlalchemy import Column, Integer, String, Float, DateTime, Text
+from sqlalchemy import Column, Integer, String, Float, DateTime, Text, UniqueConstraint
 from app.core.database import Base
 
 
@@ -14,13 +14,16 @@ class BasePadroes(Base):
     baseados em histórico e consistência de classificações
     """
     __tablename__ = "base_padroes"
+    __table_args__ = (
+        UniqueConstraint('user_id', 'padrao_num', name='base_padroes_user_id_padrao_num_key'),
+    )
     
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     user_id = Column(Integer, nullable=False, index=True)
     
     # Identificação do padrão
     padrao_estabelecimento = Column(Text, nullable=False)  # Ex: "CONTA VIVO [50-100]"
-    padrao_num = Column(Text, nullable=False, unique=True)  # Hash FNV-1a
+    padrao_num = Column(Text, nullable=False)  # Hash FNV-1a — único por (user_id, padrao_num)
     
     # Estatísticas
     contagem = Column(Integer, nullable=False)  # Quantas ocorrências

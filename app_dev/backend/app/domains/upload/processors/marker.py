@@ -1,7 +1,13 @@
 """
-Transaction Marker - Fase 2 (v4.2.3)
+Transaction Marker - Fase 2 (v5.0.0)
 Marca transações com IDs únicos (IdTransacao, IdParcela)
 Integra hasher.py e normalizer.py
+
+v5.0.0 (2026-02-25):
+- Normalização invariante à renderização PDF/CSV
+- Remove tudo que não é [A-Z0-9] da base do estabelecimento
+- Resolve: PDF 202602+ sem espaços ("CONTAVIVO") ≡ CSV ("CONTA VIVO")
+- IdParcela usa a mesma normalização [^A-Z0-9] na base do estabelecimento
 
 v4.2.3 (2026-01-16):
 - CRÍTICO: Adicionado .upper() ANTES de normalizar parcela
@@ -282,16 +288,15 @@ class TransactionMarker:
                 # Extrato: Ano e Mes da Data da transação
                 ano, mes = self._extrair_ano_mes(raw.data)
             
-            # Sempre normalizar espaços + uppercase
-            lancamento_normalizado = normalizar_espacos(raw.lancamento).upper().strip()
-            
-            if is_fatura:
-                # Fatura: normalizar formato de parcela
-                estab_normalizado = normalizar_formato_parcela(lancamento_normalizado)
+            # v5: remove tudo que não é [A-Z0-9] da base — invariante à renderização PDF/CSV
+            if info_parcela and is_fatura:
+                # Parcelada: normaliza base + recompõe (p/t)
+                base_norm = re.sub(r'[^A-Z0-9]', '', estabelecimento_base.upper())
+                estab_normalizado = f"{base_norm} ({parcela_atual}/{total_parcelas})"
             else:
-                # Extrato: manter apenas com espaços normalizados e uppercase
-                estab_normalizado = lancamento_normalizado
-            
+                # Sem parcela (ou extrato): remove tudo que não é [A-Z0-9]
+                estab_normalizado = re.sub(r'[^A-Z0-9]', '', raw.lancamento.upper())
+
             estab_hash = estab_normalizado
             valor_hash = arredondar_2_decimais(raw.valor)  # VALOR EXATO (com sinal)
             
@@ -312,7 +317,8 @@ class TransactionMarker:
             id_parcela = None
             if info_parcela and total_parcelas:
                 import hashlib
-                estab_normalizado_parcela = normalizar_estabelecimento(estabelecimento_base)
+                # v5: mesma normalização do estab_hash (remove [^A-Z0-9])
+                estab_normalizado_parcela = re.sub(r'[^A-Z0-9]', '', estabelecimento_base.upper())
                 chave = f"{estab_normalizado_parcela}|{valor_arredondado:.2f}|{total_parcelas}|{self.user_id}"
                 assert self.user_id is not None, "user_id OBRIGATÓRIO no hash IdParcela"
                 id_parcela = hashlib.md5(chave.encode()).hexdigest()[:16]

@@ -1,14 +1,35 @@
 """
-Processador bruto para Fatura Itaú PDF
-Extrai transações de PDFs de fatura do Itaú e gera a mesma estrutura que itau_fatura.py
+Processador bruto — Fatura Itaú PDF v2
+======================================
+O CSV (itau_fatura.py) é a fonte da verdade. Esta versão alinha o output
+do PDF com o CSV nos pontos que SÃO controláveis pelo processador:
 
-DEPLOY → ProjetoFinancasV5
-  Destino: app/domains/upload/processors/raw/pdf/itau_fatura_pdf.py
-  (substitui o arquivo existente)
+  ✅  Sinal dos valores:
+        CSV faz df['valor'] * -1 no bruto (gastos + → saída −).
+        Este processador aplica o mesmo ×-1 ao final.
+        Resultado: gastos NEGATIVOS, estornos/créditos POSITIVOS.
 
-MUDANÇAS vs versão anterior do V5:
-  - Adiciona parâmetro `senha: str = None` para PDFs protegidos
-  - Compatível com PDF sem senha (comportamento idêntico ao original)
+  ✅  Bug de ano em Produtos/Serviços:
+        v1 usava só `ano_fatura` sem inferência de mês → gerava datas como
+        2026-12-26 para transações de dezembro/2025.
+        v2 passa `mes_fatura` e aplica a mesma lógica da seção principal.
+
+  ✅  Parcelas futuras:
+        _extract_produtos_servicos agora descarta transações cujo mês
+        inferido é posterior ao fechamento da fatura.
+
+  ℹ️  Espaços no estabelecimento:
+        O PDF renderiza "PAODEACUCAR" como uma única palavra sem espaços —
+        é limitação de renderização, não do processador. extract_words()
+        produz o mesmo resultado que extract_text(). Não é corrigível aqui;
+        a normalização de dedup (remove non-alphanumeric) garante que a
+        comparação lógica ainda funcione.
+
+Assinatura pública:
+    process_itau_fatura_pdf(file_path, nome_arquivo, nome_cartao,
+                            final_cartao, senha=None) -> List[RawTransaction]
+
+Compatível como drop-in replacement do v1.
 """
 
 import logging
@@ -16,12 +37,34 @@ import re
 from pathlib import Path
 from datetime import datetime
 from typing import List, Optional, Tuple
+
 import pdfplumber
 
-from ..base import RawTransaction
+try:
+    from ..base import RawTransaction
+except ImportError:
+    # execução standalone / testes fora do pacote
+    from dataclasses import dataclass
+
+    @dataclass
+    class RawTransaction:
+        banco: str
+        tipo_documento: str
+        nome_arquivo: str
+        data_criacao: datetime
+        data: str
+        lancamento: str
+        valor: float
+        nome_cartao: Optional[str] = None
+        final_cartao: Optional[str] = None
+        mes_fatura: Optional[str] = None
 
 logger = logging.getLogger(__name__)
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Entry-point público
+# ─────────────────────────────────────────────────────────────────────────────
 
 def process_itau_fatura_pdf(
     file_path: Path,
@@ -33,393 +76,374 @@ def process_itau_fatura_pdf(
     """
     Processa fatura Itaú PDF (com ou sem senha).
 
-    Args:
-        file_path: Caminho do arquivo PDF
-        nome_arquivo: Nome original do arquivo
-        nome_cartao: Nome do cartão (ex: "Mastercard Black")
-        final_cartao: Final do cartão (ex: "4321")
-        senha: Senha do PDF, se protegido (geralmente CPF sem pontos/traço)
-              Injetado via functools.partial no registry, ou passado diretamente.
-
-    Returns:
-        Lista de RawTransaction
+    Output alinhado com o processador CSV:
+        - gastos  → valor NEGATIVO
+        - créditos/estornos → valor POSITIVO
     """
-    logger.info(f"Processando fatura Itaú PDF: {nome_arquivo}" + (" [com senha]" if senha else ""))
-
+    logger.info(
+        f"[v2] Processando fatura Itaú PDF: {nome_arquivo}"
+        + (" [com senha]" if senha else "")
+    )
     try:
-        # Extrair texto de todas as páginas
         open_kwargs = {"password": senha} if senha else {}
         with pdfplumber.open(file_path, **open_kwargs) as pdf:
-            texto_completo = ""
-            for page in pdf.pages:
-                texto_completo += page.extract_text() + "\n"
+            texto_completo = "\n".join(
+                (p.extract_text() or "") for p in pdf.pages
+            )
+            n_paginas = len(pdf.pages)
 
-        logger.debug(f"PDF lido: {len(pdf.pages)} páginas")
+        logger.debug(f"PDF lido: {n_paginas} páginas")
 
-        # Extrair transações do texto
-        transacoes = _extract_transactions_from_text(texto_completo)
-        logger.info(f"Fatura PDF processada: {len(transacoes)} transações")
-
-        # Extrair mês da fatura do nome do arquivo (ex: fatura-202601.pdf)
-        mes_fatura = _extract_mes_fatura(nome_arquivo)
-
-        # Converter para RawTransaction
-        transactions = []
+        transacoes_brutas = _extract_transactions_from_text(texto_completo)
+        mes_fatura_str = _extract_mes_fatura(nome_arquivo)
         data_criacao = datetime.now()
 
-        for data, lancamento, valor in transacoes:
-            transaction = RawTransaction(
-                banco='Itaú',
-                tipo_documento='fatura',
-                nome_arquivo=nome_arquivo,
-                data_criacao=data_criacao,
-                data=data,
-                lancamento=lancamento,
-                valor=valor,
-                nome_cartao=nome_cartao,
-                final_cartao=final_cartao,
-                mes_fatura=mes_fatura,
-            )
-            transactions.append(transaction)
+        transactions: List[RawTransaction] = []
+        for data, lancamento, valor in transacoes_brutas:
+            # ── Inverter sinal para alinhar com CSV ───────────────────────
+            # O PDF extrai gastos como positivos, igual ao CSV bruto.
+            # O CSV aplica df * -1 antes de retornar; fazemos o mesmo aqui.
+            # Estornos já chegam negativos (detectados pelo sufixo " -" ou
+            # pela palavra ESTORNO) → após ×-1 ficam positivos. ✓
+            valor_final = valor * -1
 
-        logger.info(f"✅ Fatura Itaú PDF processada: {len(transactions)} transações")
+            # ── Converter data YYYY-MM-DD → DD/MM/YYYY ────────────────────
+            # O V5 espera DD/MM/YYYY em RawTransaction.data (usado literal
+            # na chave do hash FNV-1a). CSV já entrega nesse formato.
+            data_br = _iso_to_br(data)
+
+            transactions.append(
+                RawTransaction(
+                    banco="Itaú",
+                    tipo_documento="fatura",
+                    nome_arquivo=nome_arquivo,
+                    data_criacao=data_criacao,
+                    data=data_br,
+                    lancamento=lancamento,
+                    valor=valor_final,
+                    nome_cartao=nome_cartao,
+                    final_cartao=final_cartao,
+                    mes_fatura=mes_fatura_str,
+                )
+            )
+
+        logger.info(f"✅ [v2] Fatura Itaú PDF: {len(transactions)} transações")
         return transactions
 
     except Exception as e:
-        logger.error(f"❌ Erro ao processar fatura Itaú PDF: {str(e)}", exc_info=True)
+        logger.error(f"❌ [v2] Erro ao processar fatura Itaú PDF: {e}", exc_info=True)
         raise
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Extração de transações do texto
+# ─────────────────────────────────────────────────────────────────────────────
+
 def _extract_transactions_from_text(texto: str) -> List[Tuple[str, str, float]]:
     """
-    Extrai transações do texto do PDF seguindo EXATAMENTE a lógica do n8n JavaScript
+    Extrai transações do texto do PDF.
 
-    Returns:
-        Lista de tuplas (data_formatada, estabelecimento, valor)
+    Retorna lista de (data YYYY-MM-DD, estabelecimento, valor_bruto).
+    Valores ainda são BRUTOS aqui (gastos positivos); a inversão de sinal
+    ocorre em process_itau_fatura_pdf após esta função.
     """
-    transacoes = []
+    transacoes: List[Tuple[str, str, float]] = []
 
-    # === DETECTAR ANO E MÊS DA FATURA ===
-    ano_fatura = None
-    mes_fatura = None
-    match_postagem = re.search(r'Postagem:\s*(\d{2})/(\d{2})/(\d{4})', texto, re.IGNORECASE)
-    if match_postagem:
-        mes_fatura = int(match_postagem.group(2))
-        ano_fatura = int(match_postagem.group(3))
-
-    if not ano_fatura:
-        match_emissao = re.search(r'Emissão:\s*(\d{2})/(\d{2})/(\d{4})', texto, re.IGNORECASE)
-        if match_emissao:
-            mes_fatura = int(match_emissao.group(2))
-            ano_fatura = int(match_emissao.group(3))
+    # ── Detectar mês/ano de fechamento da fatura ──────────────────────────
+    ano_fatura = mes_fatura = None
+    for pat in (
+        r'Postagem:\s*\d{2}/(\d{2})/(\d{4})',
+        r'Emiss[aã]o:\s*\d{2}/(\d{2})/(\d{4})',
+    ):
+        m = re.search(pat, texto, re.IGNORECASE)
+        if m:
+            mes_fatura = int(m.group(1))
+            ano_fatura = int(m.group(2))
+            break
 
     if not ano_fatura:
-        ano_fatura = datetime.now().year
-        mes_fatura = datetime.now().month
+        now = datetime.now()
+        ano_fatura, mes_fatura = now.year, now.month
 
-    logger.debug(f"Ano da fatura: {ano_fatura}, Mês da fatura: {mes_fatura}")
+    logger.debug(f"Fatura: {ano_fatura}-{mes_fatura:02d}")
 
-    # === DETECTAR POSIÇÃO DE "COMPRAS PARCELADAS" ===
-    pos_compras_parceladas = texto.lower().find('compras parceladas')
-    logger.debug(f"Posição 'compras parceladas': {pos_compras_parceladas}")
+    # ── IOF consolidado ───────────────────────────────────────────────────
+    # PDF traz como "Repasse de IOF em R$ XXX" (gasto → positivo bruto)
+    iofs = []
+    for m in re.finditer(
+        r'Repasse de IOF em R\$\s*(-?\d{1,3}(?:\.\d{3})*,\d{2})',
+        texto,
+        re.IGNORECASE,
+    ):
+        iofs.append(abs(_br(m.group(1))))
 
-    # === DETECTAR IOF CONSOLIDADO (Repasse de IOF) ===
-    regex_repasse_iof = r'Repasse de IOF em R\$\s*(-?\d{1,3}(?:\.\d{3})*,\d{2})'
-    linhas_iof_consolidado = []
+    logger.debug(f"IOFs consolidados: {len(iofs)}")
 
-    for match in re.finditer(regex_repasse_iof, texto, re.IGNORECASE):
-        valor_str = match.group(1)
-        valor_iof = _convert_valor_br(valor_str)
-        linhas_iof_consolidado.append({
-            'valor': abs(valor_iof),
-            'posicao': match.start()
-        })
-        logger.debug(f"IOF consolidado encontrado: R$ {valor_iof}")
+    # ── Transações brutas via regex DD/MM ESTABELECIMENTO VALOR ───────────
+    regex = r'(\d{2}/\d{2})\s+(.+?)\s+(-?\d{1,3}(?:\.\d{3})*,\d{2})'
+    brutas = []
 
-    logger.debug(f"Total de IOFs consolidados: {len(linhas_iof_consolidado)}")
+    for m in re.finditer(regex, texto, re.IGNORECASE | re.MULTILINE):
+        ddmm = m.group(1)
+        estab_bruto = m.group(2)
+        valor_str = m.group(3)
 
-    # === EXTRAIR TRANSAÇÕES ===
-    regex = r'(\d{2}/\d{2})\s+([^\n\r]+?)\s+(-?\d{1,3}(?:\.\d{3})*,\d{2})'
-    transacoes_brutas = []
+        dd, mm_str = ddmm[:2], ddmm[3:5]
+        mes_tx = int(mm_str)
 
-    for match in re.finditer(regex, texto, re.IGNORECASE | re.MULTILINE):
-        ddmm = match.group(1)
-        estab_bruto = match.group(2)
-        valor_str = match.group(3)
+        # Inferir ano: se mês da transação é APÓS o mês da fatura → ano anterior
+        ano_tx = ano_fatura - 1 if mes_tx > mes_fatura else ano_fatura
+        data_iso = f"{ano_tx}-{mm_str}-{dd}"
 
-        valor = _convert_valor_br(valor_str)
+        estab = estab_bruto.strip()
 
-        dd = ddmm[:2]
-        mm = ddmm[3:5]
-
-        # === INFERIR ANO CORRETO ===
-        mes_transacao = int(mm)
-        if mes_transacao > mes_fatura:
-            ano_transacao = ano_fatura - 1
-            logger.debug(f"Transação {ddmm} no mês {mes_transacao} > mês fatura {mes_fatura}, usando ano {ano_transacao}")
-        else:
-            ano_transacao = ano_fatura
-
-        data_iso = f"{ano_transacao}-{mm}-{dd}"
-
-        estab_normalizado = estab_bruto.strip()
-
+        # Estorno: termina com " -" no estabelecimento
         eh_estorno = False
-        if estab_normalizado.endswith(' -') or estab_normalizado.endswith('-'):
-            estab_normalizado = re.sub(r'\s*-\s*$', '', estab_normalizado)
+        if re.search(r'\s*-\s*$', estab):
+            estab = re.sub(r'\s*-\s*$', '', estab)
             eh_estorno = True
 
-        estab_normalizado = re.sub(r'[,.\s]+$', '', estab_normalizado)
+        estab = re.sub(r'[,.\s]+$', '', estab)
 
+        valor = _br(valor_str)
         if eh_estorno and valor > 0:
-            valor = -valor
-            logger.debug(f"Estorno detectado na extração: {estab_normalizado} - valor invertido para {valor}")
+            valor = -valor  # já negativo; após ×-1 global ficará positivo
 
-        contexto = texto[max(0, match.start() - 100):min(len(texto), match.end() + 100)]
-        eh_internacional = bool(re.search(r'USD|EUR|GBP|ARS', contexto, re.IGNORECASE))
+        ctx = texto[max(0, m.start() - 100): m.end() + 100]
+        eh_intl = bool(re.search(r'USD|EUR|GBP|ARS', ctx, re.IGNORECASE))
 
-        if mes_transacao == mes_fatura and ano_transacao == ano_fatura:
-            eh_futura = False
-        elif ano_transacao > ano_fatura:
-            eh_futura = True
-        elif ano_transacao == ano_fatura and mes_transacao > mes_fatura:
-            eh_futura = True
-        elif ano_transacao < ano_fatura:
-            eh_futura = False
-        elif ano_transacao == ano_fatura and mes_transacao < mes_fatura:
-            eh_futura = False
-        else:
-            eh_futura = False
+        # Futura: mês posterior ao fechamento desta fatura
+        eh_futura = ano_tx > ano_fatura or (
+            ano_tx == ano_fatura and mes_tx > mes_fatura
+        )
 
-        transacoes_brutas.append({
-            'ddmm': ddmm,
-            'data_iso': data_iso,
-            'estabelecimento': estab_normalizado,
-            'valor': valor,
-            'valor_positivo': abs(valor),
-            'eh_internacional': eh_internacional,
-            'eh_futura': eh_futura,
-            'posicao': match.start()
-        })
+        brutas.append(
+            dict(
+                ddmm=ddmm,
+                data_iso=data_iso,
+                estabelecimento=estab,
+                valor=valor,
+                valor_positivo=abs(valor),
+                eh_intl=eh_intl,
+                eh_futura=eh_futura,
+                posicao=m.start(),
+                parcela_atual=None,
+                parcela_total=None,
+            )
+        )
 
-    logger.debug(f"Transações brutas extraídas: {len(transacoes_brutas)}")
+    logger.debug(f"Transações brutas: {len(brutas)}")
 
-    # === FILTRAR PARCELAS DUPLICADAS ===
-    transacoes_filtradas = []
-    grupos_parcelas = {}
+    # ── Dedup de parcelas ─────────────────────────────────────────────────
+    brutas = _dedup_parcelas(brutas)
 
-    regex_parcela = re.compile(r'(\d{2})/(\d{2})\s*$')
-
-    for trans in transacoes_brutas:
-        estab = trans['estabelecimento']
-        match_parcela = regex_parcela.search(estab)
-
-        if match_parcela:
-            parcela_atual = int(match_parcela.group(1))
-            parcela_total = int(match_parcela.group(2))
-            estab_sem_parcela = estab[:match_parcela.start()].strip()
-
-            estab_norm = re.sub(r'[^A-Z0-9]', '', estab_sem_parcela.upper())
-
-            trans['parcela_atual'] = parcela_atual
-            trans['parcela_total'] = parcela_total
-            trans['estabelecimento_normalizado'] = estab_norm
-
-            if estab_norm not in grupos_parcelas:
-                grupos_parcelas[estab_norm] = []
-            grupos_parcelas[estab_norm].append(trans)
-        else:
-            trans['parcela_atual'] = None
-            trans['parcela_total'] = None
-            transacoes_filtradas.append(trans)
-
-    for estab_norm, grupo in grupos_parcelas.items():
-        if len(grupo) == 1:
-            transacoes_filtradas.append(grupo[0])
-        else:
-            subgrupos = []
-            for trans in grupo:
-                adicionado = False
-                for subgrupo in subgrupos:
-                    valor_ref = subgrupo[0]['valor_positivo']
-                    if abs(trans['valor_positivo'] - valor_ref) / valor_ref < 0.1:
-                        subgrupo.append(trans)
-                        adicionado = True
-                        break
-                if not adicionado:
-                    subgrupos.append([trans])
-
-            for subgrupo in subgrupos:
-                trans_menor_parcela = min(subgrupo, key=lambda t: t['parcela_atual'])
-                transacoes_filtradas.append(trans_menor_parcela)
-
-                if len(subgrupo) > 1:
-                    removidas = [t for t in subgrupo if t != trans_menor_parcela]
-                    parcelas_removidas = [f"{t['parcela_atual']}/{t['parcela_total']}" for t in removidas]
-                    logger.debug(f"Removendo {len(removidas)} parcelas duplicadas de {estab_norm}: " +
-                                 f"mantendo {trans_menor_parcela['parcela_atual']}/{trans_menor_parcela['parcela_total']}, " +
-                                 f"removendo {parcelas_removidas}")
-
-    logger.debug(f"Após filtro de parcelas: {len(transacoes_filtradas)} transações (removidas {len(transacoes_brutas) - len(transacoes_filtradas)})")
-    transacoes_brutas = transacoes_filtradas
-
-    # === REMOVER DUPLICATAS DE PARCELAS (COM E SEM NÚMERO) ===
-    melhores_transacoes = {}
-
-    for trans in transacoes_brutas:
-        estab_base = re.sub(r'\s*\d{2}/\d{2}\s*$', '', trans['estabelecimento']).strip()
-        estab_norm = re.sub(r'[^A-Z0-9]', '', estab_base.upper())
-        chave_sem_parcela = f"{trans['data_iso']}|{estab_norm}|{trans['valor']}"
-
-        if chave_sem_parcela in melhores_transacoes:
-            trans_existente = melhores_transacoes[chave_sem_parcela]
-            tem_parcela_atual = bool(re.search(r'\d{2}/\d{2}\s*$', trans['estabelecimento']))
-            tem_parcela_existente = bool(re.search(r'\d{2}/\d{2}\s*$', trans_existente['estabelecimento']))
-
-            if tem_parcela_atual and not tem_parcela_existente:
-                logger.debug(f"Substituindo '{trans_existente['estabelecimento']}' por '{trans['estabelecimento']}' (versão com parcela)")
-                melhores_transacoes[chave_sem_parcela] = trans
-            elif tem_parcela_existente and not tem_parcela_atual:
-                logger.debug(f"Ignorando '{trans['estabelecimento']}' - já temos '{trans_existente['estabelecimento']}' (versão com parcela)")
-            else:
-                chave_unica = f"{chave_sem_parcela}#{len(melhores_transacoes)}"
-                melhores_transacoes[chave_unica] = trans
-                logger.debug(f"Transação repetida: '{trans['estabelecimento']}' - mantendo ambas (podem ser compras legítimas)")
-        else:
-            melhores_transacoes[chave_sem_parcela] = trans
-
-    transacoes_unicas = list(melhores_transacoes.values())
-    logger.debug(f"Após remover duplicatas de parcelas: {len(transacoes_unicas)} transações (removidas {len(transacoes_brutas) - len(transacoes_unicas)})")
-    transacoes_brutas = transacoes_unicas
-
-    # === CRIAR REGISTROS FINAIS ===
-    for trans in transacoes_brutas:
-        if trans['eh_futura']:
+    # ── Registros finais (descarta futuras) ───────────────────────────────
+    for t in brutas:
+        if t["eh_futura"]:
             continue
 
-        data_completa = trans['data_iso']
-        valor_final = trans['valor']
-        estabelecimento_final = trans['estabelecimento']
+        valor_final = t["valor"]
+        estab_final = t["estabelecimento"]
 
-        if 'ESTORNO' in estabelecimento_final.upper() and valor_final > 0:
+        # Força negativo se ESTORNO no nome mas valor ainda positivo
+        if "ESTORNO" in estab_final.upper() and valor_final > 0:
             valor_final = -valor_final
-            logger.debug(f"Estorno detectado: {estabelecimento_final} - valor invertido para {valor_final}")
 
-        transacoes.append((data_completa, estabelecimento_final, valor_final))
+        transacoes.append((t["data_iso"], estab_final, valor_final))
 
-    # === ADICIONAR IOFs CONSOLIDADOS ===
-    for iof_info in linhas_iof_consolidado:
-        data_iof = f"{ano_fatura}-{mes_fatura:02d}-01"
-        transacoes.append((
-            data_iof,
-            "IOF COMPRA INTERNACIONA",
-            iof_info['valor']
-        ))
-        logger.debug(f"IOF consolidado adicionado: R$ {iof_info['valor']}")
+    # ── IOFs consolidados (gastos, ainda positivos aqui) ─────────────────
+    for v in iofs:
+        transacoes.append(
+            (f"{ano_fatura}-{mes_fatura:02d}-01", "IOF COMPRA INTERNACIONA", v)
+        )
 
-    logger.debug(f"Transações finais (com IOFs consolidados): {len(transacoes)}")
+    # ── Produtos / Serviços ───────────────────────────────────────────────
+    # v2: passa mes_fatura para corrigir inferência de ano
+    servicos = _extract_produtos_servicos(
+        texto.split("\n"), ano_fatura, mes_fatura
+    )
 
-    # === PRODUTOS/SERVIÇOS (anuidades, estornos, taxas) ===
-    linhas = texto.split('\n')
-    transacoes_servicos = _extract_produtos_servicos(linhas, ano_fatura)
+    existentes = {_chave(d, l, v) for d, l, v in transacoes}
+    for d, l, v in servicos:
+        if _chave(d, l, v) not in existentes:
+            transacoes.append((d, l, v))
 
-    transacoes_existentes = set()
-    for data, lanc, valor in transacoes:
-        lanc_sem_parcela = re.sub(r'\s*\d{2}/\d{2}\s*$', '', lanc).strip()
-        lanc_norm = re.sub(r'[^A-Z0-9]', '', lanc_sem_parcela.upper())
-        chave = f"{data}|{lanc_norm}|{valor:.2f}"
-        transacoes_existentes.add(chave)
-
-    transacoes_servicos_unicas = []
-    for data, lanc, valor in transacoes_servicos:
-        lanc_sem_parcela = re.sub(r'\s*\d{2}/\d{2}\s*$', '', lanc).strip()
-        lanc_norm = re.sub(r'[^A-Z0-9]', '', lanc_sem_parcela.upper())
-        chave = f"{data}|{lanc_norm}|{valor:.2f}"
-
-        if chave not in transacoes_existentes:
-            transacoes_servicos_unicas.append((data, lanc, valor))
-        else:
-            logger.debug(f"Duplicata entre produtos/serviços e transações principais: {data} | {lanc} | {valor}")
-
-    transacoes.extend(transacoes_servicos_unicas)
-    logger.debug(f"Total após produtos/serviços: {len(transacoes)} (duplicatas removidas: {len(transacoes_servicos) - len(transacoes_servicos_unicas)})")
-
+    logger.debug(f"Total final: {len(transacoes)} transações")
     return transacoes
 
 
-def _extract_produtos_servicos(linhas: List[str], ano_atual: int) -> List[Tuple[str, str, float]]:
+# ─────────────────────────────────────────────────────────────────────────────
+# Dedup de parcelas
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _dedup_parcelas(brutas: list) -> list:
     """
-    Extrai transações da seção 'Lançamentos: produtos e serviços'
+    Para compras parceladas que aparecem com múltiplos números (ex: 03/12 e
+    04/12 na mesma fatura), mantém apenas a de menor número de parcela.
+    Também remove duplicatas com/sem número de parcela na mesma data/valor.
     """
-    transacoes = []
+    rx_parcela = re.compile(r'(\d{2})/(\d{2})\s*$')
+    sem_parcela = []
+    grupos: dict[str, list] = {}
 
-    inicio_secao = -1
-    for i, linha in enumerate(linhas):
-        if 'PRODUTOS/SERVIÇOS' in linha.upper():
-            inicio_secao = i
-            break
+    for t in brutas:
+        m = rx_parcela.search(t["estabelecimento"])
+        if m:
+            t["parcela_atual"] = int(m.group(1))
+            t["parcela_total"] = int(m.group(2))
+            base = re.sub(
+                r'[^A-Z0-9]', '', t["estabelecimento"][:m.start()].upper()
+            )
+            grupos.setdefault(base, []).append(t)
+        else:
+            sem_parcela.append(t)
 
-    if inicio_secao == -1:
-        return transacoes
+    filtradas = list(sem_parcela)
+    for grupo in grupos.values():
+        if len(grupo) == 1:
+            filtradas.append(grupo[0])
+            continue
 
-    i = inicio_secao + 1
+        # Subgrupos por valor similar (<10% de diferença)
+        subs: list[list] = []
+        for t in grupo:
+            placed = False
+            for s in subs:
+                ref = s[0]["valor_positivo"]
+                if ref and abs(t["valor_positivo"] - ref) / ref < 0.1:
+                    s.append(t)
+                    placed = True
+                    break
+            if not placed:
+                subs.append([t])
+
+        for s in subs:
+            filtradas.append(min(s, key=lambda x: x["parcela_atual"]))
+
+    # Dedup com/sem número de parcela na mesma data/valor
+    melhores: dict[str, dict] = {}
+    for t in filtradas:
+        base = re.sub(r'\s*\d{2}/\d{2}\s*$', '', t["estabelecimento"]).strip()
+        norm = re.sub(r'[^A-Z0-9]', '', base.upper())
+        chave = f"{t['data_iso']}|{norm}|{t['valor']}"
+
+        if chave not in melhores:
+            melhores[chave] = t
+        else:
+            ex = melhores[chave]
+            tem = bool(rx_parcela.search(t["estabelecimento"]))
+            ex_tem = bool(rx_parcela.search(ex["estabelecimento"]))
+            if tem and not ex_tem:
+                melhores[chave] = t          # preferir versão com parcela
+            elif not tem and not ex_tem:
+                melhores[f"{chave}#{len(melhores)}"] = t  # manter ambas
+
+    return list(melhores.values())
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Seção Produtos / Serviços
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _extract_produtos_servicos(
+    linhas: List[str],
+    ano_fatura: int,
+    mes_fatura: int,          # ← v2: recebe mes_fatura para inferir ano correto
+) -> List[Tuple[str, str, float]]:
+    """
+    Extrai lançamentos da seção 'Lançamentos: Produtos/Serviços'.
+
+    Correções v2:
+      - Recebe mes_fatura e aplica inferência de ano igual à seção principal.
+      - Descarta transações cujo mês inferido é posterior ao fechamento.
+    """
+    resultado = []
+    inicio = next(
+        (i for i, l in enumerate(linhas) if "PRODUTOS/SERVIÇOS" in l.upper()),
+        -1,
+    )
+    if inicio == -1:
+        return resultado
+
+    rx = r'(\d{2}/\d{2})\s+(.+?)\s+(-?\d{1,3}(?:\.\d{3})*,\d{2})'
+    i = inicio + 1
     while i < len(linhas):
         linha = linhas[i].strip()
-
-        if 'COMPRAS PARCELADAS' in linha.upper() or 'TOTAL DOS LANÇAMENTOS' in linha.upper():
+        if any(
+            k in linha.upper()
+            for k in ("COMPRAS PARCELADAS", "TOTAL DOS LANÇAMENTOS")
+        ):
             break
 
-        regex_multiplas = r'(\d{2}/\d{2})\s+([^\n\r]+?)\s+(-?\d{1,3}(?:\.\d{3})*,\d{2})'
-        matches = list(re.finditer(regex_multiplas, linha))
+        for m in re.finditer(rx, linha):
+            dd, mm_str = m.group(1).split("/")
+            mes_tx = int(mm_str)
 
-        for match in matches:
-            data_curta = match.group(1)
-            descricao = match.group(2).strip()
-            valor_str = match.group(3).strip()
+            # ── inferência de ano (mesma lógica da seção principal) ───────
+            ano_tx = ano_fatura - 1 if mes_tx > mes_fatura else ano_fatura
+            data_completa = f"{ano_tx}-{mm_str}-{dd}"
 
-            if descricao.endswith('-'):
-                descricao = descricao[:-1].strip()
-                if not valor_str.startswith('-'):
-                    valor_str = '-' + valor_str
+            # ── descartar transações futuras ──────────────────────────────
+            if ano_tx > ano_fatura or (
+                ano_tx == ano_fatura and mes_tx > mes_fatura
+            ):
+                continue
 
-            descricao = re.sub(r'\d{2}/\d{2}$', '', descricao).strip()
+            desc = m.group(2).strip()
+            valor_str = m.group(3).strip()
 
-            dd, mm = data_curta.split('/')
-            data_completa = f"{ano_atual}-{mm}-{dd}"
-            valor = _convert_valor_br(valor_str)
+            if desc.endswith("-"):
+                desc = desc[:-1].strip()
+                if not valor_str.startswith("-"):
+                    valor_str = "-" + valor_str
 
-            if 'ESTORNO' in descricao.upper() and valor > 0:
+            desc = re.sub(r'\d{2}/\d{2}$', '', desc).strip()
+            valor = _br(valor_str)
+
+            if "ESTORNO" in desc.upper() and valor > 0:
                 valor = -valor
 
             if valor != 0:
-                transacoes.append((data_completa, descricao, valor))
-                logger.debug(f"Produto/Serviço extraído: {data_completa} | {descricao} | {valor}")
+                resultado.append((data_completa, desc, valor))
+                logger.debug(f"Produto/Serviço: {data_completa} | {desc} | {valor}")
 
         i += 1
 
-    return transacoes
+    return resultado
 
 
-def _convert_valor_br(valor_str: str) -> float:
-    """Converte valor no formato brasileiro (1.234,56) para float"""
-    valor_str = valor_str.strip().replace(' ', '')
-    if ',' in valor_str:
-        valor_str = valor_str.replace('.', '')
-        valor_str = valor_str.replace(',', '.')
+# ─────────────────────────────────────────────────────────────────────────────
+# Helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _br(s: str) -> float:
+    """Converte valor no formato brasileiro (1.234,56) para float."""
+    s = str(s).strip().replace(" ", "")
+    if "," in s:
+        s = s.replace(".", "").replace(",", ".")
     try:
-        return float(valor_str)
+        return float(s)
     except ValueError:
-        logger.warning(f"Não foi possível converter valor: {valor_str}")
+        logger.warning(f"Valor inválido: {s}")
         return 0.0
 
 
+def _chave(data: str, lancamento: str, valor: float) -> str:
+    lanc = re.sub(r'\s*\d{2}/\d{2}\s*$', '', lancamento).strip()
+    lanc = re.sub(r'[^A-Z0-9]', '', lanc.upper())
+    return f"{data}|{lanc}|{valor:.2f}"
+
+
 def _extract_mes_fatura(nome_arquivo: str) -> str:
-    """
-    Extrai mês da fatura do nome do arquivo
-    Ex: fatura-202601.pdf → '202601'
-    """
-    match = re.search(r'(\d{6})', nome_arquivo)
-    if match:
-        return match.group(1)
-    now = datetime.now()
-    return now.strftime('%Y%m')
+    m = re.search(r'(\d{6})', nome_arquivo)
+    return m.group(1) if m else datetime.now().strftime('%Y%m')
+
+
+def _iso_to_br(data_iso: str) -> str:
+    """Converte YYYY-MM-DD → DD/MM/YYYY (formato esperado pelo V5 / CSV Itaú)."""
+    try:
+        dt = datetime.strptime(data_iso, "%Y-%m-%d")
+        return dt.strftime("%d/%m/%Y")
+    except ValueError:
+        # Já está em DD/MM/YYYY ou formato desconhecido — retorna como está
+        return data_iso
