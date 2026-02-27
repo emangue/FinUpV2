@@ -715,3 +715,192 @@ O endpoint `GET /budget/cashflow?ano=2026` já devolve `delta_aporte` por mês. 
 | `POST /budget/planning/bulk-upsert` | **Já existe** | Salva metas dos 12 meses de uma vez |
 | `POST /budget/expectativas` | **Novo** | Salva sazonais/rendas declaradas pelo usuário |
 | `GET /budget/expectativas?mes=2026-04` | **Novo** | Lista expectativas do mês com status de conciliação |
+
+---
+
+## Módulo 2 — Budget ↔ Patrimônio (conexão de aportes)
+
+### Problema
+
+Quando o usuário faz "TED XP INVEST R$5.000" e sobe o extrato, o app sabe que gastou R$5.000 com investimentos — mas **não sabe o que ele comprou**. Resultado:
+- `investimentos_historico.aporte_mes` fica zero → rentabilidade calculada incorretamente (aparece que rendeu R$5.000, quando na verdade foi o aporte)
+- Impossível calcular custo médio de ações
+- Impossível comparar renda fixa com o CDI contratado
+
+### 3 tracks de produto
+
+Cada produto do portfólio tem um `track` que define como seu valor é calculado:
+
+| Track | Tipo de produto | Como o valor é apurado |
+|-------|----------------|----------------------|
+| `snapshot` | Imóvel, FGTS, Previdência, Conta corrente | Usuário digita o valor mensalmente. `rendimento = Δvalor - aportes` |
+| `fixo` | CDB, LCI, LCA, Tesouro Direto, Debentures | Sistema calcula via CDI/IPCA acumulado real (API Bacen). `valor_atual = capital × Π(1 + cdi_dia)` |
+| `variavel` | Ações, FIIs, ETFs, BDRs | Sistema busca cotação diária (brapi). `valor_atual = posição × preço_dia`. Custo médio ponderado das compras |
+
+### UX — Badge de aportes pendentes
+
+Imediatamente após um upload que contenha `GRUPO='Investimentos'`:
+
+```
+┌─────────────────────────────────────────────────────┐
+│  Minha Carteira                            🔍       │
+├─────────────────────────────────────────────────────┤
+│                                                     │
+│  ⚠️  2 aportes aguardando vínculo         [Vincular →] │
+│     TED XP R$5.000 · PIX BTG R$2.000               │
+│                                                     │
+│         MEU PORTFÓLIO                              │
+│            R$ 1.9M                                  │
+│            7 tipos                                  │
+│         (donut chart)                               │
+└─────────────────────────────────────────────────────┘
+```
+
+O badge aparece **somente** enquanto houver `journal_entries` com `GRUPO='Investimentos'` sem `investimentos_transacoes` vinculado. Some ao vincular todos.
+
+### UX — Match automático (produto único detectado)
+
+Quando o `Estabelecimento` contém o `texto_match` de exatamente 1 produto do portfólio:
+
+```
+┌─────────────────────────────────────────────────────┐
+│  Aporte detectado                               [✕] │
+├─────────────────────────────────────────────────────┤
+│  TED XP RENDA FIXA LTDA                            │
+│  R$ 1.150,00  ·  15/02/2026                        │
+│                                                     │
+│  Parece que é um aporte em:                        │
+│  ┌──────────────────────────────────────────────┐  │
+│  │  💰 CDB XP 112% CDI                          │  │
+│  │     Renda Fixa · Liquidez diária             │  │
+│  │     Saldo atual: R$ 28.430                   │  │
+│  └──────────────────────────────────────────────┘  │
+│                                                     │
+│  [Não é esse produto]    [✅ Confirmar vínculo]     │
+└─────────────────────────────────────────────────────┘
+```
+
+### UX — Modal de vínculo manual
+
+Quando há 0 ou N matches (usuário escolhe "Não é esse produto" ou match falhou):
+
+```
+┌─────────────────────────────────────────────────────┐
+│  Vincular aporte ao portfólio              [✕]      │
+├─────────────────────────────────────────────────────┤
+│  TED XP INVEST                                      │
+│  R$ 5.000,00  ·  15/02/2026                        │
+│                                                     │
+│  O que você fez com esse dinheiro?                 │
+│  Pode dividir em vários produtos ↓                 │
+│                                                     │
+│  ┌──────────────────────────────────────────────┐  │
+│  │  PETR4 · Ação · 100 cotas × R$38,50         │  │
+│  │  Subtotal: R$ 3.850,00              [✕ rem.] │  │
+│  └──────────────────────────────────────────────┘  │
+│                                                     │
+│  ┌──────────────────────────────────────────────┐  │
+│  │  CDB XP 112% CDI · Renda Fixa               │  │
+│  │  Subtotal: R$ 1.150,00              [✕ rem.] │  │
+│  └──────────────────────────────────────────────┘  │
+│                                                     │
+│  [+ Adicionar produto]                             │
+│                                                     │
+│  Total vinculado: R$ 5.000 / R$ 5.000  ✅          │
+│                                                     │
+│  [Cancelar]              [Confirmar vínculo]        │
+└─────────────────────────────────────────────────────┘
+```
+
+**Regras do modal:**
+- Deve somar 100% do valor da transação para habilitar "Confirmar"
+- Produto pode ser existente no portfólio ou novo (abre sub-modal de criação)
+- Para ações/FIIs (`track='variavel'`): campos extras aparecem → `Ticker`, `Qtd de cotas`, `Preço por cota`
+- Para renda fixa (`track='fixo'`): campos extras → `Indexador` (CDI/IPCA/SELIC/Prefixado), `Taxa %`, `Vencimento` (ou "Liquidez diária")
+- Para snapshot: só o valor (não tem campos extras)
+
+### UX — Detalhes extras por tipo de produto (dentro do modal)
+
+**Track `variavel` — Ações, FIIs, ETFs:**
+```
+┌──────────────────────────────────────────────────────┐
+│  Produto: [PETR4 — Petrobras PN        ▼] (busca)   │
+│  Quantidade de cotas: [___100___]                    │
+│  Preço por cota:      [R$ 38,50_____]                │
+│  Subtotal calculado:   R$ 3.850,00   ✅              │
+└──────────────────────────────────────────────────────┘
+```
+O ticker serve para busca de cotação diária no brapi e custo médio histórico.
+
+**Track `fixo` — Renda fixa:**
+```
+┌──────────────────────────────────────────────────────┐
+│  Produto: [CDB XP 112% CDI            ▼]            │
+│  Indexador: [CDI ▼]  Taxa: [112___] % do CDI        │
+│  Vencimento: [dd/mm/aaaa]  ou [☑ Liquidez diária]   │
+│  Subtotal: R$ 1.150,00                               │
+└──────────────────────────────────────────────────────┘
+```
+
+### UX — Tela de patrimônio com tracks ativos
+
+Na tela `/mobile/carteira`, ao selecionar um produto:
+
+**Produto `variavel` (PETR4):**
+```
+PETR4 · Petrobras PN · Ação
+─────────────────────────────────────────────────────
+Posição atual:      100 cotas
+Custo médio:        R$ 38,50
+Preço hoje:         R$ 41,20  (atualizado 26/02/2026 17h)
+Valor atual:        R$ 4.120,00
+─────────────────────────────────────────────────────
+Resultado:          + R$ 270,00  (+7,0%)
+IR estimado s/ venda:  R$  40,50  (15% do ganho)
+Valor líquido est.:    R$ 4.079,50
+─────────────────────────────────────────────────────
+Aportes vinculados: 2  [ver histórico]
+```
+
+**Produto `fixo` (CDB 112% CDI):**
+```
+CDB XP 112% CDI · Renda Fixa · Liquidez diária
+─────────────────────────────────────────────────────
+Capital aplicado:   R$ 28.430,00
+Taxa contratada:    112% CDI
+CDI acumulado:      +1,84% (Jan–Fev 2026, fonte: Bacen)
+Valor estimado:     R$ 28.953,13  (+1,84% × 112%)
+─────────────────────────────────────────────────────
+Rentabilidade:      + R$  523,13  (+1,84% efetivo)
+IR: retido na fonte (não entra no IR estimado)
+─────────────────────────────────────────────────────
+Aportes vinculados: 3  [ver histórico]
+```
+
+### UX — Resumo do portfólio com IR estimado
+
+No topo da tela de Carteira (após o donut):
+
+```
+┌─────────────────────────────────────────────────────┐
+│  R$ 759.693,30   Patrimônio Líquido (bruto)         │
+│  −R$  12.450,00  IR estimado (ganho de capital)*    │
+│  ═══════════════                                    │
+│  R$ 747.243,30   Patrimônio líquido após IR est.    │
+│                                                     │
+│  * Estimativa sobre ações/FIIs. IR de renda fixa    │
+│    já retido na fonte. Não considera isenção de     │
+│    R$20k/mês ou day trade.                          │
+└─────────────────────────────────────────────────────┘
+```
+
+### Fontes de dados externas
+
+| Dado | Fonte | Frequência | Custo |
+|------|-------|-----------|-------|
+| CDI diário | [API BCB série 4389](https://api.bcb.gov.br/dados/serie/bcdata.sgs.4389/dados) | 1x/dia | Gratuito |
+| IPCA mensal | [API BCB série 433](https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados) | 1x/mês | Gratuito |
+| SELIC diária | [API BCB série 11](https://api.bcb.gov.br/dados/serie/bcdata.sgs.11/dados) | 1x/dia | Gratuito |
+| Cotação ações/FIIs | [brapi.dev](https://brapi.dev) | 1x/dia (18h) | Gratuito (15k req/mês) |
+
+Todos os dados ficam em cache local na tabela `market_data_cache` — nenhuma chamada externa no request do usuário.

@@ -911,3 +911,578 @@ GET /plano/cashflow?ano=2026
 - [ ] Cashflow: mês passado usa `gastos_realizados`, mês futuro usa `gastos_recorrentes + extras`
 - [ ] Nudge: sinal correto (estouro = negativo, economia = positivo)
 - [ ] Nudge: não aparece se sem cenário de aposentadoria configurado
+
+---
+
+## Módulo 2 — Budget ↔ Patrimônio (conexão de aportes)
+
+### 9. DAG incremental (depende do Módulo 1 estar concluído)
+
+```
+NÍVEL 0 — Banco (sem dependências)
+├── N1: migration market_data_cache                ~30min
+├── N2: migration investimentos_transacoes (+campos) ~30min
+└── N3: migration investimentos_portfolio (+campos)  ~30min
+
+NÍVEL 1 — Backend: jobs e dados externos (depende N1)
+└── J1: job diário market_data_sync                ~3h
+    ├── CDI/IPCA/SELIC via BCB (gratuito)
+    └── cotações via brapi (token em .env)
+
+NÍVEL 2 — Backend: domínio investimentos estendido (depende N2, N3)
+├── V1: endpoint vínculo POST /investimentos/vincular-aporte  ~2h
+├── V2: lógica de match automático (texto_match)              ~1h
+├── V3: cálculo custo médio (track='variavel')                ~2h
+├── V4: cálculo CDI acumulado (track='fixo')                  ~2h
+└── V5: IR estimado sobre ganho de capital                    ~1h
+
+NÍVEL 3 — Backend: upload Fase 7 (depende V1, V2)
+└── U1: Fase 7 — detecta GRUPO='Investimentos' → fila de vínculo ~2h
+
+NÍVEL 4 — Frontend: carteira enriquecida (depende J1, V3, V4, V5)
+├── F1: badge "N aportes aguardando vínculo" na tela carteira  ~1h
+├── F2: modal de match automático                              ~2h
+├── F3: modal de vínculo manual (com sub-forms por track)      ~4h
+├── F4: detalhe do produto com rentabilidade calculada         ~3h
+└── F5: IR estimado no resumo do portfólio                     ~2h
+```
+
+**Estimativa total Módulo 2:** ~23h  
+**Caminho crítico:** N1–N3 → J1 + V3/V4 → F3
+
+---
+
+### 10. Banco de dados — migrations do Módulo 2
+
+#### 10.1 `market_data_cache` (nova tabela)
+
+```python
+class MarketDataCache(Base):
+    __tablename__ = "market_data_cache"
+
+    id              = Column(Integer, primary_key=True)
+    tipo            = Column(String(20), nullable=False)
+    # "acao" | "cdi" | "ipca" | "selic"
+    codigo          = Column(String(20), nullable=False)
+    # "PETR4" | "MXRF11" | "CDI" | "IPCA" | "SELIC"
+    data_referencia = Column(Date, nullable=False)
+    valor           = Column(Numeric(20, 8), nullable=False)
+    # ação: preço em R$  |  CDI/SELIC: % ao dia  |  IPCA: % ao mês
+    fonte           = Column(String(30), nullable=False)
+    # "brapi" | "bcb"
+    created_at      = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("tipo", "codigo", "data_referencia",
+                         name="uq_market_data_dia"),
+        Index("idx_market_data_tipo_codigo", "tipo", "codigo"),
+        Index("idx_market_data_data", "data_referencia"),
+    )
+```
+
+```bash
+docker exec finup_backend_dev alembic revision --autogenerate \
+  -m "add_market_data_cache"
+docker exec finup_backend_dev alembic upgrade head
+```
+
+---
+
+#### 10.2 `investimentos_transacoes` — novos campos (nullable, zero impacto em prod)
+
+```python
+# alembic: migration — extend_investimentos_transacoes_v2
+
+# Vínculo com budget
+journal_entry_id = Column(Integer,
+    ForeignKey("journal_entries.id", ondelete="SET NULL"),
+    nullable=True, index=True)
+
+# Track variavel — ações, FIIs, ETFs
+codigo_ativo     = Column(String(20))        # "PETR4", "MXRF11"
+quantidade       = Column(Numeric(15, 6))    # cotas (pode ser fracionária)
+preco_unitario   = Column(Numeric(15, 6))    # preço por cota na data
+
+# Track fixo — renda fixa
+indexador        = Column(String(20))
+# "CDI" | "IPCA" | "SELIC" | "PREFIXADO"
+taxa_pct         = Column(Numeric(8, 4))
+# 112.0 = 112% CDI  |  6.5 = IPCA+6,5%  |  13.5 = 13,5% prefixado
+data_vencimento  = Column(Date, nullable=True)
+# NULL = liquidez diária (nunca vence)
+
+# Proventos (preenchido quando tipo='rendimento')
+tipo_proventos   = Column(String(30))
+# "dividendo" | "jcp" | "rendimento_fii" | "juros_rf"
+ir_retido        = Column(Numeric(15, 2))    # IR já retido na fonte
+```
+
+```bash
+docker exec finup_backend_dev alembic revision --autogenerate \
+  -m "extend_investimentos_transacoes_v2"
+docker exec finup_backend_dev alembic upgrade head
+```
+
+---
+
+#### 10.3 `investimentos_portfolio` — novos campos
+
+```python
+# alembic: migration — extend_investimentos_portfolio_v2
+
+track        = Column(String(10), default="snapshot")
+# "snapshot" | "fixo" | "variavel"
+
+codigo_ativo = Column(String(20))
+# "PETR4", "MXRF11" — usado para busca diária no brapi e custo médio
+
+texto_match  = Column(String(200))
+# Substring detectada no Estabelecimento do journal_entry
+# Ex: "XP RENDA FIXA", "NUBANK CDB", "BTG PACTUAL"
+# Match case-insensitive, partial
+```
+
+```bash
+docker exec finup_backend_dev alembic revision --autogenerate \
+  -m "extend_investimentos_portfolio_v2"
+docker exec finup_backend_dev alembic upgrade head
+```
+
+---
+
+### 11. Job diário de cotações (`market_data_sync.py`)
+
+**Path:** `scripts/jobs/market_data_sync.py`  
+**Trigger:** APScheduler dentro do FastAPI — `cron` às 18h (após fechamento B3)  
+**Registro em `main.py`:**
+```python
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+scheduler = AsyncIOScheduler()
+scheduler.add_job(sync_market_data, "cron", hour=18, minute=0)
+scheduler.start()
+```
+
+#### Implementação
+
+```python
+import requests
+from datetime import date, timedelta
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+BCB_BASE = "https://api.bcb.gov.br/dados/serie/bcdata.sgs"
+BRAPI_BASE = "https://brapi.dev/api"
+
+SERIES_BCB = {
+    "CDI":  4389,   # % ao dia
+    "SELIC": 11,    # % ao dia
+    "IPCA": 433,    # % ao mês (mensal)
+}
+
+def upsert_cache(db, tipo, codigo, data_ref, valor, fonte):
+    stmt = pg_insert(MarketDataCache).values(
+        tipo=tipo, codigo=codigo,
+        data_referencia=data_ref, valor=valor, fonte=fonte
+    ).on_conflict_do_nothing(
+        constraint="uq_market_data_dia"
+    )
+    db.execute(stmt)
+
+def sync_market_data(db: Session):
+    hoje = date.today()
+    ontem = hoje - timedelta(days=1)
+
+    # ── BCB: CDI, SELIC, IPCA ────────────────────────────────────────────
+    for codigo, serie in SERIES_BCB.items():
+        ini = ontem.strftime("%d/%m/%Y")
+        fim = hoje.strftime("%d/%m/%Y")
+        r = requests.get(
+            f"{BCB_BASE}.{serie}/dados"
+            f"?formato=json&dataInicial={ini}&dataFinal={fim}",
+            timeout=10
+        )
+        for item in r.json():
+            dt = datetime.strptime(item["data"], "%d/%m/%Y").date()
+            upsert_cache(db, "cdi" if codigo == "CDI" else codigo.lower(),
+                         codigo, dt, float(item["valor"]), "bcb")
+
+    # ── brapi: ações, FIIs, ETFs ─────────────────────────────────────────
+    codigos = db.execute(
+        "SELECT DISTINCT codigo_ativo FROM investimentos_portfolio "
+        "WHERE track = 'variavel' AND codigo_ativo IS NOT NULL AND ativo = TRUE"
+    ).fetchall()
+    codigos = [row[0] for row in codigos]
+
+    token = settings.BRAPI_TOKEN  # variável de ambiente BRAPI_TOKEN
+    for codigo in codigos:
+        try:
+            r = requests.get(
+                f"{BRAPI_BASE}/quote/{codigo}",
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=10
+            )
+            preco = r.json()["results"][0]["regularMarketPrice"]
+            upsert_cache(db, "acao", codigo, hoje, preco, "brapi")
+        except Exception as e:
+            # log e continua — não falha o job inteiro por uma ação
+            logger.warning(f"brapi error for {codigo}: {e}")
+
+    db.commit()
+```
+
+**Variável de ambiente a adicionar em `.env`:**
+```bash
+BRAPI_TOKEN=seu_token_aqui   # gratuito: 15.000 req/mês
+```
+
+---
+
+### 12. Lógica de cálculo por track
+
+#### 12.1 Track `variavel` — Custo médio e rentabilidade
+
+```python
+def calc_posicao_variavel(investimento_id: int, user_id: int,
+                          db: Session) -> dict:
+    """
+    Calcula posição atual, custo médio ponderado e rentabilidade de ativo variável.
+    Usa FIFO implícito via média ponderada.
+    """
+    transacoes = db.query(InvestimentoTransacao).filter(
+        InvestimentoTransacao.investimento_id == investimento_id,
+        InvestimentoTransacao.user_id == user_id,
+        InvestimentoTransacao.quantidade.isnot(None),
+    ).order_by(InvestimentoTransacao.data).all()
+
+    qtd_total = Decimal(0)
+    custo_total = Decimal(0)
+
+    for t in transacoes:
+        qtd = Decimal(str(t.quantidade))
+        preco = Decimal(str(t.preco_unitario or 0))
+        if t.tipo == "aporte":    # compra
+            custo_total += qtd * preco
+            qtd_total   += qtd
+        elif t.tipo == "resgate": # venda
+            # Reduz posição pro-rata (média ponderada)
+            if qtd_total > 0:
+                custo_total -= (qtd / qtd_total) * custo_total
+            qtd_total -= qtd
+
+    custo_medio = custo_total / qtd_total if qtd_total > 0 else Decimal(0)
+
+    # Preço atual do cache
+    portfolio = db.query(InvestimentoPortfolio).get(investimento_id)
+    cache = db.query(MarketDataCache).filter(
+        MarketDataCache.tipo == "acao",
+        MarketDataCache.codigo == portfolio.codigo_ativo,
+    ).order_by(MarketDataCache.data_referencia.desc()).first()
+
+    preco_atual = Decimal(str(cache.valor)) if cache else Decimal(0)
+    valor_atual = qtd_total * preco_atual
+    ganho = valor_atual - custo_total
+    ir_estimado = max(Decimal(0), ganho * Decimal("0.15"))  # 15% operação normal
+
+    return {
+        "posicao_atual": float(qtd_total),
+        "custo_medio": float(custo_medio),
+        "custo_total": float(custo_total),
+        "preco_atual": float(preco_atual),
+        "valor_atual": float(valor_atual),
+        "ganho_capital": float(ganho),
+        "ir_estimado": float(ir_estimado),
+        "valor_liquido_estimado": float(valor_atual - ir_estimado),
+        "rentabilidade_pct": float(ganho / custo_total * 100) if custo_total > 0 else 0,
+        "cache_data": cache.data_referencia.isoformat() if cache else None,
+    }
+```
+
+#### 12.2 Track `fixo` — CDI acumulado
+
+```python
+def calc_valor_fixo(transacao_aplicacao: InvestimentoTransacao,
+                    db: Session) -> dict:
+    """
+    Calcula valor atual de renda fixa indexada ao CDI.
+    Usa CDI diário acumulado do Bacen (cache local).
+
+    valor_atual = capital × Π(1 + cdi_dia × taxa_pct/100)
+    """
+    capital = Decimal(str(transacao_aplicacao.valor))
+    taxa_multiplicador = Decimal(str(transacao_aplicacao.taxa_pct or 100)) / 100
+    # ex: 112% CDI → multiplicador = 1.12
+
+    data_inicio = transacao_aplicacao.data
+    data_fim    = transacao_aplicacao.data_vencimento or date.today()
+
+    # Buscar todos os dias CDI no período
+    dias_cdi = db.query(MarketDataCache).filter(
+        MarketDataCache.tipo == "cdi",
+        MarketDataCache.codigo == "CDI",
+        MarketDataCache.data_referencia >= data_inicio,
+        MarketDataCache.data_referencia <= data_fim,
+    ).order_by(MarketDataCache.data_referencia).all()
+
+    if not dias_cdi:
+        return {"valor_atual": float(capital), "rentabilidade_pct": 0}
+
+    # Acumular: cada dia aplica taxa_dia × multiplicador_contratado
+    fator_acumulado = Decimal(1)
+    for dia in dias_cdi:
+        taxa_dia = Decimal(str(dia.valor)) / 100  # ex: 0.052347% → 0.00052347
+        fator_acumulado *= (1 + taxa_dia * taxa_multiplicador)
+
+    valor_atual = capital * fator_acumulado
+    rentabilidade = (valor_atual / capital - 1) * 100
+
+    # Projeção até vencimento (se tem data)
+    valor_projetado = None
+    if transacao_aplicacao.data_vencimento:
+        # Estimar CDI futuro como média dos últimos 21 dias
+        ultimos = dias_cdi[-21:] if len(dias_cdi) >= 21 else dias_cdi
+        cdi_medio_diario = sum(Decimal(str(d.valor)) for d in ultimos) / len(ultimos) / 100
+        dias_restantes = (transacao_aplicacao.data_vencimento - date.today()).days
+        # Aproximação: dias corridos ÷ 1.4 ≈ dias úteis
+        dias_uteis_estimados = int(dias_restantes / 1.4)
+        fator_futuro = (1 + cdi_medio_diario * taxa_multiplicador) ** dias_uteis_estimados
+        valor_projetado = float(valor_atual * fator_futuro)
+
+    return {
+        "capital_inicial": float(capital),
+        "valor_atual": float(valor_atual),
+        "rentabilidade_pct": float(rentabilidade),
+        "cdi_contratado_pct": float(transacao_aplicacao.taxa_pct or 100),
+        "valor_projetado_vencimento": valor_projetado,
+        "dias_calculados": len(dias_cdi),
+    }
+```
+
+---
+
+### 13. Endpoints novos do Módulo 2
+
+```python
+# Adicionar em investimentos/router.py
+
+@router.post("/vincular-aporte", status_code=201)
+def vincular_aporte(
+    data: VincularAporteRequest,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Vincula um journal_entry de investimento a um ou mais produtos do portfólio.
+
+    Cria N linhas em investimentos_transacoes (uma por produto),
+    atualiza investimentos_historico.aporte_mes do mês correspondente.
+    """
+    return InvestimentoService(db).vincular_aporte(user_id, data)
+
+@router.get("/pendentes-vinculo")
+def aportes_pendentes(
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Lista journal_entries com GRUPO='Investimentos' sem investimentos_transacoes vinculado.
+    Retorna também sugestão de match automático se texto_match detectado.
+    """
+    return InvestimentoService(db).get_aportes_pendentes(user_id)
+
+@router.get("/{investimento_id}/posicao")
+def get_posicao(
+    investimento_id: int,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """Posição atual, custo médio, rentabilidade e IR estimado (variável) ou CDI acumulado (fixo)."""
+    return InvestimentoService(db).get_posicao(investimento_id, user_id)
+
+@router.get("/resumo-ir")
+def get_resumo_ir(
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Retorna IR estimado consolidado sobre ganho de capital (apenas track='variavel').
+    Usado no card do portfólio: patrimônio bruto - IR estimado = patrimônio líquido.
+    """
+    return InvestimentoService(db).get_resumo_ir(user_id)
+```
+
+---
+
+### 14. Schemas do Módulo 2
+
+```python
+class AporteParcial(BaseModel):
+    """Um produto + valor dentro de um vínculo"""
+    investimento_id: int                 # portfolio existente (ou None para criar novo)
+    valor: Decimal                       # valor destinado a este produto
+    # Campos por track (opcionais dependendo do track)
+    # Track variavel
+    codigo_ativo:   Optional[str] = None
+    quantidade:     Optional[Decimal] = None
+    preco_unitario: Optional[Decimal] = None
+    # Track fixo
+    indexador:       Optional[str] = None       # "CDI" | "IPCA" | "SELIC" | "PREFIXADO"
+    taxa_pct:        Optional[Decimal] = None
+    data_vencimento: Optional[date] = None      # None = liquidez diária
+
+class VincularAporteRequest(BaseModel):
+    journal_entry_id: int
+    aportes: List[AporteParcial]
+    # Validação: sum(aportes.valor) deve igualar journal_entry.ValorPositivo ± R$0,01
+
+class AportePendenteResponse(BaseModel):
+    journal_entry_id: int
+    estabelecimento: str
+    valor: Decimal
+    data: date
+    match_automatico: Optional[dict] = None  # {investimento_id, nome, score}
+
+class PosicaoVariavelResponse(BaseModel):
+    track: str  # "variavel"
+    posicao_atual: float
+    custo_medio: float
+    custo_total: float
+    preco_atual: float
+    valor_atual: float
+    ganho_capital: float
+    ir_estimado: float
+    valor_liquido_estimado: float
+    rentabilidade_pct: float
+    cache_data: Optional[str]  # data da última cotação
+
+class PosicaoFixoResponse(BaseModel):
+    track: str  # "fixo"
+    capital_inicial: float
+    valor_atual: float
+    rentabilidade_pct: float
+    cdi_contratado_pct: float
+    valor_projetado_vencimento: Optional[float]
+    dias_calculados: int
+
+class ResumoIRResponse(BaseModel):
+    total_ativos_bruto: Decimal
+    ir_estimado_total: Decimal
+    patrimonio_liquido_estimado: Decimal
+    produtos_com_ganho: int
+    nota: str  # "Estimativa sobre ações/FIIs. Não considera isenção ou day trade."
+```
+
+---
+
+### 15. Fase 7 do upload — detectar GRUPO='Investimentos'
+
+Adicionar em `upload/service.py` após `_fase6_conciliar_expectativas()`:
+
+```python
+def _fase7_fila_vinculo_investimentos(self,
+                                      user_id: int,
+                                      upload_history_id: int) -> dict:
+    """
+    Fase 7: Detecta transações GRUPO='Investimentos' sem vínculo e marca para vinculação.
+
+    Não cria vínculos — apenas retorna as transações pendentes.
+    O usuário vincula manualmente (ou auto se texto_match detectado) na tela de Carteira.
+    """
+    pendentes = self.db.query(JournalEntry).filter(
+        JournalEntry.user_id == user_id,
+        JournalEntry.upload_history_id == upload_history_id,
+        JournalEntry.GRUPO == "Investimentos",
+    ).filter(
+        ~JournalEntry.id.in_(
+            self.db.query(InvestimentoTransacao.journal_entry_id).filter(
+                InvestimentoTransacao.journal_entry_id.isnot(None)
+            )
+        )
+    ).all()
+
+    return {"pendentes_vinculo": len(pendentes)}
+```
+
+Chamar em `confirmar_upload()`:
+```python
+fase6 = self._fase6_conciliar_expectativas(user_id, upload_history_id)
+fase7 = self._fase7_fila_vinculo_investimentos(user_id, upload_history_id)
+```
+
+O response do confirm passa a incluir:
+```json
+{
+  "fase7": { "pendentes_vinculo": 2 }
+}
+```
+O frontend usa esse número para exibir o badge na tela de Carteira.
+
+---
+
+### 16. Frontend — Módulo 2
+
+#### Componentes novos
+
+| Componente | Path | Responsabilidade |
+|-----------|------|-----------------|
+| `AportesPendentesBar` | `features/investimentos/components/aportes-pendentes-bar.tsx` | Badge amarelo com contador + botão "Vincular" |
+| `VincularAporteModal` | `features/investimentos/components/vincular-aporte-modal.tsx` | Modal completo de vínculo (match + manual + sub-forms por track) |
+| `MatchAutomaticoCard` | `features/investimentos/components/match-automatico-card.tsx` | Card de sugestão automática com 1 clique |
+| `AporteTrackVariavelForm` | `features/investimentos/components/aporte-track-variavel-form.tsx` | Sub-form: ticker, qtd, preço |
+| `AporteTrackFixoForm` | `features/investimentos/components/aporte-track-fixo-form.tsx` | Sub-form: indexador, taxa%, vencimento |
+| `PosicaoVariavelCard` | `features/investimentos/components/posicao-variavel-card.tsx` | Custo médio, rentabilidade, IR estimado |
+| `PosicaoFixoCard` | `features/investimentos/components/posicao-fixo-card.tsx` | CDI acumulado, valor atual estimado, projeção |
+| `ResumoIRPatrimonio` | `features/investimentos/components/resumo-ir-patrimonio.tsx` | Linha IR estimado no topo da Carteira |
+
+#### Integração na tela `/mobile/carteira`
+
+```tsx
+// Adicionar logo abaixo do header, antes do donut:
+const { data: pendentes } = useSWR("/api/v1/investimentos/pendentes-vinculo")
+
+{pendentes?.length > 0 && (
+  <AportesPendentesBar
+    count={pendentes.length}
+    onPress={() => setVincularOpen(true)}
+  />
+)}
+
+<VincularAporteModal
+  open={vincularOpen}
+  pendentes={pendentes}
+  onClose={() => setVincularOpen(false)}
+  onConfirm={() => { mutate("/api/v1/investimentos/pendentes-vinculo"); setVincularOpen(false) }}
+/>
+
+// Após o patrimônio líquido atual, antes das barras de tipo:
+<ResumoIRPatrimonio />
+```
+
+---
+
+### 17. Checklist — Módulo 2
+
+### Banco
+- [ ] Migration `market_data_cache` com constraint `uq_market_data_dia`
+- [ ] Migration `investimentos_transacoes`: todos os campos nullable
+- [ ] Migration `investimentos_portfolio`: `track`, `codigo_ativo`, `texto_match`
+
+### Backend
+- [ ] Job `sync_market_data` rodando às 18h via APScheduler
+- [ ] `BRAPI_TOKEN` no `.env` local e no servidor
+- [ ] CDI: BCB série 4389 sendo inserida diariamente no cache
+- [ ] Ações: brapi inserindo preços no cache
+- [ ] `InvestimentoService.vincular_aporte()` cria transações e atualiza `aporte_mes`
+- [ ] `InvestimentoService.get_aportes_pendentes()` com sugestão de match
+- [ ] `InvestimentoService.get_posicao()`: despacha para `calc_posicao_variavel` ou `calc_valor_fixo` por track
+- [ ] `InvestimentoService.get_resumo_ir()`: soma IR estimado de todos os variáveis
+- [ ] Fase 7 em `upload/service.py` integrada ao confirm
+- [ ] Novos endpoints registrados em `investimentos/router.py`
+
+### Frontend
+- [ ] Badge `AportesPendentesBar` aparece e some corretamente
+- [ ] Match automático: sugere com 1 clique quando `texto_match` detecta 1 produto
+- [ ] Modal manual: validação de soma = valor total da transação
+- [ ] Sub-form variável: ticker, qtd, preço
+- [ ] Sub-form fixo: indexador, taxa%, vencimento opcional
+- [ ] `PosicaoVariavelCard`: custo médio, preço atual, ganho, IR estimado, data do cache
+- [ ] `PosicaoFixoCard`: capital, valor CDI acumulado, rentabilidade %, projeção
+- [ ] `ResumoIRPatrimonio`: bruto − IR = líquido estimado com tooltip explicativo

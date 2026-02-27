@@ -76,6 +76,28 @@ Visão tabular tipo "planilha":
 - Quando a pessoa está travando dinheiro de investimento por gastar acima do plano:
   > "Com esse nível de gasto, você está perdendo **3,2 anos** de aposentadoria"
 
+### 2h. Feature: Conexão Budget ↔ Patrimônio (vínculo de aportes)
+
+Quando o usuário faz uma TED/PIX para a corretora (ex: "TED XP INVEST R$5.000"), esse lançamento fica no `journal_entries` com `GRUPO='Investimentos'` mas **não tem conexão com o que ele realmente comprou** no patrimônio. O app não sabe se foi PETR4, CDB ou MXRF11.
+
+**Ideia central:** após o upload, o app detecta transações de investimento e abre um modal para o usuário detalhar em qual(ais) produto(s) aquele dinheiro foi. A partir disso:
+- `investimentos_transacoes` fica alimentado com a transação detalhada, vinculada ao `journal_entry_id`
+- `investimentos_historico.aporte_mes` é preenchido automaticamente (corrige o cálculo de rentabilidade)
+- Para ações/FIIs: guarda `codigo_ativo` + `quantidade` + `preco_unitario` → custo médio calculável
+- Para renda fixa: guarda `indexador` + `taxa_pct` + `data_vencimento` → projeção via CDI do Bacen
+
+**Match automático:** se o portfolio tem `texto_match="XP RENDA FIXA"` e o `Estabelecimento` do journal_entry contém esse texto → sugere vínculo automático sem interação do usuário.
+
+**Job diário de cotações:**
+- CDI/IPCA/SELIC: API gratuita do Banco Central (sem autenticação, sem limite)
+- Ações/FIIs/ETFs: brapi.dev (plano gratuito = 15.000 req/mês, suficiente para uso pessoal)
+- Cache local em `market_data_cache` — roda 1x/dia às 18h (após fechamento B3)
+
+**IR estimado (ações):**
+- Base de cálculo: `(preço_atual - custo_médio_ponderado) × posição_líquida × 15%`
+- Exibido como "Patrimônio líquido estimado após IR": `total - IR_estimado`
+- Renda fixa: IR já é retido na fonte — registra `ir_retido` quando vem no extrato
+
 ---
 
 ## 3. Fora do escopo (não entra nesta branch)
@@ -84,6 +106,8 @@ Visão tabular tipo "planilha":
 - Integração com Open Finance / importação automática de renda
 - Análise preditiva de gastos por ML
 - Notificações push
+- Integração com API B3 em tempo real (cotações ao vivo)
+- Cálculo exato de IR com deduções de custos operacionais (taxa B3, corretagem)
 
 ---
 
@@ -176,6 +200,51 @@ Visão tabular tipo "planilha":
   > "Você está perdendo 3,2 anos de aposentadoria gastando acima do plano"
 - Cálculo integrado com parâmetros do plano de aposentadoria
 
+### S11 — Vínculo de transação de investimento ao produto
+> Como usuário, quando faço uma transferência para a corretora e subo o extrato, quero poder detalhar em qual(ais) produto(s) aquele dinheiro foi aplicado.
+
+**Acceptance criteria:**
+- Após upload, transações com `GRUPO='Investimentos'` geram um badge na tela de Patrimônio: "N aportes aguardando vínculo"
+- Modal de vínculo: exibe a transação (valor, data, estabelecimento) e permite adicionar 1 ou mais produtos com valor parcial
+- Soma dos produtos vinculados deve igualar o valor total da transação para confirmar
+- Ao confirmar: cria `investimentos_transacoes` com `journal_entry_id` linkado
+- `investimentos_historico.aporte_mes` do mês é atualizado automaticamente
+
+### S12 — Match automático de produto único
+> Como usuário, quando a corretora que recebi o dinheiro corresponde exatamente a um produto do meu portfólio, quero que o vínculo seja sugerido automaticamente.
+
+**Acceptance criteria:**
+- Se `portfolio.texto_match` está contido no `Estabelecimento` do journal_entry → exibe sugestão "Parece que é um aporte em [produto]. Confirmar?"
+- Um clique confirma; caso contrário, abre o modal completo
+- Match case-insensitive e parcial (substring)
+
+### S13 — Rentabilidade real de renda fixa com CDI
+> Como usuário com CDB no portfólio, quero ver quanto meu investimento rendeu comparado ao CDI contratado.
+
+**Acceptance criteria:**
+- Para produtos `track='fixo'` com `indexador='CDI'` e `taxa_pct`: o app calcula o valor atual usando CDI acumulado real (API Bacen)
+- Exibe: valor aplicado, valor atual estimado, rentabilidade % e quanto % do CDI isso representa
+- Para liquidez diária (`data_vencimento` NULL): sempre mostra valor atualizado
+- Para produtos com vencimento: mostra projeção até o vencimento
+
+### S14 — Posição e custo médio de ações
+> Como usuário com ações no portfólio, quero ver minha posição atual, custo médio e rentabilidade.
+
+**Acceptance criteria:**
+- Para produtos `track='variavel'`: custo médio ponderado é calculado a partir de todas as transações de compra
+- Posição atual = quantidade comprada − quantidade vendida
+- Valor atual = posição × preço do dia (atualizado 1x/dia via brapi)
+- Exibe: posição, custo médio, valor atual, ganho/perda R$ e %
+
+### S15 — IR estimado no patrimônio
+> Como usuário com ações, quero ver uma estimativa do IR sobre ganho de capital para ter uma visão realista do meu patrimônio líquido.
+
+**Acceptance criteria:**
+- Linha "IR estimado (ganho de capital)" no resumo do portfólio: `ganho × 15%`
+- Linha "Patrimônio líquido após IR estimado": `total_ativos - ir_estimado - passivos`
+- Tooltip explicando que é estimativa (não considera isenção de R$20k/mês, day trade, etc.)
+- Renda fixa: IR já retido na fonte — não entra no cálculo de IR estimado
+
 ---
 
 ## 5. Análise Técnica Preliminar
@@ -194,36 +263,30 @@ Provável `overflow-hidden` ou `h-screen` no container da lista. Revisão de CSS
 **B4 — Formatação mobile:**  
 Revisão de padding/input size na tela `/mobile/budget/edit`.
 
-### Feature: Renda (mudanças de modelo)
+### Feature: Budget ↔ Patrimônio (mudanças de modelo)
 
-Novo campo em `BudgetPlanning` ou nova tabela `user_financial_profile`:
+**`investimentos_transacoes` — novos campos (nullable, sem quebrar prod):**
 ```python
-class UserFinancialProfile(Base):
-    __tablename__ = "user_financial_profile"
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id"), unique=True)
-    renda_media_mensal = Column(Float, nullable=True)
-    # Ganhos extraordinários: JSON [{mes: "2026-12", valor: 5000, descricao: "13o"}]
-    ganhos_extraordinarios = Column(Text, nullable=True)  # JSON
-    plano_inicio_mes = Column(String(7), nullable=True)  # YYYY-MM
-    updated_at = Column(DateTime, ...)
+journal_entry_id = Column(Integer, ForeignKey("journal_entries.id"), nullable=True)
+codigo_ativo     = Column(String(20))       # "PETR4" (track variavel)
+quantidade       = Column(Numeric(15, 6))   # cotas
+preco_unitario   = Column(Numeric(15, 6))   # preço por cota
+indexador        = Column(String(20))       # "CDI" | "IPCA" | "SELIC" | "PREFIXADO"
+taxa_pct         = Column(Numeric(8, 4))    # 112.0 = 112% CDI
+data_vencimento  = Column(Date, nullable=True)  # NULL = liquidez diária
+tipo_proventos   = Column(String(30))       # "dividendo" | "jcp" | "rendimento_fii"
+ir_retido        = Column(Numeric(15, 2))   # IR retido na fonte (renda fixa)
 ```
 
-### Feature: Parcelas
-
-Novos campos em `BudgetPlanning`:
+**`investimentos_portfolio` — novos campos:**
 ```python
-is_parcela = Column(Integer, default=0)    # 0=normal, 1=parcela
-parcela_seq = Column(Integer, nullable=True)   # 1, 2, 3...
-parcela_total = Column(Integer, nullable=True)  # total de parcelas
-parcela_grupo_ref = Column(String, nullable=True)  # nome do gasto raiz
+track       = Column(String(10), default="snapshot")  # "snapshot" | "fixo" | "variavel"
+codigo_ativo = Column(String(20))   # "PETR4" — para match e cotação diária
+texto_match  = Column(String(200))  # "XP RENDA FIXA" — detecta no Estabelecimento
 ```
 
-### Feature: Nudge e anos perdidos
-
-Cálculo client-side usando os parâmetros já salvos do plano de aposentadoria:
-- `valor_extra_mes` × PMT formula → diferença de patrimônio
-- Não requer novo endpoint, apenas componente de cálculo no frontend
+**Nova tabela `market_data_cache`:**  
+Cache de cotações diárias (ações via brapi + CDI/IPCA via BCB). Job roda 1x/dia.
 
 ---
 
@@ -243,6 +306,12 @@ S8 (seletor início + preview) → depois de S5
 S9 (tabela + restrição)       → depois de S5
 S7 (nudge custo desvio)       → depois de S5
 S10 (anos perdidos)           → depois de S5 + integração plano aposentadoria
+
+S11 (vínculo: migration + modal backend)  → depende de migration investimentos_transacoes
+S12 (match automático)                    → depende de S11
+S13 (CDI renda fixa: job + cálculo)       → depende de S11 + market_data_cache
+S14 (posição + custo médio ações)         → depende de S11 + market_data_cache (brapi)
+S15 (IR estimado)                         → depende de S14
 ```
 
 ---
@@ -255,6 +324,10 @@ S10 (anos perdidos)           → depois de S5 + integração plano aposentadori
 | Cálculo de anos perdidos divergir do plano de aposentadoria | Alta | Extrair lógica de cálculo para lib compartilhada (`features/plano-financeiro/lib/calculator.ts`) |
 | Usuário sem dados dos últimos 3 meses | Baixa | Fallback: onboarding manual sem dados históricos |
 | `router.back()` em iOS Safari se comporta diferente | Média | Usar `router.push()` com destino explícito em vez de `back()` |
+| brapi gratuita (15k req/mês) insuficiente com muitos usuários | Baixa (uso pessoal) | Upgrade para plano Startup R$50/mês se necessário; ou agrupar todos os tickers numa req no plano pago |
+| CDI histórico: Bacen limita consultas a 10 anos e exige filtro de datas | Baixa | Sempre buscar com `dataInicial` e `dataFinal`; cache local evita requerimentos repetidos |
+| Cotação de ação fora do horário B3 (final de semana) | Baixa | Cache usa último valor disponível; exibe data da última atualização |
+| Custo médio incorreto por falta de histórico pré-app | Média | Permitir lançamento manual de transações históricas de compra (tipo='aporte', fonte='manual') |
 
 ---
 
@@ -264,3 +337,5 @@ S10 (anos perdidos)           → depois de S5 + integração plano aposentadori
 - [ ] Replicação de plano funciona em 100% dos testes
 - [ ] Taxa de ativação do fluxo de renda ≥ 60% dos novos usuários que criam plano
 - [ ] Usuários que usam o nudge têm desvio de plano 20% menor (medir em 60 dias)
+- [ ] ≥ 80% dos lançamentos de investimento (GRUPO='Investimentos') têm vínculo criado pelo usuário em até 7 dias
+- [ ] Rentabilidade de renda fixa: valor calculado diverge < 0,5% do extrato da corretora (validar manualmente em 3 produtos)
