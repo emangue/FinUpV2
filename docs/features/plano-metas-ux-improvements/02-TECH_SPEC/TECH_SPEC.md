@@ -46,7 +46,7 @@ NÍVEL 3 — Backend: cashflow engine (depende P1, P2, P3)
     └── nudge aposentadoria (usa InvestimentoCenario)
 
 NÍVEL 4 — Frontend: novo domínio (depende C1)
-├── F1: bottom nav "Plano" + roteamento            ~2h
+├── F1: bottom nav redesenhado (Upload FAB + Plano + Carteira + ⚙️ Perfil no header)  ~3h
 ├── F2: /mobile/plano — Acompanhamento             ~4h
 ├── F3: /mobile/construir-plano — wizard etapa 1   ~3h
 ├── F4: /mobile/construir-plano — wizard etapa 2   ~3h
@@ -647,14 +647,71 @@ app.include_router(plano_router, prefix="/api/v1")
 
 ### 4.1 Bottom nav (`bottom-navigation.tsx`)
 
-**Mudança:** index 2 de `Metas` → `Plano`, path `/mobile/plano`, ícone `LineChart`.
+**Nova estrutura do bottom nav** (5 tabs, com FAB central = Upload):
+
+```
+[Início] [Transações] [ ⬆️ Upload ] [Plano] [Carteira]
+                       ↑ FAB central elevado
+```
+
+**Mudanças em relação ao nav anterior:**
+
+| Posição | Antes | Depois |
+|---------|-------|--------|
+| Tab 1 | Dashboard | **Início** (mesmo path, novo label) |
+| Tab 2 | Transações | Transações (sem mudança) |
+| Tab 3 (FAB) | Metas → `/mobile/budget` | **Upload** → abre bottom sheet |
+| Tab 4 | Carteira | **Plano** → `/mobile/plano` |
+| Tab 5 | Perfil | **Carteira** → `/mobile/carteira` |
+| Header | — | ⚙️ ícone de Perfil no canto direito de Início |
 
 ```tsx
 // src/components/mobile/bottom-navigation.tsx
-// Linha atual (approx):
-{ label: "Metas", icon: Target, path: "/mobile/budget" }
-// → substituir por:
-{ label: "Plano", icon: LineChart, path: "/mobile/plano" }
+// Antes (approx):
+{ label: "Metas",    icon: Target,     path: "/mobile/budget"   }
+
+// Substituir TODA a lista por:
+const navItems = [
+  { label: "Início",       icon: Home,       path: "/mobile/dashboard" },
+  { label: "Transações",   icon: List,       path: "/mobile/transactions" },
+  { label: "",             icon: Upload,     isFab: true, onPress: openUploadSheet },  // FAB central
+  { label: "Plano",        icon: LineChart,  path: "/mobile/plano" },
+  { label: "Carteira",     icon: Wallet,     path: "/mobile/carteira", badgeFn: getPendingAportesCount },
+]
+```
+
+**FAB — comportamento:**
+
+```tsx
+// Ao tocar no FAB → abre bottom sheet (não navega para rota)
+function openUploadSheet() {
+  // Exibe opções:
+  // "📄 Extrato bancário" → router.push("/mobile/upload?tipo=extrato")
+  // "💳 Fatura cartão"   → router.push("/mobile/upload?tipo=fatura")
+}
+```
+
+**Badge na aba Carteira:**
+
+```tsx
+// Mostra ⚠️ quando há aportes sem vínculo
+function getPendingAportesCount(userId: number): number {
+  // GET /api/v1/investments/pending-links → { count: N }
+  // Returns N ou 0
+}
+```
+
+**Ícone ⚙️ Perfil no header de Início:**
+
+```tsx
+// src/app/mobile/dashboard/page.tsx (header)
+<header>
+  <span>Fevereiro 2026</span>
+  <div className="flex gap-2">
+    <NotificationBell count={unreadCount} />
+    <Link href="/mobile/profile"><Settings size={20} /></Link>
+  </div>
+</header>
 ```
 
 ---
@@ -890,7 +947,10 @@ GET /plano/cashflow?ano=2026
 - [ ] Threshold de nudge: não mostrar se desvio < R$50 ou meses_restantes < 12
 
 ### Frontend
-- [ ] Bottom nav: "Metas" → "Plano", path `/mobile/plano`
+- [ ] Bottom nav redesenhado: Upload FAB central (abre bottom sheet); "Plano" em tab 4; "Carteira" em tab 5
+- [ ] Perfil move para ⚙️ ícone no header de Início
+- [ ] Badge ⚠️ no ícone da tab Carteira quando há aportes pendentes (`/api/v1/investments/pending-links`)
+- [ ] Upload bottom sheet: opções "Extrato bancário" / "Fatura cartão"
 - [ ] `/mobile/plano`: redirect para construtor se sem perfil, senão acompanhamento
 - [ ] `/mobile/construir-plano`: wizard 4 etapas funcional com estado local
 - [ ] `AcompanhamentoPlano`: nudge no topo, gastos vs plano, alertas futuros
@@ -1180,33 +1240,74 @@ def sync_market_data(db: Session):
             dt = datetime.strptime(item["data"], "%d/%m/%Y").date().replace(day=1)
             upsert_cache(db, codigo.lower(), codigo, dt, float(item["valor"]), "bcb")
 
-    # ── brapi: ações, FIIs, ETFs ─────────────────────────────────────────
-    codigos = db.execute(
+    # ── brapi: ações, FIIs, ETFs — JOB GLOBAL, SEM filtro de user_id ────────
+    #
+    # ⚠️ REGRA CRÍTICA DE EFICIÊNCIA:
+    # market_data_cache NÃO tem user_id — é um cache GLOBAL compartilhado.
+    # Coletamos TODOS os tickers únicos de TODOS os usuários em uma única query
+    # e chamamos a brapi UMA vez por ticker distinto, independente de quantos
+    # usuários possuem aquele ativo.
+    #
+    # Exemplo:
+    #   User A: PETR4, MXRF11, ITUB4
+    #   User B: PETR4, BBAS3
+    #   User C: MXRF11
+    #   → tickers únicos: [PETR4, MXRF11, ITUB4, BBAS3]  → 4 chamadas (não 6)
+    #
+    # Custo real por plano brapi:
+    # ┌──────────────────┬────────────────┬──────────────────────────────────┐
+    # │ Plano            │ Ativos/req     │ Req/dia com 50 ativos únicos     │
+    # ├──────────────────┼────────────────┼──────────────────────────────────┤
+    # │ Free (gratuito)  │ 1              │ 50 req/dia = 1.550 req/mês ✅    │
+    # │ Startup (R$50)   │ 10 em batch    │  5 req/dia =   155 req/mês ✅    │
+    # │ Pro (R$83)       │ 20 em batch    │  3 req/dia =    93 req/mês ✅    │
+    # └──────────────────┴────────────────┴──────────────────────────────────┘
+    # Free é suficiente para até ~480 ativos únicos/dia sem atingir 15k req/mês
+
+    codigos_unicos = [row[0] for row in db.execute(text(
         "SELECT DISTINCT codigo_ativo FROM investimentos_portfolio "
         "WHERE track = 'variavel' AND codigo_ativo IS NOT NULL AND ativo = TRUE"
-    ).fetchall()
-    codigos = [row[0] for row in codigos]
+    )).fetchall()]  # ex: ["PETR4", "MXRF11", "ITUB4", "BBAS3"]
 
-    token = settings.BRAPI_TOKEN  # variável de ambiente BRAPI_TOKEN
-    for codigo in codigos:
+    token      = settings.BRAPI_TOKEN
+    batch_size = getattr(settings, "BRAPI_BATCH_SIZE", 1)
+    # BRAPI_BATCH_SIZE=1 (free) | 10 (startup) | 20 (pro)
+
+    for i in range(0, len(codigos_unicos), batch_size):
+        batch       = codigos_unicos[i : i + batch_size]
+        tickers_str = ",".join(batch)  # "PETR4" (free) ou "PETR4,MXRF11,..." (pago)
         try:
             r = requests.get(
-                f"{BRAPI_BASE}/quote/{codigo}",
+                f"{BRAPI_BASE}/quote/{tickers_str}",
                 headers={"Authorization": f"Bearer {token}"},
-                timeout=10
+                timeout=15
             )
-            preco = r.json()["results"][0]["regularMarketPrice"]
-            upsert_cache(db, "acao", codigo, hoje, preco, "brapi")
+            for resultado in r.json()["results"]:
+                upsert_cache(db, "acao",
+                             resultado["symbol"],
+                             hoje,
+                             resultado["regularMarketPrice"],
+                             "brapi")
         except Exception as e:
-            # log e continua — não falha o job inteiro por uma ação
-            logger.warning(f"brapi error for {codigo}: {e}")
+            logger.warning(f"brapi error for batch {batch}: {e}")
+            # continua para o próximo batch — não aborta o job inteiro
+
+    # ── BCB: já processado acima — TAMBÉM é global ──────────────────────
+    # CDI / SELIC: 1 req/dia → serve TODOS os usuários com renda fixa
+    # IPCA / IGPM / INCC: 1 req/mês → serve TODOS os usuários
 
     db.commit()
+    logger.info(
+        f"market_data_sync: BCB ok | "
+        f"brapi: {len(codigos_unicos)} ativos únicos em "
+        f"{(len(codigos_unicos) + batch_size - 1) // batch_size} req(s)"
+    )
 ```
 
-**Variável de ambiente a adicionar em `.env`:**
+**Variáveis de ambiente a adicionar em `.env`:**
 ```bash
-BRAPI_TOKEN=seu_token_aqui   # gratuito: 15.000 req/mês
+BRAPI_TOKEN=seu_token_aqui
+BRAPI_BATCH_SIZE=1   # 1=free (15k req/mês) | 10=startup (R$50/mês) | 20=pro (R$83/mês)
 ```
 
 ---

@@ -10,7 +10,7 @@
 
 | Questão | Decisão |
 |---------|---------|
-| Entry point | **Nova tab no bottom nav: "Plano"** — substitui "Metas" (ver mapa abaixo) |
+| Entry point | **Upload como FAB central** — ação primária que alimenta todo o app; "Plano" é aba fixa à direita; "Perfil" move para ⚙️ no header de Início |
 | Plano unificado? | **Sim** — um só construtor, gastos + aposentadoria integrados |
 | Evolução por grupo | **Não** — apenas inflação global ("seus gastos evoluem com o IPCA") |
 | Parcelamento no banco | **N linhas** (via `budget_planning` + campos de parcela) — ponte para `base_parcelas` futura |
@@ -40,16 +40,255 @@
 | Dashboard → aba Patrimônio → PlanoAposentadoriaTab | `/mobile/dashboard` | Card com CTA para personalizar plano, gráfico de projeção | **Atualiza**: CTA vai para o Construtor unificado |
 | Carteira → botão "Simular" | `/mobile/carteira` | `router.push('/mobile/dashboard?tab=patrimonio')` | **Atualiza**: vai para o Construtor |
 
-### Bottom nav proposto
+### Bottom nav proposto — redesenhado
+
+#### Racional da mudança
+
+O nav atual coloca "Metas" como FAB central — mas o usuário **não cria metas diariamente**. O que ele faz mensalmente (e que desencadeia tudo no app) é o **upload do extrato**. O upload alimenta:
+- categorização → conciliação do Plano → vínculo de aportes na Carteira
+
+Referências de mercado:
+- **Kinvo**: FAB central = "Novo aporte"
+- **Warren**: FAB central = "Investir"
+- **YNAB**: FAB central = "Adicionar transação"
+- **Nubank**: FAB central = "Pix" (ação primária do produto)
+
+Em todos os casos: **o FAB central é a ação primária que mais valor gera**. Para este app, é o upload.
+
+"Perfil" é acessado raramente (configurações, senha) — não merece uma das 5 abas primárias.
+
+#### Nova estrutura
 
 ```
-[Dashboard] [Transações] [Plano●] [Carteira] [Perfil]
-                          ↑ FAB preto (ícone: LineChart ou Compass)
+[Início] [Transações] [ ⬆️ ] [Plano] [Carteira]
+                       ↑
+                  FAB elevado
+                   "Upload"
 ```
 
-- **"Metas" → "Plano"**: a tab central passa a ser o Plano Financeiro Integrado
-- Ao tocar no FAB: se a pessoa nunca configurou → abre o Construtor (wizard 4 etapas)
-- Se já configurou → abre a tela de **Acompanhamento do Plano** (nova tela de monitoramento)
+| Aba | Ícone | Path | O que resolve |
+|-----|-------|------|---------------|
+| **Início** | 🏠 House | `/mobile/dashboard` | Visão geral do mês: gastos, nudge, alertas, últimas transações |
+| **Transações** | ☰ List | `/mobile/transactions` | Lista completa com filtros e busca |
+| **⬆️ Upload** | ↑ Upload (FAB) | abre bottom sheet | Ação primária — upload de extrato ou fatura |
+| **Plano** | 📊 ChartLine | `/mobile/plano` | Plano Financeiro Integrado (era "Metas") |
+| **Carteira** | 👛 Wallet | `/mobile/carteira` | Patrimônio, investimentos, vínculo de aportes |
+
+**Perfil** move para: ⚙️ ícone no canto direito do header de Início.
+
+---
+
+### Arquitetura de navegação — conteúdo e atalhos por tela
+
+#### 🏠 Início (`/mobile/dashboard`)
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Fevereiro 2026                 [🔔 2]  [⚙️ Perfil]    │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│  ┌── RESUMO DO MÊS ────────────────────────────────┐   │
+│  │  Gasto:   R$ 8.320  /  Plano R$ 9.500   87%  ✅  │   │
+│  │  Aporte:  R$ 1.800  /  Plano R$ 2.500   72%  ⚠️  │   │
+│  │  Saldo estimado restante:  R$ 1.180              │   │
+│  └──────────────────────────────────────────────────┘   │
+│                                                         │
+│  ┌── NUDGE (se desvio > R$50 e meses_restantes≥12) ─┐  │
+│  │  📉 Você está R$700 abaixo do aporte planejado    │  │
+│  │     Isso pode custar 0,8 anos de aposentadoria    │  │
+│  │  [Ver impacto no Plano →]                         │  │
+│  └───────────────────────────────────────────────────┘  │
+│                                                         │
+│  ┌── ALERTAS CONTEXTUAIS ────────────────────────────┐  │
+│  │  ⚠️  2 aportes aguardando vínculo   → Carteira   │  │
+│  │  📤 Último upload há 31 dias        → Upload      │  │
+│  └───────────────────────────────────────────────────┘  │
+│                                                         │
+│  ÚLTIMAS TRANSAÇÕES                            [Ver →]  │
+│  ·  Supermercado Extra     − R$  340   Alimentação      │
+│  ·  TED XP Invest          − R$ 1.800  Investimentos ⚠️ │
+│  ·  Shell Gas Station      − R$   89   Transporte       │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Atalhos rápidos de Início:**
+- Card de resumo → tap → abre `/mobile/plano` na aba do mês corrente
+- Nudge card → tap → abre `/mobile/plano` com o mês destacado
+- Badge "aportes" → tap → abre `/mobile/carteira` no modal de vínculo
+- Badge "último upload" → tap → abre o bottom sheet de Upload
+- Transação com ⚠️ → tap → abre modal de vínculo daquela transação
+- "Ver →" últimas transações → abre `/mobile/transactions` com filtro do mês corrente
+
+---
+
+#### 📋 Transações (`/mobile/transactions`)
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Transações            [🔍 Buscar]  [Fev 2026 ▼]       │
+├─────────────────────────────────────────────────────────┤
+│  [Todos]  [Despesa]  [Receita]  [Investimento]          │
+├─────────────────────────────────────────────────────────┤
+│  26/02 · Supermercado Extra · Alimentação  − R$  340   │
+│  25/02 · TED XP Invest · Investimentos  ⚠️ − R$ 1.800  │
+│  25/02 · Shell Gas Station · Transporte    − R$   89   │
+│  ...                                                    │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Ações nas transações:**
+- Swipe left → opções: Editar grupo, Excluir, Vincular ao portfólio
+- Tap em transação com ⚠️ (GRUPO='Investimentos' sem vínculo) → modal de vínculo
+- Filtro de mês: date picker de mês/ano
+- Filtro de tipo: Todos / Despesa / Receita / Investimento
+
+---
+
+#### ⬆️ Upload (FAB central — bottom sheet)
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                                                         │
+│  O que você quer subir?                                 │
+│                                                         │
+│  ┌────────────────────────────┐  ┌───────────────────┐  │
+│  │  📄 Extrato bancário       │  │  💳 Fatura cartão │  │
+│  │  OFX, CSV, PDF             │  │  CSV, PDF         │  │
+│  └────────────────────────────┘  └───────────────────┘  │
+│                                                         │
+│  Último upload: Extrato Bradesco (21/02/2026)           │
+│                                                         │
+│  [Cancelar]                                             │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Fluxo pós-upload:**
+1. Upload → tela de pré-visualização (tabela de transações detectadas)
+2. Confirmar → fases 1–7 executadas no backend
+3. Retorna ao Início com toast: `"32 transações processadas · 2 aportes para vincular"`
+4. Badges ⚠️ aparecem no Início e na aba Carteira
+
+---
+
+#### 📊 Plano (`/mobile/plano`) — era "Metas"
+
+**Comportamento condicional:**
+- Sem plano configurado → abre o Construtor (wizard 4 etapas)
+- Com plano → abre Acompanhamento do Plano
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Plano 2026                       [Editar] [+ Sazonal]  │
+├─────────────────────────────────────────────────────────┤
+│  ◀ Fev 2026  ▶ Mar 2026                                 │
+│  ┌──────────────────────────────────────────────────┐   │
+│  │  Renda        R$ 15.000                          │   │
+│  │  Gastos     − R$ 12.800  (R$ 14.500 prev.) ⚠️   │   │
+│  │  Aporte     − R$  1.800  (R$  2.500 prev.) ⚠️   │   │
+│  │  Saldo          R$    400                    ✅   │   │
+│  └──────────────────────────────────────────────────┘   │
+│                                                         │
+│  POR GRUPO                                              │
+│  Alimentação  ██████████  R$2.700 / R$2.500  108% ⚠️   │
+│  Casa         ████████░░  R$2.800 / R$3.000   93% ✅   │
+│  Transporte   ████░░░░░░  R$  650 / R$1.000   65% ✅   │
+│                                                         │
+│  📅 SAZONAIS PREVISTOS                                  │
+│  Mar: IPVA R$2.300  ·  Abr: IPTU R$1.800               │
+│                                                         │
+│  [Ver cashflow anual ↓]                                 │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Atalhos rápidos de Plano:**
+- Tap no grupo → drill-down para `/mobile/budget/[goalId]`
+- "Ver cashflow anual" → tabela 12 meses
+- Badge de sazonais → editar gasto sazonal
+- Nudge no topo (se ativo): shortcut para cálculo de impacto na aposentadoria
+
+---
+
+#### 👛 Carteira (`/mobile/carteira`)
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Minha Carteira                                  [🔍]   │
+├─────────────────────────────────────────────────────────┤
+│  ⚠️  2 aportes aguardando vínculo           [Vincular→] │
+│     TED XP R$1.800  ·  PIX BTG R$2.000                 │
+├─────────────────────────────────────────────────────────┤
+│       PATRIMÔNIO BRUTO    R$  762.143,30                │
+│     − IR estimado         R$  −12.450,00                │
+│       ══════════════════════════════════                │
+│       PATRIMÔNIO LÍQUIDO  R$  749.693,30          ℹ️   │
+│                                                         │
+│              (donut chart — por tipo de ativo)          │
+│                                                         │
+│  ATIVOS   R$1.3M    PASSIVOS  −R$530K                  │
+│                                                         │
+├─────────────────────────────────────────────────────────┤
+│  PRODUTOS (14)                                          │
+│  ┌── Apartamento · Snapshot ─────────────────────────┐  │
+│  │  R$ 450.000  (digitado Jan/26)         [Atualizar] │  │
+│  └───────────────────────────────────────────────────┘  │
+│  ┌── PETR4 · Ação · 100 cotas ───────────────────────┐  │
+│  │  R$ 4.120  (+7,0%)  ·  IR: isento este mês 🟢     │  │
+│  └───────────────────────────────────────────────────┘  │
+│  ┌── CDB XP 112% CDI · Fixo ─────────────────────────┐  │
+│  │  R$ 28.953  (+1,84%)  ·  IR retido na fonte       │  │
+│  └───────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Atalhos rápidos de Carteira:**
+- Badge "N aportes" → abre modal de vínculo diretamente
+- Tap em produto → detalhe (posição, custo médio, IR, projeção)
+- [Atualizar] em Snapshot → form de atualização de valor
+- Detalhe de variável → [Registrar venda] → modal de venda/resgate
+
+---
+
+### Mapa de flows principais (happy paths)
+
+```
+Upload extrato
+    │
+    ▼
+Confirmar upload (fases 1-7 no backend)
+    │
+    ├──→ Início: toast "32 transações processadas"
+    │
+    └──→ Se GRUPO='Investimentos' detectado:
+            Início badge ⚠️ "2 aportes aguardando"
+            Carteira badge ⚠️
+                │
+                ▼
+            Modal de vínculo (automático ou manual)
+                │
+                ├──→ track='variavel' (ação/FII/ETF)
+                │       Posição + custo médio calculados
+                │       IR estimado atualizado
+                │
+                └──→ track='fixo' (renda fixa)
+                        CDI/SELIC acumulado via cache BCB
+```
+
+```
+Início: nudge "R$700 abaixo do aporte planejado"
+    │
+    ▼
+  [Ver impacto no Plano →]
+    │
+    ▼
+Plano: mês corrente destacado, desvio sinalizado
+    │
+    ▼
+  [Editar plano] → ajustar meta de aporte
+```
+
+- **"Metas" → "Plano"**: a tab passou a ser o Plano Financeiro Integrado
+- Ao tocar na aba Plano: se sem plano configurado → abre o Construtor (wizard 4 etapas)
+- Se já configurado → abre a tela de **Acompanhamento do Plano**
 
 ### Nova tela: Acompanhamento do Plano (`/mobile/plano`)
 

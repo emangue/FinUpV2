@@ -98,6 +98,38 @@ Quando o usuário faz uma TED/PIX para a corretora (ex: "TED XP INVEST R$5.000")
 - Exibido como "Patrimônio líquido estimado após IR": `total - IR_estimado`
 - Renda fixa: IR já é retido na fonte — registra `ir_retido` quando vem no extrato
 
+### 2i. Redesign de navegação — bottom nav e atalhos contextuais
+
+O app evoluiu além do que o bottom nav original foi desenhado para suportar. O FAB central "Metas" não reflete mais a ação de maior valor recorrente.
+
+**Problema atual:**
+- "Metas" como FAB central → usuário não cria metas diariamente; a ação recorrente é outra
+- "Perfil" ocupa uma das 5 slots preciosos → acesso raro (senha, configurações)
+- Quick actions estáticas não aproveitam o contexto do estado do app (aportes pendentes, upload atrasado)
+
+**Referência de mercado (padrão observado):**
+- Kinvo: FAB = "Novo aporte" | Warren: FAB = "Investir" | Nubank: FAB = "Pix"
+- Padrão: FAB central = ação transacional recorrente de maior valor para o produto
+
+**Proposta:**
+```
+[Início] [Transações] [ ⬆️ ] [Plano] [Carteira]
+                       ↑ FAB elevado — Upload de extrato/fatura
+```
+
+| Mudança | De | Para | Rationale |
+|---------|-----|------|-----------|
+| FAB central | "Metas" → `/mobile/budget` | "Upload" → bottom sheet | Upload alimenta budget, plano e investimentos |
+| Tab 4 | "Carteira" na 4ª posição | "Plano" na 4ª posição | Plano é o hub cognitivo; Carteira complementa |
+| Tab 5 | "Perfil" | "Carteira" | Carteira é mais acessada; Perfil vai para ⚙️ no header |
+| Perfil | Tab 5 no bottom nav | ⚙️ no header de Início | Raramente acessado; não merece slot primário |
+
+**Atalhos contextuais (badges inteligentes):**
+- `Início`: badge "N aportes aguardando vínculo" → shortcut para Carteira > modal vínculo
+- `Início`: badge "Último upload há N dias" (se > 30d) → shortcut para Upload
+- `Transações`: ⚠️ em linhas com `GRUPO='Investimentos'` sem vínculo → modal vínculo
+- `Carteira`: badge ⚠️ no ícone da tab quando há aportes pendentes
+
 ---
 
 ## 3. Fora do escopo (não entra nesta branch)
@@ -280,6 +312,18 @@ Quando o usuário faz uma TED/PIX para a corretora (ex: "TED XP INVEST R$5.000")
 - Cálculo: mesmo padrão de acumulação mensal que IPCA
 - Produto exibe qual indexador usa e a rentabilidade % acumulada desde a aplicação
 
+### S19 — Upload como ação primária no FAB central
+> Como usuário, quero que o botão central da barra de navegação me leve diretamente ao fluxo de upload de extrato ou fatura, pois essa é a ação que mais impacta todo o app (budget, plano e carteira).
+
+**Acceptance criteria:**
+- FAB central exibe ícone de upload (↑) em vez do ícone de alvo (Metas)
+- Tap no FAB → abre bottom sheet com duas opções: "📄 Extrato bancário" e "💳 Fatura cartão"
+- Após upload e confirmação → retorna ao Início com toast informando resultado: `"N transações processadas · X aportes para vincular"` (se houver investimentos detectados)
+- Aba "Plano" (4ª posição) substitui "Metas" → destino: `/mobile/plano` (Acompanhamento ou Construtor)
+- Aba "Carteira" ocupa 5ª posição (era "Perfil")
+- Perfil acessível via ⚙️ ícone no header de Início
+- Badge ⚠️ no ícone da tab Carteira quando há aportes pendentes de vínculo
+
 ---
 
 ## 5. Análise Técnica Preliminar
@@ -350,6 +394,8 @@ S15 (IR estimado diferenciado)            → depende de S14
 S16 (venda/resgate vinculado ao extrato)  → depende de S11 + S14 (posição)
 S17 (saldo na corretora)                  → depende de S16 (fluxo de venda)
 S18 (indexadores IGPM/INCC/pré-fixado)    → depende de S11 + market_data_cache (BCB)
+
+S19 (nav redesign: Upload FAB + Plano + Carteira + ⚙️ Perfil) → independente, pode ir primeiro (só frontend/routing)
 ```
 
 ---
@@ -368,8 +414,7 @@ S18 (indexadores IGPM/INCC/pré-fixado)    → depende de S11 + market_data_cach
 | Custo médio incorreto por falta de histórico pré-app | Média | Permitir lançamento manual de transações históricas de compra (tipo='aporte', fonte='manual') |
 | BCB IGPM/INCC com atraso de publicação (FGV publica no mês seguinte) | Baixa | Cache exibe último valor disponível; nota "Dado referente a MM/AAAA" no card |
 | Isenção R$20k: usuário opera em múltiplas corretoras não rastreadas | Média | Tooltip explica limitação: "Estimativa baseada apenas em vendas registradas no app" |
-| Saldo na corretora não sincroniza com venda de outro ativo na mesma corretora | Média | Feature de fase 2: link entre saldo_corretora e próximo aporte para fechar o ciclo |
-
+| Saldo na corretora não sincroniza com venda de outro ativo na mesma corretora | Média | Feature de fase 2: link entre saldo_corretora e próximo aporte para fechar o ciclo || brapi: N usuários com os mesmos tickers geram N chamadas repetidas | ✅ Resolvido | Job usa `DISTINCT codigo_ativo` sem `user_id` — 1 chamada por ticker único global; `BRAPI_BATCH_SIZE` controla chunks (1=free, 10=startup, 20=pro) |
 ---
 
 ## 8. Métricas de sucesso
