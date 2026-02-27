@@ -158,13 +158,14 @@ class GenericClassificationService:
         
         if result['melhor_regra']:
             regra = result['melhor_regra']
-            
-            # Incrementar contador de uso na base
+
+            # Incrementar contador (sem commit imediato — será persistido no próximo flush natural)
+            # NOTA PERF: db.commit() por chamada causava I/O caro durante classificação em batch
             rule_model = self.get_rule(regra.id)
             if rule_model:
                 rule_model.increment_usage()
-                self.db.commit()
-            
+                # NÃO chamar self.db.commit() aqui — deixar para o commit natural do service
+
             return {
                 'grupo': regra.grupo,
                 'subgrupo': regra.subgrupo,
