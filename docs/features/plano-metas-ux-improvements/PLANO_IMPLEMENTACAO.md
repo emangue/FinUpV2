@@ -43,6 +43,38 @@ Isso significa que a Sprint 0 (admin) e a Sprint 2 (onboarding + grupos padrão 
 
 ---
 
+## Protocolo de Testes — Definition of Done por Sprint
+
+> **Resposta à pergunta:** "Você vai testar e depois ligar o servidor para eu testar também?"
+
+**Sim — o fluxo padrão a cada item de sprint é:**
+
+```
+1. Implementar (código + migration se necessário)
+2. Rodar testes automatizados no container:
+   docker exec finup_backend_dev pytest app/domains/[domínio]/tests/ -v
+3. Verificar build do frontend (erros de tipo):
+   docker exec finup_frontend_app_dev npm run build
+4. Subir o servidor (se não estiver rodando):
+   ./scripts/deploy/quick_start_docker.sh
+5. Informar ao usuário: "Pronto para testar. Acesse [URL] e valide:
+   - [lista exata de ações para o usuário fazer]"
+6. Aguardar feedback do usuário
+7. Apenas então: git commit + avançar para o próximo item
+```
+
+**O que é testado automaticamente (antes de pedir ao usuário):**
+- Endpoints respondem com status HTTP correto (pytest + httpx)
+- Queries não geram registros órfãos
+- Migrations aplicam e revertem sem erro
+
+**O que o usuário valida (testes exploratórios):**
+- Fluxo real de UI (criar conta, upload, rollback, etc.)
+- Comportamento em casos de borda (campo vazio, arquivo corrompido, etc.)
+- Feedback visual (toasts, badges, estados de loading)
+
+---
+
 ## Visão geral dos sprints
 
 | Sprint | Foco | Tipo | Estimativa |
@@ -51,6 +83,7 @@ Isso significa que a Sprint 0 (admin) e a Sprint 2 (onboarding + grupos padrão 
 | **Sprint 1** | Bugs + Nav redesign + Empty states | 100% Frontend | ~10h |
 | **Sprint 2** | Onboarding + Grupos padrão | Backend + Frontend | ~8h |
 | **Sprint 3** | Upload inteligente (detecção automática) | Backend + Frontend | ~12h |
+| **Sprint 3.5** | Rollback de upload (histórico + desfazer sessão) | Backend + Frontend | ~5h |
 | **Sprint 4** | Multi-file + Classificação em lote + Import planilha | Backend + Frontend | ~10h |
 | **Sprint 5** | Modo exploração (dados demo) | Backend + Frontend | ~5h |
 | **Sprint 6** | Backend do Plano Financeiro (migrations + cashflow) | Backend | ~12h |
@@ -58,8 +91,8 @@ Isso significa que a Sprint 0 (admin) e a Sprint 2 (onboarding + grupos padrão 
 | **Sprint 8** | Patrimônio — vínculos de aporte + posição + venda | Backend + Frontend | ~14h |
 | **Sprint 9** | Patrimônio — cotações diárias + renda fixa + indexadores | Backend + Frontend | ~12h |
 
-**Total estimado:** ~106h  
-**Caminho crítico:** Sprint 0 (trigger) → Sprint 2 (hook backend) → Sprint 3 → Sprint 4 → Sprint 6 → Sprint 7 → Sprint 8 → Sprint 9
+**Total estimado:** ~111h  
+**Caminho crítico:** Sprint 0 (trigger) → Sprint 2 (hook backend) → Sprint 3 → Sprint 3.5 → Sprint 4 → Sprint 6 → Sprint 7 → Sprint 8 → Sprint 9
 
 ---
 
@@ -351,6 +384,56 @@ Isso significa que a Sprint 0 (admin) e a Sprint 2 (onboarding + grupos padrão 
 - [ ] **S20.8** — Integrar `SmartUploadDropzone` no fluxo atual de upload
   - Substituir o form pré-upload pelo novo componente em `/mobile/upload`
   - Garantir fallback: se detecção falha completamente, mostra form manual
+
+---
+
+## Sprint 3.5 — Rollback de Upload (Histórico + Desfazer Sessão)
+
+> **Princípio:** o usuário precisa conseguir desfazer um upload errado sem afetar o restante dos dados. A infraestrutura de rastreamento (`upload_history_id`) já existe em `journal_entries` — esta sprint completa o elo que faltava em `base_marcacoes` e `base_parcelas`.
+
+**Referências PRD:** S31  
+**Estimativa:** ~5h  
+**Depende de:** Sprint 3 concluída (upload gera `UploadHistory` com status `sucesso`)
+
+### Backend
+
+- [ ] **A3.5.1** — Migration: `base_marcacoes.upload_history_id` nullable FK com `ON DELETE SET NULL`
+  ```bash
+  docker exec finup_backend_dev alembic revision --autogenerate -m "add_upload_history_id_to_marcacoes_parcelas"
+  docker exec finup_backend_dev alembic upgrade head
+  ```
+- [ ] **A3.5.2** — Migration: `base_parcelas.upload_history_id` nullable FK com `ON DELETE SET NULL`
+- [ ] **A3.5.3** — No serviço de upload (fase de confirmação): ao criar `BaseMarcacoes` e `BaseParcelas`, setar `upload_history_id = upload.id`
+- [ ] **A3.5.4** — `GET /upload/history` — lista todos os uploads do usuário autenticado (desc)
+- [ ] **A3.5.5** — `GET /upload/{id}/rollback/preview` — retorna contagens de impacto + flag de vínculo de investimento
+- [ ] **A3.5.6** — `DELETE /upload/{id}/rollback` — transação única:
+  1. Remover vínculos de investimento das transações do upload
+  2. Deletar `BaseMarcacoes` onde `upload_history_id = id`
+  3. Deletar `BaseParcelas` onde `upload_history_id = id`
+  4. Deletar `UploadHistory` (cascade remove `JournalEntries`)
+  - Rollback total em caso de falha
+
+**Testes obrigatórios antes de pedir ao usuário:**
+```bash
+docker exec finup_backend_dev pytest app/domains/upload/tests/test_rollback.py -v
+# Cenários: upload → rollback → 0 journal_entries; marcação manual (FK NULL) sobrevive
+```
+
+### Frontend
+
+- [ ] **F3.5.1** — Rota `/mobile/uploads` com tabela de histórico e badges de status
+- [ ] **F3.5.2** — Botão "↩ Desfazer" apenas em uploads com status `sucesso`
+- [ ] **F3.5.3** — `RollbackPreviewModal`: carrega prévia via `GET /rollback/preview` antes de exibir
+- [ ] **F3.5.4** — Aviso de vínculos de investimento quando aplicável
+- [ ] **F3.5.5** — Após rollback: atualizar linha na tabela para "↩️ Revertido" via `mutate()`
+- [ ] **F3.5.6** — Entrada "Meus Uploads" no menu de perfil (`⚙️ Perfil → Meus Uploads`)
+
+**Validação pelo usuário:**
+1. Fazer um upload de teste
+2. Acessar ⚙️ Perfil → Meus Uploads
+3. Clicar em "↩ Desfazer" → verificar contagens no modal
+4. Confirmar → verificar que a linha muda para "Revertido"
+5. Verificar que os dados somem do extrato (aba Transações)
 
 ---
 

@@ -2452,3 +2452,651 @@ export function UploadBottomSheet({ isOpen, onClose }) {
 - [ ] `OnboardingChecklist`: card no Início, 4 itens, desaparece ao completar todos
 - [ ] `DemoModeBanner`: banner fixo com [Usar meus dados →]
 - [ ] Upload bottom sheet: modo "escolha" antes de abrir o upload específico
+
+---
+
+## Módulo 4 — Admin Completo + Rollback de Upload
+
+### 24. Backend — app_admin: ciclo de vida de usuários
+
+#### Migration: `base_grupos_config` — campo `is_padrao`
+(necessária para o trigger de inicialização SA4)
+
+```python
+# alembic revision --autogenerate -m "add_is_padrao_base_grupos_config"
+def upgrade():
+    op.add_column('base_grupos_config',
+        sa.Column('is_padrao', sa.Boolean(), nullable=False, server_default='false')
+    )
+    op.create_index('ix_base_grupos_config_is_padrao', 'base_grupos_config', ['is_padrao'])
+
+def downgrade():
+    op.drop_index('ix_base_grupos_config_is_padrao', 'base_grupos_config')
+    op.drop_column('base_grupos_config', 'is_padrao')
+```
+
+#### Grupos padrão e trigger de inicialização
+
+```python
+# app/domains/users/service.py
+
+GRUPOS_PADRAO = [
+    {"nome": "Alimentação",   "categoria_geral": "Despesa",      "cor": "#E74C3C"},
+    {"nome": "Moradia",       "categoria_geral": "Despesa",      "cor": "#E67E22"},
+    {"nome": "Transporte",    "categoria_geral": "Despesa",      "cor": "#F1C40F"},
+    {"nome": "Saúde",         "categoria_geral": "Despesa",      "cor": "#27AE60"},
+    {"nome": "Educação",      "categoria_geral": "Despesa",      "cor": "#2980B9"},
+    {"nome": "Lazer",         "categoria_geral": "Despesa",      "cor": "#8E44AD"},
+    {"nome": "Roupas",        "categoria_geral": "Despesa",      "cor": "#16A085"},
+    {"nome": "Outros",        "categoria_geral": "Despesa",      "cor": "#B0B0B0"},
+    {"nome": "Investimentos", "categoria_geral": "Investimento", "cor": "#2ECC71"},
+    {"nome": "Receita",       "categoria_geral": "Receita",      "cor": "#F7DC6F"},
+    {"nome": "Transferência", "categoria_geral": "Transferência","cor": "#AEB6BF"},
+]
+
+class UserService:
+    def _inicializar_usuario(self, user_id: int) -> None:
+        """Idempotente: verifica se já existe antes de criar."""
+        existentes = self.db.query(BaseGruposConfig).filter_by(
+            user_id=user_id, is_padrao=True
+        ).count()
+        if existentes > 0:
+            return  # Já inicializado, não duplicar
+
+        for g in GRUPOS_PADRAO:
+            self.db.add(BaseGruposConfig(
+                user_id=user_id,
+                nome=g["nome"],
+                categoria_geral=g["categoria_geral"],
+                cor=g["cor"],
+                is_padrao=True,
+            ))
+
+        # Perfil financeiro vazio
+        existe_perfil = self.db.query(UserFinancialProfile).filter_by(
+            user_id=user_id
+        ).first()
+        if not existe_perfil:
+            self.db.add(UserFinancialProfile(
+                user_id=user_id,
+                renda_mensal_liquida=None,
+                aposentadoria_meta=None,
+            ))
+        self.db.flush()
+
+    def create_user(self, data: UserCreate) -> User:
+        user = User(**data.model_dump())
+        self.db.add(user)
+        self.db.flush()  # garante user.id antes do trigger
+        self._inicializar_usuario(user.id)
+        self.db.commit()
+        return user
+```
+
+#### Endpoint: stats de conta
+
+```python
+# app/domains/users/router.py
+
+@router.get("/{user_id}/stats", response_model=UserStatsResponse)
+def get_user_stats(
+    user_id: int,
+    db: Session = Depends(get_db),
+    _admin=Depends(require_admin),
+):
+    return UserService(db).get_stats(user_id)
+
+# app/domains/users/service.py
+
+def get_stats(self, user_id: int) -> dict:
+    total_tx = self.db.query(func.count(JournalEntry.id)).filter_by(user_id=user_id).scalar() or 0
+    total_uploads = self.db.query(func.count(UploadHistory.id)).filter_by(user_id=user_id).scalar() or 0
+    ultimo_upload = self.db.query(func.max(UploadHistory.criado_em)).filter_by(user_id=user_id).scalar()
+    total_grupos = self.db.query(func.count(BaseGruposConfig.id)).filter_by(user_id=user_id).scalar() or 0
+    tem_plano = self.db.query(BudgetPlanning).filter_by(user_id=user_id).first() is not None
+    tem_invest = self.db.query(InvestimentosPortfolio).filter_by(user_id=user_id).first() is not None
+    return {
+        "total_transacoes": total_tx,
+        "total_uploads": total_uploads,
+        "ultimo_upload_em": ultimo_upload,
+        "total_grupos": total_grupos,
+        "tem_plano": tem_plano,
+        "tem_investimentos": tem_invest,
+    }
+```
+
+#### Endpoint: reativar conta
+
+```python
+@router.post("/{user_id}/reativar")
+def reativar_usuario(
+    user_id: int,
+    db: Session = Depends(get_db),
+    _admin=Depends(require_admin),
+):
+    user = db.query(User).filter_by(id=user_id).first()
+    if not user:
+        raise HTTPException(404, "Usuário não encontrado")
+    user.ativo = True
+    db.commit()
+    return {"message": "Usuário reativado com sucesso"}
+```
+
+#### Endpoint: purge total (DELETE + body de confirmação)
+
+```python
+# app/domains/users/schemas.py
+class PurgeConfirmacao(BaseModel):
+    confirmacao: str  # deve ser exatamente "EXCLUIR PERMANENTEMENTE"
+    email_usuario: str  # deve bater com o e-mail do user_id
+
+# app/domains/users/router.py
+@router.delete("/{user_id}/purge")
+def purge_usuario(
+    user_id: int,
+    body: PurgeConfirmacao,
+    db: Session = Depends(get_db),
+    current_admin=Depends(require_admin),
+):
+    if user_id == 1:
+        raise HTTPException(403, "Admin principal não pode ser purgado")
+    if body.confirmacao != "EXCLUIR PERMANENTEMENTE":
+        raise HTTPException(400, "Confirmação inválida")
+
+    user = db.query(User).filter_by(id=user_id).first()
+    if not user:
+        raise HTTPException(404, "Usuário não encontrado")
+    if body.email_usuario.lower() != user.email.lower():
+        raise HTTPException(400, "E-mail não confere com o usuário")
+
+    return UserService(db).purge_user(user_id, executado_por=current_admin.id)
+
+# app/domains/users/service.py
+def purge_user(self, user_id: int, executado_por: int) -> dict:
+    """Deleta todos os dados do usuário em ordem de FK, dentro de uma transação."""
+    # 1. Investimentos: detalhe → histórico → portfolio
+    self.db.query(InvestimentosTransacoes).filter_by(user_id=user_id).delete()
+    self.db.query(InvestimentosHistorico).filter_by(user_id=user_id).delete()
+    self.db.query(InvestimentosPortfolio).filter_by(user_id=user_id).delete()
+    # 2. Plano e expectativas
+    self.db.query(BudgetPlanning).filter_by(user_id=user_id).delete()
+    self.db.query(BaseExpectativas).filter_by(user_id=user_id).delete()
+    # 3. Perfil financeiro
+    self.db.query(UserFinancialProfile).filter_by(user_id=user_id).delete()
+    # 4. Upload history (cascade limpa journal_entries automaticamente)
+    self.db.query(UploadHistory).filter_by(user_id=user_id).delete()
+    # 5. Marcações, parcelas, grupos
+    self.db.query(BaseMarcacoes).filter_by(user_id=user_id).delete()
+    self.db.query(BaseParcelas).filter_by(user_id=user_id).delete()
+    self.db.query(BaseGruposConfig).filter_by(user_id=user_id).delete()
+    # 6. Usuário (hard delete)
+    self.db.query(User).filter_by(id=user_id).delete()
+    self.db.commit()
+
+    # Log imutável (tabela admin_audit_log se existir, ou logger)
+    logger.warning(
+        f"PURGE user_id={user_id} executado por admin_id={executado_por}"
+    )
+    return {"message": f"Usuário {user_id} removido permanentemente"}
+```
+
+#### Listar usuários com filtro de inativos
+
+```python
+# app/domains/users/router.py
+@router.get("/", response_model=list[UserResponse])
+def list_users(
+    apenas_ativos: bool = True,
+    db: Session = Depends(get_db),
+    _admin=Depends(require_admin),
+):
+    q = db.query(User)
+    if apenas_ativos:
+        q = q.filter(User.ativo == True)
+    return q.order_by(User.nome).all()
+```
+
+---
+
+### 25. Backend — Rollback de upload
+
+#### Migrations: `upload_history_id` em `base_marcacoes` e `base_parcelas`
+
+```python
+# alembic revision --autogenerate -m "add_upload_history_id_to_marcacoes_parcelas"
+def upgrade():
+    op.add_column('base_marcacoes',
+        sa.Column('upload_history_id', sa.Integer(),
+                  sa.ForeignKey('upload_history.id', ondelete='SET NULL'),
+                  nullable=True)
+    )
+    op.create_index('ix_base_marcacoes_upload_history_id',
+                    'base_marcacoes', ['upload_history_id'])
+
+    op.add_column('base_parcelas',
+        sa.Column('upload_history_id', sa.Integer(),
+                  sa.ForeignKey('upload_history.id', ondelete='SET NULL'),
+                  nullable=True)
+    )
+    op.create_index('ix_base_parcelas_upload_history_id',
+                    'base_parcelas', ['upload_history_id'])
+
+def downgrade():
+    op.drop_index('ix_base_parcelas_upload_history_id', 'base_parcelas')
+    op.drop_column('base_parcelas', 'upload_history_id')
+    op.drop_index('ix_base_marcacoes_upload_history_id', 'base_marcacoes')
+    op.drop_column('base_marcacoes', 'upload_history_id')
+```
+
+**Semântica crítica:**
+- `upload_history_id IS NULL` → marcação/parcela criada manualmente → **nunca afetada pelo rollback**
+- `upload_history_id IS NOT NULL` → criada pelo upload → **pode ser revertida**
+
+#### Endpoint: prévia de impacto (GET antes do DELETE)
+
+```python
+# app/domains/upload/router.py
+
+@router.get("/{upload_id}/rollback/preview", response_model=RollbackPreviewResponse)
+def preview_rollback(
+    upload_id: int,
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
+):
+    upload = db.query(UploadHistory).filter_by(
+        id=upload_id, user_id=user_id
+    ).first()
+    if not upload:
+        raise HTTPException(404, "Upload não encontrado")
+    if upload.status != "sucesso":
+        raise HTTPException(400, "Só é possível desfazer uploads com status 'sucesso'")
+
+    total_tx = db.query(func.count(JournalEntry.id)).filter_by(
+        upload_history_id=upload_id
+    ).scalar() or 0
+    total_marcacoes = db.query(func.count(BaseMarcacoes.id)).filter_by(
+        upload_history_id=upload_id
+    ).scalar() or 0
+    total_parcelas = db.query(func.count(BaseParcelas.id)).filter_by(
+        upload_history_id=upload_id
+    ).scalar() or 0
+    vinculos_invest = db.query(func.count(InvestimentosTransacoes.id)).join(
+        JournalEntry, InvestimentosTransacoes.journal_entry_id == JournalEntry.id
+    ).filter(JournalEntry.upload_history_id == upload_id).scalar() or 0
+
+    return {
+        "upload_id": upload_id,
+        "banco": upload.banco,
+        "periodo": upload.periodo_inicio,
+        "total_transacoes": total_tx,
+        "total_marcacoes": total_marcacoes,
+        "total_parcelas": total_parcelas,
+        "tem_vinculos_investimento": vinculos_invest > 0,
+        "total_vinculos_investimento": vinculos_invest,
+    }
+```
+
+#### Endpoint: executar rollback (DELETE com confirmação)
+
+```python
+@router.delete("/{upload_id}/rollback")
+def executar_rollback(
+    upload_id: int,
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
+):
+    return UploadService(db).rollback(upload_id, user_id)
+
+# app/domains/upload/service.py
+class UploadService:
+    def rollback(self, upload_history_id: int, user_id: int) -> dict:
+        upload = self.db.query(UploadHistory).filter_by(
+            id=upload_history_id, user_id=user_id, status="sucesso"
+        ).first()
+        if not upload:
+            raise HTTPException(404, "Upload não encontrado ou não elegível para rollback")
+
+        # 1. Remover vínculos de investimento das transações deste upload
+        journal_ids = [
+            r[0] for r in self.db.query(JournalEntry.id).filter_by(
+                upload_history_id=upload_history_id
+            ).all()
+        ]
+        if journal_ids:
+            self.db.query(InvestimentosTransacoes).filter(
+                InvestimentosTransacoes.journal_entry_id.in_(journal_ids)
+            ).delete(synchronize_session=False)
+
+        # 2. Deletar marcações criadas por este upload (IS NOT NULL)
+        self.db.query(BaseMarcacoes).filter(
+            BaseMarcacoes.user_id == user_id,
+            BaseMarcacoes.upload_history_id == upload_history_id,
+        ).delete()
+
+        # 3. Deletar parcelas criadas por este upload
+        self.db.query(BaseParcelas).filter(
+            BaseParcelas.user_id == user_id,
+            BaseParcelas.upload_history_id == upload_history_id,
+        ).delete()
+
+        # 4. Marcar como revertido ANTES de deletar (para o log)
+        upload.status = "revertido"
+        self.db.flush()
+
+        # 5. Deletar journal_entries via cascade (ao deletar UploadHistory)
+        # UploadHistory tem cascade="all, delete-orphan" em transactions
+        self.db.delete(upload)
+        self.db.commit()
+
+        return {
+            "message": "Upload desfeito com sucesso",
+            "upload_id": upload_history_id,
+        }
+```
+
+> **Nota:** `UploadHistory` com `status='revertido'` não é deletado — fica no banco para auditoria. O `db.delete(upload)` acima deleta o objeto Python mas o `status='revertido'` foi flushed antes; na implementação real pode-se ou deletar o ORM object (cascade remove JournalEntries) ou criar um registro de auditoria separado antes de deletar. Ajustar conforme o comportamento desejado de auditoria.
+
+#### Endpoint: listar histórico de uploads do usuário
+
+```python
+@router.get("/history", response_model=list[UploadHistoryResponse])
+def list_upload_history(
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
+):
+    return (
+        db.query(UploadHistory)
+        .filter_by(user_id=user_id)
+        .order_by(UploadHistory.criado_em.desc())
+        .limit(100)
+        .all()
+    )
+```
+
+---
+
+### 26. Frontend — Admin + Rollback
+
+#### Componente: `UserStatsCell`
+
+```tsx
+// app_admin/frontend/src/components/user-stats-cell.tsx
+"use client"
+import useSWR from "swr"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+
+export function UserStatsCell({ userId }: { userId: number }) {
+  const { data, isLoading } = useSWR(`/api/v1/users/${userId}/stats`)
+
+  if (isLoading) return <span className="text-muted-foreground text-sm">…</span>
+  if (!data) return <span className="text-muted-foreground text-sm">Sem dados</span>
+
+  const ultimoUpload = data.ultimo_upload_em
+    ? new Date(data.ultimo_upload_em).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })
+    : "nunca"
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="text-sm cursor-help">
+          {data.total_transacoes.toLocaleString()} tx · últ. {ultimoUpload}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>
+        <p>{data.total_uploads} uploads · {data.total_grupos} grupos</p>
+        <p>{data.tem_plano ? "✅ Tem plano" : "❌ Sem plano"}</p>
+        <p>{data.tem_investimentos ? "✅ Tem investimentos" : "❌ Sem investimentos"}</p>
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+```
+
+#### Componente: `PurgeUserModal` (2 etapas)
+
+```tsx
+// app_admin/frontend/src/components/purge-user-modal.tsx
+"use client"
+import { useState } from "react"
+import { Dialog, DialogContent, DialogHeader } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+
+export function PurgeUserModal({ user, stats, open, onClose, onConfirm }) {
+  const [step, setStep] = useState<1 | 2>(1)
+  const [emailInput, setEmailInput] = useState("")
+  const emailOk = emailInput.trim().toLowerCase() === user.email.toLowerCase()
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent>
+        {step === 1 && (
+          <>
+            <DialogHeader>⚠️ Excluir permanentemente: {user.nome}</DialogHeader>
+            <p className="text-sm text-muted-foreground">Esta ação é <strong>irreversível</strong>. Todos os dados serão removidos:</p>
+            <ul className="text-sm mt-2 space-y-1">
+              <li>🗂 {stats.total_transacoes.toLocaleString()} transações</li>
+              <li>📤 {stats.total_uploads} uploads</li>
+              <li>📋 {stats.total_grupos} grupos</li>
+              {stats.tem_investimentos && <li className="text-amber-600">⚠️ Tem investimentos vinculados — também serão removidos</li>}
+            </ul>
+            <div className="flex justify-end gap-2 mt-4">
+              <Button variant="outline" onClick={onClose}>Cancelar</Button>
+              <Button variant="destructive" onClick={() => setStep(2)}>Continuar →</Button>
+            </div>
+          </>
+        )}
+        {step === 2 && (
+          <>
+            <DialogHeader>⚠️ Confirmar exclusão permanente</DialogHeader>
+            <p className="text-sm">Digite o e-mail do usuário para confirmar:</p>
+            <Input
+              value={emailInput}
+              onChange={e => setEmailInput(e.target.value)}
+              placeholder={user.email}
+              className="mt-2"
+            />
+            <p className="text-xs text-muted-foreground mt-1">{user.email}</p>
+            <div className="flex justify-end gap-2 mt-4">
+              <Button variant="outline" onClick={() => setStep(1)}>← Voltar</Button>
+              <Button
+                variant="destructive"
+                disabled={!emailOk}
+                onClick={() => onConfirm(user.id, emailInput)}
+              >
+                🗑 Excluir Permanentemente
+              </Button>
+            </div>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+```
+
+#### Tela `/mobile/uploads` — UploadHistoryList
+
+```tsx
+// app_dev/frontend/src/app/mobile/uploads/page.tsx
+"use client"
+import useSWR, { mutate } from "swr"
+import { useState } from "react"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { RollbackPreviewModal } from "@/features/upload/components/rollback-preview-modal"
+
+const STATUS_BADGE = {
+  sucesso:      { label: "Concluído",    className: "bg-green-100 text-green-800"  },
+  revertido:    { label: "Revertido",    className: "bg-gray-100 text-gray-500"    },
+  processando:  { label: "Processando", className: "bg-yellow-100 text-yellow-800" },
+  erro:         { label: "Erro",         className: "bg-red-100 text-red-800"      },
+}
+
+export default function UploadsPage() {
+  const { data: uploads } = useSWR("/api/v1/upload/history")
+  const [selectedUpload, setSelectedUpload] = useState(null)
+
+  return (
+    <div className="p-4">
+      <h1 className="text-xl font-semibold mb-4">Meus Uploads</h1>
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-muted-foreground text-xs border-b">
+            <th className="text-left py-2">Banco</th>
+            <th className="text-left py-2">Período</th>
+            <th className="text-left py-2">Enviado em</th>
+            <th className="text-right py-2">Tx</th>
+            <th className="text-left py-2 pl-4">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {uploads?.map(u => {
+            const badge = STATUS_BADGE[u.status] ?? STATUS_BADGE.processando
+            const isRevertido = u.status === "revertido"
+            return (
+              <tr key={u.id} className={`border-b ${isRevertido ? "opacity-50" : ""}`}>
+                <td className="py-3">{u.banco ?? "—"}</td>
+                <td>{u.periodo_inicio ?? "—"}</td>
+                <td>{new Date(u.criado_em).toLocaleString("pt-BR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" })}</td>
+                <td className="text-right">{u.total_transacoes ?? "—"}</td>
+                <td className="pl-4 flex items-center gap-2">
+                  <Badge className={badge.className}>{badge.label}</Badge>
+                  {u.status === "sucesso" && (
+                    <Button size="sm" variant="ghost" onClick={() => setSelectedUpload(u)}>
+                      ↩ Desfazer
+                    </Button>
+                  )}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+
+      {selectedUpload && (
+        <RollbackPreviewModal
+          upload={selectedUpload}
+          onClose={() => setSelectedUpload(null)}
+          onSuccess={() => {
+            setSelectedUpload(null)
+            mutate("/api/v1/upload/history")
+          }}
+        />
+      )}
+    </div>
+  )
+}
+```
+
+#### Componente: `RollbackPreviewModal`
+
+```tsx
+// app_dev/frontend/src/features/upload/components/rollback-preview-modal.tsx
+"use client"
+import useSWR from "swr"
+import { Dialog, DialogContent, DialogHeader } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+
+export function RollbackPreviewModal({ upload, onClose, onSuccess }) {
+  const { data: preview, isLoading } = useSWR(
+    `/api/v1/upload/${upload.id}/rollback/preview`
+  )
+  const [confirming, setConfirming] = useState(false)
+
+  const handleConfirm = async () => {
+    setConfirming(true)
+    await fetch(`/api/v1/upload/${upload.id}/rollback`, { method: "DELETE" })
+    setConfirming(false)
+    onSuccess()
+  }
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent>
+        <DialogHeader>↩️ Desfazer upload: {upload.banco} · {upload.periodo_inicio}</DialogHeader>
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground">Calculando impacto…</p>
+        ) : (
+          <>
+            <p className="text-sm mb-2">Isso vai remover permanentemente:</p>
+            <ul className="text-sm space-y-1">
+              <li>📄 {preview.total_transacoes} transações deste upload</li>
+              <li>🏷 {preview.total_marcacoes} classificações aprendidas por este upload
+                <span className="text-xs text-muted-foreground ml-1">(manuais não afetadas)</span>
+              </li>
+              <li>📅 {preview.total_parcelas} parcelas previstas associadas</li>
+            </ul>
+            {preview.tem_vinculos_investimento && (
+              <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded text-sm text-amber-800">
+                ⚠️ {preview.total_vinculos_investimento} transações têm vínculos de investimento ativos.
+                Esses vínculos também serão removidos do portfólio.
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground mt-3">
+              Os demais uploads e transações não são afetados.
+            </p>
+            <div className="flex justify-end gap-2 mt-4">
+              <Button variant="outline" onClick={onClose}>Cancelar</Button>
+              <Button
+                variant="destructive"
+                onClick={handleConfirm}
+                disabled={confirming}
+              >
+                {confirming ? "Desfazendo…" : preview.tem_vinculos_investimento
+                  ? "Desfazer e remover vínculos →"
+                  : "Confirmar desfazer →"
+                }
+              </Button>
+            </div>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+```
+
+---
+
+### 27. Checklist — Módulo 4
+
+#### Banco
+- [ ] Migration: `base_grupos_config.is_padrao` (boolean, default false)
+- [ ] Migration: `base_marcacoes.upload_history_id` nullable FK → `upload_history.id` ON DELETE SET NULL
+- [ ] Migration: `base_parcelas.upload_history_id` nullable FK → `upload_history.id` ON DELETE SET NULL
+- [ ] Validar: `SELECT COUNT(*) FROM base_marcacoes WHERE upload_history_id IS NOT NULL` = 0 antes da sprint (campo novo)
+
+#### Backend — Admin
+- [ ] `UserService._inicializar_usuario(user_id)` idempotente: grupos padrão + perfil vazio
+- [ ] `UserService.create_user()` chama `_inicializar_usuario()` após flush
+- [ ] `GET /users/{id}/stats` retorna totais + flags sem bloquear listagem
+- [ ] `POST /users/{id}/reativar` seta `ativo=True`
+- [ ] `DELETE /users/{id}/purge` com body `PurgeConfirmacao`; user_id=1 protegido
+- [ ] `GET /users/?apenas_ativos=false` inclui inativos
+- [ ] Teste: criar usuário → confirmar grupos padrão criados
+- [ ] Teste: purge → SELECT de qualquer tabela com user_id = 0 resultado
+
+#### Backend — Rollback
+- [ ] `GET /upload/{id}/rollback/preview` retorna contagens + flag de vínculo
+- [ ] `DELETE /upload/{id}/rollback` em transação única; falha faz rollback total
+- [ ] `GET /upload/history` retorna uploads ordenados por data desc
+- [ ] Marcar `base_marcacoes` e `base_parcelas` com `upload_history_id` no serviço de upload ao confirmar
+- [ ] Teste: upload → rollback → SELECT journal_entries WHERE upload_history_id = N = 0 resultado
+- [ ] Teste: marcação criada manualmente (upload_history_id=NULL) sobrevive ao rollback
+
+#### Frontend — Admin (app_admin)
+- [ ] `UserStatsCell` com lazy load + tooltip completo
+- [ ] Toggle "Ver inativos" + badge INATIVA + linha esmaecida
+- [ ] Botão "Reativar" apenas em inativos; botão "Desativar" apenas em ativos
+- [ ] `PurgeUserModal` em 2 etapas; botão de confirmar desabilitado até e-mail bater
+- [ ] Modal de criação de conta inclui toast de confirmação de inicialização
+- [ ] user_id=1: sem botão Purge na linha
+
+#### Frontend — Rollback (app_dev)
+- [ ] Rota `/mobile/uploads` acessível via menu de perfil
+- [ ] `UploadHistoryList` com badges de status coloridos
+- [ ] Botão "↩ Desfazer" apenas em uploads com status `sucesso`
+- [ ] `RollbackPreviewModal`: prévia de impacto carregada antes de confirmar
+- [ ] Aviso de vínculo de investimento exibido quando aplicável
+- [ ] Após rollback: linha muda de status na UI sem recarregar página

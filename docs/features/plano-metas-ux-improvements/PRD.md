@@ -493,6 +493,41 @@ Um novo usuário que abre o app pela primeira vez não tem dados. A experiência
 - 3+ aportes pendentes há > 7 dias → banner no Início: "Você tem N aportes para vincular em Carteira"
 - Cada banner tem [X Fechar] e [→ Ação] — nunca intrusivo
 
+### 2n. Gestão de contas no app_admin (fonte de criação de usuários)
+
+A criação de contas é responsabilidade exclusiva do `app_admin` — não há auto-cadastro no app principal. O admin precisa de controle total sobre o ciclo de vida de cada conta.
+
+**O que já existe:** criar, editar, desativar (soft delete), resetar senha.
+
+**O que precisa ser adicionado:**
+
+- **Reativar conta:** desfazer um soft delete, restaurando login sem tocar nos dados
+- **Purge total:** exclusão irreversível do usuário e de **todos** os seus dados (journal_entries, budget, grupos, investimentos, uploads, marcações, parcelas). Exige confirmação dupla na UI (digitar email do usuário) e header extra no backend
+- **Stats de conta:** coluna na listagem mostrando total de transações e data do último upload — contexto essencial antes de excluir
+- **Listar inativos:** toggle para exibir contas desativadas na tabela
+
+**Trigger de inicialização:** ao criar um usuário via admin, o backend dispara automaticamente a criação de 10 grupos padrão em `base_grupos_config` e um perfil financeiro vazio em `user_financial_profile` — o usuário já chega no app com tudo pronto para o primeiro upload.
+
+### 2o. Rastreamento de sessão de upload e rollback
+
+Cada upload gera uma **sessão rastreável** (`upload_history_id` + `session_id`) que liga o registro de `upload_history` a todas as entidades criadas durante aquele processo. Se o usuário errou o arquivo, precisa conseguir desfazer o upload específico sem afetar os demais.
+
+**Infraestrutura já existente no banco:**
+- `journal_entries.upload_history_id` FK com `cascade="all, delete-orphan"` → deletar `UploadHistory` já apaga as transações em cascata ✅
+- `preview_transacoes.session_id` já existe (temporário, limpo após confirmação) ✅
+
+**O que ainda falta rastrear:**
+- `base_marcacoes`: adicionar `upload_history_id` nullable → saber quais marcações foram aprendidas por aquele upload (criadas manualmente ficam com `NULL` e nunca são afetadas pelo rollback)
+- `base_parcelas`: idem
+- `base_expectativas` (Sprint 6): já deve nascer com `upload_history_id` para ser rastreável
+
+**Endpoint de rollback:** `DELETE /upload/{upload_history_id}/rollback`
+1. Primeiro retorna prévia do impacto: N transações, N marcações, N parcelas
+2. Após confirmação: deleta `base_marcacoes` + `base_parcelas` onde `upload_history_id` = ID; depois deleta `UploadHistory` (cascade limpa `journal_entries`)
+3. `UploadHistory` fica com status `revertido` para auditoria — não é removido
+
+**Tela de histórico de uploads** (`/mobile/uploads`): lista todos os uploads com banco, período, data e total de transações. Botão "↩️ Desfazer" em cada linha.
+
 ### S30 — Alerta de duplicata de arquivo
 > Como usuário, quando subo um arquivo que parece já ter sido carregado antes, quero ser avisado antes de processar para não duplicar meus dados.
 
@@ -501,6 +536,64 @@ Um novo usuário que abre o app pela primeira vez não tem dados. A experiência
 - Se sim: exibe modal de aviso com data do upload anterior e número de transações
 - Usuário pode cancelar ou confirmar "Carregar de qualquer forma" (deduplicação por IdTransacao evita duplicatas mesmo assim)
 - Aviso também aparece se mais de 80% das transações de preview forem idênticas a transações já existentes
+
+### S31 — Desfazer um upload específico (rollback de sessão)
+> Como usuário, quando percebo que subi o arquivo errado, quero desfazer aquele upload específico e remover todas as transações que ele gerou, sem afetar os demais uploads.
+
+**Acceptance criteria:**
+- Tela de histórico de uploads (`/mobile/uploads`) lista todos: banco, tipo, período, data, total de transações, status
+- Botão "↩️ Desfazer" disponível para uploads com status `sucesso`
+- Ao clicar: modal de pré-visualização mostra exatamente o que será removido ("N transações, N classificações aprendidas por este upload")
+- Após confirmação: transações são removidas; marcações criadas exclusivamente por este upload também; demais uploads não afetados
+- Se o upload tiver transações com vínculo de investimento já confirmado: aviso específico + opção de remover o vínculo junto
+- `upload_history` não é deletado — fica com status `revertido` para auditoria
+
+### SA1 — Reativar conta de usuário (admin)
+> Como admin, quando um usuário foi desativado por engano ou temporariamente, quero reativá-lo sem perder nenhum dado.
+
+**Acceptance criteria:**
+- Usuários inativos visíveis ao ativar toggle "Mostrar inativos" na listagem
+- Botão "Reativar" visível apenas para usuários com `ativo=0`
+- Após reativar: usuário consegue fazer login normalmente; todos os dados preservados
+- Sem confirmação obrigatória (operação não destrutiva)
+
+### SA2 — Stats de conta antes de excluir (admin)
+> Como admin, antes de excluir permanentemente um usuário, quero ver quantos dados ele tem para tomar uma decisão informada.
+
+**Acceptance criteria:**
+- Coluna "Dados" na tabela: `N transações · Último upload: DD/MM/AAAA` (ou "Sem dados")
+- Tooltip com detalhes: total uploads, total grupos, tem plano, tem investimentos
+- Stats carregadas em paralelo com a lista (não bloqueia a renderização)
+
+### SA3 — Excluir usuário com purge total (admin)
+> Como admin, quando um usuário solicita exclusão completa de conta, quero apagar permanentemente todos os dados dele de forma segura e irreversível.
+
+**Acceptance criteria:**
+- Botão de exclusão total visualmente distinto do de desativação (vermelho sólido, ícone diferente)
+- Etapa 1: exibe resumo de dados do usuário + aviso "ação irreversível e permanente"
+- Etapa 2: campo para digitar email exato do usuário — botão só habilita se coincidir
+- Backend exige body `{ "confirmacao": "EXCLUIR PERMANENTEMENTE" }` além do token admin
+- Após purge: nenhuma tabela do banco contém registros daquele `user_id`
+- `user_id=1` nunca pode ser purgado
+- Log da operação: quem executou, quando, qual user_id foi purgado
+
+### SA4 — Trigger automático de inicialização ao criar conta
+> Como admin, quando crio um novo usuário, quero que o app já esteja pronto para recebê-lo com grupos padrão e perfil vazio.
+
+**Acceptance criteria:**
+- `POST /users/` dispara automaticamente criação de 10 grupos padrão em `base_grupos_config` com `is_padrao=True`
+- Cria registro vazio em `user_financial_profile`
+- Idempotente: se chamado novamente para o mesmo usuário, não duplica
+- Novo usuário que faz login cai no onboarding (S24), com grupos já disponíveis para o primeiro upload
+
+### SA5 — Listar usuários inativos no admin
+> Como admin, quero ver todos os usuários — ativos e inativos — em uma única tela com controle de filtro.
+
+**Acceptance criteria:**
+- Toggle "Mostrar inativos" no header da tabela de contas
+- Quando ligado: lista inclui inativos com linha esmaecida e badge "Inativo"
+- Quando desligado (default): apenas ativos
+- Contagem no header atualiza conforme o filtro
 
 ---
 
@@ -586,6 +679,13 @@ S27 (empty states com CTA)                            → independente (só fron
 S28 (checklist de primeiros passos)                   → depende de S25 + S27
 S29 (notificações in-app por gatilho)                 → depende de S28 (precisa de estado de progresso)
 S30 (alerta de duplicata)                             → depende de S20 (detecção já carrega dados do arquivo)
+S31 (rollback upload)                                 → depende de migration base_marcacoes.upload_history_id + base_parcelas.upload_history_id
+
+SA1 (reativar conta)         → independente (toggle ativo no backend + frontend)
+SA2 (stats de conta)         → independente (query count + max upload_date por user_id)
+SA3 (purge total)            → independente; respeitar ordem de FKs no backend
+SA4 (trigger inicialização)  → depende de migration is_padrao em base_grupos_config (Sprint 2)
+SA5 (listar inativos)        → independente (parâmetro apenas_ativos=false na query)
 ```
 
 ---
@@ -611,6 +711,9 @@ S30 (alerta de duplicata)                             → depende de S20 (detec�
 | Grupos do import não mapeiam para grupos existentes | Baixa | Exibir preview de grupos desconhecidos com opção "criar" ou "mapear" antes de confirmar |
 | Modo demo contamina dados reais (usuário confunde) | Baixa | Dataset de demo isolado por flag `is_demo=True` em journal_entries; import real sempre cria registros novos sem flag |
 | Checklist de primeiros passos nunca some (bug de estado) | Baixa | Marcar item como completo via backend + cache invalidation no frontend |
+| Admin purga usuário errado (ação irreversível) | Média | Confirmação em 2 etapas: (1) resumo de dados do usuário, (2) digitar email exato; `user_id=1` protegido contra purge; log imutável da operação (quem, quando, qual user_id) |
+| Rollback apaga marcação criada manualmente (não pelo upload) | Baixa | `base_marcacoes.upload_history_id IS NULL` = criada manualmente → nunca afetada pelo rollback; preview mostra apenas marcações com FK preenchida |
+| Rollback após vínculo de investimento já confirmado | Baixa | Preview detecta vínculos ativos (`investimentos_transacoes` referenciando `journal_entry`); modal avisa explicitamente e oferece "remover vínculo junto" ou "cancelar rollback" |
 ---
 
 ## 8. Métricas de sucesso
@@ -626,3 +729,6 @@ S30 (alerta de duplicata)                             → depende de S20 (detec�
 - [ ] Import planilha: ≥ 90% das linhas com `grupo` preenchido aceitas sem reclassificação (grupos mapeiam corretamente)
 - [ ] Onboarding: ≥ 60% dos novos usuários completam o primeiro upload em < 5 minutos após o cadastro
 - [ ] Retenção D7: usuários que completam o checklist de 4 itens têm retenção 30% maior que os que não completam (hipótese a validar)
+- [ ] 100% dos usuários criados via admin chegam com grupos padrão e perfil financeiro (zero erros no trigger SA4)
+- [ ] Rollback de upload concluído em ≤ 3 cliques com ≤ 5s de processamento
+- [ ] Zero registros órfãos (`user_id` referenciado sem `users` pai) após qualquer operação de purge — validar via query de auditoria
