@@ -1,8 +1,89 @@
 # UX — Plano Financeiro Integrado (Gastos + Aposentadoria)
 
 **Data:** 26/02/2026  
-**Status:** 🟡 Rascunho para validação  
+**Status:** � Decisões tomadas — pronto para Tech Spec  
 **Objetivo:** Pensar como seria a experiência completa de construção de plano, integrando renda, gastos, gastos extraordinários, evolução e o "recibo" final
+
+---
+
+## Decisões tomadas
+
+| Questão | Decisão |
+|---------|---------|
+| Entry point | **Nova tab no bottom nav: "Plano"** — substitui "Metas" (ver mapa abaixo) |
+| Plano unificado? | **Sim** — um só construtor, gastos + aposentadoria integrados |
+| Evolução por grupo | **Não** — apenas inflação global ("seus gastos evoluem com o IPCA") |
+| Parcelamento no banco | **N linhas** (via `budget_planning` + campos de parcela) — ponte para `base_parcelas` futura |
+| Recibo | **Apenas 1 ano** de exemplo, resumo anual no final |
+
+---
+
+## Mapa do app atual e impacto da mudança
+
+### Bottom nav hoje (5 tabs)
+```
+[Dashboard] [Transações] [Metas●] [Carteira] [Perfil]
+                          ↑ FAB preto
+```
+"Metas" (Target icon, FAB central) → `/mobile/budget` → lista de metas de gasto por grupo
+
+### Telas conectadas ao tema de plano (inventário)
+
+| Tela | Path | O que faz hoje | Impacto |
+|------|------|----------------|---------|
+| Metas | `/mobile/budget` | Lista metas por grupo (budget_planning) | **Transforma**: vira "Acompanhamento" |
+| Meta detalhe | `/mobile/budget/[goalId]` | Mostra gasto vs meta do grupo | Mantém |
+| Nova meta | `/mobile/budget/new` | Form simples de criar meta | **Substitui**: entra pelo Construtor |
+| Editar metas | `/mobile/budget/edit` | Edita valores bulk | **Substitui**: entra pelo Construtor |
+| Personalizar plano | `/mobile/personalizar-plano` | Wizard do plano de aposentadoria | **Unifica**: vira parte do Construtor |
+| Dashboard → aba Resultado → OrcamentoTab | `/mobile/dashboard` | Mostra despesas vs plano + investimentos vs plano | Mantém, alimentado pelo novo plano |
+| Dashboard → aba Patrimônio → PlanoAposentadoriaTab | `/mobile/dashboard` | Card com CTA para personalizar plano, gráfico de projeção | **Atualiza**: CTA vai para o Construtor unificado |
+| Carteira → botão "Simular" | `/mobile/carteira` | `router.push('/mobile/dashboard?tab=patrimonio')` | **Atualiza**: vai para o Construtor |
+
+### Bottom nav proposto
+
+```
+[Dashboard] [Transações] [Plano●] [Carteira] [Perfil]
+                          ↑ FAB preto (ícone: LineChart ou Compass)
+```
+
+- **"Metas" → "Plano"**: a tab central passa a ser o Plano Financeiro Integrado
+- Ao tocar no FAB: se a pessoa nunca configurou → abre o Construtor (wizard 4 etapas)
+- Se já configurou → abre a tela de **Acompanhamento do Plano** (nova tela de monitoramento)
+
+### Nova tela: Acompanhamento do Plano (`/mobile/plano`)
+
+Quando o plano já existe, esta é a tela que aparece ao tocar no FAB:
+
+```
+┌─────────────────────────────────────────────────────┐
+│  Plano 2026                          [Editar] [⚙️]  │
+├─────────────────────────────────────────────────────┤
+│                                                     │
+│  MARÇO 2026                                         │
+│  ┌──────────────────────────────────────────────┐  │
+│  │  Renda esperada        R$ 15.000             │  │
+│  │  Gastos planejados   − R$ 14.500  ⚠️ IPVA   │  │
+│  │  Aporte planejado    − R$  2.500             │  │
+│  │  Saldo previsto        − R$ 2.000  ❌        │  │
+│  └──────────────────────────────────────────────┘  │
+│                                                     │
+│  GASTOS vs PLANO (grupos)                           │
+│  Casa       ████████░░  R$2.800/R$3.000  93%  ✅   │
+│  Alimentação███████████ R$2.700/R$2.500 108%  ⚠️   │
+│  Transporte  ████░░░░░░  R$  650/R$1.000  65%  ✅   │
+│                                                     │
+│  INVESTIMENTOS vs PLANO                             │
+│  R$ 1.800 / R$ 2.500 aportados   72%  ⚠️           │
+│                                                     │
+│  [Ver recibo do ano ↓]   [Editar plano]             │
+└─────────────────────────────────────────────────────┘
+```
+
+Esta tela **já existe em embrião** como `OrcamentoTab` no dashboard (mostra gastos vs plano). A ideia é evoluí-la para a tela central de acompanhamento, com:
+- Contexto do mês atual (saldo previsto)
+- Alerta visual para meses com sazonais
+- Link para o recibo anual
 
 ---
 
@@ -120,8 +201,7 @@ Novo entry point: `/mobile/construir-plano` (ou integrado ao fluxo atual de meta
 **Notas de UX:**
 - Cada grupo exibe a **média real dos últimos 3 meses** ao lado do campo editável (âncora na realidade)
 - Se a pessoa digitar uma meta acima da média: leve aviso amarelo ("R$ 200 acima da sua média")
-- **Evolução por grupo** funciona exatamente como nos ganhos/aportes extraordinários: checkbox "Evoluir valor" → % ou R$/ano
-  - Exemplos de uso natural: "Escola das crianças aumenta 10%/ano", "Aluguel reajusta pelo IGPM"
+- **Sem evolução individual por grupo** — todos os gastos crescem pela inflação global (configurada uma única vez, ver seção "Evolução de gastos" abaixo). Gastos sazonais mantêm evolução própria (Etapa 3)
 - O saldo livre (renda − gastos) aparece em tempo real na barra superior
 - Saldo negativo → barra fica vermelha, botão "Continuar" desabilita com mensagem
 
@@ -204,25 +284,26 @@ Novo entry point: `/mobile/construir-plano` (ou integrado ao fluxo atual de meta
 │  │  → Plano de Aposentadoria vinculado ✓     │     │
 │  └───────────────────────────────────────────┘     │
 │                                                     │
-│  RECIBO MÊS A MÊS              ─────────────────── │
+│  RECIBO 2026 (mês a mês)        ─────────────────── │
 │                                                     │
 │  ┌──────────────────────────────────────────────┐  │
-│  │ Mês     Renda    Gastos   Aporte  Saldo      │  │
-│  │ Jan/26  15.000   10.700   2.500   1.800  ✅  │  │
-│  │ Fev/26  15.000   12.900   2.500     600  ⚠️  │  │
-│  │         ↑ IPTU R$2.200                       │  │
-│  │ Mar/26  15.000   14.500   2.500  -2.000  ❌  │  │
-│  │         ↑ IPVA R$3.800                       │  │
-│  │ Abr/26  15.000   10.700   2.500   1.800  ✅  │  │
-│  │ ...                                           │  │
-│  │ Jul/26  15.000   22.700   2.500  -9.200  ❌  │  │
-│  │         ↑ Viagem R$12.000                    │  │
-│  │ Dez/26  30.000   10.700   2.500  16.800  ✅  │  │
-│  │         ↑ 13º R$15.000                       │  │
+│  │ Mês    Renda   Gastos  Aporte  Saldo         │  │
+│  │ Jan    15.000  10.700   2.500  +1.800  ✅    │  │
+│  │ Fev    15.000  12.900   2.500    +600  ⚠️ IPTU│  │
+│  │ Mar    15.000  14.500   2.500  −2.000  ❌ IPVA│  │
+│  │ Abr    15.000  10.700   2.500  +1.800  ✅    │  │
+│  │ Mai    15.000  10.700   2.500  +1.800  ✅    │  │
+│  │ Jun    15.000  10.700   2.500  +1.800  ✅    │  │
+│  │ Jul    15.000  22.700   2.500  −9.200  ❌ Viagem│
+│  │ Ago    15.000  10.700   2.500  +1.800  ✅    │  │
+│  │ Set    15.000  10.700   2.500  +1.800  ✅    │  │
+│  │ Out    15.000  10.700   2.500  +1.800  ✅    │  │
+│  │ Nov    15.000  10.700   2.500  +1.800  ✅    │  │
+│  │ Dez    30.000  10.700   2.500 +16.800  ✅ 13°│  │
 │  └──────────────────────────────────────────────┘  │
 │                                                     │
-│  ⚠️ 3 meses com saldo negativo                    │
-│  Sugestão: aumentar aporte em Dez/26 para cobrir   │
+│  ⚠️ 2 meses com saldo negativo (Mar e Jul)         │
+│  💡 Use o 13° de Dez para cobrir os negativos      │
 │                                                     │
 │  RESUMO DO ANO                 ─────────────────── │
 │  Renda total:   R$ 195.000                         │
@@ -245,29 +326,30 @@ Novo entry point: `/mobile/construir-plano` (ou integrado ao fluxo atual de meta
 
 ---
 
-## Conceito de evolução de gastos — como funciona
+## Evolução de gastos — inflação global
 
-Igual ao existente para aportes/ganhos extraordinários:
+**Decisão:** evolução por grupo individual é complexidade desnecessária. O construtor terá um único campo de inflação esperada (padrão: IPCA ~5%), e todos os gastos crescem uniformemente.
 
 ```
-┌────────────────────────────────────────────────┐
-│ 🏠 Casa              R$ 3.200 ← média 3 meses │
-│    Meta 2026:       [R$ 3.000]                 │
-│                                                │
-│    ☐ Evoluir valor anualmente                  │
-│        [  5  ] %  ▼     ou     [150] R$ ▼     │
-│                                                │
-│    📈 Projeção:                                │
-│       2026: R$ 3.000                           │
-│       2027: R$ 3.150  (+5%)                    │
-│       2028: R$ 3.308  (+5%)                    │
-│       2029: R$ 3.473  (+5%)                    │
-└────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────┐
+│  CORREÇÃO ANUAL DOS GASTOS        ─────────────  │
+│                                                  │
+│  Seus gastos evoluem com a inflação              │
+│                                                  │
+│  Inflação esperada: [ 5,0 ] % a.a.               │
+│                     ←──────────────→             │
+│                     2%          10%              │
+│                                                  │
+│  💡 Padrão: IPCA histórico (~5%). Ajuste se      │
+│     seus gastos crescem mais rápido.             │
+│                                                  │
+│  Exemplo — Gastos de R$ 10.700/mês:              │
+│  2026: R$ 10.700  → 2027: R$ 11.235  (+5%)      │
+│  2028: R$ 11.797  → 2029: R$ 12.387  (+5%)      │
+└──────────────────────────────────────────────────┘
 ```
 
-**Por que isso importa:** Aluguel reajusta pelo IGPM (~5%/ano), escola das crianças reajusta (~8-10%/ano), plano de saúde reajusta (~10-15%/ano). Sem isso, o plano fica desatualizado no segundo ano.
-
-No recibo, os gastos com evolução aparecem com o valor do ano correspondente — mês a mês, o app aplica a evolução corretamente.
+Ganhos e gastos sazonais extraordinários **mantêm** o campo de evolução individual (% ou R$/ano) — porque 13º pode não seguir inflação, IPVA pode ter alíquota diferente, etc.
 
 ---
 
@@ -325,24 +407,56 @@ PersonalizarPlanoFinanceiro (nova tela, ~4 seções)
 
 ---
 
-## Perguntas para validação antes de implementar
+## Parcelamento — estratégia e ponte para base_parcelas
 
-1. **Onde fica o entry point?** Opções:
-   - A) Botão "Construir Plano" na tela `/mobile/budget` (acima da lista de metas)
-   - B) Tela separada no menu de navegação ("Plano" vira uma seção própria)
-   - C) Integrado ao fluxo do Plano de Aposentadoria (etapa 0 antes de definir aporte)
+**Decisão:** registrar no banco como N linhas em `budget_planning`, com campos de parcela.
 
-2. **Plano de aposentadoria separado ou unificado?**
-   - A) O construtor substitui ambas as telas (uma só experiência)
-   - B) O construtor é um onboarding novo, mas as duas telas existentes ficam para edição avançada
+### Por que N linhas (não cálculo no frontend)
 
-3. **Evolução de gastos: por grupo ou por gasto sazonal apenas?**
-   - Hoje o plano de aposentadoria tem evolução nos aportes extraordinários
-   - Na proposta: cada grupo de gasto mensal também pode evoluir
-   - Isso é mais poderoso mas também mais complexo — vale a pena?
+- O recibo mês-a-mês precisa dos valores por mês no banco para comparar com o realizado
+- Parcelas no plano serão a **versão futura** do que `base_parcelas` faz para o realizado: compra parcelada detectada no extrato → parcelas esperadas nos próximos meses
+- A ponte futura: se a `base_parcelas` detectar uma parcela de 12x cujas mensalidades futuras ainda não têm entrada no `budget_planning`, o app pode sugerir: "Você tem LOJA 4/12 — quer adicionar as parcelas 5 a 12 no seu plano?"
 
-4. **Parcelamento: registrar no banco como N linhas ou calcular no frontend?**
-   - Banco: mais pesado mas correto para o histórico
-   - Frontend: mais simples, mas se o usuário editar o banco não reflete
+### Campos novos em `budget_planning`
 
-5. **API necessária nova:** `GET /budget/media-3-meses?user_id=X` (já existe lógica de média no `valor_medio_3_meses` do modelo — só expor no endpoint)
+```python
+# Novos campos (nullable — retrocompatível)
+is_parcela     = Column(Integer, default=0)        # 0=normal, 1=parcela
+parcela_seq    = Column(Integer, nullable=True)     # 1, 2, 3...
+parcela_total  = Column(Integer, nullable=True)     # total de parcelas
+parcela_ref    = Column(String(100), nullable=True) # "IPVA 2026" (agrupa)
+```
+
+### Como aparece na tela de Acompanhamento
+
+```
+Mar/26 — Gastos R$ 11.967
+  Carro  R$ 8.167  → R$ 6.900 normal + R$ 1.267 IPVA (1/3) ← badge
+```
+
+Badge `(1/3)` ao lado do gasto sazonal parcelado, para a pessoa saber que há mais parcelas vindo.
+
+---
+
+## Resumo de componentes reutilizados vs novos
+
+| Componente | Status | Origem |
+|-----------|--------|--------|
+| `GanhosExtraordinariosEditor` | **Reutilizar** | PersonalizarPlanoLayout.tsx — mesmo componente |
+| `GastosExtraordinariosEditor` | **Novo** (espelho) | Mesmo padrão + campo Grupo + toggle Parcelado |
+| `EvoluirValorInflacao` | **Novo (simples)** | Slider % único para todos os gastos |
+| `ReciboPorMes` | **Reutilizar** | plano-chart.tsx linha 406+ — mesma tabela, colunas diferentes |
+| `AcompanhamentoPlano` | **Evoluir** | OrcamentoTab.tsx no dashboard — expandir para tela própria |
+| `PersonalizarPlanoLayout` | **Integrar** | Vira Etapa 4+ do Construtor (aporte + projeção) |
+
+---
+
+## API — o que precisa ser criado
+
+| Endpoint | Status | Notas |
+|----------|--------|-------|
+| `GET /budget/media-3-meses` | **Já existe** | Campo `valor_medio_3_meses` em `budget_planning` — só expor |
+| `GET /budget/plano-anual?ano=2026` | **Novo** | Retorna os 12 meses com renda, gastos, aportes, sazonais e saldo por mês |
+| `POST /user/financial-profile` | **Novo** | Salva renda mensal + inflação esperada |
+| `GET /user/financial-profile` | **Novo** | Carrega dados para preencher o Construtor |
+| `POST /budget/planning/bulk-upsert` | **Já existe** | Usado para salvar todas as metas dos 12 meses de uma vez |
