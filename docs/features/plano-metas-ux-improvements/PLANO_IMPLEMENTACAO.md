@@ -7,10 +7,47 @@
 
 ---
 
+## Decisão de design — Criação de usuário é responsabilidade do app_admin
+
+O ponto de criação de contas **é e deve continuar sendo exclusivamente o `app_admin`**. Não há auto-cadastro no app principal. O fluxo é:
+
+```
+Admin acessa app_admin → cria usuário (nome, email, senha, role)
+       ↓
+Backend UserService.create_user() dispara automaticamente:
+  • _criar_grupos_padrao(user_id)   → 10 grupos padrão em base_grupos_config
+  • UserFinancialProfile(vazio)     → registro em user_financial_profile
+       ↓
+Usuário recebe credenciais → faz login no app principal
+       ↓
+Middleware detecta primeiro login → redireciona para /mobile/onboarding/welcome
+```
+
+Isso significa que a Sprint 0 (admin) e a Sprint 2 (onboarding + grupos padrão backend) são **acopladas**: o hook de inicialização fica no backend e é disparado pela criação via admin.
+
+---
+
+## Análise de impacto — app_admin hoje vs. o que precisa
+
+| Funcionalidade | Hoje | Necessário |
+|---------------|------|-----------|
+| Criar usuário | ✅ Existe (`POST /users/`) | ✅ + disparar grupos padrão + perfil |
+| Editar usuário | ✅ Existe (`PUT /users/{id}`) | ✅ sem mudança |
+| Pausar (soft delete) | ✅ Existe (`DELETE /users/{id}` → `ativo=0`) | ✅ sem mudança |
+| Reativar | ❌ Não existe | ❌ Precisar de endpoint + botão no admin |
+| Excluir com purge total | ❌ Não existe (hard delete no repositório mas não exposto) | ❌ Novo endpoint protegido + UI com confirmação dupla |
+| Ver usuários inativos | ❌ Filtrado fora (`apenas_ativos=True` fixo no frontend) | ❌ Toggle no frontend |
+| Stats do usuário | ❌ Não existe | ❌ Coluna com total de transações + data do último upload |
+| Reset de senha | ✅ Existe | ✅ sem mudança |
+| Trigger de grupos padrão | ❌ Não existe no `create_user()` | ❌ Backend — Sprint 2 |
+
+---
+
 ## Visão geral dos sprints
 
 | Sprint | Foco | Tipo | Estimativa |
 |--------|------|------|-----------|
+| **Sprint 0** | App Admin: gestão completa de usuários | Backend + Frontend (admin) | ~6h |
 | **Sprint 1** | Bugs + Nav redesign + Empty states | 100% Frontend | ~10h |
 | **Sprint 2** | Onboarding + Grupos padrão | Backend + Frontend | ~8h |
 | **Sprint 3** | Upload inteligente (detecção automática) | Backend + Frontend | ~12h |
@@ -21,8 +58,92 @@
 | **Sprint 8** | Patrimônio — vínculos de aporte + posição + venda | Backend + Frontend | ~14h |
 | **Sprint 9** | Patrimônio — cotações diárias + renda fixa + indexadores | Backend + Frontend | ~12h |
 
-**Total estimado:** ~100h  
-**Caminho crítico:** Sprint 3 → Sprint 4 → Sprint 6 → Sprint 7 → Sprint 8 → Sprint 9
+**Total estimado:** ~106h  
+**Caminho crítico:** Sprint 0 (trigger) → Sprint 2 (hook backend) → Sprint 3 → Sprint 4 → Sprint 6 → Sprint 7 → Sprint 8 → Sprint 9
+
+---
+
+## Sprint 0 — App Admin: Gestão Completa de Usuários
+
+> **Princípio:** o admin é a única porta de entrada de novos usuários. Precisa ter controle total: criar, pausar, reativar e excluir com limpeza irreversível de dados.
+
+**Estimativa:** ~6h
+
+### Backend — Novo endpoint: Purge total de usuário
+
+- [ ] **A0.1** — `UserService.purge_user(user_id: int)` — hard delete em cascata
+  - Ordem de deleção (respeitar FKs):
+    1. `investimentos_transacoes` (onde `journal_entry_id` referencia entradas do user)
+    2. `investimentos_historico`
+    3. `investimentos_portfolio`
+    4. `budget_planning`
+    5. `base_expectativas`
+    6. `user_financial_profile`
+    7. `upload_history`
+    8. `base_marcacoes`
+    9. `base_parcelas` (filtrar por `user_id` se existir coluna)
+    10. `base_grupos_config`
+    11. `journal_entries`
+    12. `users` (hard delete final)
+  - Proibido purgar `user_id == 1` (admin principal)
+  - Operação dentro de uma única transação (rollback total se qualquer passo falhar)
+  - Logar a operação (quem executou, quando, qual user_id foi purgado)
+
+- [ ] **A0.2** — `DELETE /users/{user_id}/purge` endpoint
+  - Requer `require_admin`
+  - Requer header extra `X-Confirm-Purge: "CONFIRMAR"` ou body `{ "confirmacao": "EXCLUIR PERMANENTEMENTE" }` — segunda barreira além da UI
+  - Retorna `{ ok: true, dados_removidos: { transacoes: N, uploads: N, grupos: N } }` com resumo do que foi apagado
+
+- [ ] **A0.3** — `POST /users/{user_id}/reativar` endpoint
+  - Seta `ativo=1`, atualiza `updated_at`
+  - Requer `require_admin`
+  - Retorna usuário atualizado
+
+- [ ] **A0.4** — `GET /users/{user_id}/stats` endpoint
+  - Retorna `{ total_transacoes, total_uploads, ultimo_upload_em, total_grupos, tem_plano, tem_investimentos }`
+  - Usado pela listagem do admin para dar contexto antes de excluir
+
+### Backend — Trigger de inicialização no `create_user()` (preparação para Sprint 2)
+
+> ⚠️ Este item é implementado aqui mas só funciona completamente após as migrations da Sprint 2.
+
+- [ ] **A0.5** — Adicionar stub `_inicializar_usuario(user_id)` em `UserService`
+  - Por enquanto: apenas log "usuário {id} criado — inicialização pendente de migrations"
+  - Na Sprint 2: será substituído pelas chamadas reais de grupos padrão + perfil
+  - Já chamar dentro de `create_user()` agora (antes do `return`) para garantir que o hook existe
+
+### Frontend — app_admin `/admin/contas`
+
+- [ ] **A0.6** — Toggle "Mostrar inativos" na listagem
+  - Switch no header do card que alterna `apenas_ativos` na chamada `GET /users/?apenas_ativos=false`
+  - Usuários inativos exibidos com linha esmaecida e badge "Inativo"
+
+- [ ] **A0.7** — Botão "Reativar" para usuários inativos
+  - Visível apenas quando `u.ativo === 0`
+  - Ícone: `UserCheck` (verde)
+  - Chama `POST /users/{id}/reativar`
+  - Sem confirmação (operação não destrutiva)
+
+- [ ] **A0.8** — Coluna de stats na tabela
+  - Adicionar coluna "Dados" na tabela de usuários
+  - Buscar `GET /users/{id}/stats` de forma lazy (ao carregar a lista, buscar stats de todos em paralelo)
+  - Exibir: `N transações · último upload DD/MM/AAAA` (ou "Sem dados" se zero)
+  - Tooltip com detalhes completos ao hover
+
+- [ ] **A0.9** — Botão "Excluir permanentemente" — UI com confirmação dupla
+  - Visível apenas quando `u.id !== 1`
+  - Ícone diferente do desativar: `Skull` ou `Trash2` vermelho sólido (não outline)
+  - Clique abre `Dialog` de confirmação com 2 etapas:
+    - **Etapa 1:** Exibe o resumo de dados do usuário (transações, uploads) + aviso "Esta ação é IRREVERSÍVEL. Todos os dados serão permanentemente apagados."
+    - **Etapa 2:** Campo de texto onde o admin precisa digitar o email do usuário para confirmar
+  - Só habilita botão "Excluir permanentemente" se o email digitado bater exatamente
+  - Chama `DELETE /users/{id}/purge` com body `{ "confirmacao": "EXCLUIR PERMANENTEMENTE" }`
+  - Após sucesso: remove da lista com animação de saída + toast "Usuário e todos os dados removidos"
+
+- [ ] **A0.10** — Separação visual entre "Desativar" e "Excluir"
+  - Desativar (atual): `Trash2` outline cinza — mantém dados, apenas bloqueia login
+  - Excluir (novo): botão separado, vermelho destrutivo, com tooltip "Apagar conta e todos os dados"
+  - Nunca aparecem juntos no mesmo clique
 
 ---
 
@@ -110,6 +231,8 @@
 
 ### Backend — Grupos padrão (S25)
 
+> **Dependência:** Sprint 0 criou o stub `_inicializar_usuario()` dentro de `create_user()`. Esta sprint implementa o conteúdo real desse stub.
+
 - [ ] **S25.1** — Migration: adicionar campo `is_padrao` (boolean, default false) em `base_grupos_config`
   ```bash
   docker exec finup_backend_dev alembic revision --autogenerate -m "add_is_padrao_base_grupos_config"
@@ -118,7 +241,8 @@
 
 - [ ] **S25.2** — `UserService._criar_grupos_padrao(user_id)`: inserir os 10 grupos padrão com `is_padrao=True`
   - Grupos: Alimentação (Despesa), Transporte (Despesa), Casa (Despesa), Saúde (Despesa), Lazer (Despesa), Educação (Despesa), Outros (Despesa), Investimentos (Investimento), Receita (Receita), Transferência (Transferência)
-  - Chamar dentro de `UserService.create_user()` logo após commit do novo usuário
+  - **Substituir o stub** `_inicializar_usuario()` da Sprint 0 pela chamada real
+  - Idempotente: se grupos já existem para o user, não duplicar (verificar antes de inserir)
 
 - [ ] **S25.3** — `GET /onboarding/progress` endpoint
   - Retorna `{ subiu_extrato, criou_plano, adicionou_investimento, perfil_completo, todos_completos }`
@@ -681,6 +805,13 @@
 
 ### Testes mínimos obrigatórios antes do PR
 
+- [ ] **Sprint 0 — Admin:**
+  - Criar usuário no admin → backend retorna sucesso → stub `_inicializar_usuario` logou
+  - Desativar usuário → login bloqueado no app principal
+  - Reativar usuário → login volta a funcionar
+  - Toggle "mostrar inativos" → usuários inativos aparecem com badge
+  - Purge: digitar email errado → botão permanece desabilitado; digitar correto → confirma; usuário e dados somem do banco
+  - Confirmar no banco que nenhuma tabela tem registros do `user_id` purgado
 - [ ] B1-B4: Navegar pelos fluxos de budget sem encontrar nenhum dos 4 bugs
 - [ ] S19: Bottom nav com 5 tabs corretas, FAB abre bottom sheet, ⚙️ no header leva para Perfil
 - [ ] S20: Subir 1 arquivo OFX e 1 CSV → detecção retorna banco + período corretos
