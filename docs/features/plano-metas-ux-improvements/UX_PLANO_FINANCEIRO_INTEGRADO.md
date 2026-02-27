@@ -1248,3 +1248,652 @@ No topo da tela de Carteira (após o donut):
 | Cotação ações/FIIs | [brapi.dev](https://brapi.dev) | 1x/dia (18h) | Gratuito (15k req/mês) |
 
 Todos os dados ficam em cache local na tabela `market_data_cache` — nenhuma chamada externa no request do usuário.
+
+---
+
+## Upload Redesign + Jornada do Novo Usuário
+
+> **Contexto:** O upload é a ação mais importante do app. Tudo nasce dele — budget, plano, vínculo de aportes. Por isso, remover qualquer fricção do fluxo de upload é prioridade máxima. Esta seção cobre 4 temas: (1) detecção automática, (2) multi-arquivo, (3) import de dados históricos e (4) jornada completa do novo usuário.
+
+---
+
+### Tema 1 — Detecção automática de arquivo (Smart Detection)
+
+#### Problema atual
+
+O usuário abre a tela de upload e enfrenta um formulário vazio: banco, tipo de conta, período. Ele tem que preencher tudo antes de poder escolher o arquivo. Isso cria fricção desnecessária — o arquivo em si já tem todas essas informações.
+
+#### Novo fluxo
+
+```
+[Usuário drop ou seleciona arquivo]
+         ↓
+[Backend analisa o arquivo em < 2s]
+         ↓
+[Card de detecção exibido com confiança por campo]
+         ↓
+[Usuário confirma (1 clique) ou edita campos incertos]
+         ↓
+[Processar]
+```
+
+#### Sinais de detecção (por prioridade)
+
+| Sinal | Exemplo | Confiança |
+|-------|---------|-----------|
+| Formato OFX — tags `BANKID`, `ACCTTYPE`, `DTSTART/DTEND` | `BANKID:237` → Bradesco | 🟢 Alta |
+| Nome do arquivo — padrões conhecidos | `extrato-bradesco-jan-2026.csv` | 🟢 Alta |
+| Cabeçalho CSV — colunas específicas por banco | `"Data","Histórico","Valor"` → Bradesco | 🟢 Alta |
+| Conteúdo — primeiras linhas com padrão de data/valor | detecta período automaticamente | 🟡 Média |
+| Histórico do usuário — último upload deste banco | Bradesco sempre conta corrente | 🟡 Média |
+| Extensão do arquivo | `.ofx` → extrato, `.pdf` → fatura | 🔴 Baixa |
+
+**Banco de fingerprints dos processadores:**
+
+```python
+FINGERPRINTS = {
+    "bradesco_extrato_csv": {
+        "extensao": ".csv",
+        "colunas_obrigatorias": ["Data", "Histórico", "Valor"],
+        "banco": "Bradesco",
+        "tipo": "extrato",
+        "conta": "corrente",
+    },
+    "nubank_fatura_csv": {
+        "extensao": ".csv",
+        "colunas_obrigatorias": ["date", "title", "amount"],
+        "banco": "Nubank",
+        "tipo": "fatura",
+    },
+    "itau_extrato_xls": {
+        "extensao": ".xls",
+        "banco": "Itaú",
+        "tipo": "extrato",
+    },
+    "btg_extrato_csv": {
+        "extensao": ".csv",
+        "colunas_obrigatorias": ["Data", "Descrição", "Valor"],
+        "banco": "BTG",
+        "tipo": "extrato",
+    },
+    # ...
+}
+```
+
+#### UX — Card de detecção por arquivo
+
+**Alta confiança (≥ 85% campos detectados):**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  📄 extrato-bradesco-jan-2026.csv                       │
+│                                                         │
+│  ✅ Banco:          Bradesco                            │
+│  ✅ Tipo:           Extrato bancário (Conta Corrente)   │
+│  ✅ Período:        Janeiro 2026  (01/01 – 31/01)       │
+│  ✅ Transações:     47 detectadas em pré-análise        │
+│                                                         │
+│  [✏️ Editar]                [✅ Confirmar e processar]  │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Confiança parcial (50–84%):**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  📄 extrato_jan.csv                          ⚠️ Revisar │
+│                                                         │
+│  ✅ Banco:          Bradesco  (detectado pelo conteúdo)  │
+│  ✅ Tipo:           Extrato bancário                    │
+│  ❓ Período:        Não detectado automaticamente       │
+│     → [Selecionar período]                              │
+│                                                         │
+│  [✏️ Editar]            [✅ Confirmar e processar]      │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Arquivo não reconhecido (< 50%):**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  📄 arquivo.csv                           ❌ Não reconhecido │
+│                                                         │
+│  Não conseguimos identificar este arquivo.              │
+│  Preencha as informações abaixo:                        │
+│                                                         │
+│  Banco: [____________] Tipo: [Extrato ▼]               │
+│  Período: [MM/AAAA]                                     │
+│                                                         │
+│  [Cancelar]                [✅ Processar assim mesmo]   │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Alerta de duplicata:**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  ⚠️  Arquivo possivelmente duplicado                    │
+│                                                         │
+│  Bradesco Conta Corrente — Janeiro 2026                 │
+│  já foi carregado em 15/01/2026                         │
+│  (47 transações idênticas detectadas)                   │
+│                                                         │
+│  [Cancelar]              [Carregar de qualquer forma]   │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Tema 2 — Upload de múltiplos arquivos
+
+#### Por que importa
+
+Um novo usuário com 12 meses de extratos precisa fazer 12 uploads separados hoje. No novo fluxo, ele dropa tudo de uma vez. A vantagem vai além da conveniência: ao processar 12 meses juntos, a classificação em lote é exponencialmente mais eficiente — o usuário classifica **estabelecimentos únicos**, não transações.
+
+**Exemplo:** 12 meses de extrato → 1.247 transações → apenas 73 estabelecimentos únicos. Classificar 73 = tudo classificado.
+
+#### UX — Tela de multi-upload
+
+**Estado 1 — Drop zone vazia:**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                                                         │
+│         ┌───────────────────────────────┐              │
+│         │                               │              │
+│         │   📁 Arraste seus arquivos    │              │
+│         │      aqui, ou clique          │              │
+│         │                               │              │
+│         │  OFX · CSV · XLS · PDF        │              │
+│         └───────────────────────────────┘              │
+│                                                         │
+│  Pode subir vários arquivos de uma vez!                 │
+│  Extratos e faturas de bancos diferentes — tudo junto.  │
+│                                                         │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Estado 2 — Analisando (files dropados, backend detectando):**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  4 arquivos detectados                     [+ Adicionar] │
+│                                                         │
+│  ⏳ extrato-bradesco-jan-2026.csv   analisando...       │
+│  ⏳ extrato-bradesco-fev-2026.csv   analisando...       │
+│  ⏳ nubank-fatura-jan-2026.csv      analisando...       │
+│  ⏳ nubank-fatura-fev-2026.csv      analisando...       │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Estado 3 — Todos analisados, pronto para processar:**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  4 arquivos prontos                        [+ Adicionar] │
+│                                                         │
+│  ✅ Bradesco Extrato  Jan/26  47 transações             │
+│  ✅ Bradesco Extrato  Fev/26  52 transações             │
+│  ✅ Nubank Fatura     Jan/26  34 transações             │
+│  ✅ Nubank Fatura     Fev/26  29 transações             │
+│     ─────────────────────────────────────               │
+│     Total: 162 transações em 4 arquivos                 │
+│                                                         │
+│  ⚠️  Bradesco Extrato Mar/26  já foi carregado antes    │
+│     [Remover] [Incluir mesmo assim]                     │
+│                                                         │
+│              [Processar todos →]                        │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Estado 4 — Processando:**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Processando seus arquivos...                           │
+│                                                         │
+│  ✅ Bradesco Extrato  Jan/26   47 transações ✓          │
+│  🔄 Bradesco Extrato  Fev/26   processando...  45%      │
+│  ⏳ Nubank Fatura     Jan/26   aguardando...            │
+│  ⏳ Nubank Fatura     Fev/26   aguardando...            │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Estado 5 — Concluído:**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  🎉  162 transações processadas!                        │
+│                                                         │
+│  ✅ Bradesco Extrato  Jan/26   47 transações            │
+│  ✅ Bradesco Extrato  Fev/26   52 transações            │
+│  ✅ Nubank Fatura     Jan/26   34 transações            │
+│  ✅ Nubank Fatura     Fev/26   29 transações            │
+│                                                         │
+│  📋 73 estabelecimentos para classificar                │
+│     (classifique 1 vez → aplica em todas as ocorrências)│
+│                                                         │
+│  💰 3 aportes aguardando vínculo                        │
+│                                                         │
+│  [Classificar estabelecimentos →]                       │
+└─────────────────────────────────────────────────────────┘
+```
+
+#### Fluxo de classificação em lote (pós-upload)
+
+Em vez de mostrar as 162 transações individualmente, agrupa por estabelecimento com frequência:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Classifique os estabelecimentos                        │
+│  73 únicos  ·  162 transações totais                    │
+│                                            [Salvar tudo]│
+├─────────────────────────────────────────────────────────┤
+│  Uber                                  34x  R$ 1.245    │
+│  Grupo: [Transporte ▼]                       [✅ Salvar] │
+├─────────────────────────────────────────────────────────┤
+│  iFood                                 28x  R$   890    │
+│  Grupo: [Alimentação ▼]                      [✅ Salvar] │
+├─────────────────────────────────────────────────────────┤
+│  TED XP INVESTIMENTOS                   3x  R$ 9.000   │
+│  Grupo: [Investimentos ▼]                    [✅ Salvar] │
+├─────────────────────────────────────────────────────────┤
+│  Mercado Extra                         12x  R$ 2.100    │
+│  Grupo: [Alimentação ▼]                      [✅ Salvar] │
+├─────────────────────────────────────────────────────────┤
+│  ...  (69 outros)                                       │
+└─────────────────────────────────────────────────────────┘
+```
+
+- Cada decisão é salva em `base_marcacoes` → futuro upload já reconhece
+- Sugestões automáticas baseadas no histórico (Uber → Transporte já foi classificado antes)
+- "Salvar tudo" aplica as sugestões automáticas para os não-editados
+
+---
+
+### Tema 3 — Import de dados históricos (planilha própria)
+
+#### Quem usa
+
+Usuários que já têm anos de dados organizados no Excel/Google Sheets e não querem reclassificar tudo. Eles querem importar o histórico já tratado, mantendo os grupos que já deram ao longo do tempo.
+
+#### Três modos de entrada
+
+| Modo | Quando usar |
+|------|------------|
+| **Upload de extrato** (padrão) | Arquivo bancário em formato nativo (OFX, CSV do banco) |
+| **Import de planilha** (novo) | Usuário tem seus dados organizados no Excel/Sheets |
+| **Inserção manual** (futuro) | Cadastro de transações avulsas |
+
+#### UX — Fluxo de import de planilha
+
+**Passo 1 — Escolha o modo:**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  O que você quer subir?                                 │
+│                                                         │
+│  ┌────────────────────┐  ┌───────────────────────────┐  │
+│  │  📄 Extrato        │  │  📊 Minha planilha        │  │
+│  │  bancário          │  │  de dados                 │  │
+│  │                    │  │                           │  │
+│  │  OFX, CSV do       │  │  Excel, Google Sheets     │  │
+│  │  seu banco         │  │  já organizados            │  │
+│  └────────────────────┘  └───────────────────────────┘  │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Passo 2 — Guia de preparação (modo planilha):**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  📊 Import de dados históricos                     [✕]  │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│  ① Baixe nosso template                                 │
+│    [⬇️ Download template.xlsx]  [⬇️ Download template.csv] │
+│                                                         │
+│  ② Preencha com seus dados                              │
+│  ┌────────────────────────────────────────────────────┐ │
+│  │  Colunas obrigatórias:                             │ │
+│  │  data       DD/MM/YYYY   ex: 15/01/2026            │ │
+│  │  descricao  texto        ex: Supermercado Extra     │ │
+│  │  valor      número       ex: -350.00 (negativo=gasto)│ │
+│  │                                                    │ │
+│  │  Colunas opcionais (já preenchidas = menos trabalho):│ │
+│  │  grupo      texto        ex: Alimentação           │ │
+│  │  conta      texto        ex: Bradesco              │ │
+│  │  cartao     texto        ex: Nubank                │ │
+│  └────────────────────────────────────────────────────┘ │
+│                                                         │
+│  ③ Suba o arquivo preenchido                            │
+│    [📁 Escolher arquivo]                                │
+│                                                         │
+│  [Dúvidas? Ver guia completo ↓]                         │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Passo 3 — Validação pré-upload:**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Validando seu arquivo...                               │
+├─────────────────────────────────────────────────────────┤
+│  ✅ 2.847 linhas encontradas                            │
+│  ✅ Colunas obrigatórias: data, descricao, valor        │
+│  ✅ Coluna opcional: grupo (preenchida em 94% das linhas)│
+│  ⚠️  87 linhas com valor zerado → serão ignoradas       │
+│  ⚠️  12 linhas com data inválida → serão ignoradas      │
+│                                                         │
+│  Período detectado: Jan/2024 → Dez/2025 (2 anos)       │
+│                                                         │
+│  Preview (primeiras 5 linhas):                          │
+│  DATA        DESCRIÇÃO              VALOR    GRUPO      │
+│  01/01/2024  Supermercado Extra    -350.00   Alimentação│
+│  02/01/2024  Uber                   -28.50   Transporte │
+│  02/01/2024  TED XP INVESTIMENTOS -5000.00  Investimentos│
+│  03/01/2024  Salário              15000.00   Receita    │
+│  04/01/2024  Netflix               -55.90   Lazer      │
+│                                                         │
+│  [Voltar e corrigir]     [Importar 2.748 transações →]  │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Passo 4 — Processamento simplificado:**
+
+O import de planilha pula as fases de detecção/parsing (os dados já são estruturados). O processo é:
+
+```
+Importação de planilha
+1. Validar formato e colunas
+2. Gerar IdTransacao para deduplicação
+3. Mapear grupos → base_marcacoes existentes
+   - Se grupo preenchido e existe → aceitar diretamente
+   - Se grupo preenchido mas não existe → criar novo grupo (confirmar com usuário)
+   - Se grupo vazio → entra na tela de classificação
+4. Inserir em journal_entries
+5. Atualizar base_marcacoes (novos padrões aprendidos)
+6. Detectar transações de investimento (GRUPO='Investimentos') → fila de vínculo
+```
+
+**Resultado pós-import:**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  🎉  2.748 transações importadas!                       │
+│                                                         │
+│  ✅ 2.587 já classificadas (94%)  — grupo preenchido    │
+│  📋 161 precisam de classificação                       │
+│                                                         │
+│  📅 Cobrindo: Jan/2024 → Dez/2025 (2 anos de dados)    │
+│                                                         │
+│  💰 23 aportes aguardando vínculo com investimentos     │
+│                                                         │
+│  [Classificar 161 restantes →]   [Ir para o Dashboard] │
+└─────────────────────────────────────────────────────────┘
+```
+
+#### Grupos desconhecidos — confirmar antes de criar
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Grupos novos detectados na planilha                    │
+│                                                         │
+│  Encontramos grupos que não existem no app.             │
+│  O que quer fazer com eles?                             │
+│                                                         │
+│  "Saúde"          → [Criar como novo grupo] [Mapear →▼]│
+│  "Moradia"        → [Criar como novo grupo] [Mapear →▼]│
+│  "Educação"       → ✅ já existe no app                 │
+│                                                         │
+│  [Confirmar e importar]                                 │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Tema 4 — Jornada do novo usuário
+
+#### Premissa
+
+O app sem dados é uma tela vazia. A jornada do novo usuário precisa responder 3 perguntas:
+1. **O quê?** — o que o app faz (promessa em 1 frase)
+2. **Por onde?** — como começar sem se perder
+3. **Por quê agora?** — o que o usuário ganha ao colocar dados imediatamente
+
+#### Fluxo de onboarding (telas)
+
+**Tela 1 — Welcome:**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                                                         │
+│              [Ilustração: dashboard vivo]               │
+│                                                         │
+│  Bem-vindo ao FinUp                                     │
+│                                                         │
+│  Conecte seus gastos reais                              │
+│  ao seu futuro financeiro.                              │
+│                                                         │
+│  Suba seus extratos bancários, e o app                  │
+│  cuida do resto — classificação, plano                  │
+│  e acompanhamento do patrimônio.                        │
+│                                                         │
+│           [Vamos começar →]                             │
+│                                                         │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Tela 2 — Escolha o ponto de partida:**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Como você quer começar?                                │
+│                                                         │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │  📤  Subir meus extratos bancários              │   │
+│  │      Recomendado para começar do zero           │   │
+│  │      OFX, CSV, XLS — detectamos automaticamente │   │
+│  └─────────────────────────────────────────────────┘   │
+│                                                         │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │  📊  Já tenho minha planilha organizada         │   │
+│  │      Importe seus dados históricos              │   │
+│  │      com grupos já preenchidos                  │   │
+│  └─────────────────────────────────────────────────┘   │
+│                                                         │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │  🔍  Quero explorar primeiro                    │   │
+│  │      Ver como funciona com dados de exemplo     │   │
+│  │      Adiciono meus dados depois                 │   │
+│  └─────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Path A — Subir extratos (primeiro upload guiado):**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Suba seu primeiro extrato                      Passo 1/2│
+│                                                         │
+│  ┌───────────────────────────────────────────────────┐  │
+│  │                                                   │  │
+│  │   📁 Arraste o arquivo aqui                       │  │
+│  │      ou toque para selecionar                     │  │
+│  │                                                   │  │
+│  │   Formatos aceitos:                               │  │
+│  │   OFX · CSV (Bradesco, Nubank, BTG, XP...)       │  │
+│  │   XLS · PDF                                       │  │
+│  │                                                   │  │
+│  └───────────────────────────────────────────────────┘  │
+│                                                         │
+│  💡 Dica: pode subir vários meses de uma vez!           │
+│                                                         │
+│  Quanto mais dados, mais preciso fica o seu plano.      │
+└─────────────────────────────────────────────────────────┘
+```
+
+Após primeiro upload + classificação → celebração:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  🎉 Incrível! Seus dados estão no app!                  │
+│                                                         │
+│  47 transações carregadas                               │
+│  Janeiro 2026  ·  Bradesco Conta Corrente               │
+│                                                         │
+│  Próximos passos (leva 5 min):                          │
+│                                                         │
+│  ┌────────────────────────────────────────────────┐    │
+│  │  ✅ 1. Subiu seu primeiro extrato              │    │
+│  │  ⬜ 2. Criar seu Plano Financeiro              │    │
+│  │  ⬜ 3. Adicionar investimentos                 │    │
+│  └────────────────────────────────────────────────┘    │
+│                                                         │
+│  [Criar meu Plano agora →]   [Ver minhas transações]   │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Path B — Import de planilha:** vai direto para o fluxo do Tema 3.
+
+**Path C — Modo exploração:**
+- Carrega dataset de exemplo (persona fictícia: 6 meses de dados, perfil classe média)
+- Banner fixo no topo de todas as telas: `"Modo demonstração · [Adicionar meus dados reais]"`
+- Qualquer ação destrutiva (editar, deletar) → aviso de que é dados de exemplo
+
+#### Empty states por tela
+
+**Início — sem dados:**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Início                                     [⚙️ Perfil] │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│         [Ilustração: gráfico vazio animado]             │
+│                                                         │
+│  Seu painel financeiro está aguardando                  │
+│  seus dados reais.                                      │
+│                                                         │
+│  Suba um extrato bancário para começar a               │
+│  entender para onde vai o seu dinheiro.                 │
+│                                                         │
+│  [📤 Subir primeiro extrato]                            │
+│                                                         │
+│  ou  [Ver como funciona →] (modo demo)                  │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Transações — sem dados:**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Transações                                             │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│         [Ilustração: lista vazia]                       │
+│                                                         │
+│  Nenhuma transação ainda.                               │
+│                                                         │
+│  Suba um extrato bancário para que suas                 │
+│  transações apareçam aqui automaticamente.              │
+│                                                         │
+│  [📤 Subir extrato]                                     │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Plano — sem dados:**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Plano Financeiro                                       │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│         [Ilustração: bússola ou mapa]                   │
+│                                                         │
+│  Seu plano financeiro começa aqui.                      │
+│                                                         │
+│  Primeiro, precisamos entender seus gastos reais.       │
+│  Suba um extrato para que possamos sugerir              │
+│  um plano baseado no que você já gasta.                 │
+│                                                         │
+│  [📤 Subir extrato primeiro]                            │
+│                                                         │
+│  ou  [Criar plano manualmente →]                        │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Carteira — sem dados:**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Minha Carteira                                         │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│         [Ilustração: cofre ou gráfico]                  │
+│                                                         │
+│  Veja seu patrimônio completo aqui.                     │
+│                                                         │
+│  Adicione seus investimentos para acompanhar            │
+│  rentabilidade, IR estimado e evolução.                 │
+│                                                         │
+│  [Adicionar primeiro investimento]                      │
+│                                                         │
+│  Ou suba um extrato com aportes para                    │
+│  vincular automaticamente.                              │
+└─────────────────────────────────────────────────────────┘
+```
+
+#### Bases criadas automaticamente no primeiro login
+
+Quando o usuário cria sua conta, o backend cria automaticamente:
+
+```python
+GRUPOS_PADRAO = [
+    # Despesas
+    {"nome": "Alimentação",    "categoria_geral": "Despesa",     "cor": "#FF6B6B"},
+    {"nome": "Transporte",     "categoria_geral": "Despesa",     "cor": "#4ECDC4"},
+    {"nome": "Casa",           "categoria_geral": "Despesa",     "cor": "#45B7D1"},
+    {"nome": "Saúde",          "categoria_geral": "Despesa",     "cor": "#96CEB4"},
+    {"nome": "Lazer",          "categoria_geral": "Despesa",     "cor": "#FFEAA7"},
+    {"nome": "Educação",       "categoria_geral": "Despesa",     "cor": "#DDA0DD"},
+    {"nome": "Outros",         "categoria_geral": "Despesa",     "cor": "#B0B0B0"},
+    # Investimentos
+    {"nome": "Investimentos",  "categoria_geral": "Investimento","cor": "#2ECC71"},
+    # Receitas
+    {"nome": "Receita",        "categoria_geral": "Receita",     "cor": "#F7DC6F"},
+    {"nome": "Transferência",  "categoria_geral": "Transferência","cor": "#AEB6BF"},
+]
+```
+
+- `base_grupos_config` populado com os grupos padrão
+- `user_financial_profile` criado com valores zerados (pronto para receber renda declarada)
+- Modo demo disponível (dados de exemplo pré-gerados, isolados por usuário)
+
+#### Checklist de progresso ("Primeiros passos")
+
+Exibido no Início enquanto o usuário não tiver completado todos os itens:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Seus primeiros passos  · 1/4 concluídos               │
+│                                                         │
+│  ✅ Criou sua conta                                     │
+│  ⬜ Subiu seu primeiro extrato             [→ Fazer]   │
+│  ⬜ Criou seu Plano Financeiro             [→ Fazer]   │
+│  ⬜ Adicionou um investimento              [→ Fazer]   │
+└─────────────────────────────────────────────────────────┘
+```
+
+- Cada item completado → check animado + mensagem de parabéns
+- Ao completar todos os 4 → card some, é substituído pelo resumo normal do mês
+
+#### Notificações de ativação (in-app e push futuro)
+
+| Gatilho | Mensagem | CTA |
+|---------|---------|-----|
+| Cadastro feito, sem upload em 1 dia | "Suba seu extrato bancário e veja para onde vai seu dinheiro" | Upload |
+| Primeiro upload feito | "Ótimo início! Agora crie seu Plano para ter um orçamento real" | Criar Plano |
+| Plano criado, sem investimento | "Complete seu patrimônio! Adicione seus investimentos" | Carteira |
+| Último upload há > 30 dias | "Hora de atualizar seus dados! Suba o extrato de [mês]" | Upload |
+| 3 aportes aguardando vínculo há > 7 dias | "Você tem 3 aportes para vincular em Carteira" | Carteira |

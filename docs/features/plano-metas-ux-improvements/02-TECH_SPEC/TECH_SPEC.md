@@ -1882,3 +1882,573 @@ const { data: pendentes } = useSWR("/api/v1/investimentos/pendentes-vinculo")
 - [ ] `PosicaoFixoCard`: regime, indexador, capital, valor atual, alíquota IR estimada pelo prazo
 - [ ] `SaldoCorretoraCard`: exibido quando track='saldo_corretora' (valor + corretora)
 - [ ] `ResumoIRPatrimonio`: bruto − IR = líquido estimado com tooltip explicativo
+
+---
+
+## Módulo 3 — Upload Inteligente + Onboarding de Novo Usuário
+
+> **Escopo:** detecção automática de metadados do arquivo, upload de múltiplos arquivos, import de planilha histórica, grupos padrão no primeiro login, modo exploração e empty states.
+
+### 18. Backend — Detecção automática (`/upload/detect`)
+
+#### Fingerprints por processador
+
+Cada processador existente em `upload/processors/` ganha um dicionário de fingerprints usado pelo engine de detecção:
+
+```python
+# app/domains/upload/detectors/fingerprints.py
+
+FINGERPRINTS: list[dict] = [
+    {
+        "processor_id": "bradesco_extrato_csv",
+        "banco": "Bradesco",
+        "tipo": "extrato",
+        "conta": "corrente",
+        "extensoes": [".csv"],
+        "colunas_csv": ["Data", "Histórico", "Docto.", "Crédito (R$)", "Débito (R$)", "Saldo (R$)"],
+        "nome_patterns": ["bradesco", "extrato"],
+    },
+    {
+        "processor_id": "nubank_fatura_csv",
+        "banco": "Nubank",
+        "tipo": "fatura",
+        "extensoes": [".csv"],
+        "colunas_csv": ["date", "title", "amount", "category"],
+        "nome_patterns": ["nubank", "fatura"],
+    },
+    {
+        "processor_id": "itau_extrato_xls",
+        "banco": "Itaú",
+        "tipo": "extrato",
+        "extensoes": [".xls", ".xlsx"],
+        "nome_patterns": ["itau", "extrato"],
+    },
+    {
+        "processor_id": "btg_extrato_csv",
+        "banco": "BTG",
+        "tipo": "extrato",
+        "extensoes": [".csv"],
+        "colunas_csv": ["Data", "Descrição", "Valor"],
+        "nome_patterns": ["btg", "extrato"],
+    },
+    {
+        "processor_id": "ofx_generico",
+        "extensoes": [".ofx"],
+        "ofx_tags": ["BANKID", "ACCTTYPE", "DTSTART", "DTEND"],
+    },
+    # ... outros processadores
+]
+```
+
+#### Engine de detecção
+
+```python
+# app/domains/upload/detectors/engine.py
+from dataclasses import dataclass
+from typing import Optional
+import re
+
+@dataclass
+class DetectionResult:
+    processor_id: Optional[str]
+    banco: Optional[str]
+    tipo: Optional[str]      # "extrato" | "fatura"
+    conta: Optional[str]     # "corrente" | "poupança" | None
+    periodo_inicio: Optional[str]  # "YYYY-MM-DD"
+    periodo_fim: Optional[str]
+    transacoes_count: int    # pré-análise sem processar
+    confianca: float         # 0.0 – 1.0
+    campos_incertos: list[str]
+
+class DetectionEngine:
+    def detect(self, filename: str, file_bytes: bytes) -> DetectionResult:
+        extensao = Path(filename).suffix.lower()
+        nome_lower = filename.lower()
+        scores = []
+
+        for fp in FINGERPRINTS:
+            score = 0.0
+            incertos = []
+
+            # Sinal 1: extensão (peso 10%)
+            if extensao in fp.get("extensoes", []):
+                score += 0.10
+            else:
+                incertos.append("tipo_arquivo")
+
+            # Sinal 2: padrão no nome (peso 20%)
+            if any(p in nome_lower for p in fp.get("nome_patterns", [])):
+                score += 0.20
+            else:
+                incertos.append("banco")
+
+            # Sinal 3: colunas CSV (peso 50%)
+            if extensao == ".csv" and "colunas_csv" in fp:
+                header = self._get_csv_header(file_bytes)
+                match = sum(1 for c in fp["colunas_csv"] if c in header)
+                score += 0.50 * (match / len(fp["colunas_csv"]))
+                if match < len(fp["colunas_csv"]):
+                    incertos.append("formato")
+
+            # Sinal 4: tags OFX (peso 50%)
+            if extensao == ".ofx":
+                content = file_bytes.decode("latin-1", errors="ignore")
+                match = sum(1 for tag in fp.get("ofx_tags", []) if tag in content)
+                score += 0.50 * (match / max(len(fp.get("ofx_tags", [])), 1))
+
+            scores.append((score, fp, incertos))
+
+        scores.sort(key=lambda x: x[0], reverse=True)
+        best_score, best_fp, incertos = scores[0]
+
+        # Extrair período e contagem de transações da pré-análise
+        periodo = self._extract_period(extensao, file_bytes, best_fp)
+        count = self._count_rows(extensao, file_bytes)
+
+        return DetectionResult(
+            processor_id=best_fp.get("processor_id") if best_score >= 0.5 else None,
+            banco=best_fp.get("banco"),
+            tipo=best_fp.get("tipo"),
+            conta=best_fp.get("conta"),
+            periodo_inicio=periodo[0],
+            periodo_fim=periodo[1],
+            transacoes_count=count,
+            confianca=best_score,
+            campos_incertos=incertos if best_score < 0.85 else [],
+        )
+```
+
+#### Endpoint `POST /upload/detect`
+
+```python
+# app/domains/upload/router.py
+
+@router.post("/detect")
+async def detect_file(
+    arquivo: UploadFile = File(...),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """
+    Analisa o arquivo e retorna metadados detectados + nível de confiança.
+    Não processa nem salva nada — apenas detecta.
+    """
+    file_bytes = await arquivo.read()
+    engine = DetectionEngine()
+    result = engine.detect(arquivo.filename, file_bytes)
+
+    # Verificar duplicata: mesmo banco + período já uploadado por este user
+    duplicata = None
+    if result.banco and result.periodo_inicio:
+        duplicata = db.query(UploadHistory).filter(
+            UploadHistory.user_id == user_id,
+            UploadHistory.banco == result.banco,
+            UploadHistory.periodo_inicio == result.periodo_inicio,
+            UploadHistory.status == "concluido",
+        ).first()
+
+    return {
+        "banco": result.banco,
+        "tipo": result.tipo,
+        "conta": result.conta,
+        "periodo_inicio": result.periodo_inicio,
+        "periodo_fim": result.periodo_fim,
+        "transacoes_count": result.transacoes_count,
+        "confianca": result.confianca,
+        "campos_incertos": result.campos_incertos,
+        "duplicata_detectada": {
+            "upload_id": duplicata.id,
+            "data_upload": duplicata.created_at.isoformat(),
+            "transacoes": duplicata.total_transacoes,
+        } if duplicata else None,
+    }
+```
+
+#### Atualizar `UploadHistory` com metadados detectados
+
+```python
+# Novos campos nullable em upload_history
+banco          = Column(String(100))
+tipo           = Column(String(20))   # "extrato" | "fatura"
+periodo_inicio = Column(Date)
+periodo_fim    = Column(Date)
+confianca_deteccao = Column(Numeric(4, 3))  # 0.000 – 1.000
+```
+
+---
+
+### 19. Backend — Upload de múltiplos arquivos
+
+#### Endpoint `POST /upload/bulk-confirm`
+
+```python
+@router.post("/bulk-confirm")
+async def bulk_confirm(
+    arquivos: list[UploadFile] = File(...),
+    metadados: list[UploadMetadadoSchema] = Body(...),  # metadados confirmados pelo usuário por arquivo
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """
+    Processa N arquivos em série. Retorna resultado por arquivo + total consolidado.
+    """
+    resultados = []
+    total_transacoes = 0
+    total_estabelecimentos = set()
+    total_pendentes_vinculo = 0
+
+    for arquivo, meta in zip(arquivos, metadados):
+        file_bytes = await arquivo.read()
+        try:
+            resultado = await UploadService(db).processar_arquivo(
+                user_id=user_id,
+                file_bytes=file_bytes,
+                filename=arquivo.filename,
+                banco=meta.banco,
+                tipo=meta.tipo,
+                periodo_inicio=meta.periodo_inicio,
+                periodo_fim=meta.periodo_fim,
+                processor_id=meta.processor_id,
+            )
+            resultados.append({"arquivo": arquivo.filename, "status": "ok", **resultado})
+            total_transacoes += resultado["total_transacoes"]
+            total_estabelecimentos.update(resultado["estabelecimentos_novos"])
+            total_pendentes_vinculo += resultado.get("pendentes_vinculo", 0)
+        except Exception as e:
+            resultados.append({"arquivo": arquivo.filename, "status": "erro", "msg": str(e)})
+
+    return {
+        "arquivos": resultados,
+        "total_transacoes": total_transacoes,
+        "estabelecimentos_para_classificar": len(total_estabelecimentos),
+        "total_pendentes_vinculo": total_pendentes_vinculo,
+    }
+```
+
+#### Classificação em lote por estabelecimento
+
+O endpoint de classificação já existente recebe um payload de `{ estabelecimento → grupo }` e aplica em `base_marcacoes` + todas as transações do lote:
+
+```python
+@router.post("/classificar-lote")
+def classificar_lote(
+    payload: ClassificarLoteSchema,  # { "mapeamentos": [{"estabelecimento": "UBER", "grupo": "Transporte"}] }
+    upload_ids: list[int] = Body(...),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    service = UploadService(db)
+    aplicados = 0
+    for mapeamento in payload.mapeamentos:
+        # Salva em base_marcacoes
+        service.salvar_marcacao(user_id, mapeamento.estabelecimento, mapeamento.grupo)
+        # Aplica em todas as transações dos uploads do lote
+        aplicados += service.aplicar_grupo_lote(
+            user_id, upload_ids, mapeamento.estabelecimento, mapeamento.grupo
+        )
+    return {"mapeamentos_aplicados": len(payload.mapeamentos), "transacoes_atualizadas": aplicados}
+```
+
+---
+
+### 20. Backend — Import de planilha histórica
+
+#### Novo endpoint `POST /upload/import-planilha`
+
+```python
+@router.post("/import-planilha")
+async def import_planilha(
+    arquivo: UploadFile = File(...),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """
+    Valida o CSV/XLSX de planilha histórica e retorna preview + estatísticas.
+    Não insere dados ainda.
+    """
+    file_bytes = await arquivo.read()
+    service = ImportPlanilhaService(db)
+    resultado = service.validar(file_bytes, arquivo.filename)
+
+    return {
+        "total_linhas": resultado.total_linhas,
+        "linhas_validas": resultado.linhas_validas,
+        "linhas_ignoradas": resultado.linhas_ignoradas,     # zeradas, data inválida
+        "com_grupo_preenchido": resultado.com_grupo,
+        "grupos_desconhecidos": resultado.grupos_desconhecidos,  # lista
+        "periodo_inicio": resultado.periodo_inicio,
+        "periodo_fim": resultado.periodo_fim,
+        "preview": resultado.preview_5_linhas,
+    }
+
+@router.post("/import-planilha/confirmar")
+async def confirmar_import_planilha(
+    arquivo: UploadFile = File(...),
+    grupos_novos: dict[str, str] = Body(default={}),  # {"Moradia": "Casa"} = mapear; {"Saúde": null} = criar
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    file_bytes = await arquivo.read()
+    service = ImportPlanilhaService(db)
+    resultado = service.importar(
+        user_id=user_id,
+        file_bytes=file_bytes,
+        grupos_novos=grupos_novos,
+    )
+    return {
+        "total_importadas": resultado.total_importadas,
+        "classificadas_automaticamente": resultado.classificadas,
+        "para_classificar": resultado.para_classificar,
+        "pendentes_vinculo": resultado.pendentes_vinculo,
+    }
+```
+
+#### `ImportPlanilhaService`
+
+```python
+# app/domains/upload/services/import_planilha.py
+
+COLUNAS_OBRIGATORIAS = ["data", "descricao", "valor"]
+COLUNAS_OPCIONAIS = ["grupo", "conta", "cartao"]
+
+class ImportPlanilhaService:
+    def validar(self, file_bytes: bytes, filename: str) -> ImportValidationResult:
+        df = self._parse_file(file_bytes, filename)
+        faltando = [c for c in COLUNAS_OBRIGATORIAS if c not in df.columns]
+        if faltando:
+            raise ValueError(f"Colunas obrigatórias faltando: {faltando}")
+
+        grupos_presentes = df["grupo"].dropna().unique().tolist() if "grupo" in df.columns else []
+        grupos_existentes = {g.Grupo for g in db.query(BaseMarcacao.Grupo).distinct().all()}
+        grupos_desconhecidos = [g for g in grupos_presentes if g not in grupos_existentes]
+
+        linhas_validas = df[df["data"].notna() & df["valor"].notna() & (df["valor"] != 0)]
+
+        return ImportValidationResult(
+            total_linhas=len(df),
+            linhas_validas=len(linhas_validas),
+            linhas_ignoradas=len(df) - len(linhas_validas),
+            com_grupo=int(df["grupo"].notna().sum()) if "grupo" in df.columns else 0,
+            grupos_desconhecidos=grupos_desconhecidos,
+            periodo_inicio=linhas_validas["data"].min().strftime("%Y-%m-%d"),
+            periodo_fim=linhas_validas["data"].max().strftime("%Y-%m-%d"),
+            preview_5_linhas=linhas_validas.head(5).to_dict("records"),
+        )
+
+    def importar(self, user_id: int, file_bytes: bytes, grupos_novos: dict) -> ImportResult:
+        df = self._parse_file(...)
+        # Mapear/criar grupos desconhecidos
+        for grupo_original, grupo_destino in grupos_novos.items():
+            if grupo_destino is None:
+                self._criar_grupo(user_id, grupo_original)
+            else:
+                # mapear: substituir grupo_original por grupo_destino no df
+                df.loc[df["grupo"] == grupo_original, "grupo"] = grupo_destino
+
+        # Gerar IdTransacao (mesma lógica do upload normal — tipo_documento='planilha' → usa lancamento completo)
+        # Inserir em journal_entries com fonte='planilha'
+        # Rodar base_marcacoes para linhas com grupo preenchido
+        # Rodar fase 7 (fila de vínculo de investimentos) se houver GRUPO='Investimentos'
+        ...
+```
+
+---
+
+### 21. Backend — Inicialização do novo usuário
+
+#### Hook pós-criação de usuário
+
+```python
+# app/domains/users/service.py
+def create_user(self, data: UserCreate) -> User:
+    user = User(**data.dict())
+    self.db.add(user)
+    self.db.flush()  # gera o ID antes do commit
+
+    # Criar grupos padrão
+    self._criar_grupos_padrao(user.id)
+
+    # Criar perfil financeiro vazio
+    self.db.add(UserFinancialProfile(user_id=user.id))
+
+    self.db.commit()
+    return user
+
+def _criar_grupos_padrao(self, user_id: int):
+    GRUPOS_PADRAO = [
+        ("Alimentação",   "Despesa",      "#FF6B6B"),
+        ("Transporte",    "Despesa",      "#4ECDC4"),
+        ("Casa",          "Despesa",      "#45B7D1"),
+        ("Saúde",         "Despesa",      "#96CEB4"),
+        ("Lazer",         "Despesa",      "#FFEAA7"),
+        ("Educação",      "Despesa",      "#DDA0DD"),
+        ("Outros",        "Despesa",      "#B0B0B0"),
+        ("Investimentos", "Investimento", "#2ECC71"),
+        ("Receita",       "Receita",      "#F7DC6F"),
+        ("Transferência", "Transferência","#AEB6BF"),
+    ]
+    for nome, categoria, cor in GRUPOS_PADRAO:
+        self.db.add(BaseGrupoConfig(
+            user_id=user_id,
+            Grupo=nome,
+            CategoriaGeral=categoria,
+            cor=cor,
+            is_padrao=True,
+        ))
+```
+
+#### Endpoint de progresso do onboarding
+
+```python
+@router.get("/onboarding/progress")
+def get_onboarding_progress(
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """
+    Retorna o estado dos 4 itens do checklist de primeiros passos.
+    """
+    tem_upload = db.query(UploadHistory).filter(
+        UploadHistory.user_id == user_id,
+        UploadHistory.status == "concluido"
+    ).first() is not None
+
+    tem_plano = db.query(UserFinancialProfile).filter(
+        UserFinancialProfile.user_id == user_id,
+        UserFinancialProfile.renda_mensal > 0
+    ).first() is not None
+
+    tem_investimento = db.query(InvestimentoPortfolio).filter(
+        InvestimentoPortfolio.user_id == user_id,
+        InvestimentoPortfolio.ativo == True
+    ).first() is not None
+
+    perfil_completo = tem_plano  # mesmo campo por ora
+
+    return {
+        "subiu_extrato": tem_upload,
+        "criou_plano": tem_plano,
+        "adicionou_investimento": tem_investimento,
+        "perfil_completo": perfil_completo,
+        "todos_completos": all([tem_upload, tem_plano, tem_investimento, perfil_completo]),
+    }
+```
+
+#### Modo exploração (dados demo)
+
+```python
+# Dados de exemplo gerados 1 vez por tenant/ambiente (não por usuário)
+# Flag: journal_entries.fonte = 'demo'
+# user_id = -1 (usuário demo compartilhado) OU dados clonados para o usuário com flag is_demo=True
+
+# Endpoint para ativar modo demo (apenas se user não tiver dados próprios)
+@router.post("/onboarding/modo-demo")
+def ativar_modo_demo(user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    DemoDataService(db).clonar_para_usuario(user_id)
+    return {"ok": True}
+
+# Endpoint para sair do modo demo e limpar dados de exemplo
+@router.delete("/onboarding/modo-demo")
+def desativar_modo_demo(user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    db.query(JournalEntry).filter(
+        JournalEntry.user_id == user_id,
+        JournalEntry.fonte == "demo"
+    ).delete()
+    db.commit()
+    return {"ok": True}
+```
+
+---
+
+### 22. Frontend — Módulo 3
+
+#### Componentes novos
+
+| Componente | Path | Responsabilidade |
+|-----------|------|-----------------|
+| `SmartUploadDropzone` | `features/upload/components/smart-upload-dropzone.tsx` | Drop zone multi-arquivo com análise automática |
+| `FileDetectionCard` | `features/upload/components/file-detection-card.tsx` | Card por arquivo com resultado da detecção e campos editáveis |
+| `DuplicateAlert` | `features/upload/components/duplicate-alert.tsx` | Modal de aviso de arquivo já processado |
+| `BulkUploadProgress` | `features/upload/components/bulk-upload-progress.tsx` | Progress por arquivo durante processamento |
+| `BulkUploadSummary` | `features/upload/components/bulk-upload-summary.tsx` | Tela de conclusão consolidada |
+| `BatchClassificationView` | `features/upload/components/batch-classification-view.tsx` | Classificação em lote por estabelecimento + frequência |
+| `ImportPlanilhaFlow` | `features/upload/components/import-planilha-flow.tsx` | Fluxo completo de import (guia + validação + preview + confirmar) |
+| `ImportValidationPreview` | `features/upload/components/import-validation-preview.tsx` | Preview de 5 linhas + estatísticas de validação |
+| `GruposDesconhecidosModal` | `features/upload/components/grupos-desconhecidos-modal.tsx` | Confirmação de grupos novos antes do import |
+| `OnboardingWelcome` | `features/onboarding/components/onboarding-welcome.tsx` | Tela 1: welcome + proposta de valor |
+| `OnboardingChoosePath` | `features/onboarding/components/onboarding-choose-path.tsx` | Tela 2: 3 cards de escolha de ponto de partida |
+| `OnboardingChecklist` | `features/onboarding/components/onboarding-checklist.tsx` | Checklist de 4 itens no Início |
+| `EmptyStateDashboard` | `features/onboarding/components/empty-state-dashboard.tsx` | Empty state do Início |
+| `EmptyStateTransactions` | `features/onboarding/components/empty-state-transactions.tsx` | Empty state de Transações |
+| `EmptyStatePlano` | `features/onboarding/components/empty-state-plano.tsx` | Empty state do Plano |
+| `EmptyStateCarteira` | `features/onboarding/components/empty-state-carteira.tsx` | Empty state da Carteira |
+| `DemoModeBanner` | `features/onboarding/components/demo-mode-banner.tsx` | Banner fixo no modo exploração |
+
+#### Rotas de onboarding
+
+```
+/mobile/onboarding/welcome     → OnboardingWelcome
+/mobile/onboarding/start       → OnboardingChoosePath
+/mobile/onboarding/demo        → ativa modo demo + redireciona para /mobile/dashboard
+```
+
+Middleware: se usuário logado sem dados E nunca completou onboarding → redirecionar para `/mobile/onboarding/welcome`.
+
+#### Upload bottom sheet (nova versão)
+
+```tsx
+// src/features/upload/components/upload-bottom-sheet.tsx
+// Substitui o bottom sheet simples por um com modo inteligente
+
+export function UploadBottomSheet({ isOpen, onClose }) {
+  const [mode, setMode] = useState<"choose" | "extrato" | "planilha">("choose")
+
+  if (mode === "choose") return (
+    <Sheet>
+      <Card onPress={() => setMode("extrato")} icon="📄" title="Extrato bancário" subtitle="OFX, CSV, XLS" />
+      <Card onPress={() => setMode("planilha")} icon="📊" title="Minha planilha" subtitle="Dados organizados" />
+    </Sheet>
+  )
+
+  if (mode === "extrato") return <SmartUploadDropzone onClose={onClose} />
+  if (mode === "planilha") return <ImportPlanilhaFlow onClose={onClose} />
+}
+```
+
+---
+
+### 23. Checklist — Módulo 3
+
+#### Banco
+- [ ] Migration: `upload_history` — adicionar campos `banco`, `tipo`, `periodo_inicio`, `periodo_fim`, `confianca_deteccao`
+- [ ] Migration: `journal_entries` — adicionar campo `fonte` (`'upload'` | `'planilha'` | `'demo'` | `'manual'`) e `is_demo` (boolean)
+- [ ] Migration: `base_grupos_config` — adicionar campo `is_padrao` (boolean, default false)
+
+#### Backend
+- [ ] `fingerprints.py` com todos os processadores existentes mapeados
+- [ ] `DetectionEngine.detect()` implementado e testado com arquivos reais
+- [ ] `POST /upload/detect` retorna resultado em < 2s
+- [ ] `POST /upload/bulk-confirm` processa N arquivos em série
+- [ ] `POST /upload/classificar-lote` aplica grupo em todos os uploads do lote
+- [ ] `POST /upload/import-planilha` valida e retorna preview
+- [ ] `POST /upload/import-planilha/confirmar` insere dados, roda fases de deduplicação e marcações
+- [ ] `GET /onboarding/progress` retorna estado dos 4 itens do checklist
+- [ ] `POST /onboarding/modo-demo` clona dataset de exemplo para o usuário
+- [ ] `DELETE /onboarding/modo-demo` remove dados com `fonte='demo'`
+- [ ] `UserService.create_user()` cria grupos padrão + perfil vazio automaticamente
+- [ ] Alerta de duplicata: verificar na fase de detecção se período já foi carregado
+
+#### Frontend
+- [ ] `SmartUploadDropzone`: drop zone multi-arquivo, auto-detect por arquivo, cards de detecção
+- [ ] `FileDetectionCard`: campos pré-preenchidos editáveis, badge de confiança
+- [ ] `DuplicateAlert`: modal de aviso antes de processar arquivo já existente
+- [ ] `BulkUploadProgress`: progresso por arquivo (analisando/processando/concluído/erro)
+- [ ] `BulkUploadSummary`: total de transações + estabelecimentos + pendentes
+- [ ] `BatchClassificationView`: lista por estabelecimento com frequência, sugestões automáticas, "salvar tudo"
+- [ ] `ImportPlanilhaFlow`: guia passo a passo + drop + validação + grupos desconhecidos + confirmar
+- [ ] Rotas de onboarding: welcome + choose-path + demo
+- [ ] Middleware de redirect para onboarding (usuário sem dados)
+- [ ] Empty states em todas as 4 telas principais (com CTA relevante)
+- [ ] `OnboardingChecklist`: card no Início, 4 itens, desaparece ao completar todos
+- [ ] `DemoModeBanner`: banner fixo com [Usar meus dados →]
+- [ ] Upload bottom sheet: modo "escolha" antes de abrir o upload específico

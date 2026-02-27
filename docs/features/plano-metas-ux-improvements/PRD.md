@@ -130,6 +130,74 @@ O app evoluiu além do que o bottom nav original foi desenhado para suportar. O 
 - `Transações`: ⚠️ em linhas com `GRUPO='Investimentos'` sem vínculo → modal vínculo
 - `Carteira`: badge ⚠️ no ícone da tab quando há aportes pendentes
 
+### 2j. Detecção automática de arquivo no upload (Smart Detection)
+
+O upload hoje exige que o usuário preencha banco, tipo e período antes mesmo de escolher o arquivo. O arquivo em si já tem todas essas informações — o processo deve ser invertido.
+
+**Novo fluxo:** usuário dropa o arquivo → backend analisa em < 2s → app exibe card de confirmação com todos os campos detectados → usuário confirma (1 clique) ou edita campos incertos.
+
+**Signals de detecção:**
+- Tags do OFX (`BANKID`, `ACCTTYPE`, `DTSTART/DTEND`)
+- Padrão do nome do arquivo (`extrato-bradesco-jan-2026.csv`)
+- Colunas específicas do CSV por banco (fingerprints por processador)
+- Histórico do usuário (banco que ele sempre usa)
+
+**Níveis de confiança:** 🟢 Alta (todos os campos detectados, 1 clique confirma) · 🟡 Média (campos incertos destacados) · 🔴 Baixa (form manual com hints)
+
+**Alerta de duplicata:** se arquivo já foi processado (mesmo banco, mesmo período), avisar antes de confirmar.
+
+### 2k. Upload de múltiplos arquivos simultâneos
+
+O usuário pode querer subir 12 meses de extratos de uma só vez (especialmente na entrada no app). O upload precisa suportar N arquivos, de tipos e bancos diferentes, em uma única operação.
+
+**Ganho principal:** classificação em lote por estabelecimento único. 12 meses → 1.247 transações → 73 estabelecimentos. Classificar 73 = tudo classificado.
+
+**Comportamento esperado:**
+- Drop zone aceita múltiplos arquivos
+- Cada arquivo é analisado individualmente (smart detection por arquivo)
+- Lista de cards com status por arquivo (analisando / pronto / erro / duplicata)
+- Processamento em série (não paralelo, para evitar race conditions na DB)
+- Tela de conclusão unificada: total de transações + estabelecimentos para classificar
+
+**Tela de classificação em lote:** agrupa por estabelecimento com frequência decrescente. Cada decisão aplica para todas as ocorrências do estabelecimento (em todos os arquivos do lote).
+
+### 2l. Import de dados históricos (planilha própria)
+
+Usuários que já têm anos de dados organizados no Excel/Sheets não deveriam ter que reclassificar tudo. O app precisa aceitar um CSV estruturado onde o grupo já vem preenchido.
+
+**Template CSV com colunas:**
+- **Obrigatórias:** `data` (DD/MM/YYYY), `descricao`, `valor` (negativo = gasto)
+- **Opcionais:** `grupo`, `conta`, `cartao`
+
+**Diferença no processamento:**
+- Pula fases de detecção e parsing (dados já estruturados)
+- Valida formato e colunas → preview dos primeiros 5 registros antes de confirmar
+- Se `grupo` preenchido e existe → aceita sem classificação
+- Se `grupo` preenchido mas não existe → confirma criação de novo grupo com usuário
+- Se `grupo` vazio → entra na classificação normal
+- Roda deduplicação (IdTransacao gerado normalmente), base_marcacoes, fila de vínculo de investimentos
+
+**UX:** guia passo a passo inline (download template → preencher → upload → validar → confirmar)
+
+### 2m. Jornada do novo usuário (onboarding + empty states)
+
+Um novo usuário que abre o app pela primeira vez não tem dados. A experiência precisa ser: clara (o que o app faz), rápida (como começar) e motivadora (o que ganho ao colocar dados agora).
+
+**3 pontos de entrada:**
+1. **Upload de extrato** — detectamos tudo automaticamente (recomendado)
+2. **Import de planilha** — já tenho dados organizados
+3. **Modo exploração** — ver como funciona com dados de exemplo (banner permanente para converter)
+
+**Bases criadas automaticamente no primeiro login:**
+- `base_grupos_config`: 10 grupos padrão (Alimentação, Transporte, Casa, Saúde, Lazer, Educação, Outros, Investimentos, Receita, Transferência)
+- `user_financial_profile`: vazio, pronto para receber renda declarada
+
+**Empty states por tela:** cada tela sem dados mostra ilustração + descrição do que aparece ali + CTA para upload ou ação relevante. Não mostrar tela vazia sem direcionamento.
+
+**Checklist de progresso:** card no Início enquanto < 4 itens concluídos (Subiu extrato / Criou Plano / Adicionou investimento / Completou perfil).
+
+**Notificações in-app de ativação:** gatilhos por comportamento (sem upload em 1 dia, upload feito, 30 dias sem atualização, aportes pendentes há 7 dias).
+
 ---
 
 ## 3. Fora do escopo (não entra nesta branch)
@@ -324,6 +392,116 @@ O app evoluiu além do que o bottom nav original foi desenhado para suportar. O 
 - Perfil acessível via ⚙️ ícone no header de Início
 - Badge ⚠️ no ícone da tab Carteira quando há aportes pendentes de vínculo
 
+### S20 — Detecção automática dos metadados do arquivo
+> Como usuário, quando subo um arquivo de extrato ou fatura, quero que o app detecte automaticamente o banco, o tipo de conta e o período, sem precisar preencher nada antes de escolher o arquivo.
+
+**Acceptance criteria:**
+- Endpoint `POST /upload/detect` recebe o arquivo e retorna `{ banco, tipo, periodo, confianca, transacoes_preview }` em < 2s
+- Se confiança ≥ 85%: mostra card pré-preenchido com todos os campos em verde → 1 clique confirma
+- Se confiança 50–84%: campos incertos ficam destacados em amarelo com opção de editar
+- Se confiança < 50%: exibe form manual com hints baseados no que foi detectado parcialmente
+- Se arquivo idêntico a um upload anterior (mesmo banco + período detectado): exibe alerta de duplicata antes de processar
+- Detecção funciona para: OFX, CSV dos bancos suportados, XLS (Itaú)
+
+### S21 — Upload de múltiplos arquivos em uma operação
+> Como usuário, quero arrastar N arquivos de extratos e faturas de uma só vez, de bancos e tipos diferentes, e ter todos processados em sequência sem precisar repetir o processo para cada um.
+
+**Acceptance criteria:**
+- Drop zone aceita múltiplos arquivos em uma operação (drag & drop ou file picker com multi-select)
+- Cada arquivo é analisado individualmente pela detecção automática (S20)
+- Lista de cards por arquivo com status: analisando / pronto / erro / duplicata
+- Arquivos processados em série (não paralelo)
+- Tela de conclusão unificada: total de transações processadas, total de estabelecimentos para classificar, aportes para vincular
+- Botão "+ Adicionar mais arquivos" disponível durante a análise (antes de processar)
+
+### S22 — Classificação em lote por estabelecimento único
+> Como usuário que subiu múltiplos arquivos com centenas de transações, quero classificar por estabelecimento único (não por transação) para que uma decisão se aplique a todas as ocorrências do mesmo estabelecimento.
+
+**Acceptance criteria:**
+- Após processar múltiplos arquivos, a tela de classificação agrupa por `Estabelecimento` com frequência e valor total
+- Estabelecimentos ordenados por frequência decrescente (mais comum primeiro)
+- Ao salvar um grupo para um estabelecimento, todas as transações com aquele estabelecimento recebem o mesmo grupo — inclusive em todos os arquivos do lote
+- Estabelecimentos já conhecidos (`base_marcacoes`) aparecem com sugestão automática pré-selecionada (usuário só confirma)
+- "Salvar tudo" aplica as sugestões automáticas para todos os estabelecimentos não editados manualmente
+
+### S23 — Import de dados históricos via planilha
+> Como usuário que já tem anos de dados organizados no Excel, quero importar meu histórico com os grupos já preenchidos para não precisar reclassificar tudo do zero.
+
+**Acceptance criteria:**
+- Novo modo de entrada: "📊 Importar minha planilha" no bottom sheet de Upload
+- Template CSV para download (xlsx e csv) com colunas documentadas
+- Guia passo a passo inline: baixar template → preencher → subir → validar → confirmar
+- Validação pré-import: conta colunas, verifica obrigatórias, detecta linhas inválidas, exibe preview das primeiras 5 linhas
+- Linha com `grupo` preenchido e existente → aceita diretamente sem classificação
+- Linha com `grupo` preenchido mas inexistente → solicita confirmação de criação de novo grupo
+- Linha sem `grupo` → entra na classificação normal por estabelecimento
+- Processamento: mesmas fases de deduplicação e base_marcacoes do upload normal; fase 7 (fila de investimentos) aplicada se detectar `GRUPO='Investimentos'`
+
+### S24 — Onboarding: tela de boas-vindas e escolha do ponto de partida
+> Como novo usuário, quero entender o que o app faz e escolher como começar (extrato, planilha ou exploração) em no máximo 2 telas, sem ser forçado a seguir um único caminho.
+
+**Acceptance criteria:**
+- Tela 1 (Welcome): valor do app em 2 frases + ilustração + [Vamos começar →]
+- Tela 2 (Escolha): 3 cards selecionáveis — "Upload extrato", "Import planilha", "Explorar primeiro"
+- Cada card leva diretamente para o fluxo correspondente sem etapas extras
+
+### S25 — Bases de grupos criadas automaticamente no primeiro login
+> Como novo usuário, quero que o app já tenha grupos padrão criados (Alimentação, Transporte, etc.) quando faço meu primeiro upload, sem precisar criar cada grupo manualmente.
+
+**Acceptance criteria:**
+- `base_grupos_config` populado com 10 grupos padrão no momento da criação da conta (trigger backend)
+- Os grupos padrão já aparecem disponíveis no seletor de grupo durante a classificação do primeiro upload
+- Usuário pode criar grupos adicionais ou editar os nomes dos padrão a qualquer momento
+
+### S26 — Modo exploração com dados de exemplo
+> Como potencial usuário que quer entender o app antes de colocar seus dados reais, quero explorar todas as funcionalidades com dados de exemplo, sabendo claramente que são dados fictícios.
+
+**Acceptance criteria:**
+- Opção "Explorar primeiro" na tela de escolha carrega dataset de exemplo pré-gerado (persona fictícia com 6 meses de transações)
+- Banner fixo em todas as telas: "Modo demonstração — dados fictícios · [Usar meus dados →]"
+- Todas as telas funcionam normalmente (dashboard, transações, plano, carteira)
+- Ações destrutivas (editar, excluir) mostram aviso de que é dados de exemplo
+- "Usar meus dados →" vai para a tela de upload e inicia o onboarding real
+
+### S27 — Empty states com direcionamento claro
+> Como novo usuário sem dados, quero que cada tela vazia me diga o que vai aparecer ali e como colocar dados, em vez de mostrar uma tela em branco sem contexto.
+
+**Acceptance criteria:**
+- Início vazio: ilustração + "Seu painel financeiro está aqui" + [Subir primeiro extrato] + [Ver demo]
+- Transações vazio: ilustração + "Nenhuma transação ainda" + [Subir extrato]
+- Plano vazio: ilustração + "Seu plano começa com seus gastos reais" + [Subir extrato primeiro] + [Criar plano manualmente]
+- Carteira vazia: ilustração + "Veja seu patrimônio completo" + [Adicionar investimento]
+- Nenhum empty state é simplesmente uma lista vazia sem CTA
+
+### S28 — Checklist de primeiros passos no Início
+> Como novo usuário, quero ver um progresso visual dos primeiros passos no Início para saber o que falta fazer e sentir que estou avançando.
+
+**Acceptance criteria:**
+- Card "Seus primeiros passos" aparece no Início enquanto checklist não estiver 100% completo
+- 4 itens: Subiu extrato / Criou Plano / Adicionou investimento / Completou perfil (renda declarada)
+- Cada item concluído → check animado (confetti ou pulse)
+- Ao completar todos os 4 → card desaparece, substituído pelo resumo normal do mês
+
+### S29 — Notificações in-app de ativação por gatilho
+> Como usuário, quero receber mensagens contextuais no app que me lembrem de ações importantes no momento certo (não de forma genérica ou com timing irrelevante).
+
+**Acceptance criteria:**
+- Sem upload após 1 dia do cadastro → banner no Início: "Suba seu extrato e veja para onde vai seu dinheiro"
+- Primeiro upload concluído → notificação: "Ótimo início! Crie seu Plano para ter um orçamento real"
+- Plano criado, sem investimento → banner no Início: "Complete seu patrimônio! Adicione seus investimentos"
+- Último upload há > 30 dias → banner no Início: "Hora de atualizar! Suba o extrato de [mês anterior]"
+- 3+ aportes pendentes há > 7 dias → banner no Início: "Você tem N aportes para vincular em Carteira"
+- Cada banner tem [X Fechar] e [→ Ação] — nunca intrusivo
+
+### S30 — Alerta de duplicata de arquivo
+> Como usuário, quando subo um arquivo que parece já ter sido carregado antes, quero ser avisado antes de processar para não duplicar meus dados.
+
+**Acceptance criteria:**
+- Na fase de detecção (S20), o backend verifica se já existe upload com o mesmo banco + período detectado
+- Se sim: exibe modal de aviso com data do upload anterior e número de transações
+- Usuário pode cancelar ou confirmar "Carregar de qualquer forma" (deduplicação por IdTransacao evita duplicatas mesmo assim)
+- Aviso também aparece se mais de 80% das transações de preview forem idênticas a transações já existentes
+
 ---
 
 ## 5. Análise Técnica Preliminar
@@ -396,6 +574,18 @@ S17 (saldo na corretora)                  → depende de S16 (fluxo de venda)
 S18 (indexadores IGPM/INCC/pré-fixado)    → depende de S11 + market_data_cache (BCB)
 
 S19 (nav redesign: Upload FAB + Plano + Carteira + ⚙️ Perfil) → independente, pode ir primeiro (só frontend/routing)
+
+S20 (detect endpoint: fingerprints por processador)  → base de S21, S23, S30
+S21 (multi-file drop zone + análise por arquivo)      → depende de S20
+S22 (classificação em lote por estabelecimento)       → depende de S21 (funciona também com upload simples)
+S23 (import planilha: validação + processamento)      → depende de S20 parcialmente (endpoint separado)
+S24 (onboarding: welcome + escolha ponto de entrada)  → independente (só frontend)
+S25 (grupos padrão no primeiro login)                 → depende de S24 (trigger no create_user)
+S26 (modo exploração com dados demo)                  → depende de S24; dados demo pré-gerados
+S27 (empty states com CTA)                            → independente (só frontend)
+S28 (checklist de primeiros passos)                   → depende de S25 + S27
+S29 (notificações in-app por gatilho)                 → depende de S28 (precisa de estado de progresso)
+S30 (alerta de duplicata)                             → depende de S20 (detecção já carrega dados do arquivo)
 ```
 
 ---
@@ -415,6 +605,12 @@ S19 (nav redesign: Upload FAB + Plano + Carteira + ⚙️ Perfil) → independen
 | BCB IGPM/INCC com atraso de publicação (FGV publica no mês seguinte) | Baixa | Cache exibe último valor disponível; nota "Dado referente a MM/AAAA" no card |
 | Isenção R$20k: usuário opera em múltiplas corretoras não rastreadas | Média | Tooltip explica limitação: "Estimativa baseada apenas em vendas registradas no app" |
 | Saldo na corretora não sincroniza com venda de outro ativo na mesma corretora | Média | Feature de fase 2: link entre saldo_corretora e próximo aporte para fechar o ciclo || brapi: N usuários com os mesmos tickers geram N chamadas repetidas | ✅ Resolvido | Job usa `DISTINCT codigo_ativo` sem `user_id` — 1 chamada por ticker único global; `BRAPI_BATCH_SIZE` controla chunks (1=free, 10=startup, 20=pro) |
+| Detecção automática falha para banco não mapeado | Média | Fallback gracioso: exibe form manual com hints; banco desconhecido adiciona fingerprint ao backlog |
+| Upload de múltiplos arquivos com arquivo corrompido no lote | Baixa | Arquivo com erro é sinalizado no card individual; resto do lote continua |
+| Import de planilha com encoding diferente (Latin-1 vs UTF-8) | Média | Tentar auto-detect de encoding; fallback com mensagem "selecione o encoding" |
+| Grupos do import não mapeiam para grupos existentes | Baixa | Exibir preview de grupos desconhecidos com opção "criar" ou "mapear" antes de confirmar |
+| Modo demo contamina dados reais (usuário confunde) | Baixa | Dataset de demo isolado por flag `is_demo=True` em journal_entries; import real sempre cria registros novos sem flag |
+| Checklist de primeiros passos nunca some (bug de estado) | Baixa | Marcar item como completo via backend + cache invalidation no frontend |
 ---
 
 ## 8. Métricas de sucesso
@@ -425,3 +621,8 @@ S19 (nav redesign: Upload FAB + Plano + Carteira + ⚙️ Perfil) → independen
 - [ ] Usuários que usam o nudge têm desvio de plano 20% menor (medir em 60 dias)
 - [ ] ≥ 80% dos lançamentos de investimento (GRUPO='Investimentos') têm vínculo criado pelo usuário em até 7 dias
 - [ ] Rentabilidade de renda fixa: valor calculado diverge < 0,5% do extrato da corretora (validar manualmente em 3 produtos)
+- [ ] Detecção automática: ≥ 80% dos uploads têm confiança Alta (usuário confirma com 1 clique) sem editar campos
+- [ ] Multi-file: P90 do tempo de análise de 5 arquivos simultâneos < 10s
+- [ ] Import planilha: ≥ 90% das linhas com `grupo` preenchido aceitas sem reclassificação (grupos mapeiam corretamente)
+- [ ] Onboarding: ≥ 60% dos novos usuários completam o primeiro upload em < 5 minutos após o cadastro
+- [ ] Retenção D7: usuários que completam o checklist de 4 itens têm retenção 30% maior que os que não completam (hipótese a validar)
