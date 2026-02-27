@@ -407,34 +407,187 @@ PersonalizarPlanoFinanceiro (nova tela, ~4 seções)
 
 ---
 
-## Parcelamento — estratégia e ponte para base_parcelas
+## Arquitetura de dados — três camadas
 
-**Decisão:** registrar no banco como N linhas em `budget_planning`, com campos de parcela.
+```
+CAMADA 1 — REALIZADO (imutável após confirmado)
+├── journal_entries    → transações importadas e confirmadas
+└── base_parcelas      → tracker de parcelamentos realizados
+                         (qtd_pagas cresce a cada upload)
+                         ✅ NUNCA recebe projeções
 
-### Por que N linhas (não cálculo no frontend)
+CAMADA 2 — EXPECTATIVAS (nova tabela: base_expectativas)
+   Tudo que é esperado para meses futuros. Duas origens:
+   A) 'usuario'  → sazonais e rendas declaradas no Construtor de Plano
+   B) 'sistema'  → inferido automaticamente a partir de base_parcelas
+                   (qtd_parcelas - qtd_pagas = parcelas ainda por vir)
 
-- O recibo mês-a-mês precisa dos valores por mês no banco para comparar com o realizado
-- Parcelas no plano serão a **versão futura** do que `base_parcelas` faz para o realizado: compra parcelada detectada no extrato → parcelas esperadas nos próximos meses
-- A ponte futura: se a `base_parcelas` detectar uma parcela de 12x cujas mensalidades futuras ainda não têm entrada no `budget_planning`, o app pode sugerir: "Você tem LOJA 4/12 — quer adicionar as parcelas 5 a 12 no seu plano?"
+CAMADA 3 — PLANO BASE (alvo mensal recorrente)
+└── budget_planning    → meta mensal por grupo (fica como está)
+```
 
-### Campos novos em `budget_planning`
+`base_parcelas` fica limpo — é registro histórico do que já aconteceu. `base_expectativas` é a camada de projeção.
 
-```python
-# Novos campos (nullable — retrocompatível)
-is_parcela     = Column(Integer, default=0)        # 0=normal, 1=parcela
-parcela_seq    = Column(Integer, nullable=True)     # 1, 2, 3...
-parcela_total  = Column(Integer, nullable=True)     # total de parcelas
-parcela_ref    = Column(String(100), nullable=True) # "IPVA 2026" (agrupa)
+### Schema: `base_expectativas`
+
+```sql
+CREATE TABLE base_expectativas (
+    id               SERIAL PRIMARY KEY,
+    user_id          INTEGER NOT NULL,
+
+    -- O quê
+    descricao        VARCHAR(200),     -- "IPVA 2026" ou "LOJA AMERICANAS 5/12"
+    valor            DECIMAL(10,2),
+    grupo            VARCHAR(100),     -- mesmo grupo do budget_planning
+    tipo_lancamento  VARCHAR(10),      -- 'debito' | 'credito'
+
+    -- Quando
+    mes_referencia   VARCHAR(7) NOT NULL,  -- "2026-05"
+
+    -- Origem
+    tipo_expectativa VARCHAR(30) NOT NULL,
+    -- 'sazonal_plano'  → usuário declarou no Construtor
+    -- 'renda_plano'    → renda extraordinária declarada
+    -- 'parcela_futura' → derivada automaticamente de base_parcelas
+
+    origem VARCHAR(20) NOT NULL,
+    -- 'usuario' → entrada manual
+    -- 'sistema' → gerada automaticamente no upload confirm
+
+    -- Link para base_parcelas (quando tipo='parcela_futura')
+    id_parcela    VARCHAR(64),   -- FK → base_parcelas.id_parcela
+    parcela_seq   INTEGER,       -- qual parcela é essa (ex: 5)
+    parcela_total INTEGER,       -- total (ex: 12)
+
+    -- Conciliação
+    status           VARCHAR(20) DEFAULT 'pendente',
+    -- 'pendente'   → ainda não chegou no extrato
+    -- 'realizado'  → chegou e foi matched automaticamente
+    -- 'divergente' → chegou mas valor difere (requer atenção)
+    -- 'cancelado'  → usuário cancelou manualmente
+
+    journal_entry_id INTEGER,        -- FK → journal_entries.id (quando realizado)
+    valor_realizado  DECIMAL(10,2),  -- valor efetivo (pode diferir do esperado)
+    realizado_em     TIMESTAMP,
+
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+
+    UNIQUE (user_id, id_parcela, parcela_seq)  -- evita duplicar parcelas futuras
+);
+```
+
+### Como parcelas futuras são geradas (Fase 6 do upload confirm)
+
+Hoje o upload confirm tem uma Fase 5 que atualiza `base_parcelas.qtd_pagas`. A Fase 6 (nova) roda logo depois:
+
+```
+FASE 5 (existente): atualiza base_parcelas.qtd_pagas e status
+
+FASE 6 (nova — duas partes):
+
+PARTE A — marcar expectativas como realizadas:
+  Para cada transação parcelada do upload atual:
+    → buscar base_expectativas WHERE id_parcela=X AND parcela_seq=N AND status='pendente'
+    → se valor OK (±5%): status = 'realizado', setar journal_entry_id
+    → se valor diverge: status = 'divergente', registrar valor_realizado
+
+PARTE B — criar expectativas futuras (até o fim da série):
+  Para cada base_parcelas WHERE status='ativa':
+    parcelas_a_criar = range(qtd_pagas + 1, qtd_parcelas + 1)  ← TODAS até o fim
+    para cada seq em parcelas_a_criar:
+      mes_futuro = data_inicio + (seq - 1) meses
+      INSERT INTO base_expectativas (
+        id_parcela, parcela_seq, parcela_total,
+        descricao = f"{estabelecimento_base} {seq}/{qtd_parcelas}",
+        valor, grupo, mes_referencia = mes_futuro,
+        tipo_expectativa = 'parcela_futura',
+        origem = 'sistema', status = 'pendente'
+      )
+      ON CONFLICT (user_id, id_parcela, parcela_seq) DO NOTHING
+```
+
+**Exemplo:** LOJA 4/12 detectada no upload de fevereiro → sistema cria expectativas para parcelas 5, 6, 7, 8, 9, 10, 11 e 12 — todas de uma vez, cada uma no mês correto.
+
+### Conciliação de sazonais declarados pelo usuário
+
+Matching automático (opção escolhida): ao final do upload confirm, para cada transação que **não** é parcela conhecida, tentar match com `base_expectativas WHERE tipo='sazonal_plano'`:
+
+```
+critérios para match automático:
+  1. mesmo grupo (ou grupo próximo)
+  2. mesmo mês de referência
+  3. valor dentro de ±10% do esperado
+
+resultado:
+  match ok     → status = 'realizado'
+  valor diverge→ status = 'divergente' (mostra na tela: "IPVA esperado R$3.800, veio R$3.950")
+  sem match    → expectativa fica 'pendente' até o final do mês, vira alerta
+```
+
+---
+
+## Budget at risk — forecast vs orçamento por grupo
+
+**Decisão:** dado que temos orçamento planejado (`budget_planning`) e expectativas conhecidas (`base_expectativas`), o app deve mostrar antecipadamente se um mês vai estourar — antes de o mês começar.
+
+### Lógica por (grupo, mês)
+
+```
+total_esperado = budget_planning.valor_planejado     ← gasto recorrente do grupo
+              + SUM(base_expectativas.valor           ← sazonais + parcelas futuras
+                    WHERE grupo=X AND mes=Y
+                    AND status IN ('pendente','divergente'))
+
+status_previsao:
+  '✅ ok'       → total_esperado ≤ orçamento
+  '⚠️ atenção'  → total_esperado ≤ orçamento × 1.2  (até 20% acima)
+  '❌ estouro'  → total_esperado > orçamento × 1.2
+```
+
+Para o mês atual (em andamento), a projeção usa dado misto:
+
+```
+projecao_mes_atual =
+    SUM(journal_entries realizados até hoje no mês)   ← real
+  + SUM(base_expectativas pendentes do mesmo mês)     ← compromissos conhecidos
+
+→ "Março: R$650 realizados + R$1.267 IPVA esperado = R$1.917 projetado / R$1.000 orçado → ❌ vai estourar"
 ```
 
 ### Como aparece na tela de Acompanhamento
 
 ```
-Mar/26 — Gastos R$ 11.967
-  Carro  R$ 8.167  → R$ 6.900 normal + R$ 1.267 IPVA (1/3) ← badge
+┌─────────────────────────────────────────────────────┐
+│  Plano 2026  ← mês atual: Março                     │
+├─────────────────────────────────────────────────────┤
+│  GASTOS vs PLANO                                    │
+│                                                     │
+│  Casa       ████████░░  R$2.800/R$3.000  93%  ✅   │
+│  Alimentação███████████ R$2.700/R$2.500 108%  ⚠️   │
+│  Carro       ████░░░░░░  R$  650/R$1.000  65%       │
+│              ↑ real      + R$1.267 IPVA esperado    │
+│              → projeção: R$1.917 / R$1.000  192% ❌ │
+│                                                     │
+│  PRÓXIMOS MESES — alertas antecipados               │
+│  Abr  ⚠️  Carro: R$2.267 esperado / R$1.000 plano  │
+│  Mai  ⚠️  Carro: R$2.267 esperado / R$1.000 plano  │  ← parcelas 3 e 4
+│  Jul  ❌  Viagem: R$12.000 esperado / não planejado │
+│  Dez  ✅  13º: +R$15.000 esperado                  │
+└─────────────────────────────────────────────────────┘
 ```
 
-Badge `(1/3)` ao lado do gasto sazonal parcelado, para a pessoa saber que há mais parcelas vindo.
+A seção "Próximos meses — alertas antecipados" é gerada diretamente de `base_expectativas`, sem nenhum cálculo extra: basta comparar com `budget_planning` do mesmo grupo e mês.
+
+### Graus de confiança da expectativa
+
+| Tipo | Confiança | Exemplo |
+|------|-----------|---------|
+| Parcela futura (`sistema`) | 🟢 Alta | LOJA 5/12 — valor fixo, mês calculado |
+| Sazonal declarado (`usuario`) | 🟡 Média | IPVA — usuário estimou R$3.800 |
+| Renda extraordinária | 🟡 Média | 13º — usuário estimou R$15.000 |
+
+Confiança aparece como cor do badge na tela (verde = certo, amarelo = estimado).
 
 ---
 
@@ -456,7 +609,9 @@ Badge `(1/3)` ao lado do gasto sazonal parcelado, para a pessoa saber que há ma
 | Endpoint | Status | Notas |
 |----------|--------|-------|
 | `GET /budget/media-3-meses` | **Já existe** | Campo `valor_medio_3_meses` em `budget_planning` — só expor |
-| `GET /budget/plano-anual?ano=2026` | **Novo** | Retorna os 12 meses com renda, gastos, aportes, sazonais e saldo por mês |
+| `GET /budget/cashflow?ano=2026` | **Novo** | Retorna os 12 meses: realizado + expectativas + plano base + saldo projetado + status por grupo |
 | `POST /user/financial-profile` | **Novo** | Salva renda mensal + inflação esperada |
 | `GET /user/financial-profile` | **Novo** | Carrega dados para preencher o Construtor |
-| `POST /budget/planning/bulk-upsert` | **Já existe** | Usado para salvar todas as metas dos 12 meses de uma vez |
+| `POST /budget/planning/bulk-upsert` | **Já existe** | Salva metas dos 12 meses de uma vez |
+| `POST /budget/expectativas` | **Novo** | Salva sazonais/rendas declaradas pelo usuário |
+| `GET /budget/expectativas?mes=2026-04` | **Novo** | Lista expectativas do mês com status de conciliação |
