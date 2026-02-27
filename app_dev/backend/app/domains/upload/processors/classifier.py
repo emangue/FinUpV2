@@ -42,7 +42,7 @@ class CascadeClassifier:
     def __init__(self, db: Session, user_id: int):
         self.db = db
         self.user_id = user_id
-        self.generic_classifier = GenericRulesClassifier(db=db)  # Passa sessão do DB
+        self.generic_classifier = GenericRulesClassifier(db=db)
         self.stats = {
             'total': 0,
             'base_parcelas': 0,
@@ -51,7 +51,26 @@ class CascadeClassifier:
             'regras_genericas': 0,
             'nao_classificado': 0,
         }
-        logger.debug(f"CascadeClassifier inicializado para user_id={user_id}")
+
+        # PRÉ-CARREGAMENTO: 1 query para journal_entries + 1 para base_parcelas
+        # Elimina N queries dentro de classify() (uma por transação)
+        t0 = datetime.now()
+        from app.domains.transactions.models import JournalEntry, BaseParcelas
+        self._historico_cache = db.query(JournalEntry).filter(
+            JournalEntry.user_id == user_id,
+            JournalEntry.GRUPO.isnot(None),
+            JournalEntry.SUBGRUPO.isnot(None),
+            JournalEntry.TipoGasto.isnot(None)
+        ).all()
+        parcelas_rows = db.query(BaseParcelas).filter(
+            BaseParcelas.user_id == user_id
+        ).all()
+        self._parcelas_cache = {p.id_parcela: p for p in parcelas_rows}
+        elapsed = (datetime.now() - t0).total_seconds()
+        logger.info(
+            f"CascadeClassifier init: {len(self._historico_cache)} históricos, "
+            f"{len(self._parcelas_cache)} parcelas pré-carregados ({elapsed:.2f}s)"
+        )
     
     def classify(self, marked: MarkedTransaction) -> ClassifiedTransaction:
         """
@@ -169,19 +188,12 @@ class CascadeClassifier:
     def _classify_nivel1_parcelas(self, marked: MarkedTransaction) -> Optional[ClassifiedTransaction]:
         """
         Nível 1: Base Parcelas
-        Copia classificação de parcelas anteriores usando IdParcela
+        Lookup O(1) no cache pré-carregado no __init__ — sem query ao banco.
         """
         try:
-            # Import aqui para evitar circular import
-            from app.domains.transactions.models import BaseParcelas
-            
-            parcela = self.db.query(BaseParcelas).filter(
-                and_(
-                    BaseParcelas.id_parcela == marked.id_parcela,
-                    BaseParcelas.user_id == self.user_id
-                )
-            ).first()
-            
+            # Cache dict {id_parcela: row} pré-carregado no __init__
+            parcela = self._parcelas_cache.get(marked.id_parcela)
+
             if parcela:
                 logger.debug(f"✅ Nível 1 (Parcelas): {marked.estabelecimento_base[:30]}... (status: {parcela.status})")
                 
@@ -270,23 +282,13 @@ class CascadeClassifier:
     def _classify_nivel3_journal(self, marked: MarkedTransaction) -> Optional[ClassifiedTransaction]:
         """
         Nível 3: Journal Entries
-        Usa histórico com matching por tokens válidos (igual ao n8n)
+        Usa cache pré-carregado no __init__ — era N queries de 8k rows (1 por transação).
         """
         try:
-            # Import aqui para evitar circular import
-            from app.domains.transactions.models import JournalEntry
             from app.shared.utils import tokensValidos, intersecaoCount, toNumberFlexible
-            
-            # Buscar todo o histórico com classificação completa
-            historico = self.db.query(JournalEntry).filter(
-                and_(
-                    JournalEntry.user_id == self.user_id,
-                    JournalEntry.GRUPO.isnot(None),
-                    JournalEntry.SUBGRUPO.isnot(None),
-                    JournalEntry.TipoGasto.isnot(None)
-                )
-            ).all()
-            
+
+            # Cache pré-carregado no __init__: 0 queries aqui (era 1 query de 8k rows por transação)
+            historico = self._historico_cache
             if not historico:
                 return None
             

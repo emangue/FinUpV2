@@ -120,20 +120,10 @@ class UploadService:
             else:
                 logger.info(f"⏭️  Pulando limpeza (modo batch)")
             
-            # ========== NOVA FASE 0: REGENERAR PADRÕES ==========
-            # Só regenerar padrões no primeiro arquivo do lote
-            if not skip_cleanup:
-                logger.info("🔄 Fase 0: Regeneração de Base Padrões")
-                try:
-                    from app.domains.upload.processors.pattern_generator import regenerar_base_padroes_completa
-                    resultado = regenerar_base_padroes_completa(self.db, user_id)
-                    logger.info(f"  ✅ Padrões regenerados: {resultado['total_padroes_gerados']} gerados, {resultado['criados']} criados, {resultado['atualizados']} atualizados")
-                    logger.info("  🎯 Classificação usará padrões atualizados neste upload")
-                except Exception as e:
-                    # NÃO bloquear upload se regeneração falhar
-                    logger.warning(f"  ⚠️ Erro na regeneração: {str(e)}")
-                    logger.warning("  📂 Continuando com padrões existentes...")
-            
+            # NOTA PERF: Fase 0 (regenerar_base_padroes) foi movida para confirm_upload
+            # Não faz sentido regenerar ANTES do preview - usa padrões existentes para classificar
+            # A regeneração ocorre APÓS confirmação, com os dados recém inseridos
+
             # Usar session_id compartilhado (batch) ou gerar único
             session_id = shared_session_id or f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{user_id}"
             
@@ -546,17 +536,16 @@ class UploadService:
     def _fase2_marking(self, session_id: str, user_id: int) -> int:
         """
         Fase 2: Marca transações com IDs (IdTransacao, IdParcela)
-        Atualiza registros existentes no preview
+        Otimizado: 0 re-queries por ID — atualiza objetos já carregados em memória.
         """
-        # Buscar registros do preview
         previews = self.repository.get_by_session_id(session_id, user_id)
-        
         if not previews:
             return 0
-        
-        # Converter para RawTransaction
+
         from .processors.raw.base import RawTransaction
-        raw_transactions = []
+        marker = TransactionMarker(user_id=user_id)
+        now = datetime.now()
+
         for p in previews:
             raw = RawTransaction(
                 banco=p.banco,
@@ -570,51 +559,39 @@ class UploadService:
                 final_cartao=p.cartao,
                 mes_fatura=p.mes_fatura,
             )
-            raw_transactions.append((p.id, raw))
-        
-        # Marcar com IDs (v4.2.1 - passa user_id)
-        marker = TransactionMarker(user_id=user_id)
-        
-        for preview_id, raw in raw_transactions:
             marked = marker.mark_transaction(raw)
-            
-            # Atualizar preview com dados marcados
-            preview = self.db.query(PreviewTransacao).filter(
-                PreviewTransacao.id == preview_id
-            ).first()
-            
-            if preview:
-                preview.IdTransacao = marked.id_transacao
-                preview.IdParcela = marked.id_parcela
-                preview.EstabelecimentoBase = marked.estabelecimento_base
-                preview.ParcelaAtual = marked.parcela_atual
-                preview.TotalParcelas = marked.total_parcelas
-                preview.ValorPositivo = marked.valor_positivo
-                preview.TipoTransacao = marked.tipo_transacao  # ✅ NOVO
-                preview.Ano = marked.ano                        # ✅ NOVO
-                preview.Mes = marked.mes                        # ✅ NOVO
-                preview.updated_at = datetime.now()
-        
+            # Atualizar direto no objeto já carregado (sem re-query por ID)
+            p.IdTransacao = marked.id_transacao
+            p.IdParcela = marked.id_parcela
+            p.EstabelecimentoBase = marked.estabelecimento_base
+            p.ParcelaAtual = marked.parcela_atual
+            p.TotalParcelas = marked.total_parcelas
+            p.ValorPositivo = marked.valor_positivo
+            p.TipoTransacao = marked.tipo_transacao
+            p.Ano = marked.ano
+            p.Mes = marked.mes
+            p.updated_at = now
+
         self.db.commit()
-        return len(raw_transactions)
+        return len(previews)
     
     def _fase3_classification(self, session_id: str, user_id: int) -> ClassificationStats:
         """
         Fase 3: Classifica transações em 5 níveis
-        Atualiza registros existentes no preview
+        Otimizado: CascadeClassifier pré-carrega journal_entries e base_parcelas UMA vez
+        no __init__. Sem re-queries por ID — usa objetos em memória.
         """
-        # Buscar registros marcados
         previews = self.repository.get_by_session_id(session_id, user_id)
-        
         if not previews:
             return ClassificationStats(total=0)
-        
-        # Converter para MarkedTransaction
+
         from .processors.marker import MarkedTransaction
-        marked_transactions = []
+        # __init__ pré-carrega journal_entries e base_parcelas UMA vez para todos os classify()
+        classifier = CascadeClassifier(self.db, user_id)
+        now = datetime.now()
+
         for p in previews:
             marked = MarkedTransaction(
-                # Raw fields
                 banco=p.banco,
                 tipo_documento=p.tipo_documento,
                 nome_arquivo=p.nome_arquivo,
@@ -625,43 +602,29 @@ class UploadService:
                 nome_cartao=p.nome_cartao,
                 final_cartao=p.cartao,
                 mes_fatura=p.mes_fatura,
-                # Marked fields - ler do banco (CamelCase)
                 id_transacao=p.IdTransacao,
                 estabelecimento_base=p.EstabelecimentoBase,
                 valor_positivo=p.ValorPositivo,
                 id_parcela=p.IdParcela,
                 parcela_atual=p.ParcelaAtual,
                 total_parcelas=p.TotalParcelas,
-                tipo_transacao=p.TipoTransacao,  # ✅ NOVO
-                ano=p.Ano,                        # ✅ NOVO
-                mes=p.Mes,                        # ✅ NOVO
+                tipo_transacao=p.TipoTransacao,
+                ano=p.Ano,
+                mes=p.Mes,
             )
-            marked_transactions.append((p.id, marked))
-        
-        # Classificar
-        classifier = CascadeClassifier(self.db, user_id)
-        
-        for preview_id, marked in marked_transactions:
             classified = classifier.classify(marked)
-            
-            # Atualizar preview com classificação
-            preview = self.db.query(PreviewTransacao).filter(
-                PreviewTransacao.id == preview_id
-            ).first()
-            
-            if preview:
-                preview.GRUPO = classified.grupo
-                preview.SUBGRUPO = classified.subgrupo
-                preview.TipoGasto = classified.tipo_gasto
-                preview.CategoriaGeral = classified.categoria_geral
-                preview.origem_classificacao = classified.origem_classificacao
-                preview.padrao_buscado = classified.padrao_buscado  # DEBUG
-                preview.MarcacaoIA = classified.marcacao_ia  # Sugestão da base_marcacoes
-                preview.updated_at = datetime.now()
-        
+            # Atualizar direto no objeto em memória (sem re-query por ID)
+            p.GRUPO = classified.grupo
+            p.SUBGRUPO = classified.subgrupo
+            p.TipoGasto = classified.tipo_gasto
+            p.CategoriaGeral = classified.categoria_geral
+            p.origem_classificacao = classified.origem_classificacao
+            p.padrao_buscado = classified.padrao_buscado
+            p.MarcacaoIA = classified.marcacao_ia
+            p.updated_at = now
+
         self.db.commit()
-        
-        # Retornar estatísticas
+
         stats_dict = classifier.get_stats()
         return ClassificationStats(
             total=stats_dict['total'],
@@ -675,43 +638,47 @@ class UploadService:
     def _fase4_deduplication(self, session_id: str, user_id: int) -> int:
         """
         Fase 4: Identifica transações duplicadas
-        Verifica se IdTransacao já existe em journal_entries
-        Marca como duplicada e NÃO será importada
-        
+        Otimizado: 1 query IN com todos os IdTransacao (em vez de N queries individuais).
+
         Returns:
             Número de duplicatas encontradas
         """
         from app.domains.transactions.models import JournalEntry
-        
-        # Buscar registros do preview
+
         previews = self.repository.get_by_session_id(session_id, user_id)
-        
         if not previews:
             return 0
-        
+
+        # Coletar todos os IdTransacao de uma vez
+        ids_para_verificar = [p.IdTransacao for p in previews if p.IdTransacao]
+        if not ids_para_verificar:
+            return 0
+
+        # 1 query IN para todos (em vez de N queries individuais)
+        existentes = self.db.query(
+            JournalEntry.IdTransacao,
+            JournalEntry.id,
+            JournalEntry.Data
+        ).filter(
+            JournalEntry.IdTransacao.in_(ids_para_verificar),
+            JournalEntry.user_id == user_id
+        ).all()
+
+        existentes_map = {row.IdTransacao: row for row in existentes}
+
         duplicates_count = 0
-        
         for preview in previews:
-            # Só verificar se tem IdTransacao
             if not preview.IdTransacao:
                 continue
-            
-            # Verificar se já existe em journal_entries
-            existing = self.db.query(JournalEntry).filter(
-                JournalEntry.IdTransacao == preview.IdTransacao,
-                JournalEntry.user_id == user_id
-            ).first()
-            
-            if existing:
-                # Marcar como duplicada
+            row = existentes_map.get(preview.IdTransacao)
+            if row:
                 preview.is_duplicate = True
-                preview.duplicate_reason = f"IdTransacao já existe em journal_entries (ID: {existing.id}, Data: {existing.Data})"
-                # IMPORTANTE: Limpar origem_classificacao para evitar aparecer em múltiplas abas
-                # Duplicatas devem aparecer APENAS na aba "Duplicadas"
+                preview.duplicate_reason = f"IdTransacao já existe em journal_entries (ID: {row.id}, Data: {row.Data})"
+                # Duplicatas aparecem APENAS na aba "Duplicadas"
                 preview.origem_classificacao = None
                 duplicates_count += 1
                 logger.debug(f"  🔍 Duplicata: {preview.data} - {preview.lancamento} (IdTransacao: {preview.IdTransacao})")
-        
+
         self.db.commit()
         return duplicates_count
     
@@ -924,7 +891,17 @@ class UploadService:
                 logger.info(f"  ✅ Budget: {resultado_budget['criados']} linhas criadas para grupos com realizado")
             except Exception as e:
                 logger.warning(f"  ⚠️ Erro na sincronização de budget: {str(e)}")
-            
+
+            # ========== FASE 7: REGENERAR BASE PADRÕES ==========
+            # Executa APÓS commit das transações → padrões refletem os dados recém inseridos
+            logger.info("🔄 Fase 7: Regeneração de Base Padrões")
+            try:
+                from app.domains.upload.processors.pattern_generator import regenerar_base_padroes_completa
+                resultado_padroes = regenerar_base_padroes_completa(self.db, user_id)
+                logger.info(f"  ✅ Padrões: {resultado_padroes['total_padroes_gerados']} gerados, {resultado_padroes['criados']} criados, {resultado_padroes['atualizados']} atualizados")
+            except Exception as e:
+                logger.warning(f"  ⚠️ Erro na regeneração de padrões: {str(e)}")
+
             # Limpar dados de preview
             deleted = self.repository.delete_by_session_id(session_id, user_id)
             logger.info(f"🗑️  {deleted} registros de preview removidos")
