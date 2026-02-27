@@ -591,6 +591,106 @@ Confiança aparece como cor do badge na tela (verde = certo, amarelo = estimado)
 
 ---
 
+## Nudge de aposentadoria — impacto de cada desvio no patrimônio futuro
+
+**Conceito:** cada estouro ou economia mensal tem um valor composto até a data de aposentadoria. Mostrar esse número transforma um desvio abstrato ("gastei R$267 a mais") em algo concreto e motivador ("esse estouro vale R$828 a menos na aposentadoria").
+
+Os parâmetros já existem no plano de aposentadoria do usuário: `taxa_retorno_mensal` e `data_aposentadoria`. O cálculo reutiliza isso.
+
+### Fórmula
+
+```
+nudge_mes = Δaporte × (1 + taxa_mensal)^meses_restantes
+
+onde:
+  Δaporte         = aporte_realizado − aporte_planejado
+                    (negativo = estouro → menos dinheiro investido)
+  taxa_mensal     = taxa_retorno do plano de aposentadoria (ex: 0.8%/mês ≈ 10% a.a.)
+  meses_restantes = meses entre o mês do desvio e a data de aposentadoria
+```
+
+**Exemplo concreto:**
+- Usuário planeja aposentar em 12 anos (144 meses)
+- Taxa: 0,8%/mês
+- Março: estouro de R$267 no grupo Carro → aporte foi R$267 menor
+- Nudge: `−267 × (1,008)^144 = −267 × 3,10 = −R$828`
+- Frase: *"Esse estouro de março vai custar R$828 na sua aposentadoria"*
+
+O sinal é simétrico — economia gera nudge positivo:
+- Alimentação: R$300 abaixo do orçamento → `+300 × 3,10 = +R$930` na aposentadoria
+
+### Running acumulado (nudge do ano)
+
+Para o painel de acompanhamento anual, acumula cada mês com seu $n$ correto:
+
+```
+nudge_acumulado = Σ (por mês M já encerrado ou em andamento)
+                    Δaporte(M) × (1 + taxa)^(meses_aposentadoria − M)
+```
+
+Cada mês tem um expoente diferente — desvios de janeiro pesam mais que os de novembro porque têm mais tempo para compostar.
+
+**Exemplo — running de 2026 (até março):**
+```
+Jan: Δ = +150 (economizou) → +150 × (1,008)^156 = +R$495
+Fev: Δ =   −0 (ok)        →   0
+Mar: Δ = −267 (estouro)   → −267 × (1,008)^144 = −R$828
+──────────────────────────────────────────────────────
+Nudge acumulado 2026 até março: −R$333 na aposentadoria
+```
+
+### Como aparece na tela
+
+**Por mês (alerta pontual):**
+```
+┌─────────────────────────────────────────────────────┐
+│  Carro  192% do orçamento  ❌ vai estourar           │
+│  R$650 real + R$1.267 IPVA esperado = R$1.917       │
+│  Estouro: R$917 acima do plano                      │
+│                                                     │
+│  💸 Isso vale −R$2.842 na sua aposentadoria         │
+│     (R$917 × compostos por 144 meses a 0,8%/mês)   │
+└─────────────────────────────────────────────────────┘
+```
+
+**Running anual (no topo da tela de Acompanhamento):**
+```
+┌─────────────────────────────────────────────────────┐
+│  Plano 2026  ← mês atual: Março                     │
+│                                                     │
+│  💸 Impacto acumulado na aposentadoria              │
+│     Jan–Mar: −R$333  ← estouros pesam mais que economias
+│     ████░░░░░░░░░░  Progresso do ano               │
+│     [ver detalhe por mês ↓]                         │
+├─────────────────────────────────────────────────────┤
+│  GASTOS vs PLANO  ...                               │
+```
+
+Ou versão positiva quando o usuário está abaixo do orçamento:
+```
+│  🎯 Impacto acumulado na aposentadoria              │
+│     Jan–Mar: +R$1.240  ← você está economizando!   │
+```
+
+### O que é necessário para calcular
+
+O backend precisa de dois inputs do plano de aposentadoria:
+
+| Campo | Onde já existe | Uso |
+|-------|---------------|-----|
+| `taxa_retorno_mensal` | `cenario_aposentadoria` ou `plano_investimento` | expoente base |
+| `data_aposentadoria` ou `anos_faltantes` | mesmo modelo | calcula `meses_restantes` por mês |
+
+O endpoint `GET /budget/cashflow?ano=2026` já devolve `delta_aporte` por mês. Basta o frontend (ou o backend) multiplicar pelo fator de composição. Preferível calcular no **backend** para evitar expor a taxa e a data de aposentadoria no cliente desnecessariamente.
+
+### Quando NÃO mostrar
+
+- Usuário não configurou o plano de aposentadoria → nudge não aparece (sem taxa, sem data)
+- Data de aposentadoria no passado ou menos de 1 ano → nudge irrelevante, omitir
+- Desvio menor que R$50 → sem nudge (ruído)
+
+---
+
 ## Resumo de componentes reutilizados vs novos
 
 | Componente | Status | Origem |
@@ -609,7 +709,7 @@ Confiança aparece como cor do badge na tela (verde = certo, amarelo = estimado)
 | Endpoint | Status | Notas |
 |----------|--------|-------|
 | `GET /budget/media-3-meses` | **Já existe** | Campo `valor_medio_3_meses` em `budget_planning` — só expor |
-| `GET /budget/cashflow?ano=2026` | **Novo** | Retorna os 12 meses: realizado + expectativas + plano base + saldo projetado + status por grupo |
+| `GET /budget/cashflow?ano=2026` | **Novo** | Retorna os 12 meses: realizado + expectativas + plano base + saldo projetado + status por grupo + `nudge_aposentadoria` por mês e acumulado |
 | `POST /user/financial-profile` | **Novo** | Salva renda mensal + inflação esperada |
 | `GET /user/financial-profile` | **Novo** | Carrega dados para preencher o Construtor |
 | `POST /budget/planning/bulk-upsert` | **Já existe** | Salva metas dos 12 meses de uma vez |
