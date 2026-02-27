@@ -236,14 +236,49 @@ Quando o usuário faz uma TED/PIX para a corretora (ex: "TED XP INVEST R$5.000")
 - Valor atual = posição × preço do dia (atualizado 1x/dia via brapi)
 - Exibe: posição, custo médio, valor atual, ganho/perda R$ e %
 
-### S15 — IR estimado no patrimônio
-> Como usuário com ações, quero ver uma estimativa do IR sobre ganho de capital para ter uma visão realista do meu patrimônio líquido.
+### S15 — IR estimado diferenciado por tipo de ativo
+> Como usuário com ações e FIIs no portfólio, quero ver uma estimativa de IR que considere as regras corretas de cada tipo para ter uma visão realista do meu patrimônio líquido.
 
 **Acceptance criteria:**
-- Linha "IR estimado (ganho de capital)" no resumo do portfólio: `ganho × 15%`
-- Linha "Patrimônio líquido após IR estimado": `total_ativos - ir_estimado - passivos`
-- Tooltip explicando que é estimativa (não considera isenção de R$20k/mês, day trade, etc.)
-- Renda fixa: IR já retido na fonte — não entra no cálculo de IR estimado
+- Ações: aliquota 15% com badge "Isento" quando vendas brutas do mês ≤ R$ 20.000
+- FIIs: alíquota 20%, sem possibilidade de isenção
+- ETFs e BDRs: alíquota 15%, sem isenção
+- Linha "IR estimado" no resumo do portfólio: soma correta por tipo
+- Linha "Patrimônio líquido após IR est.": `total_ativos - ir_estimado - passivos`
+- Tooltip distingue: "Ações: isento se vendas < R$20k/mês; FIIs: sempre 20%; Renda fixa: IR retido na fonte"
+- Renda fixa: exibe alíquota de IR estimada pelo prazo (22,5% a 15%) como informação, não como débito
+
+### S16 — Venda / resgate vinculado ao extrato
+> Como usuário que vendeu ações ou resgatou renda fixa e subiu o extrato bancário, quero registrar essa venda no portfólio vinculando ao crédito do extrato.
+
+**Acceptance criteria:**
+- Journal_entry com `GRUPO='Investimentos'` e valor positivo (crédito) é exibido como candidato de venda
+- Modal de vínculo: permite escolher `tipo_operacao = "Venda/Resgate"` além de "Aporte"
+- Para venda de ações: campos quantidade e preço por cota; sistema verifica que posição não fica negativa
+- Para resgate de renda fixa: campo valor resgatado + campo IR retido (opcional)
+- Após confirmar: `investimentos_transacoes` recebe linha com `tipo_operacao='venda'`; posição atualizada
+
+### S17 — Saldo na corretora como produto do portfólio
+> Como usuário que vendeu ativos e deixou o dinheiro na corretora esperando oportunidades, quero ver esse saldo na tela de Carteira como parte do meu patrimônio.
+
+**Acceptance criteria:**
+- Ao registrar venda, pergunta: "Para onde foi o dinheiro?" com opções "Conta bancária" e "Ficou na corretora"
+- Se "Ficou na corretora": cria produto `track='saldo_corretora'` (ex: "Caixa XP") ou incrementa saldo existente
+- Produto aparece na tela de Carteira com tipo "Caixa Corretora" e valor em reais
+- Não calcula rentabilidade (saldo à vista) — pode ser vinculado a futuros aportes como origem
+- Badge diferente de produtos fixos/variáveis: "💵 Disponível"
+
+### S18 — Indexadores expandidos para renda fixa
+> Como usuário com CDB indexado ao IGPM ou LCA pré-fixado, quero escolher o indexador correto para que o app calcule a rentabilidade com precisão.
+
+**Acceptance criteria:**
+- Seleção de regime: toggle "Pré-fixado" / "Pós-fixado"
+- Se pré-fixado: campo único "Taxa % a.a." — sem indexador
+- Se pós-fixado: dropdown com CDI / SELIC / IPCA / IGPM / INCC / IPCA+X + campo taxa %
+  - CDI: ex. "112% do CDI"; SELIC: ex. "100% SELIC"; IPCA+X: ex. "IPCA + 6,5% a.a."
+- IGPM e INCC consultados via BCB (séries 189 e 192), armazenados em `market_data_cache`
+- Cálculo: mesmo padrão de acumulação mensal que IPCA
+- Produto exibe qual indexador usa e a rentabilidade % acumulada desde a aplicação
 
 ---
 
@@ -311,7 +346,10 @@ S11 (vínculo: migration + modal backend)  → depende de migration investimento
 S12 (match automático)                    → depende de S11
 S13 (CDI renda fixa: job + cálculo)       → depende de S11 + market_data_cache
 S14 (posição + custo médio ações)         → depende de S11 + market_data_cache (brapi)
-S15 (IR estimado)                         → depende de S14
+S15 (IR estimado diferenciado)            → depende de S14
+S16 (venda/resgate vinculado ao extrato)  → depende de S11 + S14 (posição)
+S17 (saldo na corretora)                  → depende de S16 (fluxo de venda)
+S18 (indexadores IGPM/INCC/pré-fixado)    → depende de S11 + market_data_cache (BCB)
 ```
 
 ---
@@ -328,6 +366,9 @@ S15 (IR estimado)                         → depende de S14
 | CDI histórico: Bacen limita consultas a 10 anos e exige filtro de datas | Baixa | Sempre buscar com `dataInicial` e `dataFinal`; cache local evita requerimentos repetidos |
 | Cotação de ação fora do horário B3 (final de semana) | Baixa | Cache usa último valor disponível; exibe data da última atualização |
 | Custo médio incorreto por falta de histórico pré-app | Média | Permitir lançamento manual de transações históricas de compra (tipo='aporte', fonte='manual') |
+| BCB IGPM/INCC com atraso de publicação (FGV publica no mês seguinte) | Baixa | Cache exibe último valor disponível; nota "Dado referente a MM/AAAA" no card |
+| Isenção R$20k: usuário opera em múltiplas corretoras não rastreadas | Média | Tooltip explica limitação: "Estimativa baseada apenas em vendas registradas no app" |
+| Saldo na corretora não sincroniza com venda de outro ativo na mesma corretora | Média | Feature de fase 2: link entre saldo_corretora e próximo aporte para fechar o ciclo |
 
 ---
 

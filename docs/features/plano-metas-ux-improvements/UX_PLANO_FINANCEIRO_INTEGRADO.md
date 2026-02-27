@@ -836,45 +836,148 @@ O ticker serve para busca de cotação diária no brapi e custo médio históric
 ```
 ┌──────────────────────────────────────────────────────┐
 │  Produto: [CDB XP 112% CDI            ▼]            │
-│  Indexador: [CDI ▼]  Taxa: [112___] % do CDI        │
+│                                                      │
+│  Tipo:  [○ Pré-fixado]  [◉ Pós-fixado]               │
+│                                                      │
+│  ── PÓS-FIXADO ───────────────────────────────────  │
+│  Indexador: [CDI                       ▼]            │
+│             CDI ─ SELIC ─ IPCA ─ IGPM ─ INCC          │
+│             IPCA+X ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─   │
+│  Taxa: [112___] % do CDI                             │
+│     (112% CDI | IPCA + 6,5% | 100% SELIC)           │
+│                                                      │
+│  ── PRÉ-FIXADO (quando selecionado) ─────────────   │
+│  Taxa: [13,50_] % a.a.                               │
+│  (capitalização diária pela taxa nominal anual)       │
+│                                                      │
 │  Vencimento: [dd/mm/aaaa]  ou [☑ Liquidez diária]   │
 │  Subtotal: R$ 1.150,00                               │
 └──────────────────────────────────────────────────────┘
 ```
 
+**Regras de exibição do campo Taxa:**
+- CDI / SELIC: exibe como "% do indicador" (ex: 112% CDI, 100% SELIC)
+- IPCA / IGPM / INCC: exibe como "+ X% a.a." (ex: IPCA + 6,5%)
+- IPCA+X: idem, com label explicativo "Inflação + spread"
+- Pré-fixado: exibe como "% a.a. (pré-fixado)"
+
+### UX — Venda / Resgate de ativo
+
+O modal de vínculo (e o detalhe do produto) permitem registrar **vendas e resgates** além de aportes. O fluxo transacional concilia os dois casos.
+
+**Seleção do tipo da operação:**
+```
+┌───────────────────────────────────────────────────┐
+│  O que aconteceu com esse dinheiro?         [x]   │
+├───────────────────────────────────────────────────┤
+│  [◉ Aporte / Compra]   [○ Venda / Resgate]         │
+│                                                     │
+│  ── VENDA / RESGATE (quando selecionado) ────────   │
+│  Produto: [PETR4 — Petrobras PN        ▼]          │
+│  Quantidade vendida: [___100___] cotas              │
+│  Preço de venda: [R$ 41,20________]                 │
+│  Valor bruto:    R$ 4.120,00  (autocalculado)      │
+│                                                     │
+│  Para onde foi o dinheiro?                         │
+│  [◉ Caiu na minha conta bancária]                  │
+│  [○ Ficou na corretora (esperando oportunidade)]   │
+│                                                     │
+│  IR retido (opcional): [R$ 0,00_______]             │
+│    (informe se a corretora já descontou o IR)      │
+│                                                     │
+│  [Cancelar]         [Registrar venda]               │
+└───────────────────────────────────────────────────┘
+```
+
+**Quando destino = "Ficou na corretora":**
+- Sistema cria automaticamente um produto `track='saldo_corretora'` (ex: "Caixa — XP Investimentos") ou incrementa o saldo existente
+- Produto aparece na carteira com badge "💵 Disponível" e sem cálculo de rentabilidade
+- Usuário pode vincular futuros aportes a este saldo como origem (feature de fase 2)
+
+**Quando destino = "Conta bancária":**
+- Se o extrato já foi subido: o crédito correspondente pode ser conciliado via `journal_entry_id`
+- Badge de venda some do produto e posição é atualizada
+
 ### UX — Tela de patrimônio com tracks ativos
 
 Na tela `/mobile/carteira`, ao selecionar um produto:
 
-**Produto `variavel` (PETR4):**
+**Produto `variavel` (PETR4 — Ação):**
 ```
 PETR4 · Petrobras PN · Ação
 ─────────────────────────────────────────────────────
-Posição atual:      100 cotas
-Custo médio:        R$ 38,50
-Preço hoje:         R$ 41,20  (atualizado 26/02/2026 17h)
-Valor atual:        R$ 4.120,00
+ Posição atual:      100 cotas
+ Custo médio:        R$ 38,50
+ Preço hoje:         R$ 41,20  (atualizado 26/02/2026 17h)
+ Valor atual:        R$ 4.120,00
 ─────────────────────────────────────────────────────
-Resultado:          + R$ 270,00  (+7,0%)
-IR estimado s/ venda:  R$  40,50  (15% do ganho)
-Valor líquido est.:    R$ 4.079,50
+ Resultado:          + R$ 270,00  (+7,0%)
+ IR: Ação · 15%       R$  40,50  do ganho
+     🟢 Isento este mês  (vendas R$0 < R$20k)  ← ou
+     🔴 Não isento       (vendas R$22k > R$20k)
+ Valor líquido est.:    R$ 4.079,50
 ─────────────────────────────────────────────────────
-Aportes vinculados: 2  [ver histórico]
+ Aportes vinculados: 2  [ver histórico]  [Registrar venda]
 ```
 
-**Produto `fixo` (CDB 112% CDI):**
+**Produto `variavel` (MXRF11 — FII):**
 ```
-CDB XP 112% CDI · Renda Fixa · Liquidez diária
+MXRF11 · Maxi Renda FII · Fundo Imobiliário
 ─────────────────────────────────────────────────────
-Capital aplicado:   R$ 28.430,00
-Taxa contratada:    112% CDI
-CDI acumulado:      +1,84% (Jan–Fev 2026, fonte: Bacen)
-Valor estimado:     R$ 28.953,13  (+1,84% × 112%)
+ Posição atual:      500 cotas
+ Custo médio:        R$ 10,20
+ Preço hoje:         R$ 10,85  (+6,4%)
+ Valor atual:        R$ 5.425,00
 ─────────────────────────────────────────────────────
-Rentabilidade:      + R$  523,13  (+1,84% efetivo)
-IR: retido na fonte (não entra no IR estimado)
+ Resultado:          + R$ 325,00  (+6,4%)
+ IR: FII · 20%        R$  65,00  — sem isenção de R$20k
+ Valor líquido est.:    R$ 5.360,00
 ─────────────────────────────────────────────────────
-Aportes vinculados: 3  [ver histórico]
+ Aportes vinculados: 1  [ver histórico]  [Registrar venda]
+```
+
+**Produto `fixo` (CDB 112% CDI — Pós-fixado):**
+```
+CDB XP · Renda Fixa · Pós-fixado · Liquidez diária
+─────────────────────────────────────────────────────
+ Capital aplicado:   R$ 28.430,00
+ Indexador:         112% CDI  (pós-fixado)
+ CDI acumulado:      +1,84% (Jan–Fev 2026, fonte: Bacen)
+ Valor estimado:     R$ 28.953,13
+─────────────────────────────────────────────────────
+ Rentabilidade:      + R$  523,13  (+1,84% efetivo × 112%)
+ IR: Retido na fonte · estimativa: 15% (> 720 dias)
+     Não entra no IR estimado do portfólio
+─────────────────────────────────────────────────────
+ Aportes vinculados: 3  [ver histórico]  [Registrar resgate]
+```
+
+**Produto `fixo` (LCA 13,5% a.a. — Pré-fixado):**
+```
+LCA Banco BTG · Renda Fixa · Pré-fixado · Vence 15/01/2027
+─────────────────────────────────────────────────────
+ Capital aplicado:   R$ 10.000,00
+ Regime:            13,5% a.a. (pré-fixado)
+ Dias decorridos:    220 diasúteis (aprox.)
+ Valor estimado:     R$ 10.790,00
+─────────────────────────────────────────────────────
+ Rentabilidade:      + R$  790,00  (+7,9% em 220 DU)
+ Projeção ao vencer: R$ 11.350,00
+ IR: Retido na fonte · estimativa: 17,5% (361–720 dias)
+─────────────────────────────────────────────────────
+ Aportes vinculados: 1  [ver histórico]  [Registrar resgate]
+```
+
+**Produto `saldo_corretora` (Caixa XP):**
+```
+💵 Caixa — XP Investimentos · Disponível
+─────────────────────────────────────────────────────
+ Saldo:              R$ 3.850,00
+ Origem:            Venda PETR4 em 15/02/2026
+ Rentabilidade:      N/A (dinheiro à vista)
+ IR estimado:        R$ 0 (não há rendimento)
+─────────────────────────────────────────────────────
+ [Registrar novo aporte com este saldo]
 ```
 
 ### UX — Resumo do portfólio com IR estimado
@@ -899,8 +1002,10 @@ No topo da tela de Carteira (após o donut):
 | Dado | Fonte | Frequência | Custo |
 |------|-------|-----------|-------|
 | CDI diário | [API BCB série 4389](https://api.bcb.gov.br/dados/serie/bcdata.sgs.4389/dados) | 1x/dia | Gratuito |
-| IPCA mensal | [API BCB série 433](https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados) | 1x/mês | Gratuito |
 | SELIC diária | [API BCB série 11](https://api.bcb.gov.br/dados/serie/bcdata.sgs.11/dados) | 1x/dia | Gratuito |
+| IPCA mensal | [API BCB série 433](https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados) | 1x/mês | Gratuito |
+| IGPM mensal | [API BCB série 189](https://api.bcb.gov.br/dados/serie/bcdata.sgs.189/dados) | 1x/mês | Gratuito |
+| INCC mensal | [API BCB série 192](https://api.bcb.gov.br/dados/serie/bcdata.sgs.192/dados) | 1x/mês | Gratuito |
 | Cotação ações/FIIs | [brapi.dev](https://brapi.dev) | 1x/dia (18h) | Gratuito (15k req/mês) |
 
 Todos os dados ficam em cache local na tabela `market_data_cache` — nenhuma chamada externa no request do usuário.

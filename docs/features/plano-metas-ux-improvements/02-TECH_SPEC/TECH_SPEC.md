@@ -962,9 +962,9 @@ class MarketDataCache(Base):
 
     id              = Column(Integer, primary_key=True)
     tipo            = Column(String(20), nullable=False)
-    # "acao" | "cdi" | "ipca" | "selic"
+    # "acao" | "cdi" | "selic" | "ipca" | "igpm" | "incc"
     codigo          = Column(String(20), nullable=False)
-    # "PETR4" | "MXRF11" | "CDI" | "IPCA" | "SELIC"
+    # "PETR4" | "MXRF11" | "CDI" | "SELIC" | "IPCA" | "IGPM" | "INCC"
     data_referencia = Column(Date, nullable=False)
     valor           = Column(Numeric(20, 8), nullable=False)
     # ação: preço em R$  |  CDI/SELIC: % ao dia  |  IPCA: % ao mês
@@ -1005,16 +1005,30 @@ preco_unitario   = Column(Numeric(15, 6))    # preço por cota na data
 
 # Track fixo — renda fixa
 indexador        = Column(String(20))
-# "CDI" | "IPCA" | "SELIC" | "PREFIXADO"
+# "CDI" | "SELIC" | "IPCA" | "IGPM" | "INCC" | "IPCA+X" | "PREFIXADO"
 taxa_pct         = Column(Numeric(8, 4))
-# 112.0 = 112% CDI  |  6.5 = IPCA+6,5%  |  13.5 = 13,5% prefixado
+# Pós-fixado: 112.0 = 112% CDI  |  6.5 = IPCA + 6,5% a.a.
+# Prefixado:  13.5  = 13,5% a.a. nominal (sem indexador externo)
+regime           = Column(String(12))
+# "prefixado"  — taxa fixa, capitalização diária pela taxa a.a.
+# "pos_fixado" — indexado ao indicador (CDI, SELIC, IPCA, IGPM, INCC, IPCA+X)
+# NULL         — não se aplica (variavel, snapshot, saldo_corretora)
 data_vencimento  = Column(Date, nullable=True)
 # NULL = liquidez diária (nunca vence)
 
 # Proventos (preenchido quando tipo='rendimento')
 tipo_proventos   = Column(String(30))
 # "dividendo" | "jcp" | "rendimento_fii" | "juros_rf"
-ir_retido        = Column(Numeric(15, 2))    # IR já retido na fonte
+ir_retido        = Column(Numeric(15, 2))    # IR já retido na fonte (renda fixa)
+
+# Operação e destino
+tipo_operacao    = Column(String(10), default="aporte")
+# "aporte" — compra / aplicação / depósito na corretora
+# "venda"  — resgate / desinvestimento / retirada da posição
+destino_resgate  = Column(String(20))
+# "conta_bancaria"  → volta ao extrato bancário (conciliável com journal_entry)
+# "saldo_corretora" → fica na corretora aguardando nova aplicação
+# NULL              → não se aplica (tipo_operacao='aporte')
 ```
 
 ```bash
@@ -1030,8 +1044,18 @@ docker exec finup_backend_dev alembic upgrade head
 ```python
 # alembic: migration — extend_investimentos_portfolio_v2
 
-track        = Column(String(10), default="snapshot")
-# "snapshot" | "fixo" | "variavel"
+track        = Column(String(15), default="snapshot")
+# "snapshot"         — Imóvel, FGTS, Previdência, Conta corrente pessoal
+# "fixo"             — CDB, LCI, LCA, Tesouro Direto, Debêntures, Poupança
+# "variavel"         — Ações, FIIs, ETFs, BDRs
+# "saldo_corretora"  — Caixa na corretora aguardando nova aplicação
+
+subtipo_ativo = Column(String(15))
+# Para track='variavel': "acao" | "fii" | "etf" | "bdr"
+# Determina a regra de IR: acao=15%+isenção R$20k; fii=20%; etf/bdr=15% sem isenção
+
+regime       = Column(String(12))
+# "prefixado" | "pos_fixado" | NULL (variavel, snapshot, saldo_corretora)
 
 codigo_ativo = Column(String(20))
 # "PETR4", "MXRF11" — usado para busca diária no brapi e custo médio
@@ -1047,6 +1071,35 @@ docker exec finup_backend_dev alembic revision --autogenerate \
   -m "extend_investimentos_portfolio_v2"
 docker exec finup_backend_dev alembic upgrade head
 ```
+
+---
+
+#### 10.4 Regras de IR por tipo de ativo (tabela de referência)
+
+| Tipo | `subtipo_ativo` | Alíquota | Isenção | Base legal |
+|------|----------------|---------|---------|------------|
+| Ações (swing trade) | `acao` | **15%** | ✅ Vendas brutas ≤ R$ 20.000/mês → IR = 0 | Art. 22, Lei 9.250/95 |
+| FIIs (cotas) | `fii` | **20%** | ❌ Nenhuma — sem isenção de R$ 20k | Art. 3º, Lei 11.033/2004 |
+| ETFs renda variável | `etf` | **15%** | ❌ Sem isenção | IN RFB 1.585/2015 |
+| BDRs | `bdr` | **15%** | ❌ Sem isenção | IN RFB 1.585/2015 |
+| Day trade | — | 20% | ❌ | App não rastreia intraday |
+
+**Renda fixa — IR retido na fonte (tabela regressiva):**
+
+| Prazo da aplicação | Alíquota |
+|--------------------|----------|
+| Até 180 dias | 22,5% |
+| 181 a 360 dias | 20,0% |
+| 361 a 720 dias | 17,5% |
+| Acima de 720 dias | 15,0% |
+
+> IR de renda fixa é sempre retido na fonte pela corretora/banco. O app exibe a alíquota estimada **para fins informativos** com base no prazo — **não entra no "IR estimado" do portfólio**.
+
+**Isenção de R$ 20.000 para ações — detalhes de implementação:**
+- Isenção é por CPF e por mês calendário (não por produto)
+- O app agrega `SUM(valor_total)` de todas as transações `tipo_operacao='venda'` com `subtipo_ativo='acao'` no mês corrente para o user_id
+- Se `total_vendas_mes ≤ R$20.000`: `ir_estimado = 0` e `ir_isento_este_mes = True`
+- Limitação documentada: vendas em outras corretoras não capturadas pelo app reduzem o "espaço de isenção" real mas não são rastreadas
 
 ---
 
@@ -1072,10 +1125,17 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 BCB_BASE = "https://api.bcb.gov.br/dados/serie/bcdata.sgs"
 BRAPI_BASE = "https://brapi.dev/api"
 
-SERIES_BCB = {
-    "CDI":  4389,   # % ao dia
-    "SELIC": 11,    # % ao dia
-    "IPCA": 433,    # % ao mês (mensal)
+# Séries diárias — acumulação dia a dia útil
+SERIES_BCB_DIARIOS = {
+    "CDI":   4389,  # % ao dia — base dos pós-fixados CDI
+    "SELIC": 11,    # % ao dia — meta SELIC over
+}
+
+# Séries mensais — variação mensal do índice de preços
+SERIES_BCB_MENSAIS = {
+    "IPCA":  433,   # % ao mês — IBGE via BCB
+    "IGPM":  189,   # % ao mês — FGV via BCB (Índice Geral de Preços — Mercado)
+    "INCC":  192,   # % ao mês — FGV via BCB (Índice Nac. de Custo da Construção)
 }
 
 def upsert_cache(db, tipo, codigo, data_ref, valor, fonte):
@@ -1091,8 +1151,10 @@ def sync_market_data(db: Session):
     hoje = date.today()
     ontem = hoje - timedelta(days=1)
 
-    # ── BCB: CDI, SELIC, IPCA ────────────────────────────────────────────
-    for codigo, serie in SERIES_BCB.items():
+    inicio_mes = hoje.replace(day=1)
+
+    # ── BCB: séries DIÁRIAS (CDI, SELIC) ─────────────────────────────────
+    for codigo, serie in SERIES_BCB_DIARIOS.items():
         ini = ontem.strftime("%d/%m/%Y")
         fim = hoje.strftime("%d/%m/%Y")
         r = requests.get(
@@ -1102,8 +1164,21 @@ def sync_market_data(db: Session):
         )
         for item in r.json():
             dt = datetime.strptime(item["data"], "%d/%m/%Y").date()
-            upsert_cache(db, "cdi" if codigo == "CDI" else codigo.lower(),
-                         codigo, dt, float(item["valor"]), "bcb")
+            upsert_cache(db, codigo.lower(), codigo, dt, float(item["valor"]), "bcb")
+
+    # ── BCB: séries MENSAIS (IPCA, IGPM, INCC) ───────────────────────────
+    for codigo, serie in SERIES_BCB_MENSAIS.items():
+        ini = inicio_mes.strftime("%d/%m/%Y")
+        fim = hoje.strftime("%d/%m/%Y")
+        r = requests.get(
+            f"{BCB_BASE}.{serie}/dados"
+            f"?formato=json&dataInicial={ini}&dataFinal={fim}",
+            timeout=10
+        )
+        for item in r.json():
+            # Data de referência: primeiro dia do mês publicado
+            dt = datetime.strptime(item["data"], "%d/%m/%Y").date().replace(day=1)
+            upsert_cache(db, codigo.lower(), codigo, dt, float(item["valor"]), "bcb")
 
     # ── brapi: ações, FIIs, ETFs ─────────────────────────────────────────
     codigos = db.execute(
@@ -1179,21 +1254,81 @@ def calc_posicao_variavel(investimento_id: int, user_id: int,
 
     preco_atual = Decimal(str(cache.valor)) if cache else Decimal(0)
     valor_atual = qtd_total * preco_atual
-    ganho = valor_atual - custo_total
-    ir_estimado = max(Decimal(0), ganho * Decimal("0.15"))  # 15% operação normal
+    ganho       = valor_atual - custo_total
+
+    # IR diferenciado por subtipo de ativo (regras: seção 10.4)
+    subtipo = portfolio.subtipo_ativo or "acao"  # default: ação
+
+    # Vendas brutas de ações no mês corrente (para verificar isenção R$20k)
+    vendas_mes = Decimal(0)
+    if subtipo == "acao":
+        mes_ini   = date.today().replace(day=1)
+        ids_acoes = db.query(InvestimentoPortfolio.id).filter(
+            InvestimentoPortfolio.user_id       == user_id,
+            InvestimentoPortfolio.subtipo_ativo == "acao",
+        )
+        vendas_mes = db.query(func.coalesce(func.sum(InvestimentoTransacao.valor), 0)).filter(
+            InvestimentoTransacao.user_id        == user_id,
+            InvestimentoTransacao.tipo_operacao  == "venda",
+            InvestimentoTransacao.data           >= mes_ini,
+            InvestimentoTransacao.investimento_id.in_(ids_acoes),
+        ).scalar() or Decimal(0)
+
+    ir_info     = calcular_ir_variavel(ganho, subtipo, vendas_mes)
+    ir_estimado = Decimal(str(ir_info["ir_estimado"]))
 
     return {
-        "posicao_atual": float(qtd_total),
-        "custo_medio": float(custo_medio),
-        "custo_total": float(custo_total),
-        "preco_atual": float(preco_atual),
-        "valor_atual": float(valor_atual),
-        "ganho_capital": float(ganho),
-        "ir_estimado": float(ir_estimado),
-        "valor_liquido_estimado": float(valor_atual - ir_estimado),
-        "rentabilidade_pct": float(ganho / custo_total * 100) if custo_total > 0 else 0,
-        "cache_data": cache.data_referencia.isoformat() if cache else None,
+        "posicao_atual":           float(qtd_total),
+        "custo_medio":             float(custo_medio),
+        "custo_total":             float(custo_total),
+        "preco_atual":             float(preco_atual),
+        "valor_atual":             float(valor_atual),
+        "ganho_capital":           float(ganho),
+        "ir_estimado":             float(ir_estimado),
+        "ir_aliquota_pct":         ir_info["aliquota"],
+        "ir_regra":                ir_info["ir_regra"],
+        "ir_isento_este_mes":      ir_info.get("isento", False),
+        "vendas_brutas_mes":       float(ir_info.get("vendas_brutas_mes", 0)),
+        "valor_liquido_estimado":  float(valor_atual - ir_estimado),
+        "rentabilidade_pct":       float(ganho / custo_total * 100) if custo_total > 0 else 0,
+        "cache_data":              cache.data_referencia.isoformat() if cache else None,
+        "subtipo_ativo":           subtipo,
     }
+
+
+def calcular_ir_variavel(ganho: Decimal, subtipo: str,
+                          vendas_brutas_mes: Decimal) -> dict:
+    """
+    Calcula IR estimado sobre ganho de capital de ativos variáveis.
+
+    Regras (art. 22 Lei 9.250/95 e IN RFB 1.585/2015):
+    ┌──────────────┬──────────┬─────────────────────────────────────┐
+    │ acao         │ 15%      │ ISENTO se vendas_brutas_mes ≤ R$20k │
+    │ fii          │ 20%      │ SEM isenção (Lei 11.033/2004)        │
+    │ etf / bdr    │ 15%      │ SEM isenção (IN RFB 1585/2015)      │
+    └──────────────┴──────────┴─────────────────────────────────────┘
+    """
+    if ganho <= 0:
+        return {"ir_estimado": Decimal(0), "aliquota": 0,
+                "isento": False, "ir_regra": "sem_ganho"}
+
+    if subtipo == "acao":
+        isento = vendas_brutas_mes <= Decimal("20000")
+        return {
+            "ir_estimado": Decimal(0) if isento else ganho * Decimal("0.15"),
+            "aliquota": 15,
+            "isento": isento,
+            "ir_regra": "isento_20k" if isento else "acao_15pct",
+            "vendas_brutas_mes": float(vendas_brutas_mes),
+        }
+
+    if subtipo == "fii":
+        return {"ir_estimado": ganho * Decimal("0.20"), "aliquota": 20,
+                "isento": False, "ir_regra": "fii_sem_isencao_20pct"}
+
+    # etf, bdr: 15% sem isenção
+    return {"ir_estimado": ganho * Decimal("0.15"), "aliquota": 15,
+            "isento": False, "ir_regra": "etf_bdr_15pct"}
 ```
 
 #### 12.2 Track `fixo` — CDI acumulado
@@ -1202,57 +1337,138 @@ def calc_posicao_variavel(investimento_id: int, user_id: int,
 def calc_valor_fixo(transacao_aplicacao: InvestimentoTransacao,
                     db: Session) -> dict:
     """
-    Calcula valor atual de renda fixa indexada ao CDI.
-    Usa CDI diário acumulado do Bacen (cache local).
+    Calcula valor atual de renda fixa para qualquer indexador/regime.
 
-    valor_atual = capital × Π(1 + cdi_dia × taxa_pct/100)
+    Suportados:
+    ┌─────────────────────┬────────────────────────────────────────────────┐
+    │ PREFIXADO           │ capital × (1 + taxa_aa/100)^(du/252)           │
+    │ PÓS CDI / SELIC     │ capital × Π(1 + taxa_dia × mult)  — diário     │
+    │ PÓS IPCA/IGPM/INCC  │ capital × Π(1 + variacao_mensal)  — mensal     │
+    │ PÓS IPCA+X          │ IPCA acumulado × (1 + spread/100)^(du/252)    │
+    └─────────────────────┴────────────────────────────────────────────────┘
     """
-    capital = Decimal(str(transacao_aplicacao.valor))
-    taxa_multiplicador = Decimal(str(transacao_aplicacao.taxa_pct or 100)) / 100
-    # ex: 112% CDI → multiplicador = 1.12
-
+    capital     = Decimal(str(transacao_aplicacao.valor))
+    taxa_pct    = Decimal(str(transacao_aplicacao.taxa_pct or 100))
+    regime      = transacao_aplicacao.regime or "pos_fixado"
+    indexador   = (transacao_aplicacao.indexador or "CDI").upper()
     data_inicio = transacao_aplicacao.data
     data_fim    = transacao_aplicacao.data_vencimento or date.today()
+    dias_prazo  = (date.today() - data_inicio).days
 
-    # Buscar todos os dias CDI no período
-    dias_cdi = db.query(MarketDataCache).filter(
-        MarketDataCache.tipo == "cdi",
-        MarketDataCache.codigo == "CDI",
-        MarketDataCache.data_referencia >= data_inicio,
-        MarketDataCache.data_referencia <= data_fim,
-    ).order_by(MarketDataCache.data_referencia).all()
+    # ── PREFIXADO ─────────────────────────────────────────────────────────
+    if regime == "prefixado":
+        dias_corridos   = (data_fim - data_inicio).days
+        du              = max(1, int(dias_corridos / 1.4))
+        taxa_dia        = (1 + taxa_pct / 100) ** (Decimal(1) / 252) - 1
+        fator           = (1 + taxa_dia) ** du
+        valor_atual     = capital * fator
+        rentabilidade   = (fator - 1) * 100
+        valor_projetado = None
+        if transacao_aplicacao.data_vencimento:
+            du_total = max(1, int((transacao_aplicacao.data_vencimento - data_inicio).days / 1.4))
+            valor_projetado = float(capital * (1 + taxa_dia) ** du_total)
+        return {
+            "capital_inicial": float(capital), "valor_atual": float(valor_atual),
+            "rentabilidade_pct": float(rentabilidade), "regime": "prefixado",
+            "indexador": "PREFIXADO", "taxa_pct": float(taxa_pct),
+            "valor_projetado_vencimento": valor_projetado,
+            "n_periodos_calculados": du,
+            **_ir_renda_fixa_info(dias_prazo),
+        }
 
-    if not dias_cdi:
-        return {"valor_atual": float(capital), "rentabilidade_pct": 0}
+    # ── PÓS CDI / SELIC (séries diárias) ─────────────────────────────────
+    if indexador in ("CDI", "SELIC"):
+        dados = db.query(MarketDataCache).filter(
+            MarketDataCache.tipo == indexador.lower(),
+            MarketDataCache.data_referencia.between(data_inicio, data_fim),
+        ).order_by(MarketDataCache.data_referencia).all()
+        if not dados:
+            return {"valor_atual": float(capital), "rentabilidade_pct": 0,
+                    "aviso": f"sem_dados_{indexador.lower()}_cache"}
+        mult  = taxa_pct / 100  # 112% CDI → mult=1.12
+        fator = Decimal(1)
+        for d in dados:
+            fator *= (1 + Decimal(str(d.valor)) / 100 * mult)
+        valor_atual   = capital * fator
+        rentabilidade = (fator - 1) * 100
+        return {**_base_fixo(capital, valor_atual, rentabilidade, indexador,
+                              taxa_pct, dados, transacao_aplicacao, regime),
+                **_ir_renda_fixa_info(dias_prazo)}
 
-    # Acumular: cada dia aplica taxa_dia × multiplicador_contratado
-    fator_acumulado = Decimal(1)
-    for dia in dias_cdi:
-        taxa_dia = Decimal(str(dia.valor)) / 100  # ex: 0.052347% → 0.00052347
-        fator_acumulado *= (1 + taxa_dia * taxa_multiplicador)
+    # ── PÓS IPCA / IGPM / INCC (séries mensais) ──────────────────────────
+    if indexador in ("IPCA", "IGPM", "INCC"):
+        dados = db.query(MarketDataCache).filter(
+            MarketDataCache.tipo == indexador.lower(),
+            MarketDataCache.data_referencia >= data_inicio.replace(day=1),
+            MarketDataCache.data_referencia <= data_fim,
+        ).order_by(MarketDataCache.data_referencia).all()
+        if not dados:
+            return {"valor_atual": float(capital), "rentabilidade_pct": 0,
+                    "aviso": f"sem_dados_{indexador.lower()}_cache"}
+        fator = Decimal(1)
+        for m in dados:
+            fator *= (1 + Decimal(str(m.valor)) / 100)
+        valor_atual   = capital * fator
+        rentabilidade = (fator - 1) * 100
+        return {**_base_fixo(capital, valor_atual, rentabilidade, indexador,
+                              taxa_pct, dados, transacao_aplicacao, regime),
+                **_ir_renda_fixa_info(dias_prazo)}
 
-    valor_atual = capital * fator_acumulado
-    rentabilidade = (valor_atual / capital - 1) * 100
+    # ── IPCA + spread fixo (IPCA+X) ───────────────────────────────────────
+    if indexador == "IPCA+X":
+        meses = db.query(MarketDataCache).filter(
+            MarketDataCache.tipo == "ipca",
+            MarketDataCache.data_referencia >= data_inicio.replace(day=1),
+        ).order_by(MarketDataCache.data_referencia).all()
+        fator_ipca = Decimal(1)
+        for m in meses:
+            fator_ipca *= (1 + Decimal(str(m.valor)) / 100)
+        du            = max(1, int((data_fim - data_inicio).days / 1.4))
+        taxa_dia_fixa = (1 + taxa_pct / 100) ** (Decimal(1) / 252) - 1
+        fator_fixo    = (1 + taxa_dia_fixa) ** du
+        valor_atual   = capital * fator_ipca * fator_fixo
+        rentabilidade = (valor_atual / capital - 1) * 100
+        return {**_base_fixo(capital, valor_atual, rentabilidade, "IPCA+X",
+                              taxa_pct, meses, transacao_aplicacao, regime),
+                **_ir_renda_fixa_info(dias_prazo)}
 
-    # Projeção até vencimento (se tem data)
+    return {"erro": f"indexador_nao_suportado: {indexador}",
+            "capital_inicial": float(capital), "valor_atual": float(capital),
+            "rentabilidade_pct": 0}
+
+
+def _ir_renda_fixa_info(dias_prazo: int) -> dict:
+    """Tabela regressiva de IR — renda fixa (art. 206 CTN). IR retido na fonte."""
+    aliquota = (22.5 if dias_prazo <= 180 else
+                20.0 if dias_prazo <= 360 else
+                17.5 if dias_prazo <= 720 else 15.0)
+    return {
+        "ir_aliquota_estimada_pct": aliquota,
+        "nota_ir": "IR retido na fonte pela corretora. Alíquota estimada pelo prazo da aplicação.",
+    }
+
+
+def _base_fixo(capital, valor_atual, rentabilidade, indexador,
+               taxa_pct, dados, transacao, regime) -> dict:
+    """Monta response padrão para renda fixa pós-fixada."""
     valor_projetado = None
-    if transacao_aplicacao.data_vencimento:
-        # Estimar CDI futuro como média dos últimos 21 dias
-        ultimos = dias_cdi[-21:] if len(dias_cdi) >= 21 else dias_cdi
-        cdi_medio_diario = sum(Decimal(str(d.valor)) for d in ultimos) / len(ultimos) / 100
-        dias_restantes = (transacao_aplicacao.data_vencimento - date.today()).days
-        # Aproximação: dias corridos ÷ 1.4 ≈ dias úteis
-        dias_uteis_estimados = int(dias_restantes / 1.4)
-        fator_futuro = (1 + cdi_medio_diario * taxa_multiplicador) ** dias_uteis_estimados
-        valor_projetado = float(valor_atual * fator_futuro)
-
+    if transacao.data_vencimento and dados:
+        ultimos      = dados[-6:]
+        media_var    = sum(Decimal(str(d.valor)) for d in ultimos) / len(ultimos) / 100
+        dias_rest    = (transacao.data_vencimento - date.today()).days
+        periodos     = (max(1, int(dias_rest / 1.4))
+                        if indexador in ("CDI", "SELIC")
+                        else max(1, round(dias_rest / 30)))
+        valor_projetado = float(valor_atual * (1 + media_var) ** periodos)
     return {
         "capital_inicial": float(capital),
         "valor_atual": float(valor_atual),
         "rentabilidade_pct": float(rentabilidade),
-        "cdi_contratado_pct": float(transacao_aplicacao.taxa_pct or 100),
+        "regime": regime,
+        "indexador": indexador,
+        "taxa_pct": float(taxa_pct),
         "valor_projetado_vencimento": valor_projetado,
-        "dias_calculados": len(dias_cdi),
+        "n_periodos_calculados": len(dados),
     }
 ```
 
@@ -1307,6 +1523,25 @@ def get_resumo_ir(
     Usado no card do portfólio: patrimônio bruto - IR estimado = patrimônio líquido.
     """
     return InvestimentoService(db).get_resumo_ir(user_id)
+
+@router.post("/registrar-venda", status_code=201)
+def registrar_venda(
+    data: RegistrarVendaRequest,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Registra venda/resgate de ativo (variável ou fixo).
+
+    Pergunta obrigatória: destino do valor recebido.
+    - "conta_bancaria"  → volta ao extrato bancário; pode ser conciliado via journal_entry_id
+    - "saldo_corretora" → cria automaticamente produto track='saldo_corretora' na corretora
+                          (ou incrementa o saldo existente) — fica visível no portfólio
+
+    Para ações/FIIs: valida que posição não fica negativa após a venda.
+    Recalcula aporte_mes do InvestimentoHistorico se destino='conta_bancaria'.
+    """
+    return InvestimentoService(db).registrar_venda(user_id, data)
 ```
 
 ---
@@ -1314,19 +1549,46 @@ def get_resumo_ir(
 ### 14. Schemas do Módulo 2
 
 ```python
+class IndexadorEnum(str, Enum):
+    CDI       = "CDI"
+    SELIC     = "SELIC"
+    IPCA      = "IPCA"
+    IGPM      = "IGPM"
+    INCC      = "INCC"
+    IPCA_X    = "IPCA+X"
+    PREFIXADO = "PREFIXADO"
+
+class RegimeEnum(str, Enum):
+    PREFIXADO  = "prefixado"
+    POS_FIXADO = "pos_fixado"
+
+class SubtipoAtivoEnum(str, Enum):
+    ACAO = "acao"  # ações: 15% + isenção R$20k
+    FII  = "fii"   # fundos imobiliários: 20%, sem isenção
+    ETF  = "etf"   # ETFs renda variável: 15%, sem isenção
+    BDR  = "bdr"   # BDRs: 15%, sem isenção
+
+
 class AporteParcial(BaseModel):
-    """Um produto + valor dentro de um vínculo"""
-    investimento_id: int                 # portfolio existente (ou None para criar novo)
+    """Um produto + valor dentro de um vínculo (aporte ou venda)"""
+    investimento_id: int                 # portfólio existente (ou None para criar novo)
     valor: Decimal                       # valor destinado a este produto
-    # Campos por track (opcionais dependendo do track)
-    # Track variavel
+    tipo_operacao: str = "aporte"        # "aporte" | "venda"
+
+    # Track variavel — ações, FIIs, ETFs, BDRs
     codigo_ativo:   Optional[str] = None
+    subtipo_ativo:  Optional[SubtipoAtivoEnum] = None  # determina a regra de IR
     quantidade:     Optional[Decimal] = None
     preco_unitario: Optional[Decimal] = None
-    # Track fixo
-    indexador:       Optional[str] = None       # "CDI" | "IPCA" | "SELIC" | "PREFIXADO"
+
+    # Track fixo — renda fixa
+    indexador:       Optional[IndexadorEnum] = None
+    regime:          Optional[RegimeEnum] = None    # obrigatório se track='fixo'
     taxa_pct:        Optional[Decimal] = None
-    data_vencimento: Optional[date] = None      # None = liquidez diária
+    data_vencimento: Optional[date] = None          # None = liquidez diária
+
+    # Venda/resgate (preenchido quando tipo_operacao='venda')
+    destino_resgate: Optional[str] = None  # "conta_bancaria" | "saldo_corretora"
 
 class VincularAporteRequest(BaseModel):
     journal_entry_id: int
@@ -1341,26 +1603,35 @@ class AportePendenteResponse(BaseModel):
     match_automatico: Optional[dict] = None  # {investimento_id, nome, score}
 
 class PosicaoVariavelResponse(BaseModel):
-    track: str  # "variavel"
+    track: str                      # "variavel"
+    subtipo_ativo: str              # "acao" | "fii" | "etf" | "bdr"
     posicao_atual: float
     custo_medio: float
     custo_total: float
     preco_atual: float
     valor_atual: float
     ganho_capital: float
-    ir_estimado: float
+    ir_estimado: float              # R$ 0 se isento; 15% ou 20% conforme subtipo
+    ir_aliquota_pct: int            # 15 ou 20
+    ir_regra: str                   # "isento_20k" | "acao_15pct" | "fii_sem_isencao_20pct" | ...
+    ir_isento_este_mes: bool        # True = vendas totais de ações no mês < R$ 20k
+    vendas_brutas_mes: float        # soma de todas as vendas de ações no mês corrente
     valor_liquido_estimado: float
     rentabilidade_pct: float
-    cache_data: Optional[str]  # data da última cotação
+    cache_data: Optional[str]       # data da última cotação ("YYYY-MM-DD")
 
 class PosicaoFixoResponse(BaseModel):
-    track: str  # "fixo"
+    track: str                              # "fixo"
+    regime: str                             # "prefixado" | "pos_fixado"
+    indexador: str                          # "CDI" | "SELIC" | "IPCA" | "IGPM" | "INCC" | "IPCA+X" | "PREFIXADO"
     capital_inicial: float
     valor_atual: float
     rentabilidade_pct: float
-    cdi_contratado_pct: float
+    taxa_pct: float                         # % do indexador (pós) ou taxa a.a. (pré)
     valor_projetado_vencimento: Optional[float]
-    dias_calculados: int
+    n_periodos_calculados: int              # dias úteis (CDI/SELIC) ou meses (IPCA/IGPM/INCC)
+    ir_aliquota_estimada_pct: float         # 22.5 / 20 / 17.5 / 15 conforme tabela regressiva
+    nota_ir: str                            # "IR retido na fonte..."
 
 class ResumoIRResponse(BaseModel):
     total_ativos_bruto: Decimal
@@ -1368,6 +1639,24 @@ class ResumoIRResponse(BaseModel):
     patrimonio_liquido_estimado: Decimal
     produtos_com_ganho: int
     nota: str  # "Estimativa sobre ações/FIIs. Não considera isenção ou day trade."
+
+class RegistrarVendaRequest(BaseModel):
+    """Registra venda ou resgate de ativo diretamente no portfólio."""
+    investimento_id: int
+    valor_total: Decimal              # valor bruto recebido (pré-IR para renda fixa)
+    data: date
+    destino_resgate: str              # "conta_bancaria" | "saldo_corretora"
+
+    # Para track='variavel' (ações, FIIs)
+    quantidade:     Optional[Decimal] = None
+    preco_unitario: Optional[Decimal] = None
+    subtipo_ativo:  Optional[SubtipoAtivoEnum] = None
+
+    # Para track='fixo' (renda fixa)
+    ir_retido: Optional[Decimal] = None   # IR já descontado pela corretora/banco
+
+    # Vínculo opcional com o extrato bancário
+    journal_entry_id: Optional[int] = None  # crédito correspondente no extrato
 ```
 
 ---
@@ -1462,27 +1751,33 @@ const { data: pendentes } = useSWR("/api/v1/investimentos/pendentes-vinculo")
 
 ### Banco
 - [ ] Migration `market_data_cache` com constraint `uq_market_data_dia`
-- [ ] Migration `investimentos_transacoes`: todos os campos nullable
-- [ ] Migration `investimentos_portfolio`: `track`, `codigo_ativo`, `texto_match`
+- [ ] Migration `investimentos_transacoes`: campos `regime`, `tipo_operacao`, `destino_resgate` adicionados (nullable)
+- [ ] Migration `investimentos_portfolio`: `track` (add 'saldo_corretora'), `subtipo_ativo`, `regime`, `codigo_ativo`, `texto_match`
 
 ### Backend
 - [ ] Job `sync_market_data` rodando às 18h via APScheduler
 - [ ] `BRAPI_TOKEN` no `.env` local e no servidor
-- [ ] CDI: BCB série 4389 sendo inserida diariamente no cache
-- [ ] Ações: brapi inserindo preços no cache
+- [ ] CDI / SELIC (BCB séries 4389/11) inseridos diáriamente via `SERIES_BCB_DIARIOS`
+- [ ] IPCA / IGPM / INCC (BCB séries 433/189/192) inseridos mensalmente via `SERIES_BCB_MENSAIS`
+- [ ] Ações/FIIs: brapi inserindo preços no cache
 - [ ] `InvestimentoService.vincular_aporte()` cria transações e atualiza `aporte_mes`
 - [ ] `InvestimentoService.get_aportes_pendentes()` com sugestão de match
-- [ ] `InvestimentoService.get_posicao()`: despacha para `calc_posicao_variavel` ou `calc_valor_fixo` por track
-- [ ] `InvestimentoService.get_resumo_ir()`: soma IR estimado de todos os variáveis
+- [ ] `InvestimentoService.get_posicao()`: despacha por track (`calc_posicao_variavel` / `calc_valor_fixo`)
+- [ ] `calc_posicao_variavel()`: IR por subtipo (`calcular_ir_variavel`), isenção R$20k para ações
+- [ ] `calc_valor_fixo()`: suporte a PREFIXADO, CDI, SELIC, IPCA, IGPM, INCC, IPCA+X
+- [ ] `InvestimentoService.registrar_venda()`: deducts posição, cria produto `saldo_corretora` se destino='saldo_corretora'
+- [ ] `InvestimentoService.get_resumo_ir()`: soma IR estimado de todos variáveis
 - [ ] Fase 7 em `upload/service.py` integrada ao confirm
-- [ ] Novos endpoints registrados em `investimentos/router.py`
+- [ ] Endpoints registrados: vincular-aporte, pendentes-vinculo, posicao, resumo-ir, registrar-venda
 
 ### Frontend
 - [ ] Badge `AportesPendentesBar` aparece e some corretamente
 - [ ] Match automático: sugere com 1 clique quando `texto_match` detecta 1 produto
 - [ ] Modal manual: validação de soma = valor total da transação
-- [ ] Sub-form variável: ticker, qtd, preço
-- [ ] Sub-form fixo: indexador, taxa%, vencimento opcional
-- [ ] `PosicaoVariavelCard`: custo médio, preço atual, ganho, IR estimado, data do cache
-- [ ] `PosicaoFixoCard`: capital, valor CDI acumulado, rentabilidade %, projeção
+- [ ] Sub-form variável: ticker, subtipo (ação/FII/ETF/BDR), qtd, preço
+- [ ] Sub-form fixo: toggle Pré-fixado / Pós-fixado; dropdown de indexador (CDI/SELIC/IPCA/IGPM/INCC/IPCA+X); taxa%; vencimento opcional
+- [ ] Venda/resgate: pergunta destino (conta bancária / saldo corretora)
+- [ ] `PosicaoVariavelCard`: custo médio, preço atual, ganho, IR por subtipo, badge "Isento" quando aplicável
+- [ ] `PosicaoFixoCard`: regime, indexador, capital, valor atual, alíquota IR estimada pelo prazo
+- [ ] `SaldoCorretoraCard`: exibido quando track='saldo_corretora' (valor + corretora)
 - [ ] `ResumoIRPatrimonio`: bruto − IR = líquido estimado com tooltip explicativo
