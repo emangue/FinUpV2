@@ -42,7 +42,7 @@ class CascadeClassifier:
     def __init__(self, db: Session, user_id: int):
         self.db = db
         self.user_id = user_id
-        self.generic_classifier = GenericRulesClassifier(db=db)  # Passa sessão do DB
+        self.generic_classifier = GenericRulesClassifier(db=db)
         self.stats = {
             'total': 0,
             'base_parcelas': 0,
@@ -51,7 +51,49 @@ class CascadeClassifier:
             'regras_genericas': 0,
             'nao_classificado': 0,
         }
-        logger.debug(f"CascadeClassifier inicializado para user_id={user_id}")
+
+        # PRÉ-CARREGAMENTO: 4 queries totais independente do tamanho do lote
+        # Elimina N queries por transação dentro de classify()
+        t0 = datetime.now()
+        from app.domains.transactions.models import JournalEntry, BaseParcelas
+        from app.domains.patterns.models import BasePadroes
+        from app.domains.classification.models import GenericClassificationRules
+
+        # 1) Journal Entries com classificação (nivel 3)
+        self._historico_cache = db.query(JournalEntry).filter(
+            JournalEntry.user_id == user_id,
+            JournalEntry.GRUPO.isnot(None),
+            JournalEntry.SUBGRUPO.isnot(None),
+            JournalEntry.TipoGasto.isnot(None)
+        ).all()
+
+        # 2) Base Parcelas → dict {id_parcela: row} para lookup O(1) (nivel 1)
+        parcelas_rows = db.query(BaseParcelas).filter(
+            BaseParcelas.user_id == user_id
+        ).all()
+        self._parcelas_cache = {p.id_parcela: p for p in parcelas_rows}
+
+        # 3) Base Padrões alta confiança → dict {padrao_estab: row} (nivel 2)
+        padroes_rows = db.query(BasePadroes).filter(
+            BasePadroes.user_id == user_id,
+            BasePadroes.confianca == 'alta'
+        ).all()
+        self._padroes_cache = {p.padrao_estabelecimento: p for p in padroes_rows}
+
+        # 4) Regras genéricas do banco → lista ordenada por prioridade (nivel 4)
+        generic_rules = db.query(GenericClassificationRules).filter(
+            GenericClassificationRules.ativo == True
+        ).order_by(GenericClassificationRules.prioridade.desc()).all()
+
+        # Passar cache pré-carregado para GenericRulesClassifier (0 queries por transação)
+        self.generic_classifier = GenericRulesClassifier(db=db, preloaded_rules=generic_rules)
+
+        elapsed = (datetime.now() - t0).total_seconds()
+        logger.info(
+            f"CascadeClassifier init: {len(self._historico_cache)} históricos, "
+            f"{len(self._parcelas_cache)} parcelas, {len(self._padroes_cache)} padrões, "
+            f"{len(generic_rules)} regras genéricas pré-carregados em {elapsed:.2f}s"
+        )
     
     def classify(self, marked: MarkedTransaction) -> ClassifiedTransaction:
         """
@@ -169,19 +211,12 @@ class CascadeClassifier:
     def _classify_nivel1_parcelas(self, marked: MarkedTransaction) -> Optional[ClassifiedTransaction]:
         """
         Nível 1: Base Parcelas
-        Copia classificação de parcelas anteriores usando IdParcela
+        Lookup O(1) no cache pré-carregado no __init__ — sem query ao banco.
         """
         try:
-            # Import aqui para evitar circular import
-            from app.domains.transactions.models import BaseParcelas
-            
-            parcela = self.db.query(BaseParcelas).filter(
-                and_(
-                    BaseParcelas.id_parcela == marked.id_parcela,
-                    BaseParcelas.user_id == self.user_id
-                )
-            ).first()
-            
+            # Cache dict {id_parcela: row} pré-carregado no __init__
+            parcela = self._parcelas_cache.get(marked.id_parcela)
+
             if parcela:
                 logger.debug(f"✅ Nível 1 (Parcelas): {marked.estabelecimento_base[:30]}... (status: {parcela.status})")
                 
@@ -208,41 +243,22 @@ class CascadeClassifier:
     def _classify_nivel2_padroes(self, marked: MarkedTransaction, padrao_montado: str) -> Optional[ClassifiedTransaction]:
         """
         Nível 2: Base Padrões
-        Usa padrões aprendidos com alta confiança
-        LÓGICA DO N8N: Recebe padrão já montado = "ESTABELECIMENTO [FAIXA]"
+        Lookup O(1) no cache pré-carregado no __init__ — era 2 queries por transação.
         """
         try:
-            # Import aqui para evitar circular import
-            from app.domains.patterns.models import BasePadroes
             from app.shared.utils import normalizar_estabelecimento
-            
-            # Padrão já foi montado no classify() - usar diretamente
-            logger.debug(f"🔍 Buscando padrão: '{padrao_montado}'")
-            
-            # Buscar padrão EXATO (segmentado) ou fallback para padrão simples
-            # Tenta primeiro com faixa no nome
-            padrao = self.db.query(BasePadroes).filter(
-                and_(
-                    BasePadroes.padrao_estabelecimento == padrao_montado,
-                    BasePadroes.confianca == 'alta',
-                    BasePadroes.user_id == self.user_id
-                )
-            ).first()
-            
-            # Se não achar segmentado, tenta padrão simples (sem faixa)
+
+            # Lookup O(1) no dict (segmentado com faixa primeiro)
+            padrao = self._padroes_cache.get(padrao_montado)
+
+            # Fallback: padrão simples sem faixa
             if not padrao:
                 estab_normalizado = normalizar_estabelecimento(marked.estabelecimento_base)
-                padrao = self.db.query(BasePadroes).filter(
-                    and_(
-                        BasePadroes.padrao_estabelecimento == estab_normalizado,
-                        BasePadroes.confianca == 'alta',
-                        BasePadroes.user_id == self.user_id
-                    )
-                ).first()
+                padrao = self._padroes_cache.get(estab_normalizado)
                 if padrao:
-                    logger.debug(f"✅ Match padrão simples: '{estab_normalizado}'")
+                    logger.debug(f"✅ Match padrão simples (cache): '{estab_normalizado}'")
             else:
-                logger.debug(f"✅ Match padrão segmentado: '{padrao_montado}'")
+                logger.debug(f"✅ Match padrão segmentado (cache): '{padrao_montado}'")
             
             if padrao:
                 grupo = padrao.grupo_sugerido
@@ -270,23 +286,13 @@ class CascadeClassifier:
     def _classify_nivel3_journal(self, marked: MarkedTransaction) -> Optional[ClassifiedTransaction]:
         """
         Nível 3: Journal Entries
-        Usa histórico com matching por tokens válidos (igual ao n8n)
+        Usa cache pré-carregado no __init__ — era N queries de 8k rows (1 por transação).
         """
         try:
-            # Import aqui para evitar circular import
-            from app.domains.transactions.models import JournalEntry
             from app.shared.utils import tokensValidos, intersecaoCount, toNumberFlexible
-            
-            # Buscar todo o histórico com classificação completa
-            historico = self.db.query(JournalEntry).filter(
-                and_(
-                    JournalEntry.user_id == self.user_id,
-                    JournalEntry.GRUPO.isnot(None),
-                    JournalEntry.SUBGRUPO.isnot(None),
-                    JournalEntry.TipoGasto.isnot(None)
-                )
-            ).all()
-            
+
+            # Cache pré-carregado no __init__: 0 queries aqui (era 1 query de 8k rows por transação)
+            historico = self._historico_cache
             if not historico:
                 return None
             

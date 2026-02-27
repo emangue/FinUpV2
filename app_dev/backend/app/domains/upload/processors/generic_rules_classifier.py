@@ -30,12 +30,15 @@ class GenericRulesClassifier:
     v1.0: Usava regras hardcoded (DEPRECATED)
     """
     
-    def __init__(self, db: Session = None):
+    def __init__(self, db: Session = None, preloaded_rules=None):
         """
         Args:
             db: Sessão do banco (None = usa apenas regras hardcoded)
+            preloaded_rules: Lista de GenericClassificationRules já carregadas
+                (quando fornecida, elimina queries ao banco no classify)
         """
         self.db = db
+        self._preloaded_rules = preloaded_rules  # Cache externo (do CascadeClassifier)
         self._hardcoded_rules = self._get_hardcoded_rules()  # Fallback
     
     def classify(self, estabelecimento: str, banco: str = None) -> Optional[Dict]:
@@ -145,19 +148,35 @@ class GenericRulesClassifier:
         return None
     
     def _classify_database_rules(self, estabelecimento: str) -> Optional[Dict]:
-        """Classifica usando regras da base de dados"""
+        """
+        Classifica usando regras da base de dados.
+        Se houver cache pré-carregado (_preloaded_rules), usa diretamente — 0 queries.
+        Caso contrário, faz query ao banco (fallback para uso avulso).
+        """
         try:
+            # Caminho rápido: usar regras pré-carregadas (0 queries ao banco)
+            if self._preloaded_rules is not None:
+                for rule in self._preloaded_rules:
+                    if rule.matches(estabelecimento):
+                        logger.debug(f"✅ Classificação (cache): {estabelecimento[:30]} -> {rule.grupo} > {rule.subgrupo}")
+                        return {
+                            'grupo': rule.grupo,
+                            'subgrupo': rule.subgrupo,
+                            'tipo_gasto': rule.tipo_gasto,
+                            'prioridade': rule.prioridade,
+                            'regra_aplicada': rule.nome_regra
+                        }
+                return None
+
+            # Fallback: query ao banco (uso avulso sem cache)
             from app.domains.classification.service import GenericClassificationService
-            
             service = GenericClassificationService(self.db)
             result = service.classify_text(estabelecimento)
-            
             if result:
-                logger.debug(f"✅ Classificação DB: {estabelecimento[:30]}... -> {result['grupo']} > {result['subgrupo']} (regra: {result['regra_aplicada']})")
+                logger.debug(f"✅ Classificação DB: {estabelecimento[:30]} -> {result['grupo']} > {result['subgrupo']}")
                 return result
-            
             return None
-            
+
         except Exception as e:
             logger.warning(f"Erro ao usar regras da base: {e}")
             return None
