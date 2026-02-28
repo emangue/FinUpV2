@@ -4,68 +4,70 @@
 
 ---
 
-## Sprint 3 — Detecção inteligente + Alerta de duplicata (~10h)
+## Sprint 3 — Detecção inteligente + Alerta de duplicata (~10h) ✅
 
 ### Backend (6h)
 
-| Task | Descrição | Est. |
-|------|-----------|------|
-| A.01 | Migration: criar tabela `upload_history` + FK `journal_entries.upload_history_id` | 1h |
-| A.02 | Criar `app/domains/upload/fingerprints.py` com `DetectionEngine` + `FINGERPRINTS` dict | 2h |
-| A.03 | Endpoint `POST /upload/detect` — detecção + S30 (verificar duplicata) | 1h |
-| A.04 | Integrar `_registrar_historico()` no fluxo existente de import (setar `upload_history_id` em cada JournalEntry criado) | 1.5h |
-| A.05 | Testes: arquivo Nubank, Itaú, BTG + arquivo desconhecido (fallback) | 0.5h |
+| Task | Descrição | Est. | Status |
+|------|-----------|------|--------|
+| A.01 | Migration: criar tabela `upload_history` + FK `journal_entries.upload_history_id` | 1h | ✅ |
+| A.02 | Criar `app/domains/upload/fingerprints.py` com `DetectionEngine` + `FINGERPRINTS` dict | 2h | ✅ + `content_extractor.py` (XLS/XLSX/PDF) |
+| A.03 | Endpoint `POST /upload/detect` — detecção + S30 (verificar duplicata) | 1h | ✅ |
+| A.04 | Integrar `_registrar_historico()` no fluxo existente de import (setar `upload_history_id` em cada JournalEntry criado) | 1.5h | ✅ |
+| A.05 | Testes: arquivo Nubank, Itaú, BTG + arquivo desconhecido (fallback) | 0.5h | ✅ |
+
+**Detecção por conteúdo (prioridade):** estrutura → cabeçalho → regex → filename fallback. Itaú extrato/fatura, MP, BTG cobertos.
 
 ### Frontend (4h)
 
-| Task | Descrição | Est. |
-|------|-----------|------|
-| F.01 | Componente `FileDetectionCard` com campos banco/tipo/período e alerta de duplicata | 2h |
-| F.02 | Integrar `FileDetectionCard` no fluxo de upload existente (substituir campos manuais) | 1h |
-| F.03 | Modal de aviso de duplicata com opções "Cancelar" e "Carregar de qualquer forma" | 1h |
+| Task | Descrição | Est. | Status |
+|------|-----------|------|--------|
+| F.01 | Componente `FileDetectionCard` com campos banco/tipo/período e alerta de duplicata | 2h | ✅ |
+| F.02 | Integrar `FileDetectionCard` no fluxo de upload existente (substituir campos manuais) | 1h | ✅ |
+| F.03 | Modal de aviso de duplicata com opções "Cancelar" e "Carregar de qualquer forma" | 1h | ✅ |
 
 ---
 
-## Sprint 3.5 — Rollback de upload (~8h)
+## Sprint 3.5 — Rollback de upload (~8h) 🔄
 
 ### Backend (4h)
 
-| Task | Descrição | Est. |
-|------|-----------|------|
-| A.06 | Migrations: FK `base_marcacoes.upload_history_id` + `base_parcelas.upload_history_id` | 0.5h |
-| A.07 | Endpoint `GET /upload/{id}/rollback/preview` — contagens + flag vínculos | 1h |
-| A.08 | Endpoint `DELETE /upload/{id}/rollback` — transação atômica na ordem correta | 1.5h |
-| A.09 | Endpoint `GET /upload/history` — lista com paginação | 0.5h |
-| A.10 | Teste rollback: com e sem vínculos de investimento | 0.5h |
+| Task | Descrição | Est. | Status |
+|------|-----------|------|--------|
+| A.06 | Migrations: FK `base_marcacoes.upload_history_id` + `base_parcelas.upload_history_id` | 0.5h | ⏳ |
+| A.07 | Endpoint `GET /upload/history/{id}/rollback-preview` — contagens + flag vínculos | 1h | ✅ |
+| A.08 | Endpoint `DELETE /upload/history/{id}` — transação atômica na ordem correta | 1.5h | ✅ |
+| A.09 | Endpoint `GET /upload/history` — lista com paginação | 0.5h | ✅ |
+| A.10 | Teste rollback: com e sem vínculos de investimento | 0.5h | ⏳ |
 
 ### Frontend (4h)
 
-| Task | Descrição | Est. |
-|------|-----------|------|
-| F.04 | Componente `UploadHistoryList` (useSWR + lista de uploads com badge duplicata) | 1.5h |
-| F.05 | Componente `RollbackPreviewModal` (preview + checkbox confirmação + botão destructive) | 2h |
-| F.06 | Adicionar "Meus Uploads" no menu de perfil → rota `/mobile/uploads` | 0.5h |
+| Task | Descrição | Est. | Status |
+|------|-----------|------|--------|
+| F.04 | Componente `UploadHistoryList` (useSWR + lista de uploads com badge duplicata) | 1.5h | ✅ `UploadsPanel` |
+| F.05 | Componente `RollbackPreviewModal` (preview + checkbox confirmação + botão destructive) | 2h | ✅ (AlertDialog com preview via API) |
+| F.06 | Adicionar "Meus Uploads" no menu de perfil → rota `/mobile/uploads` | 0.5h | ✅ |
 
 ---
 
-## Sprint 4 — Multi-arquivo + Classificação em lote (~9h)
+## Sprint 4 — Multi-arquivo + Classificação em lote (~9h) 🔄
 
 ### Frontend (6h)
 
-| Task | Descrição | Est. |
-|------|-----------|------|
-| F.07 | Instalar `react-dropzone`, criar componente `DropZoneMulti` | 1.5h |
-| F.08 | Detecção em paralelo (Promise.all) com atualização de estado por arquivo | 1.5h |
-| F.09 | Progresso de importação por arquivo (estado: detectando → ok / erro) | 1h |
-| F.10 | Componente `BatchClassifyModal` — agrupar por `estabelecimento_base`, dropdown de grupo, "Salvar tudo" | 2h |
+| Task | Descrição | Est. | Status |
+|------|-----------|------|--------|
+| F.07 | Instalar `react-dropzone`, criar componente `DropZoneMulti` | 1.5h | ✅ (HTML5 drag-drop nativo) |
+| F.08 | Detecção em paralelo (Promise.all) com atualização de estado por arquivo | 1.5h | ✅ |
+| F.09 | Progresso de importação por arquivo (estado: detectando → ok / erro) | 1h | ✅ |
+| F.10 | Componente `BatchClassifyModal` — agrupar por `estabelecimento_base`, dropdown de grupo, "Salvar tudo" | 2h | ✅ |
 
 ### Backend (3h)
 
-| Task | Descrição | Est. |
-|------|-----------|------|
-| A.11 | Endpoint `POST /upload/batch` — aceita lista de arquivos, processa em loop | 1.5h |
-| A.12 | `GET /upload/estabelecimentos/sugestoes` — retorna grupos históricos por estabelecimento | 1h |
-| A.13 | Testes de importação paralela (3 arquivos simultâneos) | 0.5h |
+| Task | Descrição | Est. | Status |
+|------|-----------|------|--------|
+| A.11 | Endpoint `POST /upload/batch` — aceita lista de arquivos, processa em loop | 1.5h | ✅ |
+| A.12 | `GET /upload/estabelecimentos/sugestoes` — retorna grupos históricos por estabelecimento | 1h | ✅ |
+| A.13 | Testes de importação paralela (3 arquivos simultâneos) | 0.5h | ⏳ |
 
 ---
 

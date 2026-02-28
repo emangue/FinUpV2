@@ -36,3 +36,13 @@ class UploadHistoryListResponse(BaseModel):
     success: bool
     total: int
     uploads: list[UploadHistoryResponse]
+
+
+class RollbackPreviewResponse(BaseModel):
+    """Preview antes de desfazer upload"""
+    history_id: int
+    nome_arquivo: str
+    banco: str
+    transacoes_count: int
+    parcelas_count: int
+    tem_vinculos_investimento: bool = False

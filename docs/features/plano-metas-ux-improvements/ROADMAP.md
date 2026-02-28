@@ -8,7 +8,7 @@
 
 | # | Pasta | Foco | Sprint(s) | Estimativa | Dep. de |
 |---|-------|------|-----------|-----------|---------|
-| 01 | `01-admin-gestao-usuarios/` | Ciclo de vida de contas no app_admin | 0 | ~6h | — |
+| 01 | `01-admin-gestao-usuarios/` | Ciclo de vida de contas + grupos por usuário | 0 | ~14h | — |
 | 02 | `02-ux-fundacao/` | Bugs críticos + Nav redesign + Empty states | 1 | ~10h | — |
 | 03 | `03-onboarding-grupos/` | Primeiro login, grupos padrão, checklist, notificações | 2 | ~8h | 01 (trigger) |
 | 04 | `04-upload-completo/` | Smart detection, rollback, multi-file, import, demo | 3, 3.5, 4, 5 | ~32h | 03 (grupos) |
@@ -68,12 +68,19 @@ FASE 4 — Patrimônio (depende de FASE 3 completa)
 
 | Sub-projeto | PRD | TECH_SPEC | PLANO | Implementado | Observações |
 |-------------|-----|-----------|-------|--------------|-------------|
-| 01-admin | ✅ | ✅ | ✅ | ❌ | Pronto para Sprint 0 |
-| 02-ux-fundacao | ✅ | ✅ | ✅ | ❌ | Pronto para Sprint 1 |
-| 03-onboarding | ✅ | ✅ | ✅ | ❌ | Aguarda 01 |
-| 04-upload | ✅ | ✅ | ✅ | ❌ | Aguarda 03 |
+| 01-admin | ✅ | ✅ | ✅ | ✅ | A.00–A.17 + T.01–T.06 concluídos; A.18 opcional |
+| 02-ux-fundacao | ✅ | ✅ | ✅ | ✅ | Bugs + Nav + Empty states + FAB Upload + detecção por conteúdo |
+| 03-onboarding | ✅ | ✅ | ✅ | ✅ | Welcome, choose-path, demo mode, checklist, nudges |
+| 04-upload | ✅ | ✅ | ✅ | 🔄 | Sprint 3 ✅ + 3.5 ✅ + 4 ✅ (DropZoneMulti, batch, BatchClassifyModal). Próximo: Sprint 5 planilha genérica |
 | 05-plano | ✅ | ✅ | ✅ | ❌ | Aguarda 03 |
 | 06-patrimonio | ✅ | ✅ | ✅ | ❌ | Aguarda 04+05 |
+
+---
+
+## 🚀 Próximos passos (ordem sugerida)
+
+1. **04-upload Sprint 5** — Planilha genérica: import CSV/XLS com mapeamento de colunas
+2. **05-plano** — Pode iniciar (03 concluído): renda, meta anual, desvio, aposentadoria
 
 ---
 

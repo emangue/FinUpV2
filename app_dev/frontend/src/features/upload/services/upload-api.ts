@@ -9,6 +9,37 @@ import { Bank, CreditCard, PreviewData } from '../types';
 
 const BASE_URL = `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}`;
 
+/** Resultado da detecção Sprint 3 */
+export interface DetectionResult {
+  banco: string;
+  tipo: string;
+  periodo_inicio: string | null;
+  periodo_fim: string | null;
+  confianca: number;
+  arquivo_hash: string;
+  mes_fatura: string | null;
+  filename?: string;
+  duplicata_detectada?: {
+    upload_id: number;
+    data_importacao: string | null;
+    total_transacoes: number;
+  } | null;
+}
+
+/** Detecta banco/tipo/período + verifica duplicata */
+export async function detectFile(file: File): Promise<DetectionResult> {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await fetchWithAuth(`${BASE_URL}/upload/detect`, {
+    method: 'POST',
+    body: formData,
+  });
+  if (!response.ok) {
+    throw new Error('Erro ao detectar arquivo');
+  }
+  return response.json();
+}
+
 /** Status de compatibilidade por formato (OK=disponível, WIP=em desenvolvimento, TBD=em breve) */
 export type FormatStatus = 'OK' | 'WIP' | 'TBD';
 

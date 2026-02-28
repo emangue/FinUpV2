@@ -14,6 +14,8 @@ export { MonthYearPicker } from './month-year-picker';
 export { FormatSelector } from './format-selector';
 export { FileInput } from './file-input';
 export { TabBar } from './tab-bar';
+export { FileDetectionCard } from './file-detection-card';
+export { DropZoneMulti, type FileDetectionState } from './drop-zone-multi';
 
 // Preview components
 export { AddGroupDialog } from './add-group-dialog';

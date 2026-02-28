@@ -3,21 +3,80 @@ Domínio Upload - Router
 Endpoints HTTP - apenas validação e chamadas de service
 """
 from typing import List, Optional
+from dataclasses import asdict
 from fastapi import APIRouter, Depends, UploadFile, File, Form, Query
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.shared.dependencies import get_current_user_id
 from .service import UploadService
+from .fingerprints import DetectionEngine, DetectionResult
+from .content_extractor import extract_content_sample
+from .history_models import UploadHistory
 from .schemas import (
     UploadPreviewResponse,
     GetPreviewResponse,
     ConfirmUploadResponse,
     DeletePreviewResponse
 )
-from .history_schemas import UploadHistoryListResponse
+from .history_schemas import UploadHistoryListResponse, RollbackPreviewResponse
 
 router = APIRouter(prefix="/upload", tags=["upload"])
+
+
+@router.post("/detect")
+async def detect_arquivo(
+    file: UploadFile = File(...),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """
+    Sprint 3: Detecta banco/tipo/período + verifica duplicata (S30).
+    Retorna sugestão de processamento e alerta se já existe upload similar.
+    """
+    file_bytes = await file.read()
+    content_sample = extract_content_sample(file_bytes, file.filename or "arquivo")
+
+    engine = DetectionEngine()
+    result = engine.detect(file.filename or "arquivo", content_sample, file_bytes)
+
+    # S30: verificar duplicata
+    duplicata = None
+    if result.banco != "generico" and (result.mes_fatura or result.periodo_inicio):
+        mes = result.mes_fatura
+        if not mes and result.periodo_inicio:
+            parts = result.periodo_inicio.split("-")
+            if len(parts) >= 2:
+                mes = f"{parts[0]}{parts[1]}"
+        if mes:
+            existing = (
+                db.query(UploadHistory)
+                .filter(
+                    UploadHistory.user_id == user_id,
+                    UploadHistory.banco == result.banco,
+                    UploadHistory.tipo_documento == result.tipo,
+                    UploadHistory.mes_fatura == mes,
+                    UploadHistory.status == "success",
+                )
+                .first()
+            )
+            if existing:
+                duplicata = {
+                    "upload_id": existing.id,
+                    "data_importacao": (
+                        existing.data_confirmacao.isoformat()
+                        if existing.data_confirmacao
+                        else (existing.data_upload.isoformat() if existing.data_upload else None)
+                    ),
+                    "total_transacoes": existing.transacoes_importadas or existing.total_registros,
+                }
+
+    return {
+        **asdict(result),
+        "filename": file.filename,
+        "duplicata_detectada": duplicata,
+    }
+
 
 @router.post("/preview", response_model=UploadPreviewResponse)
 async def upload_preview(
@@ -98,15 +157,23 @@ async def upload_batch(
     session_id_consolidado = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{user_id}"
     logger.info(f"🎯 Sessão consolidada: {session_id_consolidado}")
     
+    def _formato_from_filename(filename: str) -> str:
+        ext = (filename or "").lower().split(".")[-1]
+        if ext in ("xls", "xlsx", "xlsm"):
+            return "Excel"
+        if ext == "pdf":
+            return "PDF"
+        if ext == "ofx":
+            return "OFX"
+        return "CSV"
+
     for i, file in enumerate(files, 1):
         try:
             logger.info(f"  {i}/{len(files)} - Processando: {file.filename}")
             
-            # Extrair mês da fatura do nome do arquivo se for fatura
-            # Ex: MP202501.xlsx → mesFatura = "2025-01"
-            mes_fatura = "2025-01"  # Default
+            formato = _formato_from_filename(file.filename or "")
+            mes_fatura = "2025-01"
             if tipoDocumento == "fatura" and file.filename:
-                # Tentar extrair do nome do arquivo
                 import re
                 match = re.search(r'(\d{4})(\d{2})', file.filename)
                 if match:
@@ -120,10 +187,10 @@ async def upload_batch(
                 user_id=user_id,
                 cartao=None,
                 tipo_documento=tipoDocumento,
-                formato="Excel",
+                formato=formato,
                 final_cartao=None,
-                skip_cleanup=(i > 1),  # Limpar apenas no primeiro arquivo
-                shared_session_id=session_id_consolidado  # Usar sessão compartilhada
+                skip_cleanup=(i > 1),
+                shared_session_id=session_id_consolidado
             )
             
             resultados.append({
@@ -220,6 +287,55 @@ async def update_preview_classification(
         criar_regra=criar_regra,
         user_id=user_id
     )
+
+@router.get("/estabelecimentos/sugestoes")
+async def get_estabelecimentos_sugestoes(
+    limit: int = 50,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Retorna grupos históricos por estabelecimento (para classificação em lote).
+    Útil no BatchClassifyModal para sugerir grupo ao usuário.
+    """
+    from app.domains.transactions.models import JournalEntry
+    from sqlalchemy import func
+
+    rows = (
+        db.query(JournalEntry.EstabelecimentoBase, JournalEntry.GRUPO)
+        .filter(
+            JournalEntry.user_id == user_id,
+            JournalEntry.EstabelecimentoBase.isnot(None),
+            JournalEntry.EstabelecimentoBase != "",
+            JournalEntry.GRUPO.isnot(None),
+            JournalEntry.GRUPO != "",
+        )
+        .distinct()
+        .limit(limit)
+        .all()
+    )
+
+    return {
+        "sugestoes": [
+            {"estabelecimento": r[0], "grupo": r[1]}
+            for r in rows
+        ]
+    }
+
+
+@router.get("/history/{history_id}/rollback-preview", response_model=RollbackPreviewResponse)
+async def get_rollback_preview(
+    history_id: int,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Preview do que será removido ao desfazer o upload.
+    Usado pelo modal de confirmação antes do delete.
+    """
+    service = UploadService(db)
+    return service.get_rollback_preview(history_id, user_id)
+
 
 @router.get("/history", response_model=UploadHistoryListResponse)
 async def get_upload_history(

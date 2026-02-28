@@ -22,19 +22,22 @@ import {
   MonthYearPicker, 
   FormatSelector, 
   FileInput, 
-  TabBar 
+  TabBar,
+  FileDetectionCard,
 } from '@/features/upload/components';
 import { useBanks, useCreditCards, useUpload } from '@/features/upload/hooks';
-import { fetchCompatibility, createCard, PasswordRequiredError } from '@/features/upload/services/upload-api';
+import { fetchCompatibility, createCard, PasswordRequiredError, detectFile, type DetectionResult } from '@/features/upload/services/upload-api';
 import type { BankCompatibilityMap } from '@/features/upload/services/upload-api';
 import type { FormatAvailability } from '@/features/upload/components/format-selector';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePendingUpload } from '@/contexts/PendingUploadContext';
 import { API_ENDPOINTS } from '@/core/config/api.config';
 import { Settings } from 'lucide-react';
 
 export default function UploadPage() {
   const router = useRouter();
   const { isAuthenticated, loading: authLoading, login } = useAuth();
+  const { consumePendingFile } = usePendingUpload();
   const [authReady, setAuthReady] = useState(false);
 
   useEffect(() => {
@@ -85,6 +88,8 @@ export default function UploadPage() {
   const [fileName, setFileName] = useState('Nenhum...');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [password, setPassword] = useState('');  // Senha do PDF protegido
+  const [detection, setDetection] = useState<DetectionResult | null>(null);
+  const [detecting, setDetecting] = useState(false);
 
   // Estado do dialog: adicionar cartão
   const [showAddCard, setShowAddCard] = useState(false);
@@ -102,11 +107,20 @@ export default function UploadPage() {
     setSelectedCard('');
   }, [selectedBank]);
 
-  const handleFileChange = (file: File | null) => {
+  // Arquivo vindo do FAB da bottom nav (tocou Upload → escolheu arquivo → navegou)
+  useEffect(() => {
+    if (!authReady) return;
+    const pending = consumePendingFile();
+    if (pending) {
+      handleFileChange(pending);
+    }
+  }, [authReady]);
+
+  const handleFileChange = async (file: File | null) => {
+    setDetection(null);
     if (file) {
       setFileName(file.name);
       setSelectedFile(file);
-      // Auto-detectar formato pela extensão do arquivo
       const ext = file.name.split('.').pop()?.toLowerCase();
       if (ext === 'xlsx' || ext === 'xls' || ext === 'xlsm') {
         setSelectedFormat('excel');
@@ -116,6 +130,41 @@ export default function UploadPage() {
         setSelectedFormat('pdf');
       } else if (ext === 'ofx') {
         setSelectedFormat('ofx');
+      }
+      setDetecting(true);
+      try {
+        const res = await detectFile(file);
+        setDetection(res);
+        if (res.banco !== 'generico' && banks.length > 0) {
+          const bancoNorm = res.banco.toLowerCase().replace(/ú/u, 'u');
+          const match = banks.find((b) => {
+            const name = (b.id || b.name || '').toLowerCase().replace(/ú/u, 'u');
+            return name.includes(bancoNorm) || bancoNorm.includes(name);
+          });
+          if (match) setSelectedBank(match.name);
+        }
+        // Fallback: quando backend retorna generico, inferir do filename (ex: fatura-itau.csv)
+        if (res.banco === 'generico' && banks.length > 0) {
+          const fn = file.name.toLowerCase().replace(/ú/u, 'u');
+          const match = banks.find((b) => {
+            const name = (b.id || b.name || '').toLowerCase().replace(/ú/u, 'u');
+            return fn.includes(name);
+          });
+          if (match) setSelectedBank(match.name);
+        }
+        if (res.periodo_inicio && activeTab === 'fatura') {
+          const [y, m] = res.periodo_inicio.split('-');
+          if (y && m) {
+            setSelectedYear(parseInt(y, 10));
+            setSelectedMonth(months[parseInt(m, 10) - 1] || selectedMonth);
+          }
+        }
+      } catch (err) {
+        setDetection(null);
+        console.warn('[Upload] Detecção falhou:', err);
+        toast.error('Não foi possível detectar o arquivo. Selecione banco e período manualmente.');
+      } finally {
+        setDetecting(false);
       }
     }
   };
@@ -438,8 +487,14 @@ export default function UploadPage() {
         </header>
         
         {/* Subtitle */}
-        <div className="bg-white px-6 py-3 border-b border-gray-100">
+        <div className="bg-white px-6 py-3 border-b border-gray-100 flex flex-col items-center gap-1">
           <p className="text-xs text-gray-400 text-center">Faça o upload de faturas de cartão ou extratos bancários</p>
+          <button
+            onClick={() => router.push('/mobile/upload/batch')}
+            className="text-xs text-indigo-600 hover:text-indigo-700 font-medium"
+          >
+            Importar vários arquivos →
+          </button>
         </div>
         
         {/* Main Content */}
@@ -450,6 +505,31 @@ export default function UploadPage() {
             activeTab={activeTab}
             onChange={setActiveTab}
           />
+
+          {/* Arquivo — PRIMEIRO: usuário escolhe arquivo antes de preencher o resto */}
+          <FileInput 
+            fileName={fileName}
+            onChange={handleFileChange}
+          />
+          {detecting && (
+            <div className="mb-4 text-sm text-gray-500 flex items-center gap-2">
+              <span className="animate-pulse">Detectando banco e período...</span>
+            </div>
+          )}
+          {detection && !detecting && (
+            <div className="mb-6">
+              <FileDetectionCard
+                detection={detection}
+                onProceed={() => setDetection(null)}
+                onCancel={() => {
+                  setSelectedFile(null);
+                  setFileName('Nenhum...');
+                  setDetection(null);
+                }}
+                loading={uploading}
+              />
+            </div>
+          )}
           
           {/* Instituição Financeira */}
           {loadingBanks ? (
@@ -519,13 +599,7 @@ export default function UploadPage() {
               </p>
             </div>
           )}
-          
-          {/* Arquivo */}
-          <FileInput 
-            fileName={fileName}
-            onChange={handleFileChange}
-          />
-          
+
           {/* Progress Bar */}
           {uploading && (
             <div className="mb-6">

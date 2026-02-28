@@ -46,6 +46,7 @@ export function UploadsPanel({ limit = 10 }: UploadsPanelProps) {
   const [recreating, setRecreating] = useState<number | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [uploadToDelete, setUploadToDelete] = useState<UploadHistoryItem | null>(null);
+  const [rollbackPreview, setRollbackPreview] = useState<{ transacoes_count: number; parcelas_count: number; tem_vinculos_investimento: boolean } | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
@@ -70,9 +71,25 @@ export function UploadsPanel({ limit = 10 }: UploadsPanelProps) {
     }
   };
 
-  const handleDeleteClick = (upload: UploadHistoryItem) => {
+  const handleDeleteClick = async (upload: UploadHistoryItem) => {
     setUploadToDelete(upload);
+    setRollbackPreview(null);
     setDeleteDialogOpen(true);
+    try {
+      const res = await fetchWithAuth(
+        `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/upload/history/${upload.id}/rollback-preview`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setRollbackPreview({
+          transacoes_count: data.transacoes_count,
+          parcelas_count: data.parcelas_count,
+          tem_vinculos_investimento: data.tem_vinculos_investimento,
+        });
+      }
+    } catch {
+      setRollbackPreview({ transacoes_count: upload.transacoes_importadas, parcelas_count: 0, tem_vinculos_investimento: false });
+    }
   };
 
   const handleConfirmDelete = async () => {
@@ -90,6 +107,7 @@ export function UploadsPanel({ limit = 10 }: UploadsPanelProps) {
       }
       setDeleteDialogOpen(false);
       setUploadToDelete(null);
+      setRollbackPreview(null);
       loadUploads();
     } catch (err) {
       console.error('Erro ao excluir upload:', err);
@@ -265,7 +283,11 @@ export function UploadsPanel({ limit = 10 }: UploadsPanelProps) {
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir upload</AlertDialogTitle>
             <AlertDialogDescription>
-              Deseja excluir todas as {uploadToDelete?.transacoes_importadas ?? 0} transações deste upload?
+              Deseja excluir todas as {rollbackPreview?.transacoes_count ?? uploadToDelete?.transacoes_importadas ?? 0} transações deste upload?
+              {rollbackPreview && rollbackPreview.parcelas_count > 0 && (
+                <> e {rollbackPreview.parcelas_count} parcela(s) vinculada(s)</>
+              )}
+              ?
               <br />
               <br />
               <strong>{uploadToDelete?.nome_arquivo}</strong>
@@ -274,6 +296,12 @@ export function UploadsPanel({ limit = 10 }: UploadsPanelProps) {
                   <br />
                   {uploadToDelete.banco}
                   {uploadToDelete.nome_cartao && ` • ${uploadToDelete.nome_cartao}`}
+                </>
+              )}
+              {rollbackPreview?.tem_vinculos_investimento && (
+                <>
+                  <br />
+                  <span className="text-amber-600 font-medium">⚠️ Este upload tem vínculos com investimentos.</span>
                 </>
               )}
               <br />

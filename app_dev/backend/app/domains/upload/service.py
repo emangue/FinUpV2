@@ -1003,6 +1003,52 @@ class UploadService:
             uploads=[to_response(u) for u in uploads]
         )
     
+    def get_rollback_preview(
+        self,
+        upload_history_id: int,
+        user_id: int
+    ) -> "RollbackPreviewResponse":
+        """
+        Retorna preview do que será removido ao desfazer o upload.
+        Usado pelo modal de confirmação antes do delete.
+        """
+        from app.domains.transactions.models import JournalEntry, BaseParcelas
+        
+        history = self.db.query(UploadHistory).filter(
+            UploadHistory.id == upload_history_id,
+            UploadHistory.user_id == user_id
+        ).first()
+        
+        if not history:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"errorCode": "UPL_013", "error": "Upload não encontrado"}
+            )
+        
+        transacoes_count = self.db.query(JournalEntry).filter(
+            JournalEntry.upload_history_id == upload_history_id,
+            JournalEntry.user_id == user_id
+        ).count()
+        
+        old_rows = self.db.query(JournalEntry.IdParcela).filter(
+            JournalEntry.upload_history_id == upload_history_id,
+            JournalEntry.user_id == user_id,
+            JournalEntry.IdParcela.isnot(None)
+        ).distinct().all()
+        old_id_parcelas = {r[0] for r in old_rows if r[0]}
+        
+        parcelas_count = len(old_id_parcelas) if old_id_parcelas else 0
+        
+        from app.domains.upload.history_schemas import RollbackPreviewResponse
+        return RollbackPreviewResponse(
+            history_id=upload_history_id,
+            nome_arquivo=history.nome_arquivo or "",
+            banco=history.banco or "",
+            transacoes_count=transacoes_count,
+            parcelas_count=parcelas_count,
+            tem_vinculos_investimento=False,
+        )
+    
     def delete_upload_history(
         self,
         upload_history_id: int,
@@ -1209,6 +1255,7 @@ class UploadService:
             # Buscar TipoGasto e CategoriaGeral da base_grupos_config
             from app.domains.grupos.models import BaseGruposConfig
             grupo_config = self.db.query(BaseGruposConfig).filter(
+                BaseGruposConfig.user_id == user_id,
                 BaseGruposConfig.nome_grupo == grupo
             ).first()
             
@@ -1285,12 +1332,13 @@ class UploadService:
         from app.domains.categories.models import BaseMarcacao
         
         existing = self.db.query(BaseMarcacao).filter(
+            BaseMarcacao.user_id == user_id,
             BaseMarcacao.GRUPO == grupo,
             BaseMarcacao.SUBGRUPO == subgrupo
         ).first()
         
         if not existing:
-            nova_marcacao = BaseMarcacao(GRUPO=grupo, SUBGRUPO=subgrupo)
+            nova_marcacao = BaseMarcacao(user_id=user_id, GRUPO=grupo, SUBGRUPO=subgrupo)
             self.db.add(nova_marcacao)
             logger.info(f"  ➕ Nova marcação criada em base_marcacoes: {grupo} > {subgrupo}")
         else:
@@ -1369,7 +1417,7 @@ class UploadService:
             else:
                 # INSERIR nova compra parcelada
                 # Buscar categoria_geral via grupo
-                categoria_geral = self._get_categoria_geral_from_grupo(transacao.GRUPO)
+                categoria_geral = self._get_categoria_geral_from_grupo(transacao.GRUPO, user_id)
                 
                 # Determinar status inicial baseado no progresso
                 if transacao.parcela_atual >= transacao.TotalParcelas:
@@ -1483,9 +1531,9 @@ class UploadService:
         
         return {'criados': criados}
     
-    def _get_categoria_geral_from_grupo(self, grupo: str) -> str:
+    def _get_categoria_geral_from_grupo(self, grupo: str, user_id: int) -> str:
         """
-        Busca CategoriaGeral correspondente ao Grupo via base_grupos_config
+        Busca CategoriaGeral correspondente ao Grupo via base_grupos_config do usuário
         """
         from sqlalchemy import text
         
@@ -1493,8 +1541,8 @@ class UploadService:
             return 'Despesa'  # Fallback padrão
         
         result = self.db.execute(
-            text("SELECT categoria_geral FROM base_grupos_config WHERE nome_grupo = :grupo"),
-            {"grupo": grupo}
+            text("SELECT categoria_geral FROM base_grupos_config WHERE user_id = :user_id AND nome_grupo = :grupo"),
+            {"user_id": user_id, "grupo": grupo}
         ).fetchone()
         
         return result[0] if result else 'Despesa'

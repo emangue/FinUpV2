@@ -58,6 +58,7 @@ import TabBar from '../molecules/TabBar';
 import TransactionList from '../organisms/TransactionList';
 import BottomActionBar from '../organisms/BottomActionBar';
 import ClassificationModal from '../molecules/ClassificationModal';
+import BatchClassifyModal from '../molecules/BatchClassifyModal';
 import { API_CONFIG } from '@/core/config/api.config';
 import { fetchWithAuth } from '@/core/utils/api-client';
 import {
@@ -89,6 +90,7 @@ export default function PreviewLayout({ sessionId, initialFileInfo, initialTrans
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
   const [criarRegraExclusao, setCriarRegraExclusao] = useState(false);
+  const [batchClassifyOpen, setBatchClassifyOpen] = useState(false);
 
   const fetchGruposSubgrupos = async () => {
     try {
@@ -307,12 +309,20 @@ export default function PreviewLayout({ sessionId, initialFileInfo, initialTrans
       <div className="pb-52">
         {/* Alert */}
         {hasUnclassified && (
-          <div className="mx-4 mt-4">
+          <div className="mx-4 mt-4 space-y-2">
             <Alert
               title={`${stats.naoClassificadas} transações sem classificação`}
               message={`Complete a classificação antes de confirmar a importação. ${stats.classificadas} de ${stats.total} transações já classificadas.`}
               variant="warning"
             />
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={() => setBatchClassifyOpen(true)}
+            >
+              Classificar em lote por estabelecimento
+            </Button>
           </div>
         )}
 
@@ -367,6 +377,34 @@ export default function PreviewLayout({ sessionId, initialFileInfo, initialTrans
           onSave={handleSaveClassification}
         />
       )}
+
+      {/* BatchClassifyModal - Sprint 4 F.10 */}
+      <BatchClassifyModal
+        isOpen={batchClassifyOpen}
+        onClose={() => setBatchClassifyOpen(false)}
+        transactions={transactions}
+        sessionId={sessionId}
+        onSaved={(updates) => {
+          const applyUpdate = (tx: Transaction): Transaction => {
+            const u = updates.get(tx.id);
+            if (u) return { ...tx, grupo: u.grupo, subgrupo: u.subgrupo, source: 'manual' as const };
+            if (tx.items && tx.items.length > 0) {
+              const newItems = tx.items.map((i) => {
+                const ui = updates.get(i.id);
+                return ui ? { ...i, grupo: ui.grupo, subgrupo: ui.subgrupo, source: 'manual' as const } : i;
+              });
+              const anyUpdated = newItems.some((i) => updates.has(i.id));
+              if (anyUpdated) {
+                const first = newItems[0];
+                return { ...tx, items: newItems, grupo: first.grupo, subgrupo: first.subgrupo, source: 'manual' as const };
+              }
+            }
+            return tx;
+          };
+          setTransactions((prev) => regroupTransactions(prev.map(applyUpdate) as Transaction[]));
+          fetchGruposSubgrupos();
+        }}
+      />
 
       {/* Modal Excluir Transação - Sprint D (mobile) */}
       <Dialog open={deleteModalOpen} onOpenChange={(open) => {
