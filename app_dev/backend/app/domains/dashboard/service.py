@@ -143,4 +143,3 @@ class DashboardService:
             total_planejado=data["total_planejado"],
             items=items
         )
-
