@@ -71,7 +71,7 @@ FASE 4 — Patrimônio (depende de FASE 3 completa)
 | 01-admin | ✅ | ✅ | ✅ | ✅ | A.00–A.17 + T.01–T.06 concluídos; A.18 opcional |
 | 02-ux-fundacao | ✅ | ✅ | ✅ | ✅ | Bugs + Nav + Empty states + FAB Upload + detecção por conteúdo |
 | 03-onboarding | ✅ | ✅ | ✅ | ✅ | Welcome, choose-path, demo mode, checklist, nudges |
-| 04-upload | ✅ | ✅ | ✅ | 🔄 | Sprint 3 ✅ + 3.5 ✅ + 4 ✅ (DropZoneMulti, batch, BatchClassifyModal). Próximo: Sprint 5 planilha genérica |
+| 04-upload | ✅ | ✅ | ✅ | 🔄 | Sprint 3–5 ✅ (planilha genérica, import-planilha, FAB, batch, BatchClassifyModal) |
 | 05-plano | ✅ | ✅ | ✅ | ❌ | Aguarda 03 |
 | 06-patrimonio | ✅ | ✅ | ✅ | ❌ | Aguarda 04+05 |
 
@@ -79,8 +79,7 @@ FASE 4 — Patrimônio (depende de FASE 3 completa)
 
 ## 🚀 Próximos passos (ordem sugerida)
 
-1. **04-upload Sprint 5** — Planilha genérica: import CSV/XLS com mapeamento de colunas
-2. **05-plano** — Pode iniciar (03 concluído): renda, meta anual, desvio, aposentadoria
+1. **05-plano** — Pode iniciar (03 concluído): renda, meta anual, desvio, aposentadoria
 
 ---
 

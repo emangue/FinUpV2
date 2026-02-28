@@ -289,6 +289,101 @@ class UploadService:
                     "details": str(e)
                 }
             )
+
+    def import_planilha(
+        self,
+        file: UploadFile,
+        user_id: int,
+        mapeamento: Optional[dict] = None,
+    ) -> dict:
+        """
+        Sprint 5: Importa planilha genérica CSV/XLSX.
+        Valida colunas obrigatórias (Data, Descrição, Valor), processa e salva em preview.
+        Reutiliza fluxo de confirmação existente (POST /upload/confirm/{sessionId}).
+        """
+        from .processors.raw.planilha_generica import process_planilha_generica
+
+        if not file or not file.filename:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"errorCode": "UPL_001", "error": "Arquivo não fornecido"}
+            )
+
+        ext = (file.filename or "").lower().split(".")[-1]
+        if ext not in ("csv", "xls", "xlsx", "xlsm"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"errorCode": "UPL_PL_001", "error": "Formato não suportado. Use CSV ou Excel (XLS/XLSX)."}
+            )
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{file.filename}") as tmp:
+            content = file.file.read()
+            tmp.write(content)
+            tmp_path = tmp.name
+
+        try:
+            raw_transactions = process_planilha_generica(
+                Path(tmp_path),
+                file.filename,
+                mapeamento=mapeamento,
+            )
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"errorCode": "UPL_PL_002", "error": str(e)}
+            )
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+
+        if not raw_transactions:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"errorCode": "UPL_PL_003", "error": "Nenhuma transação válida encontrada na planilha."}
+            )
+
+        # Limpar preview anterior
+        self.repository.delete_all_by_user(user_id)
+
+        session_id = f"planilha_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{user_id}"
+
+        history_record = UploadHistory(
+            user_id=user_id,
+            session_id=session_id,
+            banco="Planilha genérica",
+            tipo_documento="planilha",
+            nome_arquivo=file.filename,
+            status="processing",
+            data_upload=datetime.now(),
+        )
+        history_record = self.repository.create_upload_history(history_record)
+        self.repository.update_upload_history(history_record.id, total_registros=len(raw_transactions))
+
+        self._save_raw_to_preview(raw_transactions, session_id, user_id)
+        self._fase2_marking(session_id, user_id)
+        self._fase3_classification(session_id, user_id)
+
+        previews = self.repository.get_by_session_id(session_id, user_id)
+        preview_rows = []
+        for p in previews[:5]:
+            preview_rows.append({
+                "id": p.id,
+                "data": p.data,
+                "lancamento": p.lancamento,
+                "valor": p.valor,
+                "grupo": p.GRUPO,
+                "subgrupo": p.SUBGRUPO,
+            })
+
+        return {
+            "success": True,
+            "sessionId": session_id,
+            "totalRegistros": len(raw_transactions),
+            "preview": preview_rows,
+            "colunasMapeadas": {"Data": "detectado", "Descrição": "detectado", "Valor": "detectado"},
+        }
     
     def _apply_exclusion_rules(
         self,

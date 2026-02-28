@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { MobileHeader } from '@/components/mobile/mobile-header';
 import { DropZoneMulti, type FileDetectionState } from '@/features/upload/components';
+import { importPlanilhaFile } from '@/features/upload/services/upload-api';
 import { Button } from '@/components/ui/button';
 import { useRequireAuth } from '@/core/hooks/use-require-auth';
 import { fetchWithAuth } from '@/core/utils/api-client';
@@ -95,7 +96,19 @@ export default function UploadBatchPage() {
     <div className="min-h-screen bg-gray-50 pb-24">
       <MobileHeader title="Importar em lote" leftAction="back" />
       <div className="p-5">
-        <DropZoneMulti onFilesDetected={handleFilesDetected} maxFiles={10} />
+        <DropZoneMulti
+          onFilesDetected={handleFilesDetected}
+          onImportPlanilha={async (file) => {
+            try {
+              const result = await importPlanilhaFile(file);
+              toast.success(`${result.totalRegistros} transações importadas`);
+              router.push(`/mobile/preview/${result.sessionId}`);
+            } catch (e) {
+              toast.error(e instanceof Error ? e.message : 'Erro ao importar planilha');
+            }
+          }}
+          maxFiles={10}
+        />
 
         {files.length > 0 && files.some((f) => f.status === 'ok') && (
           <div className="mt-6">

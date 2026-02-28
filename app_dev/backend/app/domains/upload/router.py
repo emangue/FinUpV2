@@ -4,6 +4,7 @@ Endpoints HTTP - apenas validação e chamadas de service
 """
 from typing import List, Optional
 from dataclasses import asdict
+import json
 from fastapi import APIRouter, Depends, UploadFile, File, Form, Query
 from sqlalchemy.orm import Session
 
@@ -225,6 +226,30 @@ async def upload_batch(
         "arquivos": resultados,  # Lista de arquivos processados
         "erros": erros
     }
+
+
+@router.post("/import-planilha")
+async def import_planilha(
+    file: UploadFile = File(...),
+    mapeamento: Optional[str] = Form(None),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Sprint 5: Importa planilha genérica CSV/XLSX.
+    Valida colunas obrigatórias (Data, Descrição, Valor) e retorna preview.
+    Usa detecção automática de colunas ou mapeamento explícito.
+    Confirmação via POST /upload/confirm/{sessionId}.
+    """
+    mapeamento_dict = None
+    if mapeamento:
+        try:
+            mapeamento_dict = json.loads(mapeamento)
+        except json.JSONDecodeError:
+            pass
+    service = UploadService(db)
+    return service.import_planilha(file=file, user_id=user_id, mapeamento=mapeamento_dict)
+
 
 @router.get("/preview/{session_id}", response_model=GetPreviewResponse)
 async def get_preview_data(

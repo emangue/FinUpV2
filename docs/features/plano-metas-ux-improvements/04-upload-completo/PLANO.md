@@ -71,22 +71,22 @@
 
 ---
 
-## Sprint 5 — Planilha genérica (~5h)
+## Sprint 5 — Planilha genérica (~5h) ✅
 
 ### Backend (3h)
 
-| Task | Descrição | Est. |
-|------|-----------|------|
-| A.14 | Endpoint `POST /upload/import-planilha` — validar colunas obrigatórias + retornar preview | 1.5h |
-| A.15 | Endpoint `POST /upload/confirmar` — executar import com grupos mapeados + registrar historico | 1h |
-| A.16 | Teste com CSV sem cabeçalho correto (erro claro) + CSV válido | 0.5h |
+| Task | Descrição | Est. | Status |
+|------|-----------|------|--------|
+| A.14 | Endpoint `POST /upload/import-planilha` — validar colunas obrigatórias + retornar preview | 1.5h | ✅ |
+| A.15 | Reutiliza `POST /upload/confirm/{sessionId}` existente | 1h | ✅ |
+| A.16 | Teste com CSV sem cabeçalho correto (erro claro) + CSV válido | 0.5h | ⏳ |
 
 ### Frontend (2h)
 
-| Task | Descrição | Est. |
-|------|-----------|------|
-| F.11 | UI de preview de planilha: 5 primeiras linhas + indicação de colunas mapeadas/faltando | 1h |
-| F.12 | Integrar planilha no `DropZoneMulti` (quando `tipo: planilha` detectado, redirecionar ao fluxo de preview) | 1h |
+| Task | Descrição | Est. | Status |
+|------|-----------|------|--------|
+| F.11 | UI de preview: reutiliza PreviewLayout existente | 1h | ✅ |
+| F.12 | Integrar planilha no `DropZoneMulti` + página single (botão "Importar planilha") | 1h | ✅ |
 
 ---
 

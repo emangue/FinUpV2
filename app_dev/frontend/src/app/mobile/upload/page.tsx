@@ -26,7 +26,7 @@ import {
   FileDetectionCard,
 } from '@/features/upload/components';
 import { useBanks, useCreditCards, useUpload } from '@/features/upload/hooks';
-import { fetchCompatibility, createCard, PasswordRequiredError, detectFile, type DetectionResult } from '@/features/upload/services/upload-api';
+import { fetchCompatibility, createCard, PasswordRequiredError, detectFile, importPlanilhaFile, type DetectionResult } from '@/features/upload/services/upload-api';
 import type { BankCompatibilityMap } from '@/features/upload/services/upload-api';
 import type { FormatAvailability } from '@/features/upload/components/format-selector';
 import { useAuth } from '@/contexts/AuthContext';
@@ -90,6 +90,7 @@ export default function UploadPage() {
   const [password, setPassword] = useState('');  // Senha do PDF protegido
   const [detection, setDetection] = useState<DetectionResult | null>(null);
   const [detecting, setDetecting] = useState(false);
+  const [importingPlanilha, setImportingPlanilha] = useState(false);
 
   // Estado do dialog: adicionar cartão
   const [showAddCard, setShowAddCard] = useState(false);
@@ -293,6 +294,20 @@ export default function UploadPage() {
       }
       console.error('❌ [MOBILE-UPLOAD] Erro no upload:', error);
       alert('Erro ao fazer upload. Por favor, tente novamente.');
+    }
+  };
+
+  const handleImportPlanilha = async () => {
+    if (!selectedFile) return;
+    try {
+      setImportingPlanilha(true);
+      const result = await importPlanilhaFile(selectedFile);
+      toast.success(`${result.totalRegistros} transações importadas`);
+      router.push(`/mobile/preview/${result.sessionId}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao importar planilha');
+    } finally {
+      setImportingPlanilha(false);
     }
   };
 
@@ -526,7 +541,8 @@ export default function UploadPage() {
                   setFileName('Nenhum...');
                   setDetection(null);
                 }}
-                loading={uploading}
+                loading={uploading || importingPlanilha}
+                onImportPlanilha={detection?.banco === 'generico' && detection?.tipo === 'planilha' ? handleImportPlanilha : undefined}
               />
             </div>
           )}

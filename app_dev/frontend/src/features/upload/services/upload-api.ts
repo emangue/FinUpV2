@@ -242,6 +242,29 @@ export async function uploadFile(formData: {
 }
 
 /**
+ * Sprint 5: Importa planilha genérica CSV/XLSX
+ * Valida colunas (Data, Descrição, Valor) e retorna sessionId para preview
+ */
+export async function importPlanilhaFile(file: File): Promise<{
+  sessionId: string;
+  totalRegistros: number;
+  preview: Array<{ id: number; data: string; lancamento: string; valor: number; grupo?: string; subgrupo?: string }>;
+  colunasMapeadas: Record<string, string>;
+}> {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await fetchWithAuth(`${BASE_URL}/upload/import-planilha`, {
+    method: 'POST',
+    body: formData,
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.detail?.error || err.detail || 'Erro ao importar planilha');
+  }
+  return response.json();
+}
+
+/**
  * Busca dados de preview de uma sessão de upload
  */
 export async function fetchPreviewData(sessionId: string): Promise<PreviewData> {

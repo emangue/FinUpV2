@@ -18,6 +18,7 @@ export type FileDetectionState = {
 
 interface DropZoneMultiProps {
   onFilesDetected?: (states: FileDetectionState[]) => void;
+  onImportPlanilha?: (file: File) => void | Promise<void>;
   maxFiles?: number;
   accept?: string;
   className?: string;
@@ -27,6 +28,7 @@ const ACCEPT_DEFAULT = '.csv,.xls,.xlsx,.pdf,.ofx';
 
 export function DropZoneMulti({
   onFilesDetected,
+  onImportPlanilha,
   maxFiles = 10,
   accept = ACCEPT_DEFAULT,
   className,
@@ -139,6 +141,7 @@ export function DropZoneMulti({
               key={`${state.file.name}-${i}`}
               state={state}
               onRemove={() => removeFile(i)}
+              onImportPlanilha={onImportPlanilha}
             />
           ))}
         </div>
@@ -150,11 +153,15 @@ export function DropZoneMulti({
 function FileDetectionCardMulti({
   state,
   onRemove,
+  onImportPlanilha,
 }: {
   state: FileDetectionState;
   onRemove: () => void;
+  onImportPlanilha?: (file: File) => void | Promise<void>;
 }) {
   const { file, status, result, error } = state;
+  const [importing, setImporting] = useState(false);
+  const isPlanilha = result?.banco === 'generico' && result?.tipo === 'planilha';
 
   if (status === 'detectando') {
     return (
@@ -190,6 +197,16 @@ function FileDetectionCardMulti({
     { extrato: 'Extrato', fatura: 'Fatura', planilha: 'Planilha' }[result.tipo]
   )) || result?.tipo || '—';
 
+  const handleImportPlanilha = async () => {
+    if (!onImportPlanilha || !isPlanilha) return;
+    setImporting(true);
+    try {
+      await onImportPlanilha(file);
+    } finally {
+      setImporting(false);
+    }
+  };
+
   return (
     <div className="flex items-start gap-3 p-4 rounded-xl border border-gray-200 bg-white">
       <div className="rounded-full bg-green-100 p-2 shrink-0">
@@ -203,6 +220,15 @@ function FileDetectionCardMulti({
         </p>
         {result?.duplicata_detectada && (
           <p className="text-xs text-amber-600 mt-1">⚠️ Possível duplicata</p>
+        )}
+        {isPlanilha && onImportPlanilha && (
+          <button
+            onClick={handleImportPlanilha}
+            disabled={importing}
+            className="mt-2 text-sm font-medium text-indigo-600 hover:text-indigo-700 disabled:opacity-50"
+          >
+            {importing ? 'Importando...' : 'Importar planilha →'}
+          </button>
         )}
       </div>
       <button

@@ -13,6 +13,8 @@ interface FileDetectionCardProps {
   onProceed: () => void;
   onCancel: () => void;
   loading?: boolean;
+  /** Sprint 5: quando banco=generico e tipo=planilha, chama este callback em vez de onProceed */
+  onImportPlanilha?: () => void;
 }
 
 const BANCO_LABELS: Record<string, string> = {
@@ -41,10 +43,12 @@ export function FileDetectionCard({
   onProceed,
   onCancel,
   loading = false,
+  onImportPlanilha,
 }: FileDetectionCardProps) {
   const duplicata = detection.duplicata_detectada;
   const bancoLabel = BANCO_LABELS[detection.banco] || detection.banco;
   const tipoLabel = TIPO_LABELS[detection.tipo] || detection.tipo;
+  const isPlanilha = detection.banco === 'generico' && detection.tipo === 'planilha';
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
@@ -95,13 +99,23 @@ export function FileDetectionCard({
             >
               Cancelar
             </Button>
-            <Button
-              size="sm"
-              onClick={onProceed}
-              disabled={loading}
-            >
-              {loading ? 'Processando...' : duplicata ? 'Carregar de qualquer forma' : 'Continuar'}
-            </Button>
+            {isPlanilha && onImportPlanilha ? (
+              <Button
+                size="sm"
+                onClick={onImportPlanilha}
+                disabled={loading}
+              >
+                {loading ? 'Importando...' : 'Importar planilha'}
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                onClick={onProceed}
+                disabled={loading}
+              >
+                {loading ? 'Processando...' : duplicata ? 'Carregar de qualquer forma' : 'Continuar'}
+              </Button>
+            )}
           </div>
         </div>
       </div>
