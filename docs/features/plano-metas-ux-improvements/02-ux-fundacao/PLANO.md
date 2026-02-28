@@ -8,28 +8,28 @@
 
 ### Bugs críticos (~4h)
 
-- [ ] **B1.01** Mapear todos os `router.back()` em `/mobile/` e substituir por destino explícito
-- [ ] **B1.02** Garantir que `onClose` é passado como prop pelos pais de `EditTransactionModal`
-- [ ] **B2.01** Diagnosticar replicação: `grep useTransactionStore` → identificar estado compartilhado
-- [ ] **B2.02** Isolar estado de formulário dentro do modal (useState local por instância)
-- [ ] **B3.01** Aplicar `overflow-y auto` + `dvh` + sticky header na tabela de transações
-- [ ] **B4.01** Criar `src/lib/format.ts` com `formatBRL()`
-- [ ] **B4.02** Substituir `toFixed(2)` e `toLocaleString()` por `formatBRL()` (grep para encontrar todos)
+- [x] **B1.01** Mapear todos os `router.back()` em `/mobile/` e substituir por destino explícito
+- [x] **B1.02** Garantir que `onClose` é passado como prop pelos pais de `EditTransactionModal`
+- [x] **B2.01** Diagnosticar replicação: `grep useTransactionStore` → identificar estado compartilhado
+- [x] **B2.02** Isolar estado de formulário dentro do modal (key por IdTransacao força remount)
+- [x] **B3.01** Aplicar `overflow-y auto` + `dvh` + sticky header na tabela de transações
+- [x] **B4.01** Criar `src/lib/format.ts` com `formatBRL()`
+- [x] **B4.02** Substituir `toFixed(2)` e `toLocaleString()` por `formatBRL()` (grep para encontrar todos)
 
 ### Navegação (~2h)
 
-- [ ] **S19.01** Criar/atualizar `BottomNav` com 5 itens + FAB Upload destacado
-- [ ] **S19.02** Atualizar sidebar desktop com mesmos 5 destinos
-- [ ] **S19.03** Garantir indicador de tela ativa (ícone preenchido + cor primária)
+- [x] **S19.01** Criar/atualizar `BottomNav` com 5 itens + FAB Upload destacado
+- [x] **S19.02** Atualizar sidebar desktop com mesmos 5 destinos
+- [x] **S19.03** Garantir indicador de tela ativa (ícone preenchido + cor primária)
 
 ### Empty states (~4h)
 
-- [ ] **S27.01** Criar componente `EmptyState` reutilizável em `src/components/`
-- [ ] **S27.02** `/mobile/inicio` — empty state com CTA de upload
-- [ ] **S27.03** `/mobile/transacoes` — empty state com CTA de upload
-- [ ] **S27.04** `/mobile/plano` — empty state com CTA de criar plano
-- [ ] **S27.05** `/mobile/carteira` — empty state com CTA de adicionar investimento
-- [ ] **S27.06** Garantir que skeletons aparecem durante loading (empty state só quando dados chegam vazios)
+- [x] **S27.01** Criar componente `EmptyState` reutilizável em `src/components/`
+- [x] **S27.02** `/mobile/inicio` — empty state com CTA de upload
+- [x] **S27.03** `/mobile/transacoes` — empty state com CTA de upload
+- [x] **S27.04** `/mobile/plano` — empty state com CTA de criar plano
+- [x] **S27.05** `/mobile/carteira` — empty state com CTA de adicionar investimento
+- [x] **S27.06** Garantir que skeletons aparecem durante loading (empty state só quando dados chegam vazios)
 
 ---
 

@@ -2,7 +2,8 @@
 
 import * as React from "react"
 import { toast } from 'sonner'
-import { fetchWithAuth } from '@/core/utils/api-client'  // ✅ FASE 3 - Autenticação obrigatória
+import { fetchWithAuth } from '@/core/utils/api-client'
+import { formatBRL } from '@/lib/format'
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -55,13 +56,16 @@ interface EditTransactionModalProps {
   onOpenChange: (open: boolean) => void
   transaction: Transaction | null
   onSave: () => void
+  /** B1.02: Callback ao fechar (pai pode garantir destino explícito) */
+  onClose?: () => void
 }
 
 export function EditTransactionModal({
   open,
   onOpenChange,
   transaction,
-  onSave
+  onSave,
+  onClose,
 }: EditTransactionModalProps) {
   const [grupo, setGrupo] = React.useState("")
   const [subgrupo, setSubgrupo] = React.useState("")
@@ -78,6 +82,11 @@ export function EditTransactionModal({
     if (!grupo) return []
     return subgruposPorGrupo[grupo] || []
   }, [grupo, subgruposPorGrupo])
+
+  const handleOpenChange = React.useCallback((nextOpen: boolean) => {
+    if (!nextOpen) onClose?.()
+    onOpenChange(nextOpen)
+  }, [onClose, onOpenChange])
 
   React.useEffect(() => {
     if (transaction) {
@@ -116,7 +125,7 @@ export function EditTransactionModal({
 
       if (response.ok) {
         onSave()
-        onOpenChange(false)
+        handleOpenChange(false)
       } else {
         const errorData = await response.json()
         console.error('Erro na resposta:', errorData)
@@ -141,7 +150,7 @@ export function EditTransactionModal({
 
       if (response.ok) {
         onSave() // Atualiza a lista
-        onOpenChange(false) // Fecha o modal
+        handleOpenChange(false) // Fecha o modal
         setDeleteDialogOpen(false) // Fecha o dialog de confirmação
       } else {
         const errorData = await response.json()
@@ -154,13 +163,6 @@ export function EditTransactionModal({
     } finally {
       setDeleting(false)
     }
-  }
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(value)
   }
 
   const formatDate = (dateString: string) => {
@@ -188,7 +190,7 @@ export function EditTransactionModal({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Editar Transação</DialogTitle>
@@ -207,7 +209,7 @@ export function EditTransactionModal({
               <div>
                 <Label className="text-xs text-muted-foreground">Valor</Label>
                 <p className={`font-medium ${transaction.Valor >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {formatCurrency(transaction.Valor)}
+                  {formatBRL(transaction.Valor)}
                 </p>
               </div>
               <div className="col-span-2">
@@ -298,7 +300,7 @@ export function EditTransactionModal({
               <Trash2 className="h-4 w-4" />
             </Button>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => onOpenChange(false)} disabled={deleting}>
+              <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={deleting}>
                 Cancelar
               </Button>
               <Button onClick={handleSave} disabled={loading || deleting}>

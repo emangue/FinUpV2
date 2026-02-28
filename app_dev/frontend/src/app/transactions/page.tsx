@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { Suspense } from "react"
-import { useSearchParams } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { fetchWithAuth } from "@/core/utils/api-client"
 import DashboardLayout from "@/components/dashboard-layout"
 import { Badge } from "@/components/ui/badge"
@@ -81,6 +81,7 @@ export default function TransactionsPage() {
 }
 
 function TransactionsPageContent() {
+  const router = useRouter()
   const apiUrl = process.env.NEXT_PUBLIC_BACKEND_URL ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1` : 'http://localhost:8000/api/v1'
   const searchParams = useSearchParams()
   const [activeTab, setActiveTab] = React.useState("all")
@@ -688,10 +689,12 @@ function TransactionsPageContent() {
         </Tabs>
 
         <EditTransactionModal
+          key={selectedTransaction?.IdTransacao ?? 'none'}
           open={editModalOpen}
           onOpenChange={setEditModalOpen}
           transaction={adaptTransactionForModal(selectedTransaction)}
           onSave={() => fetchTransactions(activeTab, pagination.page, appliedFilters)}
+          onClose={() => router.push('/transactions')}
         />
       </div>
     </DashboardLayout>
