@@ -33,4 +33,8 @@ def get_db() -> Session:
     try:
         yield db
     finally:
+        try:
+            db.rollback()  # Limpa transação abortada antes de devolver ao pool
+        except Exception:
+            pass
         db.close()

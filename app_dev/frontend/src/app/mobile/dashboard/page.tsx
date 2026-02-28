@@ -22,6 +22,9 @@ import { GastosPorCartaoBox } from '@/features/dashboard/components/gastos-por-c
 import { PatrimonioTab } from '@/features/dashboard/components/patrimonio-tab'
 import { OrcamentoTab } from '@/features/dashboard/components/orcamento-tab'
 import { PlanoAposentadoriaTab } from '@/features/plano-aposentadoria/components/plano-aposentadoria-tab'
+import { OnboardingChecklist } from '@/features/onboarding/OnboardingChecklist'
+import { DemoModeBanner } from '@/features/onboarding/DemoModeBanner'
+import { NudgeBanners } from '@/features/onboarding/NudgeBanners'
 import { useDashboardMetrics, useIncomeSources, useExpenseSources, useChartData, useChartDataYearly } from '@/features/dashboard/hooks/use-dashboard'
 import { fetchLastMonthWithData } from '@/features/dashboard/services/dashboard-api'
 import { useRequireAuth } from '@/core/hooks/use-require-auth'
@@ -147,6 +150,9 @@ export default function DashboardMobilePage() {
 
       {/* Main Content */}
       <div className="flex-1 overflow-y-auto bg-white px-6 pt-6 pb-6">
+        <DemoModeBanner />
+        <NudgeBanners />
+        <OnboardingChecklist />
         {isLoading ? (
           <div className="flex items-center justify-center py-10">
             <div className="text-gray-600">Carregando...</div>

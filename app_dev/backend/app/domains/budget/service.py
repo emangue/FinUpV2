@@ -131,9 +131,12 @@ class BudgetService:
         ).all()
         
         try:
-            grupos_rows = self.db.query(BaseGruposConfig.nome_grupo, BaseGruposConfig.categoria_geral).all()
+            grupos_rows = self.db.query(BaseGruposConfig.nome_grupo, BaseGruposConfig.categoria_geral).filter(
+                BaseGruposConfig.user_id == user_id
+            ).all()
             grupos_config = {nome: cat for nome, cat in grupos_rows}
         except Exception as e:
+            self.db.rollback()
             logger.warning("get_budget_planning: base_grupos_config inacessível, usando fallback: %s", e)
             grupos_config = {}
         
@@ -244,6 +247,7 @@ class BudgetService:
         from app.domains.grupos.models import BaseGruposConfig
         mes_referencia = budget.mes_referencia
         grupo_config = self.db.query(BaseGruposConfig).filter(
+            BaseGruposConfig.user_id == user_id,
             BaseGruposConfig.nome_grupo == budget.grupo
         ).first()
         categoria_geral = grupo_config.categoria_geral if grupo_config else 'Despesa'

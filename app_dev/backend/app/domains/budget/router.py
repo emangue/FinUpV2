@@ -254,6 +254,7 @@ def list_grupos_disponiveis(
     from app.domains.grupos.models import BaseGruposConfig
     
     grupos = db.query(BaseGruposConfig.nome_grupo).filter(
+        BaseGruposConfig.user_id == user_id,
         BaseGruposConfig.categoria_geral.in_(['Despesa', 'Transferência', 'Investimentos'])
     ).order_by(BaseGruposConfig.nome_grupo).all()
     
@@ -272,6 +273,7 @@ def list_grupos_com_categoria(
     from app.domains.grupos.models import BaseGruposConfig
     
     rows = db.query(BaseGruposConfig.nome_grupo, BaseGruposConfig.categoria_geral).filter(
+        BaseGruposConfig.user_id == user_id,
         BaseGruposConfig.categoria_geral.in_(['Despesa', 'Transferência', 'Receita', 'Investimentos'])
     ).order_by(BaseGruposConfig.nome_grupo).all()
     
