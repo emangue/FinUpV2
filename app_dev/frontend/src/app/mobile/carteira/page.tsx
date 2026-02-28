@@ -38,15 +38,18 @@ import {
   ChevronRight,
   Search,
   PiggyBank,
+  Settings,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { EmptyState } from '@/components/empty-state'
 import { cn } from '@/lib/utils'
+import { formatBRL } from '@/lib/format'
 
 /* ───────────────── helpers ───────────────── */
 
 function fmt(value: number | string | undefined | null): string {
   const n = typeof value === 'string' ? parseFloat(value) : (value ?? 0)
-  return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+  return formatBRL(Number.isNaN(n) ? 0 : n)
 }
 
 function fmtCompact(value: number): string {
@@ -361,13 +364,22 @@ function CarteiraContent() {
             </div>
             <span className="font-semibold text-sm text-gray-900">Minha Carteira</span>
           </div>
-          <button
-            onClick={() => setSearchOpen(!searchOpen)}
-            className="p-2 rounded-full hover:bg-gray-100 transition-colors"
-            aria-label="Buscar"
-          >
-            <Search className="w-5 h-5 text-gray-600" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => router.push('/mobile/profile')}
+              className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+              aria-label="Perfil e configurações"
+            >
+              <Settings className="w-5 h-5 text-gray-600" />
+            </button>
+            <button
+              onClick={() => setSearchOpen(!searchOpen)}
+              className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+              aria-label="Buscar"
+            >
+              <Search className="w-5 h-5 text-gray-600" />
+            </button>
+          </div>
         </div>
 
         {/* Search bar */}
@@ -392,11 +404,19 @@ function CarteiraContent() {
           />
         </div>
 
-        {/* Donut + PL */}
+        {/* Donut + PL ou Empty State */}
         {loading ? (
           <div className="flex justify-center py-12">
             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600" />
           </div>
+        ) : investimentos.length === 0 ? (
+          <EmptyState
+            icon="📈"
+            title="Adicione seus investimentos"
+            description="Registre seus ativos e passivos para acompanhar seu patrimônio."
+            ctaLabel="Adicionar"
+            ctaHref="/mobile/investimentos?action=new"
+          />
         ) : (
           <div className="flex flex-col items-center px-5">
             <DonutChart
@@ -424,7 +444,8 @@ function CarteiraContent() {
           </div>
         )}
 
-        {/* ───── Action buttons ───── */}
+        {/* ───── Action buttons (ocultos quando vazio) ───── */}
+        {investimentos.length > 0 && (
         <div className="flex items-center justify-center gap-3 py-5 px-5">
           <button
             onClick={() => router.push('/mobile/investimentos')}
@@ -448,9 +469,10 @@ function CarteiraContent() {
             NOVO
           </button>
         </div>
+        )}
 
         {/* ───── KPI strip ───── */}
-        {!loading && (
+        {!loading && investimentos.length > 0 && (
           <div className="grid grid-cols-3 divide-x divide-gray-100 border-y border-gray-100 mx-5">
             <div className="py-3 text-center">
               <div className="text-[10px] text-gray-400 uppercase tracking-wider">Ativos</div>
@@ -468,7 +490,7 @@ function CarteiraContent() {
         )}
 
         {/* ───── Legenda donut ───── */}
-        {!loading && donutSlices.length > 0 && (
+        {!loading && investimentos.length > 0 && donutSlices.length > 0 && (
           <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 px-5 pt-4 pb-2 max-w-[320px] mx-auto">
             {donutSlices.map((s, i) => (
               <div key={i} className="flex items-center gap-1.5">
@@ -481,7 +503,9 @@ function CarteiraContent() {
           </div>
         )}
 
-        {/* ───── Portfolio list header ───── */}
+        {/* ───── Portfolio list header + Asset list ───── */}
+        {investimentos.length > 0 && (
+        <>
         <div className="flex items-center justify-between px-5 pt-5 pb-2">
           <h2 className="text-sm font-bold text-gray-900">Meu Portfólio</h2>
           <button
@@ -492,7 +516,6 @@ function CarteiraContent() {
           </button>
         </div>
 
-        {/* ───── Asset list ───── */}
         <div className="px-4">
           {loading ? (
             <div className="space-y-4 py-4">
@@ -550,6 +573,8 @@ function CarteiraContent() {
             </div>
           )}
         </div>
+        </>
+        )}
 
       </div>
     </div>

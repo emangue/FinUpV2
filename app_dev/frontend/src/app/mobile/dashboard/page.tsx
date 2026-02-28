@@ -12,7 +12,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { Upload } from 'lucide-react'
+import { Upload, Settings } from 'lucide-react'
 import { MobileHeader } from '@/components/mobile/mobile-header'
 import { MonthScrollPicker } from '@/components/mobile/month-scroll-picker'
 import { YearScrollPicker } from '@/components/mobile/year-scroll-picker'
@@ -88,7 +88,7 @@ export default function DashboardMobilePage() {
   if (!isAuth) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <MobileHeader title="Dashboard" leftAction="logo" />
+        <MobileHeader title="Dashboard" leftAction="logo" showProfileLink />
         <div className="flex items-center justify-center h-[calc(100vh-64px)]">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
@@ -118,13 +118,22 @@ export default function DashboardMobilePage() {
               />
             )}
           </div>
-          <button
-            onClick={() => router.push('/mobile/upload')}
-            className="p-2 rounded-full text-gray-600 hover:bg-gray-100 hover:text-gray-900 shrink-0 mr-1"
-            aria-label="Upload"
-          >
-            <Upload className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1 shrink-0 mr-1">
+            <button
+              onClick={() => router.push('/mobile/profile')}
+              className="p-2 rounded-full text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+              aria-label="Perfil e configurações"
+            >
+              <Settings className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => router.push('/mobile/upload')}
+              className="p-2 rounded-full text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+              aria-label="Upload"
+            >
+              <Upload className="w-5 h-5" />
+            </button>
+          </div>
         </div>
       </div>
 

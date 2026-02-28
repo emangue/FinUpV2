@@ -19,7 +19,7 @@ import { EmptyInvestimentos, EmptyFilterResults } from '../empty-states'
 import { ApiErrorFallback } from '../error-boundary'
 import { InvestmentFilters } from '../investment-filters'
 import { PeriodFilter } from '../period-filter'
-import { BottomNav } from '@/components/mobile/bottom-nav'
+import { BottomNavigation } from '@/components/mobile/bottom-navigation'
 
 export function DashboardInvestimentosMobile() {
   const [addModalOpen, setAddModalOpen] = useState(false)
@@ -154,7 +154,7 @@ export function DashboardInvestimentosMobile() {
         <TimelineIndicators rendimentos={rendimentos} />
         {/* TODO: Cards de investimentos, botões, etc. */}
       </div>
-      <BottomNav />
+      <BottomNavigation />
     </>
   )
 }

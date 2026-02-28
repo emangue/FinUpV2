@@ -1,10 +1,10 @@
 // src/components/mobile/mobile-header.tsx
 // Mobile Experience V1.0 - MobileHeader Component
-// Data: 01/02/2026
+// S19.04: Perfil no ícone engrenagem no header
 
 'use client';
 
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Settings } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { IconButton } from './icon-button';
 import { mobileTypography } from '@/config/mobile-typography';
@@ -21,6 +21,8 @@ interface MobileHeaderProps {
   subtitle?: string;
   leftAction?: 'back' | 'logo' | null;
   rightActions?: Action[];
+  /** S19.04: Mostra ícone engrenagem que leva ao Perfil */
+  showProfileLink?: boolean;
   onBack?: () => void;
   variant?: 'default' | 'centered';
 }
@@ -30,6 +32,7 @@ export function MobileHeader({
   subtitle,
   leftAction = null,
   rightActions = [],
+  showProfileLink = false,
   onBack,
   variant = 'default',
 }: MobileHeaderProps) {
@@ -93,6 +96,13 @@ export function MobileHeader({
               onClick={action.onClick}
             />
           ))}
+          {showProfileLink && (
+            <IconButton
+              icon={<Settings className="w-5 h-5" />}
+              label="Perfil e configurações"
+              onClick={() => router.push('/mobile/profile')}
+            />
+          )}
         </div>
       </div>
     </header>

@@ -4,6 +4,7 @@ import * as React from 'react'
 import { Suspense } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { MobileHeader } from '@/components/mobile/mobile-header'
+import { formatBRL } from '@/lib/format'
 import { useGoalDetail } from '@/features/goals/hooks/use-goal-detail'
 import { useEditGoal } from '@/features/goals/hooks/use-edit-goal'
 import { EditGoalModal, type EditGoalData } from '@/features/goals/components'
@@ -227,12 +228,12 @@ function GoalDetailContent() {
                 <span className="text-[9px] text-gray-500 mt-0.5 truncate max-w-full">
                   {valor_atual >= 1000
                     ? `R$ ${(valor_atual / 1000).toFixed(1).replace('.', ',')}k`
-                    : valor_atual.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
+                    : formatBRL(valor_atual).replace(/,\d{2}$/, '')}
                 </span>
                 <span className="text-[8px] text-gray-400">
                   de {goal.valor_planejado >= 1000
                     ? `R$ ${(goal.valor_planejado / 1000).toFixed(1).replace('.', ',')}k`
-                    : goal.valor_planejado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
+                    : formatBRL(goal.valor_planejado).replace(/,\d{2}$/, '')}
                 </span>
               </div>
             </div>
@@ -242,20 +243,20 @@ function GoalDetailContent() {
               <div>
                 <p className="text-xs text-gray-500 mb-1">Gasto</p>
                 <p className="text-base font-bold text-gray-900">
-                  R$ {valor_atual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  {formatBRL(valor_atual)}
                 </p>
               </div>
               <div>
                 <p className="text-xs text-gray-500 mb-1">Meta</p>
                 <p className="text-base font-bold text-gray-900">
-                  R$ {goal.valor_planejado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  {formatBRL(goal.valor_planejado)}
                 </p>
               </div>
               <div>
                 <p className="text-xs text-gray-500 mb-1">{remaining >= 0 ? 'Restante' : 'Estouro'}</p>
                 <p className={`text-base font-bold ${remaining >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {remaining >= 0 ? 'R$ ' : '- R$ '}
-                  {Math.abs(remaining).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  {remaining >= 0 ? '' : '- '}
+                  {formatBRL(Math.abs(remaining))}
                 </p>
               </div>
             </div>

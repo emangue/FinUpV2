@@ -20,6 +20,8 @@ import { fetchWithAuth } from '@/core/utils/api-client'
 import { API_CONFIG } from '@/core/config/api.config'
 import { cn } from '@/lib/utils'
 import { TransactionDetailBottomSheet } from '@/components/mobile/transaction-detail-bottom-sheet'
+import { EmptyState } from '@/components/empty-state'
+import { formatBRL } from '@/lib/format'
 import { getGoalColor } from '@/features/goals/lib/colors'
 
 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
@@ -261,13 +263,6 @@ function TransactionsMobileContent() {
     if (gastosOpen && grupoFilter) fetchSubgruposGastos()
   }, [gastosOpen, grupoFilter, fetchSubgruposGastos])
 
-  const formatCurrency = (v: number) =>
-    new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-      minimumFractionDigits: 2,
-    }).format(v)
-
   const groupedByDate = useMemo(() => {
     const map: Record<string, Transaction[]> = {}
     transactions.forEach((t) => {
@@ -307,6 +302,7 @@ function TransactionsMobileContent() {
       <MobileHeader
         title={urlGrupo ? `${urlGrupo}${urlSubgrupo && urlSubgrupo !== '__null__' ? ` › ${urlSubgrupo}` : ''}` : 'Transações'}
         leftAction={fromMetas || fromOrcamento ? 'back' : null}
+        showProfileLink
         onBack={
           fromMetas
             ? () => {
@@ -314,7 +310,7 @@ function TransactionsMobileContent() {
                 router.push(target)
               }
             : fromOrcamento
-              ? () => router.back()
+              ? () => router.push('/mobile/dashboard')
               : undefined
         }
       />
@@ -554,7 +550,7 @@ function TransactionsMobileContent() {
                 <div className="h-8 w-8 mt-1 animate-pulse bg-gray-100 rounded" />
               ) : resumo ? (
                 <p className={cn('text-2xl font-bold mt-1', resumo.total >= 0 ? 'text-green-600' : 'text-red-600')}>
-                  {resumo.total >= 0 ? '+' : ''}{formatCurrency(resumo.total)}
+                  {resumo.total >= 0 ? '+' : ''}{formatBRL(resumo.total)}
                 </p>
               ) : (
                 <p className="text-2xl font-bold text-gray-900 mt-1">R$ 0,00</p>
@@ -568,11 +564,11 @@ function TransactionsMobileContent() {
             </div>
             <div className="bg-gray-50 rounded-xl p-2.5 text-center">
               <p className="text-[10px] text-gray-500">Maior gasto</p>
-              <p className="text-sm font-bold text-gray-900">{formatCurrency(resumo?.maior_gasto ?? 0)}</p>
+              <p className="text-sm font-bold text-gray-900">{formatBRL(resumo?.maior_gasto ?? 0)}</p>
             </div>
             <div className="bg-gray-50 rounded-xl p-2.5 text-center">
               <p className="text-[10px] text-gray-500">Média/dia</p>
-              <p className="text-sm font-bold text-gray-900">{formatCurrency(resumo?.media_por_dia ?? 0)}</p>
+              <p className="text-sm font-bold text-gray-900">{formatBRL(resumo?.media_por_dia ?? 0)}</p>
             </div>
           </div>
         </div>
@@ -620,7 +616,7 @@ function TransactionsMobileContent() {
                               <span className={cn('text-xs font-medium', isActive ? 'text-indigo-700' : 'text-gray-700')}>
                                 {sub.grupo || 'Sem subgrupo'}
                               </span>
-                              <span className="text-xs font-semibold text-gray-900">{formatCurrency(Math.abs(sub.total))}</span>
+                              <span className="text-xs font-semibold text-gray-900">{formatBRL(Math.abs(sub.total))}</span>
                             </div>
                             <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
                               <div
@@ -669,7 +665,7 @@ function TransactionsMobileContent() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between mb-1">
                               <span className="text-xs font-medium text-gray-700">{cat.grupo}</span>
-                              <span className="text-xs font-semibold text-gray-900">{formatCurrency(cat.total)}</span>
+                              <span className="text-xs font-semibold text-gray-900">{formatBRL(cat.total)}</span>
                             </div>
                             <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
                               <div
@@ -701,19 +697,21 @@ function TransactionsMobileContent() {
             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-gray-900" />
           </div>
         ) : transactions.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-10">
-            <p className="text-gray-400 text-center mb-4">
-              {searchQuery.trim() ? `Nenhuma transação encontrada para "${searchQuery}"` : 'Nenhuma transação no período.'}
-            </p>
-            {!searchQuery.trim() && (
-              <button
-                onClick={() => router.push('/mobile/upload')}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Importar Arquivo
-              </button>
-            )}
-          </div>
+          !searchQuery.trim() ? (
+            <EmptyState
+              icon="📋"
+              title="Nenhuma transação ainda"
+              description="Comece subindo seu extrato bancário ou fatura de cartão para ver suas transações aqui."
+              ctaLabel="Fazer upload"
+              ctaHref="/mobile/upload"
+            />
+          ) : (
+            <div className="flex flex-col items-center justify-center py-10">
+              <p className="text-gray-400 text-center mb-4">
+                Nenhuma transação encontrada para &quot;{searchQuery}&quot;
+              </p>
+            </div>
+          )
         ) : (
           <div className="space-y-2">
             {sortedDateKeys.map((date) => {
@@ -768,7 +766,7 @@ function TransactionsMobileContent() {
                               isIncome ? 'text-green-600' : 'text-red-600'
                             )}
                           >
-                            {isIncome ? '+' : '-'}{formatCurrency(Math.abs(tx.Valor))}
+                            {isIncome ? '+' : '-'}{formatBRL(Math.abs(tx.Valor))}
                           </p>
                         </div>
                       )

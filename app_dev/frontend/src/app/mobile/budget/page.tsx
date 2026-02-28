@@ -22,9 +22,10 @@ import * as React from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
 import { isSameMonth } from 'date-fns'
-import { Plus, Target as TargetIcon, Settings } from 'lucide-react'
+import { Plus, Target as TargetIcon, Settings, User } from 'lucide-react'
 import { MonthScrollPicker } from '@/components/mobile/month-scroll-picker'
 import { GoalListItem, DonutChart } from '@/features/goals/components'
+import { EmptyState } from '@/components/empty-state'
 import { useGoals } from '@/features/goals/hooks/use-goals'
 import { fetchLastMonthWithData } from '@/features/dashboard/services/dashboard-api'
 
@@ -118,6 +119,13 @@ function GoalsMobilePageContent() {
           </div>
           <div className="flex items-center gap-1 pr-3 shrink-0">
             <button
+              onClick={() => router.push('/mobile/profile')}
+              className="p-2 rounded-full text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+              aria-label="Perfil e configurações"
+            >
+              <User className="w-5 h-5" />
+            </button>
+            <button
               onClick={handleManageGoals}
               className="p-2 rounded-full text-gray-600 hover:bg-gray-100 hover:text-gray-900"
               aria-label="Gerenciar metas"
@@ -175,21 +183,13 @@ function GoalsMobilePageContent() {
             ))}
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center py-10">
-            <TargetIcon className="w-16 h-16 text-gray-300 mb-4" />
-            <div className="text-gray-500 text-center">
-              <div className="font-semibold mb-2">Nenhuma meta de gastos</div>
-              <div className="text-sm mb-4">
-                Crie metas para acompanhar seus gastos por categoria
-              </div>
-              <button
-                onClick={handleCreateGoal}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium"
-              >
-                Criar primeira meta
-              </button>
-            </div>
-          </div>
+          <EmptyState
+            icon="🎯"
+            title="Crie seu Plano Financeiro"
+            description="Defina metas de gastos por categoria para acompanhar seu orçamento."
+            ctaLabel="Criar plano"
+            ctaHref="/mobile/budget/new"
+          />
         )}
         </div>
       </div>

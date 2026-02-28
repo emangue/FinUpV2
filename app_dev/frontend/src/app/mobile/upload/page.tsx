@@ -30,6 +30,7 @@ import type { BankCompatibilityMap } from '@/features/upload/services/upload-api
 import type { FormatAvailability } from '@/features/upload/components/format-selector';
 import { useAuth } from '@/contexts/AuthContext';
 import { API_ENDPOINTS } from '@/core/config/api.config';
+import { Settings } from 'lucide-react';
 
 export default function UploadPage() {
   const router = useRouter();
@@ -418,15 +419,22 @@ export default function UploadPage() {
         {/* Header */}
         <header className="bg-white rounded-t-3xl px-6 py-4 flex items-center justify-between border-b border-gray-100">
           <button 
-            onClick={() => router.back()}
+            onClick={() => router.push('/mobile/dashboard')}
             className="text-gray-700 hover:text-gray-900 transition-colors"
+            aria-label="Voltar"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path>
             </svg>
           </button>
           <h1 className="text-lg font-bold text-gray-800">Importar Arquivo</h1>
-          <div className="w-6"></div>
+          <button
+            onClick={() => router.push('/mobile/profile')}
+            className="p-2 rounded-full text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+            aria-label="Perfil e configurações"
+          >
+            <Settings className="w-5 h-5" />
+          </button>
         </header>
         
         {/* Subtitle */}

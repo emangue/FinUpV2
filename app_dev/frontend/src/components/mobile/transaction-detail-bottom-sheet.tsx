@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { fetchWithAuth } from '@/core/utils/api-client'
 import { API_CONFIG } from '@/core/config/api.config'
+import { formatBRL } from '@/lib/format'
 import { CategoryIcon } from '@/components/mobile/category-icon'
 import type { CategoryType } from '@/components/mobile/category-icon'
 
@@ -193,8 +194,6 @@ export function TransactionDetailBottomSheet({
     }
   }
 
-  const formatCurrency = (v: number) =>
-    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)
 
   /** Mapeia TipoTransacao/tipodocumento para tipo_documento da API de exclusões */
   const getTipoDocumento = (): 'cartao' | 'extrato' | 'ambos' => {
@@ -326,7 +325,7 @@ export function TransactionDetailBottomSheet({
                   transaction.Valor >= 0 ? 'text-green-600' : 'text-red-600'
                 )}
               >
-                {formatCurrency(transaction.Valor)}
+                {formatBRL(transaction.Valor)}
               </p>
             </div>
           </div>
