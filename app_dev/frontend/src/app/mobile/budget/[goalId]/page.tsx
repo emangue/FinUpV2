@@ -116,7 +116,7 @@ function GoalDetailContent() {
       <div className="flex flex-col items-center justify-center h-screen bg-gray-50 p-4">
         <p className="text-gray-600 mb-4">Meta não encontrada</p>
         <button
-          onClick={() => router.back()}
+          onClick={() => router.push('/mobile/budget')}
           className="px-6 py-2 bg-blue-600 text-white rounded-lg"
         >
           Voltar
@@ -287,7 +287,7 @@ function GoalDetailContent() {
       <div className="bg-white border-t border-gray-200 px-6 py-4">
         <div className="grid grid-cols-2 gap-3">
           <button
-            onClick={() => router.back()}
+            onClick={() => router.push('/mobile/budget')}
             className="bg-white text-gray-700 border border-gray-300 rounded-xl py-3 px-4 font-semibold hover:bg-gray-50 transition-colors"
           >
             Voltar

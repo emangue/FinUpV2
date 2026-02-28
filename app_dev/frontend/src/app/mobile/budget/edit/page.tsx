@@ -139,7 +139,7 @@ function BudgetEditContent() {
       }
       
       // Voltar para página de metas
-      router.back()
+      router.push('/mobile/budget')
     } catch (error) {
       console.error('Erro ao salvar metas:', error)
       alert('Erro ao salvar metas. Tente novamente.')
@@ -160,7 +160,7 @@ function BudgetEditContent() {
       <MobileHeader
         title={`Editar Metas - ${formatMesReferencia(mesReferencia)}`}
         leftAction="back"
-        onBack={() => router.back()}
+        onBack={() => router.push('/mobile/budget')}
         rightActions={[
           {
             icon: <Save className="w-5 h-5" />,

@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 import { useAuth } from '@/contexts/AuthContext'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
@@ -10,10 +11,12 @@ import {
   DollarSign,
   Home,
   LineChart,
+  List,
   LogOut,
   PieChart,
   Settings,
   Shield,
+  Target,
   TrendingUp,
   Upload,
   Wallet,
@@ -32,6 +35,8 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarGroup,
+  SidebarGroupLabel,
 } from "@/components/ui/sidebar"
 
 // Data para sidebar financeira
@@ -47,6 +52,14 @@ const data = {
       logo: Wallet,
       plan: "Personal",
     },
+  ],
+  // S19.02: 5 destinos alinhados ao BottomNav mobile
+  navApp: [
+    { title: "Início", url: "/mobile/dashboard", icon: Home },
+    { title: "Transações", url: "/mobile/transactions", icon: List },
+    { title: "Upload", url: "/mobile/upload", icon: Upload },
+    { title: "Plano", url: "/mobile/budget", icon: Target },
+    { title: "Carteira", url: "/mobile/carteira", icon: Wallet },
   ],
   navMain: [
     {
@@ -524,6 +537,21 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <TeamSwitcher teams={data.teams} />
       </SidebarHeader>
       <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupLabel>App</SidebarGroupLabel>
+          <SidebarMenu>
+            {data.navApp.map((item) => (
+              <SidebarMenuItem key={item.url}>
+                <SidebarMenuButton asChild tooltip={item.title}>
+                  <Link href={item.url}>
+                    {item.icon && <item.icon className="h-4 w-4" />}
+                    <span>{item.title}</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            ))}
+          </SidebarMenu>
+        </SidebarGroup>
         <NavMain items={filteredNavMain} isAdmin={isAdmin} />
         <NavProjects projects={projectsWithStatus} isAdmin={isAdmin} />
       </SidebarContent>

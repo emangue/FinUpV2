@@ -373,7 +373,13 @@ function TransactionsMobileContent() {
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 pb-24 scrollbar-hide">
+      <div
+        className="flex-1 overflow-y-auto px-4 pb-24 scrollbar-hide"
+        style={{
+          WebkitOverflowScrolling: 'touch',
+          maxHeight: 'calc(100dvh - 180px)',
+        }}
+      >
         {/* Filtros Avançados */}
         <div className="bg-white rounded-2xl border border-gray-200 mt-4 overflow-hidden">
           <button

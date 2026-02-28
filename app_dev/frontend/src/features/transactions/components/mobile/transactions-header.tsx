@@ -12,7 +12,7 @@ export function TransactionsMobileHeader() {
       <div className="flex items-center h-16 px-4">
         {/* Botão voltar */}
         <button
-          onClick={() => router.back()}
+          onClick={() => router.push('/mobile/dashboard')}
           className="h-10 w-10 flex items-center justify-center hover:bg-primary-foreground/10 rounded-lg transition-colors"
           aria-label="Voltar"
         >

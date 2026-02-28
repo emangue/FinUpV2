@@ -154,7 +154,7 @@ function InvestimentosMobileContent() {
       <div className="sticky top-0 z-20 bg-white border-b border-gray-200 shrink-0">
         <div className="flex items-center gap-2 px-2 py-2">
           <button
-            onClick={() => router.back()}
+            onClick={() => router.push('/mobile/carteira')}
             className="p-2 rounded-full text-gray-600 hover:bg-gray-100 hover:text-gray-900 shrink-0"
             aria-label="Voltar"
           >
