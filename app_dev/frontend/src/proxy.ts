@@ -13,7 +13,7 @@ const MOBILE_ROUTES: Record<string, string> = {
   '/': '/mobile/dashboard',
   '/dashboard': '/mobile/dashboard',
   '/transactions': '/mobile/transactions',
-  '/budget': '/mobile/budget',
+  '/budget': '/mobile/plano',
   '/investimentos': '/mobile/investimentos',
   '/upload': '/mobile/upload',
   '/profile': '/mobile/profile',

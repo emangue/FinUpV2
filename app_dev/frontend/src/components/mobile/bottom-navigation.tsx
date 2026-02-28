@@ -14,7 +14,7 @@ const NAV_ITEMS = [
   { id: 'dashboard', label: 'Início', icon: Home, path: '/mobile/dashboard' },
   { id: 'transactions', label: 'Transações', icon: List, path: '/mobile/transactions' },
   { id: 'upload', label: 'Upload', icon: Upload, path: '/mobile/upload', fab: true },
-  { id: 'budget', label: 'Plano', icon: Target, path: '/mobile/budget' },
+  { id: 'budget', label: 'Plano', icon: Target, path: '/mobile/plano' },
   { id: 'carteira', label: 'Carteira', icon: Wallet, path: '/mobile/carteira' },
 ];
 

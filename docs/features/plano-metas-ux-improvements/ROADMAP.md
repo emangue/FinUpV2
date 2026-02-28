@@ -80,6 +80,8 @@ FASE 4 — Patrimônio (depende de FASE 3 completa)
 ## 🚀 Próximos passos (ordem sugerida)
 
 1. **05-plano** — Pode iniciar (03 concluído): renda, meta anual, desvio, aposentadoria
+2. **05-plano — Volta ao legado** — Ver `05-plano-financeiro/PLANO_VOLTA_LEGADO.md`: remover `plano_compromissos`, alinhar ao modelo de 3 camadas (budget_planning + base_expectativas futura)
+3. **05-plano — Plano de ajuste** — Ver `05-plano-financeiro/PLANO_DE_AJUSTE.md`: **Fase 0 primeiro** (shell do wizard em `/mobile/construir-plano`), depois hub, projeção, etc. Regra: toda edição do plano passa pelo wizard.
 
 ---
 

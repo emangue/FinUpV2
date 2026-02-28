@@ -14,7 +14,7 @@ const apiUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
 const ITEMS = [
   { key: 'conta_criada', label: 'Criou sua conta', href: null },
   { key: 'primeiro_upload', label: 'Suba seu primeiro extrato', href: '/mobile/upload' },
-  { key: 'plano_criado', label: 'Crie seu Plano Financeiro', href: '/mobile/budget' },
+  { key: 'plano_criado', label: 'Crie seu Plano Financeiro', href: '/mobile/plano' },
   { key: 'investimento_adicionado', label: 'Adicione um investimento', href: '/mobile/carteira' },
 ] as const;
 

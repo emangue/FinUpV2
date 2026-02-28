@@ -58,7 +58,7 @@ const data = {
     { title: "Início", url: "/mobile/dashboard", icon: Home },
     { title: "Transações", url: "/mobile/transactions", icon: List },
     { title: "Upload", url: "/mobile/upload", icon: Upload },
-    { title: "Plano", url: "/mobile/budget", icon: Target },
+    { title: "Plano", url: "/mobile/plano", icon: Target },
     { title: "Carteira", url: "/mobile/carteira", icon: Wallet },
   ],
   navMain: [
