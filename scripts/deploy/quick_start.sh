@@ -16,6 +16,35 @@ echo "🚀 Iniciando servidores..."
 echo "   Projeto: $PROJECT_ROOT"
 echo ""
 
+# === POSTGRESQL via Docker (obrigatório — alinha com VM) ===
+echo "🐘 Verificando PostgreSQL..."
+PG_OK=false
+if (command -v pg_isready &>/dev/null && pg_isready -h localhost -p 5432 -U finup_user 2>/dev/null) || \
+   (docker exec finup_postgres_dev pg_isready -U finup_user 2>/dev/null); then
+    PG_OK=true
+    echo "   ✅ PostgreSQL já está rodando"
+fi
+if [ "$PG_OK" = false ] && command -v docker &>/dev/null && docker info &>/dev/null 2>&1; then
+    echo "   PostgreSQL não está rodando. Subindo via Docker..."
+    docker compose up -d postgres
+    echo "   Aguardando PostgreSQL ficar pronto..."
+    for i in $(seq 1 12); do
+        sleep 2
+        if (command -v pg_isready &>/dev/null && pg_isready -h localhost -p 5432 -U finup_user 2>/dev/null) || \
+           docker exec finup_postgres_dev pg_isready -U finup_user 2>/dev/null; then
+            echo "   ✅ PostgreSQL pronto"
+            PG_OK=true
+            break
+        fi
+        [ $i -eq 12 ] && echo "   ⚠️  PostgreSQL demorou. Backend pode falhar. Verifique: docker ps"
+    done
+elif [ "$PG_OK" = false ]; then
+    echo "   ⚠️  PostgreSQL não está em localhost:5432."
+    echo "   Com Docker: docker compose up -d postgres  (Docker Desktop aberto)"
+    echo "   Doc: docs/deploy/DEV_SETUP.md"
+fi
+echo ""
+
 # === CONTAGEM INFORMATIVA (NUNCA mata processos por nome - evita matar Cursor/IDE) ===
 echo "🔍 Verificando processos..."
 

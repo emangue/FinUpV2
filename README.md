@@ -4,13 +4,17 @@ Sistema modular de controle financeiro pessoal com frontend Next.js e backend Fa
 
 ## 🚀 Quick Start
 
+**Pré-requisito:** Docker Desktop (para PostgreSQL — alinha com VM)
+
 ```bash
-# Iniciar sistema
+# Iniciar sistema (PostgreSQL + Backend + Frontend)
 ./scripts/deploy/quick_start.sh
 
 # Parar sistema
 ./scripts/deploy/quick_stop.sh
 ```
+
+Ver [docs/deploy/DEV_SETUP.md](docs/deploy/DEV_SETUP.md) para detalhes.
 
 ## 📁 Estrutura do Projeto
 

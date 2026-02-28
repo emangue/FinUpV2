@@ -109,9 +109,12 @@ const typography = {
 - ✅ README.md como ponto de entrada
 - ✅ Consolidar informações (máximo 7-8 arquivos por pasta PRD)
 
-### 3. Banco de Dados Único
-**Path absoluto único:** `/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/backend/database/financas_dev.db`  
-**NUNCA:** Criar outro banco em qualquer local
+### 3. Banco de Dados — SEMPRE PostgreSQL via Docker
+**SEMPRE usar PostgreSQL** (espelho da VM/produção). **NUNCA** SQLite em dev.
+- **Local:** PostgreSQL via Docker — `docker compose up -d postgres` (antes de `quick_start.sh`)
+- **Produção/VM:** PostgreSQL em `127.0.0.1:5432/finup_db`
+- **URL:** `postgresql://finup_user:finup_password_dev_2026@localhost:5432/finup_db`
+- **Como subir:** Docker Desktop aberto → `docker compose up -d postgres` (ou `quick_start.sh` faz isso)
 
 ### 4. Arquitetura
 - **Backend:** DDD com domínios isolados (`app_dev/backend/app/domains/`)
@@ -141,6 +144,12 @@ const typography = {
 ### 9. Virtual Environment
 **SEMPRE:** Usar `app_dev/venv` (não `.venv` da raiz)  
 **Scripts:** `./scripts/deploy/quick_start.sh` gerencia automaticamente
+
+### 9.1 Docker — PostgreSQL Obrigatório
+**SEMPRE:** PostgreSQL via Docker antes de rodar o backend. Alinha dev local com VM.
+- **Subir:** `docker compose up -d postgres` (ou `quick_start.sh` tenta subir automaticamente)
+- **Verificar:** `pg_isready -h localhost -p 5432` ou `docker ps | grep postgres`
+- **Parar:** `docker compose stop postgres`
 
 ### 10. Segurança
 **SEMPRE:** Secrets em `.env` (NUNCA hardcoded)  
