@@ -11,20 +11,36 @@ import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react';
 import { MobileHeader } from '@/components/mobile/mobile-header';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { mobileTypography } from '@/config/mobile-typography';
 import {
   getPerfil,
   putPerfil,
   postRenda,
   getGruposMedia3Meses,
-  putOrcamentoBulk,
+  putOrcamentoBulkRange,
+  getOrcamentoRangeInfo,
   getExpectativas,
   postExpectativa,
   deleteExpectativa,
-  getProjecaoLonga,
+  getGruposDespesa,
 } from '../api';
+import type { ExpectativaItem } from '../api';
 import { TabelaReciboAnual } from './TabelaReciboAnual';
 import { ProjecaoChart } from './ProjecaoChart';
+import {
+  PlanoAposentadoriaStepContent,
+  type PlanoAposentadoriaState,
+} from './PlanoAposentadoriaStepContent';
 import type { PlanoWizardState } from '../types/plano-wizard-state';
 
 const STEPS = [
@@ -48,14 +64,29 @@ const RECORRENCIAS = [
   { value: 'anual', label: 'Anual' },
 ] as const;
 
+const PARCELAS_OPCOES = [
+  { value: 1, label: 'À vista' },
+  ...Array.from({ length: 11 }, (_, i) => ({ value: i + 2, label: `${i + 2}x` })),
+];
+
 export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps) {
   const [step, setStep] = React.useState(1);
   const [aporteLoaded, setAporteLoaded] = React.useState(false);
   const [rendaLoaded, setRendaLoaded] = React.useState(false);
   const [grupos, setGrupos] = React.useState<{ grupo: string; valor_planejado: number; valor_medio_3_meses: number }[]>([]);
-  const [sazonais, setSazonais] = React.useState<{ id: number; descricao: string | null; valor: number; mes_referencia: string }[]>([]);
-  const [extraRendas, setExtraRendas] = React.useState<{ id: number; descricao: string | null; valor: number; mes_referencia: string }[]>([]);
-  const [projecaoLonga, setProjecaoLonga] = React.useState<{ patrimonio_final_real: number; meses: number } | null>(null);
+  const [sazonais, setSazonais] = React.useState<ExpectativaItem[]>([]);
+  const [gruposDespesa, setGruposDespesa] = React.useState<string[]>([]);
+  const [extraRendas, setExtraRendas] = React.useState<ExpectativaItem[]>([]);
+  const [aposentadoriaState, setAposentadoriaState] = React.useState<PlanoAposentadoriaState>({
+    age: 35,
+    retire: 65,
+    patrimonio: 0,
+    rendaMensal: 0,
+    aporte: 0,
+    retorno: 10,
+    inflacao: 4.5,
+    activeProfile: 'moderado',
+  });
   const [novoExtraRenda, setNovoExtraRenda] = React.useState<{
     descricao: string;
     valor: number;
@@ -66,11 +97,17 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
     descricao: string;
     valor: number;
     mes: number;
+    grupo: string;
+    parcelas: number;
     recorrencia: 'unico' | 'bimestral' | 'trimestral' | 'semestral' | 'anual';
-  }>({ descricao: '', valor: 0, mes: 1, recorrencia: 'anual' });
+  }>({ descricao: '', valor: 0, mes: 1, grupo: '', parcelas: 1, recorrencia: 'anual' });
   const router = useRouter();
-  const ano = new Date().getFullYear();
-  const mes = new Date().getMonth() + 1;
+  const hoje = new Date();
+  const ano = hoje.getFullYear();
+  const mes = hoje.getMonth() + 1;
+  const [planInicioAno, setPlanInicioAno] = React.useState(ano);
+  const [planInicioMes, setPlanInicioMes] = React.useState(mes);
+  const [showConfirmPlanDialog, setShowConfirmPlanDialog] = React.useState(false);
 
   React.useEffect(() => {
     if (step !== 1 || rendaLoaded) return;
@@ -103,22 +140,18 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
     getExpectativas()
       .then((list) => setSazonais(list.filter((e) => e.tipo_expectativa === 'sazonal_plano')))
       .catch(() => setSazonais([]));
+    getGruposDespesa()
+      .then(setGruposDespesa)
+      .catch(() => setGruposDespesa([]));
   }, [step]);
 
   React.useEffect(() => {
     if (step !== 4 || aporteLoaded) return;
     setAporteLoaded(true);
-    getPerfil()
-      .then((p) => {
-        if (p.aporte_planejado != null && p.aporte_planejado > 0) {
-          onStateChange((s) => ({ ...s, aporte: p.aporte_planejado! }));
-        }
-      })
-      .catch(() => {});
-    getProjecaoLonga()
-      .then((r) => setProjecaoLonga({ patrimonio_final_real: r.patrimonio_final_real, meses: r.meses }))
-      .catch(() => setProjecaoLonga(null));
-  }, [step, aporteLoaded]);
+    if ((state.renda_mensal ?? 0) > 0) {
+      setAposentadoriaState((s) => ({ ...s, rendaMensal: state.renda_mensal! }));
+    }
+  }, [step, aporteLoaded, state.renda_mensal]);
 
   const handleBack = () => {
     if (step > 1) {
@@ -138,42 +171,78 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
     }
     if (step === 2 && grupos.length > 0) {
       try {
-        const mesRef = `${ano}-${String(mes).padStart(2, '0')}`;
-        await putOrcamentoBulk(
-          mesRef,
+        const current = await getGruposMedia3Meses(planInicioAno, planInicioMes);
+        const currentMap = new Map(current.map((c) => [c.grupo, c.valor_planejado]));
+        const hasChange = grupos.some(
+          (g) => Math.abs((currentMap.get(g.grupo) ?? 0) - g.valor_planejado) > 0.01
+        );
+        if (hasChange) {
+          setShowConfirmPlanDialog(true);
+          return;
+        }
+      } catch {
+        setShowConfirmPlanDialog(true);
+        return;
+      }
+    }
+    await advanceStep();
+  };
+
+  const handleConfirmPlanAndNext = async () => {
+    if (step === 2 && grupos.length > 0) {
+      try {
+        const mesInicio = `${planInicioAno}-${String(planInicioMes).padStart(2, '0')}`;
+        await putOrcamentoBulkRange(
+          mesInicio,
           grupos.map((g) => ({ grupo: g.grupo, valor_planejado: g.valor_planejado }))
         );
       } catch {
         /* não bloqueia */
       }
+      setShowConfirmPlanDialog(false);
     }
+    await advanceStep();
+  };
+
+  const advanceStep = async () => {
     if (step < 4) {
       setStep(step + 1);
     } else {
-      if (state.aporte > 0) {
-        try {
-          await putPerfil({ aporte_planejado: state.aporte });
-        } catch {
-          /* não bloqueia */
-        }
+      try {
+        await putPerfil({
+          aporte_planejado: aposentadoriaState.aporte,
+          taxa_retorno_anual: aposentadoriaState.retorno / 100,
+          idade_atual: aposentadoriaState.age,
+          idade_aposentadoria: aposentadoriaState.retire,
+          patrimonio_atual: aposentadoriaState.patrimonio,
+          renda_mensal_liquida: aposentadoriaState.rendaMensal > 0 ? aposentadoriaState.rendaMensal : undefined,
+        });
+      } catch {
+        /* não bloqueia */
       }
       if (onFinish) onFinish();
     }
   };
 
+  const mesesLabel = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const planInicioLabel = `${mesesLabel[planInicioMes - 1]}/${planInicioAno}`;
+  const { count: qtdMeses, mesFimLabel } = getOrcamentoRangeInfo(`${planInicioAno}-${String(planInicioMes).padStart(2, '0')}`);
+
   const handleAddSazonal = async () => {
-    if (!novoSazonal.descricao || novoSazonal.valor <= 0) return;
+    if (!novoSazonal.descricao || novoSazonal.valor <= 0 || !novoSazonal.grupo) return;
     try {
       const mesRef = `${ano}-${String(novoSazonal.mes).padStart(2, '0')}`;
       await postExpectativa({
         descricao: novoSazonal.descricao,
         valor: novoSazonal.valor,
         mes_referencia: mesRef,
+        grupo: novoSazonal.grupo,
+        parcelas: novoSazonal.parcelas,
         tipo_lancamento: 'debito',
         tipo_expectativa: 'sazonal_plano',
         recorrencia: novoSazonal.recorrencia,
       });
-      setNovoSazonal({ descricao: '', valor: 0, mes: 1, recorrencia: 'anual' });
+      setNovoSazonal({ descricao: '', valor: 0, mes: 1, grupo: '', parcelas: 1, recorrencia: 'anual' });
       const list = await getExpectativas();
       setSazonais(list.filter((e) => e.tipo_expectativa === 'sazonal_plano'));
     } catch {
@@ -225,6 +294,10 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
     );
   };
 
+  const totalGastos = grupos.reduce((s, g) => s + g.valor_planejado, 0);
+  const rendaRecorrente = state.renda_mensal ?? 0;
+  const saldoGastos = rendaRecorrente - totalGastos;
+
   const formatCurrency = (v: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0 }).format(v);
 
@@ -236,7 +309,7 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
 
   const isStepValid =
     step === 1 ? (state.renda_mensal ?? 0) > 0 :
-    step === 2 ? true :
+    step === 2 ? saldoGastos >= 0 :
     step === 3 ? true :
     step === 4 ? true : true;
 
@@ -370,6 +443,53 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
             </div>
           ) : step === 2 ? (
             <div className="space-y-4">
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Renda recorrente</span>
+                  <span className="font-semibold text-gray-900">{formatCurrency(rendaRecorrente)}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Total gastos</span>
+                  <span className="font-semibold text-gray-900">{formatCurrency(totalGastos)}</span>
+                </div>
+                <div className="flex justify-between items-center pt-2 border-t border-gray-200">
+                  <span className="text-sm font-medium text-gray-700">Saldo disponível</span>
+                  <span className={`font-bold ${saldoGastos >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {formatCurrency(saldoGastos)}
+                  </span>
+                </div>
+                {saldoGastos < 0 && (
+                  <p className="text-xs text-red-600 mt-1">
+                    A soma dos gastos não pode ultrapassar a renda recorrente. Ajuste os valores abaixo.
+                  </p>
+                )}
+              </div>
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-medium text-gray-700">Plano vigente a partir de:</span>
+                  <select
+                    value={planInicioMes}
+                    onChange={(e) => setPlanInicioMes(Number(e.target.value))}
+                    className="rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                  >
+                    {[1,2,3,4,5,6,7,8,9,10,11,12].map((m) => (
+                      <option key={m} value={m}>{['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][m-1]}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={planInicioAno}
+                    onChange={(e) => setPlanInicioAno(Number(e.target.value))}
+                    className="rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                  >
+                    {[ano - 1, ano, ano + 1].map((a) => (
+                      <option key={a} value={a}>{a}</option>
+                    ))}
+                  </select>
+                </div>
+                <p className="text-xs text-gray-500">
+                  As metas serão aplicadas deste mês até 12 meses à frente.
+                </p>
+              </div>
               <p className={mobileTypography.frequency.tailwind}>
                 Ajuste suas metas de gasto por categoria. Média 3 meses como referência.
               </p>
@@ -406,99 +526,136 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
           ) : step === 3 ? (
             <div className="space-y-4">
               <p className={mobileTypography.frequency.tailwind}>
-                Gastos sazonais (IPVA, IPTU, 13º, etc.)
+                Gastos sazonais (IPVA, IPTU, 13º, etc.) — vincule ao grupo para somar no plano.
               </p>
               <div className="space-y-2">
-                {sazonais.map((s) => (
-                  <div key={s.id} className="flex items-center justify-between py-2 px-3 bg-gray-50 rounded-xl">
-                    <div>
-                      <p className="font-medium">{s.descricao || '(sem descrição)'}</p>
-                      <p className="text-sm text-gray-600">{formatCurrency(s.valor)} · {s.mes_referencia}</p>
+                {sazonais.map((s) => {
+                  const parcelas = s.parcelas ?? 1;
+                  const valorExib = parcelas > 1 ? `${parcelas}x de ${formatCurrency(s.valor / parcelas)}` : formatCurrency(s.valor);
+                  return (
+                    <div key={s.id} className="flex items-center justify-between py-2 px-3 bg-gray-50 rounded-xl">
+                      <div>
+                        <p className="font-medium">{s.descricao || '(sem descrição)'}</p>
+                        <p className="text-sm text-gray-600">
+                          {s.grupo ? <span className="text-gray-500">{s.grupo} · </span> : null}
+                          {valorExib} · {s.mes_referencia}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveSazonal(s.id)}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                        aria-label="Excluir"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveSazonal(s.id)}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
-                      aria-label="Excluir"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
-              <div className="border border-gray-200 rounded-xl p-4 space-y-2">
-                <input
-                  type="text"
-                  placeholder="Descrição (ex: IPVA)"
-                  value={novoSazonal.descricao}
-                  onChange={(e) => setNovoSazonal((n) => ({ ...n, descricao: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2"
-                />
-                <div className="flex gap-2">
+              <div className="border border-gray-200 rounded-xl p-4 space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Descrição</label>
                   <input
-                    type="number"
-                    min={0}
-                    step={50}
-                    placeholder="Valor"
-                    value={novoSazonal.valor || ''}
-                    onChange={(e) => setNovoSazonal((n) => ({ ...n, valor: parseFloat(e.target.value) || 0 }))}
-                    className="flex-1 rounded-lg border border-gray-200 px-3 py-2"
+                    type="text"
+                    placeholder="Ex: IPVA, IPTU, 13º"
+                    value={novoSazonal.descricao}
+                    onChange={(e) => setNovoSazonal((n) => ({ ...n, descricao: e.target.value }))}
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2"
                   />
-                  <select
-                    value={novoSazonal.mes}
-                    onChange={(e) => setNovoSazonal((n) => ({ ...n, mes: Number(e.target.value) }))}
-                    className="rounded-lg border border-gray-200 px-3 py-2"
-                  >
-                    {[1,2,3,4,5,6,7,8,9,10,11,12].map((m) => (
-                      <option key={m} value={m}>{['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][m-1]}</option>
-                    ))}
-                  </select>
-                  <select
-                    value={novoSazonal.recorrencia}
-                    onChange={(e) => setNovoSazonal((n) => ({ ...n, recorrencia: e.target.value as typeof novoSazonal.recorrencia }))}
-                    className="rounded-lg border border-gray-200 px-3 py-2"
-                  >
-                    {RECORRENCIAS.map((r) => (
-                      <option key={r.value} value={r.value}>{r.label}</option>
-                    ))}
-                  </select>
                 </div>
-                <Button type="button" variant="outline" size="sm" onClick={handleAddSazonal} className="w-full">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Grupo (obrigatório)</label>
+                  <select
+                    value={novoSazonal.grupo}
+                    onChange={(e) => setNovoSazonal((n) => ({ ...n, grupo: e.target.value }))}
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2"
+                  >
+                    <option value="">Selecione o grupo</option>
+                    {gruposDespesa.map((g) => (
+                      <option key={g} value={g}>{g}</option>
+                    ))}
+                  </select>
+                  {gruposDespesa.length === 0 && (
+                    <p className="text-xs text-amber-600 mt-1">
+                      Configure grupos Despesa na Etapa 2 (Gastos) antes de adicionar sazonais.
+                    </p>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Valor</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step={50}
+                      placeholder="0"
+                      value={novoSazonal.valor || ''}
+                      onChange={(e) => setNovoSazonal((n) => ({ ...n, valor: parseFloat(e.target.value) || 0 }))}
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Parcelas</label>
+                    <select
+                      value={novoSazonal.parcelas}
+                      onChange={(e) => setNovoSazonal((n) => ({ ...n, parcelas: Number(e.target.value) }))}
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2"
+                    >
+                      {PARCELAS_OPCOES.map((p) => (
+                        <option key={p.value} value={p.value}>{p.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Mês</label>
+                    <select
+                      value={novoSazonal.mes}
+                      onChange={(e) => setNovoSazonal((n) => ({ ...n, mes: Number(e.target.value) }))}
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2"
+                    >
+                      {[1,2,3,4,5,6,7,8,9,10,11,12].map((m) => (
+                        <option key={m} value={m}>{['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][m-1]}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Recorrência</label>
+                    <select
+                      value={novoSazonal.recorrencia}
+                      onChange={(e) => setNovoSazonal((n) => ({ ...n, recorrencia: e.target.value as typeof novoSazonal.recorrencia }))}
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2"
+                    >
+                      {RECORRENCIAS.map((r) => (
+                        <option key={r.value} value={r.value}>{r.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddSazonal}
+                  disabled={!novoSazonal.grupo || !novoSazonal.descricao || novoSazonal.valor <= 0}
+                  className="w-full"
+                >
                   <Plus className="w-4 h-4 mr-1" />
                   Adicionar
                 </Button>
               </div>
             </div>
           ) : step === 4 ? (
-            <div className="space-y-4">
-              <p className={mobileTypography.frequency.tailwind}>
-                Recibo do ano e projeção até aposentadoria.
-              </p>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Aporte mensal (R$)</label>
-                <input
-                  type="number"
-                  min={0}
-                  step={100}
-                  value={state.aporte || ''}
-                  onChange={(e) => {
-                    const v = parseFloat(e.target.value) || 0;
-                    onStateChange({ ...state, aporte: v });
-                  }}
-                  placeholder="0"
-                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-lg font-semibold mb-4"
-                />
-              </div>
-              <TabelaReciboAnual ano={ano} />
-              <ProjecaoChart ano={ano} />
-              {projecaoLonga && (
-                <div className="rounded-xl bg-indigo-50 border border-indigo-100 p-4">
-                  <p className="text-sm font-medium text-indigo-900">
-                    Projeção até aposentadoria: {formatCurrency(projecaoLonga.patrimonio_final_real)} ({projecaoLonga.meses} meses)
-                  </p>
-                </div>
-              )}
-            </div>
+            <PlanoAposentadoriaStepContent
+              ano={planInicioAno}
+              state={aposentadoriaState}
+              onStateChange={setAposentadoriaState}
+              extraRendas={extraRendas}
+              totalGastosRecorrentes={totalGastos}
+              sazonais={sazonais}
+            />
           ) : null}
         </div>
       </div>
@@ -516,12 +673,30 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
         <Button
           className="flex-1"
           onClick={handleNext}
-          disabled={step === 1 && !isStepValid}
+          disabled={!isStepValid}
         >
           {isLastStep ? 'Concluir' : 'Próximo'}
           <ChevronRight className="w-5 h-5 ml-1" />
         </Button>
       </div>
+
+      <AlertDialog open={showConfirmPlanDialog} onOpenChange={setShowConfirmPlanDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Aplicar plano de gastos</AlertDialogTitle>
+            <AlertDialogDescription>
+              As metas serão salvas em <strong>{qtdMeses} meses</strong> (de {planInicioLabel} até {mesFimLabel}).
+              Os valores planejados atuais serão substituídos nesse período. Deseja continuar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmPlanAndNext}>
+              Sim, aplicar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
