@@ -262,8 +262,10 @@ def criar_expectativa(
         valor=data.valor,
         mes_referencia=data.mes_referencia,
         grupo=data.grupo,
+        subgrupo=data.subgrupo,
         tipo_lancamento=data.tipo_lancamento,
         tipo_expectativa=data.tipo_expectativa,
+        recorrencia=data.recorrencia,
     )
 
 

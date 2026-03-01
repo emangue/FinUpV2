@@ -36,9 +36,11 @@ class ExpectativaCreate(BaseModel):
     descricao: str = Field(..., max_length=200)
     valor: float = Field(..., ge=0)
     grupo: Optional[str] = Field(None, max_length=100)
+    subgrupo: Optional[str] = Field(None, max_length=100)
     tipo_lancamento: str = Field("debito", pattern="^(debito|credito)$")
-    mes_referencia: str = Field(..., pattern=r"^\d{4}-\d{2}$")  # YYYY-MM
+    mes_referencia: str = Field(..., pattern=r"^\d{4}-\d{2}$")  # YYYY-MM (mês de início)
     tipo_expectativa: str = Field("sazonal_plano", pattern="^(sazonal_plano|renda_plano|parcela_futura)$")
+    recorrencia: Optional[str] = Field("unico", pattern="^(unico|bimestral|trimestral|semestral|anual)$")
 
 
 class ExpectativaResponse(BaseModel):

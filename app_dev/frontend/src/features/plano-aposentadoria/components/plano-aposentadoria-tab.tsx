@@ -59,7 +59,7 @@ export function PlanoAposentadoriaTab({
 
   const handleCreate = () => {
     if (onCreatePlan) onCreatePlan()
-    else router.push('/mobile/personalizar-plano')
+    else router.push('/mobile/construir-plano')
   }
 
   // Sprint H: Se existem cenários, mostrar Central

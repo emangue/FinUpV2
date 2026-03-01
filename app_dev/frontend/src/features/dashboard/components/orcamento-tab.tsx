@@ -557,7 +557,7 @@ export function OrcamentoTab({
           </>
         ) : (
           <Link
-            href="/mobile/personalizar-plano"
+            href="/mobile/construir-plano"
             className="flex flex-col items-center justify-center gap-3 py-6 px-4 bg-blue-50 border border-blue-100 rounded-xl hover:bg-blue-100 transition-colors"
           >
             <span className="text-2xl">🎯</span>

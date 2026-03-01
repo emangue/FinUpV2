@@ -270,7 +270,7 @@ export function CentralCenarios({ cenarios, onRefresh }: CentralCenariosProps) {
                   <Trash2 className="w-4 h-4" />
                 </button>
                 <button
-                  onClick={() => router.push(`/mobile/personalizar-plano?id=${c.id}`)}
+                  onClick={() => router.push(`/mobile/construir-plano?id=${c.id}`)}
                   className="p-2 rounded-lg hover:bg-gray-100 text-gray-600"
                   aria-label="Editar cenário"
                 >
@@ -337,7 +337,7 @@ export function CentralCenarios({ cenarios, onRefresh }: CentralCenariosProps) {
                   </div>
                 </div>
                 <button
-                  onClick={() => router.push(`/mobile/personalizar-plano?id=${c.id}`)}
+                  onClick={() => router.push(`/mobile/construir-plano?id=${c.id}`)}
                   className="w-full mt-3 py-2.5 text-xs font-medium text-gray-600 hover:text-gray-900 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors flex items-center justify-center gap-1.5"
                 >
                   Editar plano completo
@@ -351,7 +351,7 @@ export function CentralCenarios({ cenarios, onRefresh }: CentralCenariosProps) {
       </div>
 
       <button
-        onClick={() => router.push('/mobile/personalizar-plano')}
+        onClick={() => router.push('/mobile/construir-plano')}
         className="w-full py-4 bg-gray-900 text-white rounded-2xl text-sm font-semibold
                    hover:bg-gray-800 active:scale-[0.98] transition-all
                    flex items-center justify-center gap-2"

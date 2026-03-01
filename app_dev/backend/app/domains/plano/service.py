@@ -1,5 +1,7 @@
 """Service do domínio Plano"""
+import json
 import logging
+from datetime import date
 from typing import Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func
@@ -7,6 +9,9 @@ from sqlalchemy import text, func
 from .models import UserFinancialProfile, PlanoMetaCategoria, BaseExpectativa, ExpectativaMes
 
 logger = logging.getLogger(__name__)
+
+# Intervalo em meses por recorrência (para expansão em expectativas_mes)
+RECORRENCIA_INTERVAL = {"unico": 0, "bimestral": 2, "trimestral": 3, "semestral": 6, "anual": 12}
 
 
 
@@ -448,8 +453,33 @@ class PlanoService:
             for r in rows
         ]
 
+    def _expandir_meses_recorrencia(
+        self, mes_referencia: str, recorrencia: str, num_meses: int = 12
+    ) -> list[str]:
+        """Expande recorrência para lista de YYYY-MM nos próximos num_meses a partir de hoje."""
+        ano_inicio, mes_inicio = int(mes_referencia[:4]), int(mes_referencia[5:7])
+        hoje = date.today()
+        ano_hoje, mes_hoje = hoje.year, hoje.month
+        interval = RECORRENCIA_INTERVAL.get(recorrencia or "unico", 0)
+        meses_out: list[str] = []
+        mes_cal, ano_cal = mes_inicio, ano_inicio
+        count = 0
+        while count <= num_meses + 12:
+            if (ano_cal > ano_hoje) or (ano_cal == ano_hoje and mes_cal >= mes_hoje):
+                meses_out.append(f"{ano_cal}-{str(mes_cal).zfill(2)}")
+            if interval == 0:
+                break
+            mes_cal += interval
+            while mes_cal > 12:
+                mes_cal -= 12
+                ano_cal += 1
+            count += 1
+            if len(meses_out) >= num_meses:
+                break
+        return meses_out[:num_meses]
+
     def _materializar_expectativa(self, expectativa: BaseExpectativa, meses: list[str]) -> None:
-        """Insere/atualiza expectativas_mes para os meses dados."""
+        """Insere expectativas_mes para os meses dados."""
         for mes_ref in meses:
             em = ExpectativaMes(
                 user_id=expectativa.user_id,
@@ -470,15 +500,20 @@ class PlanoService:
         valor: float,
         mes_referencia: str,
         grupo: Optional[str] = None,
+        subgrupo: Optional[str] = None,
         tipo_lancamento: str = "debito",
         tipo_expectativa: str = "sazonal_plano",
+        recorrencia: Optional[str] = "unico",
     ) -> dict:
-        """Cria expectativa (sazonal ou renda) e materializa em expectativas_mes."""
+        """Cria expectativa e materializa em expectativas_mes (expande por recorrência)."""
+        metadata = {"recorrencia": recorrencia or "unico"}
         e = BaseExpectativa(
             user_id=user_id,
             descricao=descricao,
             valor=valor,
             grupo=grupo,
+            subgrupo=subgrupo,
+            metadata_json=json.dumps(metadata) if metadata else None,
             tipo_lancamento=tipo_lancamento,
             mes_referencia=mes_referencia,
             tipo_expectativa=tipo_expectativa,
@@ -486,7 +521,8 @@ class PlanoService:
         )
         self.db.add(e)
         self.db.flush()
-        self._materializar_expectativa(e, [mes_referencia])
+        meses = self._expandir_meses_recorrencia(mes_referencia, recorrencia or "unico")
+        self._materializar_expectativa(e, meses)
         self.db.commit()
         self.db.refresh(e)
         return {
@@ -518,11 +554,8 @@ class PlanoService:
     def get_expectativas_por_mes(self, user_id: int, ano: int) -> dict:
         """
         Retorna { mes_referencia: { debitos: float, creditos: float, items: [...] } }.
-        Lê de expectativas_mes (materializada) + base_expectativas não materializadas (migração).
+        Lê apenas de expectativas_mes (extraordinários materializados).
         """
-        by_mes: dict = {}
-
-        # 1. expectativas_mes (materializadas)
         exp_rows = (
             self.db.query(ExpectativaMes, BaseExpectativa.descricao)
             .outerjoin(BaseExpectativa, ExpectativaMes.origem_expectativa_id == BaseExpectativa.id)
@@ -532,7 +565,7 @@ class PlanoService:
             )
             .all()
         )
-        ids_materializados = {em.origem_expectativa_id for em, _ in exp_rows if em.origem_expectativa_id is not None}
+        by_mes: dict = {}
         for em, descricao in exp_rows:
             mes = em.mes_referencia
             if mes not in by_mes:
@@ -547,29 +580,5 @@ class PlanoService:
                 "descricao": descricao or "(extraordinário)",
                 "valor": v,
                 "tipo_lancamento": em.tipo,
-            })
-
-        # 2. base_expectativas não materializadas (migração)
-        base_q = self.db.query(BaseExpectativa).filter(
-            BaseExpectativa.user_id == user_id,
-            BaseExpectativa.mes_referencia.like(f"{ano}-%"),
-            BaseExpectativa.status == "pendente",
-        )
-        if ids_materializados:
-            base_q = base_q.filter(BaseExpectativa.id.notin_(ids_materializados))
-        for r in base_q.all():
-            mes = r.mes_referencia
-            if mes not in by_mes:
-                by_mes[mes] = {"debitos": 0.0, "creditos": 0.0, "items": []}
-            v = float(r.valor)
-            if r.tipo_lancamento == "credito":
-                by_mes[mes]["creditos"] += v
-            else:
-                by_mes[mes]["debitos"] += v
-            by_mes[mes]["items"].append({
-                "id": r.id,
-                "descricao": r.descricao,
-                "valor": v,
-                "tipo_lancamento": r.tipo_lancamento or "debito",
             })
         return by_mes
