@@ -46,6 +46,7 @@ from app.domains.investimentos.models import (
     InvestimentoCenario, AporteExtraordinario, InvestimentoPlanejamento,
     InvestimentoTransacao,
 )
+from app.domains.plano.models import BaseExpectativa, ExpectativaMes, UserFinancialProfile, PlanoMetaCategoria
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

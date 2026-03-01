@@ -26,6 +26,8 @@ class BaseExpectativa(Base):
     descricao = Column(String(200), nullable=True)
     valor = Column(Float, nullable=False)
     grupo = Column(String(100), nullable=True)
+    subgrupo = Column(String(100), nullable=True)
+    metadata_json = Column(String(2000), nullable=True)
     tipo_lancamento = Column(String(10), default="debito")  # debito | credito
     mes_referencia = Column(String(7), nullable=False, index=True)  # YYYY-MM
     tipo_expectativa = Column(String(30), nullable=False)
@@ -39,6 +41,27 @@ class BaseExpectativa(Base):
     realizado_em = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, onupdate=func.now())
+
+
+class ExpectativaMes(Base):
+    """
+    Materialização dos extraordinários expandidos por mês.
+    Usada para leitura rápida em get_cashflow, get_orcamento, get_resumo.
+    Total planejado = budget_planning.valor_planejado + SUM(expectativas_mes.valor) por grupo/mês.
+    """
+    __tablename__ = "expectativas_mes"
+    __table_args__ = (
+        Index("idx_expectativas_mes_user_mes", "user_id", "mes_referencia"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    mes_referencia = Column(String(7), nullable=False, index=True)  # YYYY-MM
+    grupo = Column(String(100), nullable=True)
+    subgrupo = Column(String(100), nullable=True)
+    tipo = Column(String(10), default="debito")  # debito | credito
+    valor = Column(Float, nullable=False)
+    origem_expectativa_id = Column(Integer, ForeignKey("base_expectativas.id"), nullable=True)
 
 
 class UserFinancialProfile(Base):
