@@ -415,8 +415,8 @@ class PlanoService:
 
         if sem_patrimonio and reducao_pct == 0:
             # Curva azul (base) = soma acumulada de aporte do plano + extraordinários (créditos - débitos)
-            # Valores definidos no wizard: aporte mensal + receitas extras - gastos sazonais
-            exp_por_mes = self.get_expectativas_por_mes(user_id, ano)
+            # Usa get_expectativas_por_mes_para_ano para expandir BaseExpectativa no ano (cobre anual 2025->2026)
+            exp_por_mes = self.get_expectativas_por_mes_para_ano(user_id, ano)
             acumulado_aportes = 0.0
             for i, m in enumerate(cashflow["meses"][:meses]):
                 mes_ref = m["mes_referencia"]
@@ -592,21 +592,17 @@ class PlanoService:
     def _expandir_meses_recorrencia(
         self, mes_referencia: str, recorrencia: str, num_meses: int = 12
     ) -> list[str]:
-        """Expande recorrência para lista de YYYY-MM. unico: sempre inclui mes_referencia; demais: a partir de hoje."""
+        """Expande recorrência para lista de YYYY-MM. Inclui mes_referencia e ocorrências seguintes (para plano anual)."""
         ano_inicio, mes_inicio = int(mes_referencia[:4]), int(mes_referencia[5:7])
-        hoje = date.today()
-        ano_hoje, mes_hoje = hoje.year, hoje.month
         interval = RECORRENCIA_INTERVAL.get(recorrencia or "unico", 0)
         meses_out: list[str] = []
         mes_cal, ano_cal = mes_inicio, ano_inicio
         count = 0
         while count <= num_meses + 12:
             if interval == 0:
-                # unico: sempre inclui o mês de referência (para recibo do ano)
                 meses_out.append(f"{ano_cal}-{str(mes_cal).zfill(2)}")
                 break
-            if (ano_cal > ano_hoje) or (ano_cal == ano_hoje and mes_cal >= mes_hoje):
-                meses_out.append(f"{ano_cal}-{str(mes_cal).zfill(2)}")
+            meses_out.append(f"{ano_cal}-{str(mes_cal).zfill(2)}")
             mes_cal += interval
             while mes_cal > 12:
                 mes_cal -= 12
@@ -730,6 +726,65 @@ class PlanoService:
         self.db.delete(e)
         self.db.commit()
         return True
+
+    def _expandir_para_ano(self, mes_referencia: str, recorrencia: str, parcelas: int, ano_alvo: int) -> list[tuple[str, float]]:
+        """Retorna [(mes_ref, valor)] para cada mês do ano_alvo afetado por esta expectativa."""
+        ref_ano, ref_mes = int(mes_referencia[:4]), int(mes_referencia[5:7])
+        out: list[tuple[str, float]] = []
+        if parcelas > 1:
+            valor_parcela = 1.0 / parcelas  # proporção; valor será aplicado depois
+            ano, mes = ref_ano, ref_mes
+            for _ in range(parcelas):
+                if ano == ano_alvo:
+                    out.append((f"{ano}-{str(mes).zfill(2)}", valor_parcela))
+                mes += 1
+                if mes > 12:
+                    mes, ano = 1, ano + 1
+        else:
+            interval = RECORRENCIA_INTERVAL.get(recorrencia or "unico", 0)
+            ano, mes = ref_ano, ref_mes
+            for _ in range(20):
+                if ano == ano_alvo:
+                    out.append((f"{ano}-{str(mes).zfill(2)}", 1.0))
+                if interval == 0:
+                    break
+                mes += interval
+                while mes > 12:
+                    mes, ano = mes - 12, ano + 1
+        return out
+
+    def get_expectativas_por_mes_para_ano(self, user_id: int, ano: int) -> dict:
+        """
+        Retorna { mes_referencia: { debitos: float, creditos: float } } expandindo BaseExpectativa
+        para o ano_alvo. Garante extraordinários mesmo quando expectativas_mes foram criadas
+        com expansão antiga (ex: anual 2025-01 não gerava 2026-01).
+        """
+        rows = self.db.query(BaseExpectativa).filter(
+            BaseExpectativa.user_id == user_id,
+            BaseExpectativa.status != "cancelado",
+        ).all()
+        by_mes: dict = {}
+        for e in rows:
+            meta = {}
+            if e.metadata_json:
+                try:
+                    meta = json.loads(e.metadata_json)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            rec = meta.get("recorrencia", "unico")
+            parcelas = meta.get("parcelas", 1)
+            meses_val = self._expandir_para_ano(e.mes_referencia, rec, parcelas, ano)
+            valor = float(e.valor)
+            tipo = (e.tipo_lancamento or "debito").lower()
+            for mes_ref, prop in meses_val:
+                if mes_ref not in by_mes:
+                    by_mes[mes_ref] = {"debitos": 0.0, "creditos": 0.0}
+                v = valor * prop if prop != 1.0 else valor
+                if tipo == "credito":
+                    by_mes[mes_ref]["creditos"] += v
+                else:
+                    by_mes[mes_ref]["debitos"] += v
+        return by_mes
 
     def get_expectativas_por_mes(self, user_id: int, ano: int) -> dict:
         """
