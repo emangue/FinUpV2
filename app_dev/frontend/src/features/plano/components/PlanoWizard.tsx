@@ -2,9 +2,8 @@
 
 /**
  * PlanoWizard — frame do construtor de plano em 4 etapas.
- * Fase 0: shell com navegação entre steps. Conteúdo real será preenchido na Fase 5.
- *
  * Etapas: 1.Renda | 2.Gastos | 3.Sazonais | 4.Aporte
+ * Fase 3: Etapa 4 com aporte real + persist via putPerfil.
  */
 
 import * as React from 'react';
@@ -13,6 +12,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { MobileHeader } from '@/components/mobile/mobile-header';
 import { Button } from '@/components/ui/button';
 import { mobileTypography } from '@/config/mobile-typography';
+import { getPerfil, putPerfil, postRenda } from '../api';
 import type { PlanoWizardState } from '../types/plano-wizard-state';
 
 const STEPS = [
@@ -24,13 +24,41 @@ const STEPS = [
 
 interface PlanoWizardProps {
   state: PlanoWizardState;
-  onStateChange: (state: PlanoWizardState) => void;
+  onStateChange: React.Dispatch<React.SetStateAction<PlanoWizardState>>;
   onFinish?: () => void;
 }
 
 export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps) {
   const [step, setStep] = React.useState(1);
+  const [aporteLoaded, setAporteLoaded] = React.useState(false);
+  const [rendaLoaded, setRendaLoaded] = React.useState(false);
   const router = useRouter();
+
+  // Carregar renda do perfil quando chegar na etapa 1
+  React.useEffect(() => {
+    if (step !== 1 || rendaLoaded) return
+    setRendaLoaded(true)
+    getPerfil()
+      .then((p) => {
+        if (p.renda_mensal_liquida != null && p.renda_mensal_liquida > 0) {
+          onStateChange((s) => ({ ...s, renda_mensal: p.renda_mensal_liquida! }))
+        }
+      })
+      .catch(() => {})
+  }, [step, rendaLoaded])
+
+  // Carregar aporte do perfil quando chegar na etapa 4
+  React.useEffect(() => {
+    if (step !== 4 || aporteLoaded) return
+    setAporteLoaded(true)
+    getPerfil()
+      .then((p) => {
+        if (p.aporte_planejado != null && p.aporte_planejado > 0) {
+          onStateChange((s) => ({ ...s, aporte: p.aporte_planejado! }))
+        }
+      })
+      .catch(() => {})
+  }, [step, aporteLoaded])
 
   const handleBack = () => {
     if (step > 1) {
@@ -40,11 +68,25 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
     }
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
+    if (step === 1 && state.renda_mensal > 0) {
+      try {
+        await postRenda(state.renda_mensal);
+      } catch {
+        // não bloqueia
+      }
+    }
     if (step < 4) {
       setStep(step + 1);
-    } else if (onFinish) {
-      onFinish();
+    } else {
+      if (state.aporte > 0) {
+        try {
+          await putPerfil({ aporte_planejado: state.aporte });
+        } catch {
+          // não bloqueia
+        }
+      }
+      if (onFinish) onFinish();
     }
   };
 
@@ -82,30 +124,73 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
         ))}
       </div>
 
-      {/* Step content (placeholder) */}
+      {/* Step content */}
       <div className="flex-1 overflow-y-auto p-5">
         <div className="rounded-2xl bg-white p-6 border border-gray-200 shadow-sm">
           <h2 className={mobileTypography.sectionTitle.tailwind + ' mb-2'}>
             Etapa {step}: {currentStep.label}
           </h2>
-          <p className={mobileTypography.frequency.tailwind}>
-            Conteúdo será preenchido na Fase 5. Por ora, este é o frame do wizard.
-          </p>
-          <div className="mt-4 p-4 bg-gray-50 rounded-xl text-sm text-gray-600">
-            <p>Estado atual (preview):</p>
-            <pre className="mt-2 text-xs overflow-x-auto">
-              {JSON.stringify(
-                {
-                  renda_mensal: state.renda_mensal,
-                  gastos_count: state.gastos_por_grupo.length,
-                  sazonais_count: state.sazonais.length,
-                  aporte: state.aporte,
-                },
-                null,
-                2
-              )}
-            </pre>
-          </div>
+          {step === 1 ? (
+            <div className="space-y-4">
+              <p className={mobileTypography.frequency.tailwind}>
+                Qual sua renda mensal líquida?
+              </p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Renda (R$)</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={100}
+                  value={state.renda_mensal || ''}
+                  onChange={(e) => {
+                    const v = parseFloat(e.target.value) || 0
+                    onStateChange({ ...state, renda_mensal: v })
+                  }}
+                  placeholder="0"
+                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-lg font-semibold"
+                />
+              </div>
+            </div>
+          ) : step === 3 ? (
+            <div className="space-y-4">
+              <p className={mobileTypography.frequency.tailwind}>
+                Gastos sazonais (IPVA, IPTU, 13º, etc.) serão adicionados na próxima versão.
+              </p>
+              <p className="text-sm text-gray-500">
+                Por ora, use a tela de metas para ajustar seus gastos por categoria.
+              </p>
+            </div>
+          ) : step === 4 ? (
+            <div className="space-y-4">
+              <p className={mobileTypography.frequency.tailwind}>
+                Quanto você planeja guardar por mês para investimentos?
+              </p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Aporte mensal (R$)</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={100}
+                  value={state.aporte || ''}
+                  onChange={(e) => {
+                    const v = parseFloat(e.target.value) || 0
+                    onStateChange({ ...state, aporte: v })
+                  }}
+                  placeholder="0"
+                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-lg font-semibold"
+                />
+              </div>
+            </div>
+          ) : step === 2 ? (
+            <div className="space-y-4">
+              <p className={mobileTypography.frequency.tailwind}>
+                Defina suas metas de gasto por categoria.
+              </p>
+              <p className="text-sm text-gray-500">
+                Use a tela &quot;Gerenciar metas por grupo&quot; no Plano para ajustar cada categoria. Avance para continuar.
+              </p>
+            </div>
+          ) : null}
         </div>
       </div>
 

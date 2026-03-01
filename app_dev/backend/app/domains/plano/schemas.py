@@ -7,6 +7,16 @@ class RendaUpdate(BaseModel):
     renda_mensal_liquida: float = Field(..., ge=0)
 
 
+class PerfilUpdate(BaseModel):
+    """PUT /plano/perfil - renda, aporte, idade, aposentadoria, patrimônio, taxa"""
+    renda_mensal_liquida: Optional[float] = Field(None, ge=0)
+    aporte_planejado: Optional[float] = Field(None, ge=0)
+    idade_atual: Optional[int] = Field(None, ge=18, le=120)
+    idade_aposentadoria: Optional[int] = Field(None, ge=18, le=120)
+    patrimonio_atual: Optional[float] = Field(None, ge=0)
+    taxa_retorno_anual: Optional[float] = Field(None, ge=0, le=1)
+
+
 class OrcamentoItem(BaseModel):
     grupo: str
     gasto: float
@@ -19,3 +29,27 @@ class MetaCreate(BaseModel):
     valor_meta: float = Field(..., ge=0)
     ano: int = Field(..., ge=2020, le=2100)
     mes: int = Field(..., ge=1, le=12)
+
+
+class ExpectativaCreate(BaseModel):
+    """POST /plano/expectativas"""
+    descricao: str = Field(..., max_length=200)
+    valor: float = Field(..., ge=0)
+    grupo: Optional[str] = Field(None, max_length=100)
+    tipo_lancamento: str = Field("debito", pattern="^(debito|credito)$")
+    mes_referencia: str = Field(..., pattern=r"^\d{4}-\d{2}$")  # YYYY-MM
+    tipo_expectativa: str = Field("sazonal_plano", pattern="^(sazonal_plano|renda_plano|parcela_futura)$")
+
+
+class ExpectativaResponse(BaseModel):
+    id: int
+    descricao: Optional[str]
+    valor: float
+    grupo: Optional[str]
+    tipo_lancamento: str
+    mes_referencia: str
+    tipo_expectativa: str
+    status: str
+
+    class Config:
+        from_attributes = True

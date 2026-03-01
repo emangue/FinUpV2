@@ -81,7 +81,8 @@ FASE 4 — Patrimônio (depende de FASE 3 completa)
 
 1. **05-plano** — Pode iniciar (03 concluído): renda, meta anual, desvio, aposentadoria
 2. **05-plano — Volta ao legado** — Ver `05-plano-financeiro/PLANO_VOLTA_LEGADO.md`: remover `plano_compromissos`, alinhar ao modelo de 3 camadas (budget_planning + base_expectativas futura)
-3. **05-plano — Plano de ajuste** — Ver `05-plano-financeiro/PLANO_DE_AJUSTE.md`: **Fase 0 primeiro** (shell do wizard em `/mobile/construir-plano`), depois hub, projeção, etc. Regra: toda edição do plano passa pelo wizard.
+3. **05-plano — Plano de ajuste** — Ver `05-plano-financeiro/PLANO_DE_AJUSTE.md`: **Fase 0 primeiro** (shell do wizard em `/mobile/construir-plano`), depois hub, cashflow, etc. Regra: toda edição do plano passa pelo wizard.
+4. **Alinhamento ao legado** — Ver `COMPARATIVO_GERAL_LEGADO.md` e `AJUSTE_GERAL_LEGADO.md`: garantir que cada pasta (01–06) seja parte coerente do grande plano legado.
 
 ---
 
@@ -112,6 +113,12 @@ XX-nome-do-subprojeto/
 
 ---
 
-## 📚 Arquivos legados (referência)
+## 📚 Documentos de alinhamento e legado
 
-Os arquivos originais (PRD monolítico, TECH_SPEC monolítico, UX doc, PLANO original) estão em `_legado/` para consulta. Eles cobrem o mesmo conteúdo mas de forma não estruturada.
+| Documento | Uso |
+|-----------|-----|
+| `COMPARATIVO_GERAL_LEGADO.md` | Mapeamento legado → pastas 01–06; gaps por sub-projeto |
+| `AJUSTE_GERAL_LEGADO.md` | Ações concretas para alinhar cada pasta ao legado |
+| `VISAO_FLUXO_DADOS.md` | Fluxo extrato → plano → patrimônio; 3 camadas |
+| `05-plano-financeiro/ADDITIONAIS_UX.md` | Melhorias incrementais: números compactos, legenda gráfico, gastos extraordinários |
+| `_legado/` | PRD, PLANO_IMPLEMENTACAO, UX, TECH_SPEC originais |
