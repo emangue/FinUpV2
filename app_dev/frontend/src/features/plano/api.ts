@@ -361,6 +361,29 @@ export async function postExpectativa(payload: ExpectativaCreatePayload): Promis
   return res.json();
 }
 
+export async function putExpectativa(
+  expectativaId: number,
+  payload: ExpectativaCreatePayload
+): Promise<ExpectativaItem> {
+  const res = await fetchWithAuth(`${BASE}/expectativas/${expectativaId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      descricao: payload.descricao,
+      valor: payload.valor,
+      mes_referencia: payload.mes_referencia,
+      grupo: payload.grupo ?? null,
+      subgrupo: payload.subgrupo ?? null,
+      tipo_lancamento: payload.tipo_lancamento ?? 'debito',
+      tipo_expectativa: payload.tipo_expectativa ?? 'sazonal_plano',
+      recorrencia: payload.recorrencia ?? 'unico',
+      parcelas: payload.parcelas ?? 1,
+    }),
+  });
+  if (!res.ok) throw new Error('Erro ao atualizar expectativa');
+  return res.json();
+}
+
 export async function deleteExpectativa(expectativaId: number): Promise<void> {
   const res = await fetchWithAuth(`${BASE}/expectativas/${expectativaId}`, { method: 'DELETE' });
   if (!res.ok) throw new Error('Erro ao excluir expectativa');

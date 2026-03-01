@@ -96,6 +96,8 @@ export interface PlanoAposentadoriaState {
   aporte: number;
   retorno: number;
   inflacao: number;
+  /** Evolução da renda (% a.a.) — renda e aporte crescem ao longo do tempo */
+  crescimentoRenda: number;
   activeProfile: PlanoProfile;
 }
 
@@ -218,7 +220,7 @@ export function PlanoAposentadoriaStepContent({
       totalGastosRecorrentes > 0 || sazonais.length > 0 || extraRendas.length > 0;
     if (!temDados) return 50000; // Sem dados do plano: slider livre até 50k
     const minDisp = Math.min(...disponivelPorMes);
-    return Math.max(500, Math.round(minDisp / 500) * 500);
+    return Math.max(100, Math.round(minDisp / 100) * 100);
   }, [
     totalGastosRecorrentes,
     sazonais.length,
@@ -245,19 +247,43 @@ export function PlanoAposentadoriaStepContent({
   const aporteEfetivo = temPlanData ? Math.min(state.aporte, maxAporte) : state.aporte;
   const aporteUsado = aporteEfetivo > 0 ? aporteEfetivo : state.aporte;
 
+  // Aporte por mês da projeção: (aporte base + extras - sazonais) * crescimento anual
+  const anoBase = hoje.getFullYear();
+  const mesBase = hoje.getMonth() + 1;
+  const crescimentoRenda = state.crescimentoRenda ?? 0;
+  const aportePorMesProjecao = React.useMemo(() => {
+    const out: number[] = [];
+    const fatorAnual = 1 + crescimentoRenda / 100;
+    for (let m = 0; m < months; m++) {
+      const anoOffset = Math.floor((mesBase - 1 + m) / 12);
+      const ano_m = anoBase + anoOffset;
+      const mes_m = ((mesBase - 1 + m) % 12) + 1;
+      const saz = expandirPorMes(ano_m, sazonais, -1);
+      const ext = expandirPorMes(ano_m, extraRendas, 1);
+      const netExtra = (ext[mes_m - 1] ?? 0) + (saz[mes_m - 1] ?? 0); // saz é negativo
+      const base = aporteUsado + netExtra;
+      const multiplicador = Math.pow(fatorAnual, anoOffset);
+      out.push(Math.max(0, base * multiplicador));
+    }
+    return out;
+  }, [months, anoBase, mesBase, aporteUsado, sazonais, extraRendas, crescimentoRenda]);
+
   const projection = React.useMemo(() => {
     const monthlyRateNom = Math.pow(1 + state.retorno / 100, 1 / 12) - 1;
     let pNom = state.patrimonio;
     for (let m = 0; m < months; m++) {
-      pNom = (pNom + aporteUsado) * (1 + monthlyRateNom);
+      const aporteMes = aportePorMesProjecao[m] ?? aporteUsado;
+      pNom = (pNom + aporteMes) * (1 + monthlyRateNom);
     }
-    const totalAportes = state.patrimonio + aporteUsado * months;
+    const totalAportes =
+      state.patrimonio + aportePorMesProjecao.reduce((s, a) => s + a, 0);
     const rendimentosNom = pNom - totalAportes;
 
     const monthlyRateReal = Math.pow(1 + retornoReal / 100, 1 / 12) - 1;
     let pReal = state.patrimonio;
     for (let m = 0; m < months; m++) {
-      pReal = (pReal + aporteUsado) * (1 + monthlyRateReal);
+      const aporteMes = aportePorMesProjecao[m] ?? aporteUsado;
+      pReal = (pReal + aporteMes) * (1 + monthlyRateReal);
     }
     const rendaPassivaNom = (pNom * 0.04) / 12;
     const rendaPassivaReal = (pReal * 0.04) / 12;
@@ -276,6 +302,7 @@ export function PlanoAposentadoriaStepContent({
   }, [
     state.patrimonio,
     aporteUsado,
+    aportePorMesProjecao,
     state.retorno,
     retornoReal,
     months,
@@ -340,8 +367,7 @@ export function PlanoAposentadoriaStepContent({
     }));
   };
 
-  const quickPicksBase = [500, 1000, 2000, 3000, 5000, 7000, 10000];
-  const quickPicks = quickPicksBase.filter((v) => v <= maxAporte);
+  const minAporte = 100;
 
   return (
     <div className="space-y-4">
@@ -469,30 +495,42 @@ export function PlanoAposentadoriaStepContent({
         </div>
         <input
           type="range"
-          min={500}
+          min={minAporte}
           max={maxAporte}
-          step={500}
-          value={Math.min(state.aporte, maxAporte)}
+          step={100}
+          value={Math.min(Math.max(state.aporte, minAporte), maxAporte)}
           className="w-full h-2 bg-gray-200 rounded-lg accent-indigo-600"
           onChange={(e) =>
             onStateChange((s) => ({ ...s, aporte: parseInt(e.target.value) }))
           }
         />
-        <div className="flex gap-1.5 mt-2 flex-wrap">
-          {quickPicks.map((v) => (
-            <button
-              key={v}
-              type="button"
-              onClick={() => onStateChange((s) => ({ ...s, aporte: v }))}
-              className={`py-1.5 px-2 rounded-lg border text-[10px] font-semibold ${
-                state.aporte === v
-                  ? 'bg-gray-900 text-white border-gray-900'
-                  : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
-              }`}
-            >
-              {v >= 1000 ? `${v / 1000}k` : v}
-            </button>
-          ))}
+        <div className="flex gap-2 mt-2 justify-center">
+          <button
+            type="button"
+            onClick={() =>
+              onStateChange((s) => ({
+                ...s,
+                aporte: Math.max(minAporte, s.aporte - 100),
+              }))
+            }
+            disabled={state.aporte <= minAporte}
+            className="py-1.5 px-3 rounded-lg border border-gray-200 bg-white text-gray-700 font-semibold text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            −100
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              onStateChange((s) => ({
+                ...s,
+                aporte: Math.min(maxAporte, s.aporte + 100),
+              }))
+            }
+            disabled={state.aporte >= maxAporte}
+            className="py-1.5 px-3 rounded-lg border border-gray-200 bg-white text-gray-700 font-semibold text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            +100
+          </button>
         </div>
       </div>
 
@@ -730,7 +768,11 @@ export function PlanoAposentadoriaStepContent({
         {(totalGastosRecorrentes > 0 || sazonais.length > 0 || extraRendas.length > 0) && (
           <p className="text-[10px] text-gray-500 mb-3 text-center">
             Cálculo: renda − gastos recorrentes − sazonais (por mês, parcelado/recorrência) + extras (por mês).
-            Aporte efetivo: {fC(aporteUsado)}/mês.
+            {crescimentoRenda > 0 ? (
+              <> Aporte cresce {(crescimentoRenda).toFixed(1).replace('.', ',')}% a.a. (base: {fC(aporteUsado)}/mês).</>
+            ) : (
+              <> Aporte efetivo: {fC(aporteUsado)}/mês.</>
+            )}
           </p>
         )}
         <div

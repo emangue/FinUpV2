@@ -727,6 +727,63 @@ class PlanoService:
         self.db.commit()
         return True
 
+    def update_expectativa(
+        self,
+        user_id: int,
+        expectativa_id: int,
+        descricao: str,
+        valor: float,
+        mes_referencia: str,
+        grupo: Optional[str] = None,
+        subgrupo: Optional[str] = None,
+        tipo_lancamento: str = "debito",
+        recorrencia: Optional[str] = "unico",
+        parcelas: Optional[int] = 1,
+    ) -> Optional[dict]:
+        """Atualiza expectativa: remove expectativas_mes antigas, atualiza registro e re-materializa."""
+        e = self.db.query(BaseExpectativa).filter(
+            BaseExpectativa.id == expectativa_id,
+            BaseExpectativa.user_id == user_id,
+        ).first()
+        if not e:
+            return None
+        self.db.query(ExpectativaMes).filter(
+            ExpectativaMes.origem_expectativa_id == expectativa_id,
+        ).delete(synchronize_session=False)
+        parcelas_val = parcelas or 1
+        metadata = {"recorrencia": recorrencia or "unico", "parcelas": parcelas_val}
+        e.descricao = descricao
+        e.valor = valor
+        e.mes_referencia = mes_referencia
+        e.grupo = grupo
+        e.subgrupo = subgrupo
+        e.tipo_lancamento = tipo_lancamento
+        e.metadata_json = json.dumps(metadata) if metadata else None
+        self.db.flush()
+        if parcelas_val > 1:
+            rec = recorrencia or "unico"
+            if rec == "anual":
+                meses = self._expandir_meses_parcelas_anual(mes_referencia, parcelas_val)
+            else:
+                meses = self._expandir_meses_parcelas(mes_referencia, parcelas_val)
+            valor_parcela = valor / parcelas_val
+            self._materializar_expectativa(e, meses, valor_por_mes=valor_parcela)
+        else:
+            meses = self._expandir_meses_recorrencia(mes_referencia, recorrencia or "unico")
+            self._materializar_expectativa(e, meses)
+        self.db.commit()
+        self.db.refresh(e)
+        return {
+            "id": e.id,
+            "descricao": e.descricao,
+            "valor": float(e.valor),
+            "grupo": e.grupo,
+            "tipo_lancamento": e.tipo_lancamento or "debito",
+            "mes_referencia": e.mes_referencia,
+            "tipo_expectativa": e.tipo_expectativa,
+            "status": e.status or "pendente",
+        }
+
     def _expandir_para_ano(self, mes_referencia: str, recorrencia: str, parcelas: int, ano_alvo: int) -> list[tuple[str, float]]:
         """Retorna [(mes_ref, valor)] para cada mês do ano_alvo afetado por esta expectativa."""
         ref_ano, ref_mes = int(mes_referencia[:4]), int(mes_referencia[5:7])

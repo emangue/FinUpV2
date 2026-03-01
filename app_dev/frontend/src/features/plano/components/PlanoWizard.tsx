@@ -8,7 +8,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react';
 import { MobileHeader } from '@/components/mobile/mobile-header';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -33,6 +33,7 @@ import {
   getExpectativas,
   postExpectativa,
   deleteExpectativa,
+  putExpectativa,
   getGruposDespesa,
 } from '../api';
 import type { ExpectativaItem } from '../api';
@@ -70,6 +71,93 @@ const PARCELAS_OPCOES = [
   ...Array.from({ length: 11 }, (_, i) => ({ value: i + 2, label: `${i + 2}x` })),
 ];
 
+const RECORRENCIA_INTERVAL: Record<string, number> = {
+  unico: 0,
+  bimestral: 2,
+  trimestral: 3,
+  semestral: 6,
+  anual: 12,
+};
+
+/** Expande receitas extraordinárias por mês do ano (parcelado ou recorrência). */
+function expandirExtrasPorMes(planAno: number, items: ExpectativaItem[]): number[] {
+  const porMes = new Array(12).fill(0);
+  for (const e of items) {
+    const [refAno, refMes] = (e.mes_referencia || '').split('-').map(Number);
+    const parcelas = e.parcelas ?? 1;
+    const recorrencia = (e.recorrencia ?? 'unico') as string;
+    if (parcelas > 1) {
+      const valorParcela = e.valor / parcelas;
+      let ano = refAno;
+      let mes = refMes;
+      for (let i = 0; i < parcelas; i++) {
+        if (ano === planAno && mes >= 1 && mes <= 12) porMes[mes - 1] += valorParcela;
+        mes += 1;
+        if (mes > 12) {
+          mes = 1;
+          ano += 1;
+        }
+      }
+    } else {
+      const interval = RECORRENCIA_INTERVAL[recorrencia] ?? 0;
+      let ano = refAno;
+      let mes = refMes;
+      let count = 0;
+      while (count <= 24) {
+        if (ano === planAno && mes >= 1 && mes <= 12) porMes[mes - 1] += e.valor;
+        if (interval === 0) break;
+        mes += interval;
+        while (mes > 12) {
+          mes -= 12;
+          ano += 1;
+        }
+        count += 1;
+      }
+    }
+  }
+  return porMes;
+}
+
+const MESES_LABEL = ['J','F','M','A','M','J','J','A','S','O','N','D'];
+
+function EvolucaoMensalExtras({
+  porMes,
+  formatCurrency,
+}: {
+  porMes: number[];
+  formatCurrency: (v: number) => string;
+}) {
+  const maxVal = Math.max(...porMes, 1);
+  const total = porMes.reduce((s, v) => s + v, 0);
+  return (
+    <div>
+      <div className="flex items-end gap-1 h-16 mb-2">
+        {porMes.map((v, i) => {
+          const pct = (v / maxVal) * 100;
+          return (
+            <div
+              key={i}
+              className="flex-1 min-w-0 flex flex-col items-center justify-end h-full"
+              title={`${MESES_LABEL[i]} ${i + 1}: ${formatCurrency(v)}`}
+            >
+              <div
+                className="w-full bg-emerald-500 rounded-t transition-all"
+                style={{ height: `${Math.max(4, pct)}%` }}
+              />
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex justify-between text-[10px] text-gray-500">
+        <span>{MESES_LABEL.join(' ')}</span>
+        <span className="font-semibold text-emerald-700">
+          Total ano: {formatCurrency(total)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps) {
   const [step, setStep] = React.useState(1);
   const [aporteLoaded, setAporteLoaded] = React.useState(false);
@@ -86,6 +174,7 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
     aporte: 0,
     retorno: 10,
     inflacao: 4.5,
+    crescimentoRenda: 0,
     activeProfile: 'moderado',
   });
   const [novoExtraRenda, setNovoExtraRenda] = React.useState<{
@@ -99,11 +188,14 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
   const [novoSazonal, setNovoSazonal] = React.useState<{
     descricao: string;
     valor: number;
+    ano: number;
     mes: number;
     grupo: string;
     parcelas: number;
     recorrencia: 'unico' | 'bimestral' | 'trimestral' | 'semestral' | 'anual';
-  }>({ descricao: '', valor: 0, mes: 1, grupo: '', parcelas: 1, recorrencia: 'anual' });
+  }>({ descricao: '', valor: 0, ano: new Date().getFullYear(), mes: 1, grupo: '', parcelas: 1, recorrencia: 'anual' });
+  const [editingExtraRendaId, setEditingExtraRendaId] = React.useState<number | null>(null);
+  const [editingSazonalId, setEditingSazonalId] = React.useState<number | null>(null);
   const router = useRouter();
   const hoje = new Date();
   const ano = hoje.getFullYear();
@@ -232,25 +324,55 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
   const { count: qtdMeses, mesFimLabel } = getOrcamentoRangeInfo(`${planInicioAno}-${String(planInicioMes).padStart(2, '0')}`);
 
   const handleAddSazonal = async () => {
-    if (!novoSazonal.descricao || novoSazonal.valor <= 0 || !novoSazonal.grupo) return;
+    if (!novoSazonal.descricao || novoSazonal.valor <= 0 || !novoSazonal.grupo) {
+      toast.error('Preencha descrição, valor e grupo');
+      return;
+    }
     try {
-      const mesRef = `${ano}-${String(novoSazonal.mes).padStart(2, '0')}`;
-      await postExpectativa({
+      const mesRef = `${novoSazonal.ano}-${String(novoSazonal.mes).padStart(2, '0')}`;
+      const payload = {
         descricao: novoSazonal.descricao,
         valor: novoSazonal.valor,
         mes_referencia: mesRef,
         grupo: novoSazonal.grupo,
         parcelas: novoSazonal.parcelas,
-        tipo_lancamento: 'debito',
-        tipo_expectativa: 'sazonal_plano',
+        tipo_lancamento: 'debito' as const,
+        tipo_expectativa: 'sazonal_plano' as const,
         recorrencia: novoSazonal.recorrencia,
-      });
-      setNovoSazonal({ descricao: '', valor: 0, mes: 1, grupo: '', parcelas: 1, recorrencia: 'anual' });
+      };
+      if (editingSazonalId) {
+        await putExpectativa(editingSazonalId, payload);
+        setEditingSazonalId(null);
+        toast.success('Gasto sazonal atualizado');
+      } else {
+        await postExpectativa(payload);
+        toast.success('Gasto sazonal adicionado');
+      }
+      setNovoSazonal({ descricao: '', valor: 0, ano: planInicioAno, mes: 1, grupo: '', parcelas: 1, recorrencia: 'anual' });
       const list = await getExpectativas();
       setSazonais(list.filter((e) => e.tipo_expectativa === 'sazonal_plano'));
-    } catch {
-      /* ignore */
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Erro ao salvar gasto sazonal');
     }
+  };
+
+  const handleEditSazonal = (s: ExpectativaItem) => {
+    const [y, m] = (s.mes_referencia || '').split('-').map(Number);
+    setNovoSazonal({
+      descricao: s.descricao || '',
+      valor: s.valor,
+      ano: y || planInicioAno,
+      mes: m || 1,
+      grupo: s.grupo || '',
+      parcelas: s.parcelas ?? 1,
+      recorrencia: (s.recorrencia as typeof novoSazonal.recorrencia) || 'anual',
+    });
+    setEditingSazonalId(s.id);
+  };
+
+  const handleCancelEditSazonal = () => {
+    setEditingSazonalId(null);
+    setNovoSazonal({ descricao: '', valor: 0, ano: planInicioAno, mes: 1, grupo: '', parcelas: 1, recorrencia: 'anual' });
   };
 
   const handleRemoveSazonal = async (id: number) => {
@@ -269,22 +391,47 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
     }
     try {
       const mesRef = `${novoExtraRenda.ano}-${String(novoExtraRenda.mes).padStart(2, '0')}`;
-      await postExpectativa({
+      const payload = {
         descricao: novoExtraRenda.descricao,
         valor: novoExtraRenda.valor,
         mes_referencia: mesRef,
-        tipo_lancamento: 'credito',
-        tipo_expectativa: 'renda_plano',
+        tipo_lancamento: 'credito' as const,
+        tipo_expectativa: 'renda_plano' as const,
         recorrencia: novoExtraRenda.recorrencia,
         parcelas: novoExtraRenda.parcelas,
-      });
+      };
+      if (editingExtraRendaId) {
+        await putExpectativa(editingExtraRendaId, payload);
+        setEditingExtraRendaId(null);
+        toast.success('Receita extraordinária atualizada');
+      } else {
+        await postExpectativa(payload);
+        toast.success('Receita extraordinária adicionada');
+      }
       setNovoExtraRenda({ descricao: '', valor: 0, ano: planInicioAno, mes: 1, recorrencia: 'anual', parcelas: 1 });
       const list = await getExpectativas();
       setExtraRendas(list.filter((e) => e.tipo_expectativa === 'renda_plano'));
-      toast.success('Receita extraordinária adicionada');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Erro ao salvar receita extraordinária');
     }
+  };
+
+  const handleEditExtraRenda = (e: ExpectativaItem) => {
+    const [y, m] = (e.mes_referencia || '').split('-').map(Number);
+    setNovoExtraRenda({
+      descricao: e.descricao || '',
+      valor: e.valor,
+      ano: y || planInicioAno,
+      mes: m || 1,
+      recorrencia: (e.recorrencia as typeof novoExtraRenda.recorrencia) || 'anual',
+      parcelas: e.parcelas ?? 1,
+    });
+    setEditingExtraRendaId(e.id);
+  };
+
+  const handleCancelEditExtraRenda = () => {
+    setEditingExtraRendaId(null);
+    setNovoExtraRenda({ descricao: '', valor: 0, ano: planInicioAno, mes: 1, recorrencia: 'anual', parcelas: 1 });
   };
 
   const handleRemoveExtraRenda = async (id: number) => {
@@ -383,6 +530,33 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
                   />
                 </div>
               </div>
+              <div className="bg-white rounded-xl border border-gray-200 p-4">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">
+                  Evolução da renda
+                </h3>
+                <p className="text-sm text-gray-600 mb-3">
+                  Renda e aporte crescem ao longo do tempo na projeção até aposentadoria.
+                </p>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range"
+                    min={0}
+                    max={15}
+                    step={0.5}
+                    value={aposentadoriaState.crescimentoRenda ?? 0}
+                    onChange={(e) =>
+                      setAposentadoriaState((s) => ({
+                        ...s,
+                        crescimentoRenda: parseFloat(e.target.value),
+                      }))
+                    }
+                    className="flex-1 h-2 bg-gray-200 rounded-lg accent-indigo-600"
+                  />
+                  <span className="text-sm font-semibold text-gray-900 w-14">
+                    {(aposentadoriaState.crescimentoRenda ?? 0).toFixed(1).replace('.', ',')}% a.a.
+                  </span>
+                </div>
+              </div>
               <div>
                 <p className={mobileTypography.frequency.tailwind}>
                   Receitas extraordinárias (13º, bônus, etc.)
@@ -398,17 +572,38 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
                           {e.recorrencia && e.recorrencia !== 'unico' && ` · ${RECORRENCIAS.find((r) => r.value === e.recorrencia)?.label ?? e.recorrencia}`}
                         </p>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveExtraRenda(e.id)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
-                        aria-label="Excluir"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleEditExtraRenda(e)}
+                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
+                          aria-label="Editar"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveExtraRenda(e.id)}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                          aria-label="Excluir"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
+                {extraRendas.length > 0 && (
+                  <div className="mt-4 p-4 bg-white rounded-xl border border-gray-200">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">
+                      Evolução mensal ({planInicioAno})
+                    </h3>
+                    <EvolucaoMensalExtras
+                      porMes={expandirExtrasPorMes(planInicioAno, extraRendas)}
+                      formatCurrency={formatCurrency}
+                    />
+                  </div>
+                )}
                 <div className="border border-gray-200 rounded-xl p-4 space-y-2 mt-2">
                   <input
                     type="text"
@@ -468,10 +663,26 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
                       ))}
                     </select>
                   </div>
-                  <Button type="button" variant="outline" size="sm" onClick={handleAddExtraRenda} className="w-full">
-                    <Plus className="w-4 h-4 mr-1" />
-                    Adicionar
-                  </Button>
+                  <div className="flex gap-2">
+                    {editingExtraRendaId && (
+                      <Button type="button" variant="outline" size="sm" onClick={handleCancelEditExtraRenda} className="flex-1">
+                        Cancelar
+                      </Button>
+                    )}
+                    <Button type="button" variant="outline" size="sm" onClick={handleAddExtraRenda} className={editingExtraRendaId ? 'flex-1' : 'w-full'}>
+                      {editingExtraRendaId ? (
+                        <>
+                          <Pencil className="w-4 h-4 mr-1" />
+                          Salvar
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="w-4 h-4 mr-1" />
+                          Adicionar
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -575,14 +786,24 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
                           {valorExib} · {s.mes_referencia}
                         </p>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveSazonal(s.id)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
-                        aria-label="Excluir"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleEditSazonal(s)}
+                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
+                          aria-label="Editar"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveSazonal(s.id)}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                          aria-label="Excluir"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
@@ -642,25 +863,34 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
                     </select>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Mês</label>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Desde quando considerar</label>
+                  <div className="flex gap-2 flex-wrap items-center">
+                    <select
+                      value={novoSazonal.ano}
+                      onChange={(e) => setNovoSazonal((n) => ({ ...n, ano: Number(e.target.value) }))}
+                      className="rounded-lg border border-gray-200 px-3 py-2"
+                      title="Ano"
+                    >
+                      {[planInicioAno - 1, planInicioAno, planInicioAno + 1].map((a) => (
+                        <option key={a} value={a}>{a}</option>
+                      ))}
+                    </select>
                     <select
                       value={novoSazonal.mes}
                       onChange={(e) => setNovoSazonal((n) => ({ ...n, mes: Number(e.target.value) }))}
-                      className="w-full rounded-lg border border-gray-200 px-3 py-2"
+                      className="rounded-lg border border-gray-200 px-3 py-2"
+                      title="Mês"
                     >
                       {[1,2,3,4,5,6,7,8,9,10,11,12].map((m) => (
                         <option key={m} value={m}>{['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][m-1]}</option>
                       ))}
                     </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Recorrência</label>
                     <select
                       value={novoSazonal.recorrencia}
                       onChange={(e) => setNovoSazonal((n) => ({ ...n, recorrencia: e.target.value as typeof novoSazonal.recorrencia }))}
-                      className="w-full rounded-lg border border-gray-200 px-3 py-2"
+                      className="rounded-lg border border-gray-200 px-3 py-2"
+                      title="Recorrência"
                     >
                       {RECORRENCIAS.map((r) => (
                         <option key={r.value} value={r.value}>{r.label}</option>
@@ -668,17 +898,33 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
                     </select>
                   </div>
                 </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleAddSazonal}
-                  disabled={!novoSazonal.grupo || !novoSazonal.descricao || novoSazonal.valor <= 0}
-                  className="w-full"
-                >
-                  <Plus className="w-4 h-4 mr-1" />
-                  Adicionar
-                </Button>
+                <div className="flex gap-2">
+                  {editingSazonalId && (
+                    <Button type="button" variant="outline" size="sm" onClick={handleCancelEditSazonal} className="flex-1">
+                      Cancelar
+                    </Button>
+                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAddSazonal}
+                    disabled={!novoSazonal.grupo || !novoSazonal.descricao || novoSazonal.valor <= 0}
+                    className={editingSazonalId ? 'flex-1' : 'w-full'}
+                  >
+                    {editingSazonalId ? (
+                      <>
+                        <Pencil className="w-4 h-4 mr-1" />
+                        Salvar
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="w-4 h-4 mr-1" />
+                        Adicionar
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
             </div>
           ) : step === 4 ? (

@@ -1,7 +1,7 @@
 """Router do domínio Plano"""
 from datetime import date
 from typing import Optional
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -268,6 +268,32 @@ def criar_expectativa(
         recorrencia=data.recorrencia,
         parcelas=data.parcelas,
     )
+
+
+@router.put("/expectativas/{expectativa_id}")
+def atualizar_expectativa(
+    expectativa_id: int,
+    data: ExpectativaCreate,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Atualiza expectativa (sazonal ou renda extra)"""
+    service = PlanoService(db)
+    result = service.update_expectativa(
+        user_id,
+        expectativa_id,
+        descricao=data.descricao,
+        valor=data.valor,
+        mes_referencia=data.mes_referencia,
+        grupo=data.grupo,
+        subgrupo=data.subgrupo,
+        tipo_lancamento=data.tipo_lancamento,
+        recorrencia=data.recorrencia,
+        parcelas=data.parcelas,
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="Expectativa não encontrada")
+    return result
 
 
 @router.delete("/expectativas/{expectativa_id}", status_code=204)
