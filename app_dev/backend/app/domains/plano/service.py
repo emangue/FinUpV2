@@ -4,7 +4,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func
 
-from .models import UserFinancialProfile, PlanoMetaCategoria, BaseExpectativa
+from .models import UserFinancialProfile, PlanoMetaCategoria, BaseExpectativa, ExpectativaMes
 
 logger = logging.getLogger(__name__)
 
@@ -32,23 +32,57 @@ class PlanoService:
         ).first()
         return float(profile.renda_mensal_liquida) if profile and profile.renda_mensal_liquida else None
 
-    def get_resumo(self, user_id: int, ano: int, mes: int) -> dict:
-        """A.07: Resumo com renda, total_budget (budget_planning Despesa), disponivel_real = renda - total_budget"""
-        renda = self.get_renda(user_id)
+    def get_planejado_por_grupo_mes(self, user_id: int, ano: int, mes: int) -> dict:
+        """
+        Total planejado por grupo = budget_planning + expectativas_mes (seção 5.1).
+        Retorna { grupo: valor_total } apenas para grupos Despesa.
+        """
         mes_ref = f"{ano}-{str(mes).zfill(2)}"
         from app.domains.budget.models import BudgetPlanning
         from app.domains.grupos.models import BaseGruposConfig
-        total_budget = self.db.query(func.sum(BudgetPlanning.valor_planejado)).join(
-            BaseGruposConfig,
-            (BudgetPlanning.user_id == BaseGruposConfig.user_id)
-            & (BudgetPlanning.grupo == BaseGruposConfig.nome_grupo),
-        ).filter(
-            BudgetPlanning.user_id == user_id,
-            BudgetPlanning.mes_referencia == mes_ref,
-            BudgetPlanning.ativo == True,
-            BaseGruposConfig.categoria_geral == "Despesa",
-        ).scalar()
-        total_budget = float(total_budget or 0)
+
+        # Budget base (Despesa)
+        bp_rows = (
+            self.db.query(BudgetPlanning.grupo, BudgetPlanning.valor_planejado)
+            .join(
+                BaseGruposConfig,
+                (BudgetPlanning.user_id == BaseGruposConfig.user_id)
+                & (BudgetPlanning.grupo == BaseGruposConfig.nome_grupo),
+            )
+            .filter(
+                BudgetPlanning.user_id == user_id,
+                BudgetPlanning.mes_referencia == mes_ref,
+                BudgetPlanning.ativo == True,
+                BaseGruposConfig.categoria_geral == "Despesa",
+            )
+            .all()
+        )
+        result = {r.grupo: float(r.valor_planejado or 0) for r in bp_rows}
+
+        # Extraordinários (expectativas_mes, tipo debito)
+        exp_rows = (
+            self.db.query(ExpectativaMes.grupo, func.sum(ExpectativaMes.valor))
+            .filter(
+                ExpectativaMes.user_id == user_id,
+                ExpectativaMes.mes_referencia == mes_ref,
+                ExpectativaMes.tipo == "debito",
+                ExpectativaMes.grupo.isnot(None),
+                ExpectativaMes.grupo != "",
+            )
+            .group_by(ExpectativaMes.grupo)
+            .all()
+        )
+        for r in exp_rows:
+            if r.grupo:
+                result[r.grupo] = result.get(r.grupo, 0) + float(r[1] or 0)
+
+        return result
+
+    def get_resumo(self, user_id: int, ano: int, mes: int) -> dict:
+        """A.07: Resumo com renda, total_budget (budget + expectativas_mes), disponivel_real = renda - total_budget"""
+        renda = self.get_renda(user_id)
+        planejado = self.get_planejado_por_grupo_mes(user_id, ano, mes)
+        total_budget = sum(planejado.values())
         disponivel_real = (renda - total_budget) if renda is not None else None
         return {
             "renda": renda,
@@ -78,27 +112,9 @@ class PlanoService:
             ).all()
         }
 
-        # Fallback: metas do budget_planning (valor_planejado) - apenas grupos Despesa
+        # Fallback: metas = budget_planning + expectativas_mes (get_planejado_por_grupo_mes)
         if not metas:
-            from app.domains.budget.models import BudgetPlanning
-            from app.domains.grupos.models import BaseGruposConfig
-            mes_ref = f"{ano}-{str(mes).zfill(2)}"
-            bp = (
-                self.db.query(BudgetPlanning)
-                .join(
-                    BaseGruposConfig,
-                    (BudgetPlanning.user_id == BaseGruposConfig.user_id)
-                    & (BudgetPlanning.grupo == BaseGruposConfig.nome_grupo),
-                )
-                .filter(
-                    BudgetPlanning.user_id == user_id,
-                    BudgetPlanning.mes_referencia == mes_ref,
-                    BudgetPlanning.ativo == True,
-                    BaseGruposConfig.categoria_geral == "Despesa",
-                )
-                .all()
-            )
-            metas = {b.grupo: float(b.valor_planejado) for b in bp}
+            metas = self.get_planejado_por_grupo_mes(user_id, ano, mes)
 
         # União: grupos com gasto OU com meta (mostra restrições mesmo sem gasto)
         all_grupos = sorted(set(gastos_dict.keys()) | set(metas.keys()))
@@ -256,44 +272,23 @@ class PlanoService:
             mes_ref = f"{ano}-{str(m).zfill(2)}"
             mes_fatura = f"{ano}{str(m).zfill(2)}"
 
-            # Alinhado ao dashboard Resumo do Mês:
-            # - Receitas: income-sources (agrupa por GRUPO, GRUPO not null)
-            # - Despesas/Investimentos: budget/planning (agrupa por GRUPO, sum(Valor) por grupo, abs)
-            _filtro_base = [
+            # renda_realizada: sum(Valor) de CategoriaGeral=Receita (sem exigir GRUPO, como gastos)
+            renda_total = self.db.query(func.sum(JournalEntry.Valor)).filter(
                 JournalEntry.user_id == user_id,
                 JournalEntry.MesFatura == mes_fatura,
+                JournalEntry.CategoriaGeral == "Receita",
                 JournalEntry.IgnorarDashboard == 0,
-                JournalEntry.GRUPO.isnot(None),
-                JournalEntry.GRUPO != "",
-            ]
+            ).scalar()
+            renda_realizada = max(0.0, float(renda_total)) if renda_total else None
 
-            # renda_realizada: soma por grupo (como income-sources), só Receita
-            renda_por_grupo = (
-                self.db.query(JournalEntry.GRUPO, func.sum(JournalEntry.Valor).label("total"))
-                .filter(
-                    *_filtro_base,
-                    JournalEntry.CategoriaGeral == "Receita",
-                )
-                .group_by(JournalEntry.GRUPO)
-                .all()
-            )
-            renda_realizada = sum(float(r.total) for r in renda_por_grupo if r.total) if renda_por_grupo else None
-            if renda_realizada is not None and renda_realizada < 0:
-                renda_realizada = 0.0  # Receita não deve ser negativa
-
-            # investimentos_realizados: por grupo, sum(Valor) depois abs (como budget)
-            inv_por_grupo = (
-                self.db.query(JournalEntry.GRUPO, func.sum(JournalEntry.Valor).label("total"))
-                .filter(
-                    *_filtro_base,
-                    JournalEntry.CategoriaGeral == "Investimentos",
-                )
-                .group_by(JournalEntry.GRUPO)
-                .all()
-            )
-            investimentos_realizados = (
-                sum(abs(float(r.total)) for r in inv_por_grupo if r.total) if inv_por_grupo else None
-            )
+            # investimentos_realizados: sum(Valor) de CategoriaGeral=Investimentos (sem exigir GRUPO, como gastos)
+            inv_total = self.db.query(func.sum(JournalEntry.Valor)).filter(
+                JournalEntry.user_id == user_id,
+                JournalEntry.MesFatura == mes_fatura,
+                JournalEntry.CategoriaGeral == "Investimentos",
+                JournalEntry.IgnorarDashboard == 0,
+            ).scalar()
+            investimentos_realizados = abs(float(inv_total)) if inv_total else None
 
             # gastos_recorrentes: budget_planning APENAS grupos com categoria_geral = 'Despesa'
             gastos_rec = (
@@ -410,7 +405,11 @@ class PlanoService:
             renda_mes = m.get("renda_usada") or 0.0
             gastos_base = m.get("gastos_usados") or (m["gastos_realizados"] or m["gastos_recorrentes"])
             extras = m.get("gastos_extras_esperados", 0) or 0
-            gastos = (gastos_base * fator) + extras
+            # Redução só em meses não realizados — janeiro já foi, não dá pra economizar nele
+            if m.get("use_realizado"):
+                gastos = gastos_base + extras
+            else:
+                gastos = (gastos_base * fator) + extras
             aporte_mes = m.get("aporte_usado") or m["aporte_planejado"]
             saldo_mes = renda_mes - gastos - aporte_mes
             acumulado += saldo_mes
@@ -449,6 +448,21 @@ class PlanoService:
             for r in rows
         ]
 
+    def _materializar_expectativa(self, expectativa: BaseExpectativa, meses: list[str]) -> None:
+        """Insere/atualiza expectativas_mes para os meses dados."""
+        for mes_ref in meses:
+            em = ExpectativaMes(
+                user_id=expectativa.user_id,
+                mes_referencia=mes_ref,
+                grupo=expectativa.grupo,
+                subgrupo=expectativa.subgrupo,
+                tipo=expectativa.tipo_lancamento or "debito",
+                valor=expectativa.valor,
+                origem_expectativa_id=expectativa.id,
+            )
+            self.db.add(em)
+        self.db.flush()
+
     def create_expectativa(
         self,
         user_id: int,
@@ -459,7 +473,7 @@ class PlanoService:
         tipo_lancamento: str = "debito",
         tipo_expectativa: str = "sazonal_plano",
     ) -> dict:
-        """Cria expectativa (sazonal ou renda)."""
+        """Cria expectativa (sazonal ou renda) e materializa em expectativas_mes."""
         e = BaseExpectativa(
             user_id=user_id,
             descricao=descricao,
@@ -471,6 +485,8 @@ class PlanoService:
             origem="usuario",
         )
         self.db.add(e)
+        self.db.flush()
+        self._materializar_expectativa(e, [mes_referencia])
         self.db.commit()
         self.db.refresh(e)
         return {
@@ -485,26 +501,63 @@ class PlanoService:
         }
 
     def delete_expectativa(self, user_id: int, expectativa_id: int) -> bool:
-        """Remove ou marca como cancelado."""
+        """Remove expectativa e linhas em expectativas_mes."""
         e = self.db.query(BaseExpectativa).filter(
             BaseExpectativa.id == expectativa_id,
             BaseExpectativa.user_id == user_id,
         ).first()
         if not e:
             return False
+        self.db.query(ExpectativaMes).filter(
+            ExpectativaMes.origem_expectativa_id == expectativa_id,
+        ).delete(synchronize_session=False)
         self.db.delete(e)
         self.db.commit()
         return True
 
     def get_expectativas_por_mes(self, user_id: int, ano: int) -> dict:
-        """Retorna { mes_referencia: { debitos: float, creditos: float, items: [...] } }."""
-        rows = self.db.query(BaseExpectativa).filter(
+        """
+        Retorna { mes_referencia: { debitos: float, creditos: float, items: [...] } }.
+        Lê de expectativas_mes (materializada) + base_expectativas não materializadas (migração).
+        """
+        by_mes: dict = {}
+
+        # 1. expectativas_mes (materializadas)
+        exp_rows = (
+            self.db.query(ExpectativaMes, BaseExpectativa.descricao)
+            .outerjoin(BaseExpectativa, ExpectativaMes.origem_expectativa_id == BaseExpectativa.id)
+            .filter(
+                ExpectativaMes.user_id == user_id,
+                ExpectativaMes.mes_referencia.like(f"{ano}-%"),
+            )
+            .all()
+        )
+        ids_materializados = {em.origem_expectativa_id for em, _ in exp_rows if em.origem_expectativa_id is not None}
+        for em, descricao in exp_rows:
+            mes = em.mes_referencia
+            if mes not in by_mes:
+                by_mes[mes] = {"debitos": 0.0, "creditos": 0.0, "items": []}
+            v = float(em.valor)
+            if em.tipo == "credito":
+                by_mes[mes]["creditos"] += v
+            else:
+                by_mes[mes]["debitos"] += v
+            by_mes[mes]["items"].append({
+                "id": em.origem_expectativa_id or em.id,
+                "descricao": descricao or "(extraordinário)",
+                "valor": v,
+                "tipo_lancamento": em.tipo,
+            })
+
+        # 2. base_expectativas não materializadas (migração)
+        base_q = self.db.query(BaseExpectativa).filter(
             BaseExpectativa.user_id == user_id,
             BaseExpectativa.mes_referencia.like(f"{ano}-%"),
             BaseExpectativa.status == "pendente",
-        ).all()
-        by_mes: dict = {}
-        for r in rows:
+        )
+        if ids_materializados:
+            base_q = base_q.filter(BaseExpectativa.id.notin_(ids_materializados))
+        for r in base_q.all():
             mes = r.mes_referencia
             if mes not in by_mes:
                 by_mes[mes] = {"debitos": 0.0, "creditos": 0.0, "items": []}
@@ -517,6 +570,6 @@ class PlanoService:
                 "id": r.id,
                 "descricao": r.descricao,
                 "valor": v,
-                "tipo_lancamento": r.tipo_lancamento,
+                "tipo_lancamento": r.tipo_lancamento or "debito",
             })
         return by_mes

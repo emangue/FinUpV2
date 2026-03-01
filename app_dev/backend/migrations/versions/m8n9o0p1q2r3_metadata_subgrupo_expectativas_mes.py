@@ -27,7 +27,7 @@ def upgrade() -> None:
     # 2. expectativas_mes — materialização dos extraordinários expandidos
     op.create_table(
         "expectativas_mes",
-        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("user_id", sa.Integer(), nullable=False),
         sa.Column("mes_referencia", sa.String(7), nullable=False),
         sa.Column("grupo", sa.String(100), nullable=True),
