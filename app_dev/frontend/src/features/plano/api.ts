@@ -79,6 +79,7 @@ export interface CashflowMes {
   renda_usada?: number;
   gastos_recorrentes: number;
   gastos_usados?: number;
+  total_gastos?: number; // gastos_usados + gastos_extras (para Renda - Gastos - Aporte = Saldo)
   investimentos_realizados?: number | null;
   aporte_usado?: number; // = investimentos quando use_realizado
   gastos_extras_esperados: number;
@@ -86,6 +87,7 @@ export interface CashflowMes {
   aporte_planejado: number;
   saldo_projetado: number | null;
   status_mes: 'ok' | 'parcial' | 'futuro' | 'negativo';
+  use_realizado?: boolean;
   grupos: unknown[];
   expectativas: unknown[];
 }
