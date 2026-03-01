@@ -256,25 +256,44 @@ class PlanoService:
             mes_ref = f"{ano}-{str(m).zfill(2)}"
             mes_fatura = f"{ano}{str(m).zfill(2)}"
 
-            # renda_realizada: SUM(Valor) WHERE CategoriaGeral = 'Receita'
-            renda_real = self.db.query(func.sum(JournalEntry.Valor)).filter(
+            # Alinhado ao dashboard Resumo do Mês:
+            # - Receitas: income-sources (agrupa por GRUPO, GRUPO not null)
+            # - Despesas/Investimentos: budget/planning (agrupa por GRUPO, sum(Valor) por grupo, abs)
+            _filtro_base = [
                 JournalEntry.user_id == user_id,
                 JournalEntry.MesFatura == mes_fatura,
-                JournalEntry.CategoriaGeral == "Receita",
                 JournalEntry.IgnorarDashboard == 0,
-            ).scalar()
-            renda_realizada = float(renda_real) if renda_real is not None else None
+                JournalEntry.GRUPO.isnot(None),
+                JournalEntry.GRUPO != "",
+            ]
+
+            # renda_realizada: soma por grupo (como income-sources), só Receita
+            renda_por_grupo = (
+                self.db.query(JournalEntry.GRUPO, func.sum(JournalEntry.Valor).label("total"))
+                .filter(
+                    *_filtro_base,
+                    JournalEntry.CategoriaGeral == "Receita",
+                )
+                .group_by(JournalEntry.GRUPO)
+                .all()
+            )
+            renda_realizada = sum(float(r.total) for r in renda_por_grupo if r.total) if renda_por_grupo else None
             if renda_realizada is not None and renda_realizada < 0:
                 renda_realizada = 0.0  # Receita não deve ser negativa
 
-            # investimentos_realizados: SUM(ABS(Valor)) WHERE CategoriaGeral = 'Investimentos'
-            inv_real = self.db.query(func.sum(func.abs(JournalEntry.Valor))).filter(
-                JournalEntry.user_id == user_id,
-                JournalEntry.MesFatura == mes_fatura,
-                JournalEntry.CategoriaGeral == "Investimentos",
-                JournalEntry.IgnorarDashboard == 0,
-            ).scalar()
-            investimentos_realizados = float(inv_real) if inv_real is not None else None
+            # investimentos_realizados: por grupo, sum(Valor) depois abs (como budget)
+            inv_por_grupo = (
+                self.db.query(JournalEntry.GRUPO, func.sum(JournalEntry.Valor).label("total"))
+                .filter(
+                    *_filtro_base,
+                    JournalEntry.CategoriaGeral == "Investimentos",
+                )
+                .group_by(JournalEntry.GRUPO)
+                .all()
+            )
+            investimentos_realizados = (
+                sum(abs(float(r.total)) for r in inv_por_grupo if r.total) if inv_por_grupo else None
+            )
 
             # gastos_recorrentes: budget_planning APENAS grupos com categoria_geral = 'Despesa'
             gastos_rec = (
@@ -294,14 +313,14 @@ class PlanoService:
             )
             gastos_recorrentes = float(gastos_rec or 0)
 
-            # gastos_realizados: APENAS CategoriaGeral = 'Despesa'
-            gastos_real = self.db.query(func.sum(func.abs(JournalEntry.Valor))).filter(
+            # gastos_realizados: sum(Valor) real (como dashboard) — neta estornos; abs só para exibição
+            gastos_real = self.db.query(func.sum(JournalEntry.Valor)).filter(
                 JournalEntry.user_id == user_id,
                 JournalEntry.MesFatura == mes_fatura,
                 JournalEntry.CategoriaGeral == "Despesa",
                 JournalEntry.IgnorarDashboard == 0,
             ).scalar()
-            gastos_realizados = float(gastos_real) if gastos_real else None
+            gastos_realizados = abs(float(gastos_real)) if gastos_real else None
 
             # Troca para realizado quando receita >= 90% do esperado (receita, despesas, investimentos)
             use_realizado = (
@@ -320,13 +339,17 @@ class PlanoService:
                 gastos_usados = gastos_recorrentes
                 aporte_usado = aporte
 
-            # Fase 4: base_expectativas (debitos - creditos do mês)
+            # Fase 4: base_expectativas — APENAS em modo planejado (não misturar real com expectativa)
             exp_mes = self.get_expectativas_por_mes(user_id, ano).get(mes_ref, {"debitos": 0.0, "creditos": 0.0, "items": []})
-            gastos_extras = exp_mes["debitos"] - exp_mes["creditos"]
-            expectativas_items = exp_mes.get("items", [])
+            gastos_extras = exp_mes["debitos"] - exp_mes["creditos"] if not use_realizado else 0.0
+            expectativas_items = exp_mes.get("items", []) if not use_realizado else []
 
             total_gastos = gastos_usados + gastos_extras
-            saldo = renda_usada - total_gastos - aporte_usado if renda_usada else None
+            # Saldo = Renda - Gastos (aporte não entra no saldo; é o que sobra após despesas)
+            r = round(renda_usada / 100) * 100
+            g = round(total_gastos / 100) * 100
+            a = round(aporte_usado / 100) * 100
+            saldo = r - g if renda_usada else None
 
             # status_mes: ok, parcial, futuro, negativo
             if m < hoje_mes and ano <= hoje_ano:
@@ -340,16 +363,17 @@ class PlanoService:
                 "mes_referencia": mes_ref,
                 "renda_esperada": renda,
                 "renda_realizada": round(renda_realizada, 2) if renda_realizada is not None else None,
-                "renda_usada": round(renda_usada, 2),
+                "renda_usada": r,
                 "gastos_recorrentes": gastos_recorrentes,
                 "gastos_extras_esperados": round(gastos_extras, 2),
                 "gastos_realizados": gastos_realizados,
                 "gastos_usados": round(gastos_usados, 2),
+                "total_gastos": g,
                 "aporte_planejado": aporte,
                 "investimentos_realizados": round(investimentos_realizados, 2) if investimentos_realizados is not None else None,
-                "aporte_usado": round(aporte_usado, 2),
+                "aporte_usado": a,
                 "use_realizado": use_realizado,
-                "saldo_projetado": round(saldo, 2) if saldo is not None else None,
+                "saldo_projetado": saldo,
                 "status_mes": status_mes,
                 "grupos": [],
                 "expectativas": expectativas_items,
