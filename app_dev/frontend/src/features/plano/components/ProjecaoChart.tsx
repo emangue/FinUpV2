@@ -64,14 +64,14 @@ export function ProjecaoChart({ ano }: { ano: number }) {
     } catch {}
   }, []);
 
-  // Sempre buscar base (0%) e com redução quando slider > 0
+  // Sempre buscar base (0%) e com redução quando slider > 0. sem_patrimonio: só poupança do ano, não patrimônio.
   useEffect(() => {
     setLoading(true);
     setError(null);
     const fetches = [
-      getProjecao(ano, 12, 0),
+      getProjecao(ano, 12, 0, true),
       getCashflow(ano),
-      ...(reducaoPct > 0 ? [getProjecao(ano, 12, reducaoPct)] : []),
+      ...(reducaoPct > 0 ? [getProjecao(ano, 12, reducaoPct, true)] : []),
     ];
     Promise.all(fetches)
       .then((results) => {
@@ -174,7 +174,7 @@ export function ProjecaoChart({ ano }: { ano: number }) {
       <div className="p-4 border-b border-gray-100">
         <h3 className="font-semibold text-black mb-1">Projeção de poupança</h3>
         <p className="text-xs text-gray-500 mb-2">
-          Patrimônio acumulado mês a mês. Subir = guardando mais; descer = gastando mais que a renda.
+          Poupança acumulada no ano (sem patrimônio inicial). Subir = guardando mais; descer = gastando mais que a renda.
         </p>
         <div className="flex items-center gap-3">
           <label className="text-[13px] text-gray-600 whitespace-nowrap">

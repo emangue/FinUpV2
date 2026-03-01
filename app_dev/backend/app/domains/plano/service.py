@@ -392,16 +392,18 @@ class PlanoService:
         ano: int,
         meses: int = 12,
         reducao_pct: float = 0.0,
+        sem_patrimonio: bool = False,
     ) -> dict:
         """
         GET /plano/projecao - poupança acumulada mês a mês com opção de redução de gastos.
         reducao_pct: 0-100, percentual de redução nos gastos planejados.
+        sem_patrimonio: se True, inicia em 0 (só poupança do ano, não patrimônio total).
         """
         cashflow = self.get_cashflow(user_id, ano)
         profile = self.db.query(UserFinancialProfile).filter(
             UserFinancialProfile.user_id == user_id
         ).first()
-        patrimonio = float(profile.patrimonio_atual or 0) if profile else 0.0
+        patrimonio = 0.0 if sem_patrimonio else (float(profile.patrimonio_atual or 0) if profile else 0.0)
 
         fator = 1.0 - (reducao_pct / 100.0)
         acumulado = patrimonio
@@ -540,8 +542,15 @@ class PlanoService:
         if mes:
             q = q.filter(BaseExpectativa.mes_referencia == mes)
         rows = q.order_by(BaseExpectativa.mes_referencia, BaseExpectativa.id).all()
-        return [
-            {
+        out = []
+        for r in rows:
+            meta = {}
+            if r.metadata_json:
+                try:
+                    meta = json.loads(r.metadata_json)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            out.append({
                 "id": r.id,
                 "descricao": r.descricao,
                 "valor": float(r.valor),
@@ -550,9 +559,10 @@ class PlanoService:
                 "mes_referencia": r.mes_referencia,
                 "tipo_expectativa": r.tipo_expectativa,
                 "status": r.status or "pendente",
-            }
-            for r in rows
-        ]
+                "recorrencia": meta.get("recorrencia"),
+                "parcelas": meta.get("parcelas", 1),
+            })
+        return out
 
     def _expandir_meses_recorrencia(
         self, mes_referencia: str, recorrencia: str, num_meses: int = 12
@@ -579,8 +589,39 @@ class PlanoService:
                 break
         return meses_out[:num_meses]
 
-    def _materializar_expectativa(self, expectativa: BaseExpectativa, meses: list[str]) -> None:
-        """Insere expectativas_mes para os meses dados."""
+    def _expandir_meses_parcelas(self, mes_referencia: str, parcelas: int) -> list[str]:
+        """Retorna N meses consecutivos a partir de mes_referencia (YYYY-MM)."""
+        ano, mes = int(mes_referencia[:4]), int(mes_referencia[5:7])
+        out: list[str] = []
+        for _ in range(parcelas):
+            out.append(f"{ano}-{str(mes).zfill(2)}")
+            mes += 1
+            if mes > 12:
+                mes = 1
+                ano += 1
+        return out
+
+    def _expandir_meses_parcelas_anual(self, mes_referencia: str, parcelas: int, num_anos: int = 3) -> list[str]:
+        """Parcelado + anual: N parcelas por ano, repetido por num_anos."""
+        ano, mes_inicio = int(mes_referencia[:4]), int(mes_referencia[5:7])
+        out: list[str] = []
+        for _ in range(num_anos):
+            ano_bloco = ano
+            mes = mes_inicio
+            for _ in range(parcelas):
+                out.append(f"{ano}-{str(mes).zfill(2)}")
+                mes += 1
+                if mes > 12:
+                    mes = 1
+                    ano += 1
+            ano = ano_bloco + 1
+        return out
+
+    def _materializar_expectativa(
+        self, expectativa: BaseExpectativa, meses: list[str], valor_por_mes: Optional[float] = None
+    ) -> None:
+        """Insere expectativas_mes para os meses dados. valor_por_mes: se None, usa expectativa.valor."""
+        val = float(valor_por_mes) if valor_por_mes is not None else float(expectativa.valor)
         for mes_ref in meses:
             em = ExpectativaMes(
                 user_id=expectativa.user_id,
@@ -588,7 +629,7 @@ class PlanoService:
                 grupo=expectativa.grupo,
                 subgrupo=expectativa.subgrupo,
                 tipo=expectativa.tipo_lancamento or "debito",
-                valor=expectativa.valor,
+                valor=val,
                 origem_expectativa_id=expectativa.id,
             )
             self.db.add(em)
@@ -605,9 +646,11 @@ class PlanoService:
         tipo_lancamento: str = "debito",
         tipo_expectativa: str = "sazonal_plano",
         recorrencia: Optional[str] = "unico",
+        parcelas: Optional[int] = 1,
     ) -> dict:
-        """Cria expectativa e materializa em expectativas_mes (expande por recorrência)."""
-        metadata = {"recorrencia": recorrencia or "unico"}
+        """Cria expectativa e materializa em expectativas_mes (expande por recorrência ou parcelas)."""
+        parcelas_val = parcelas or 1
+        metadata = {"recorrencia": recorrencia or "unico", "parcelas": parcelas_val}
         e = BaseExpectativa(
             user_id=user_id,
             descricao=descricao,
@@ -622,8 +665,17 @@ class PlanoService:
         )
         self.db.add(e)
         self.db.flush()
-        meses = self._expandir_meses_recorrencia(mes_referencia, recorrencia or "unico")
-        self._materializar_expectativa(e, meses)
+        if parcelas_val > 1:
+            rec = recorrencia or "unico"
+            if rec == "anual":
+                meses = self._expandir_meses_parcelas_anual(mes_referencia, parcelas_val)
+            else:
+                meses = self._expandir_meses_parcelas(mes_referencia, parcelas_val)
+            valor_parcela = valor / parcelas_val
+            self._materializar_expectativa(e, meses, valor_por_mes=valor_parcela)
+        else:
+            meses = self._expandir_meses_recorrencia(mes_referencia, recorrencia or "unico")
+            self._materializar_expectativa(e, meses)
         self.db.commit()
         self.db.refresh(e)
         return {

@@ -153,11 +153,13 @@ export interface ProjecaoResponse {
 export async function getProjecao(
   ano: number,
   meses?: number,
-  reducao_pct?: number
+  reducao_pct?: number,
+  sem_patrimonio?: boolean
 ): Promise<ProjecaoResponse> {
   const params = new URLSearchParams({ ano: String(ano) });
   if (meses != null) params.set('meses', String(meses));
   if (reducao_pct != null) params.set('reducao_pct', String(reducao_pct));
+  if (sem_patrimonio) params.set('sem_patrimonio', '1');
   const res = await fetchWithAuth(`${BASE}/projecao?${params}`);
   if (!res.ok) throw new Error('Erro ao carregar projeção');
   return res.json();
@@ -205,12 +207,13 @@ export async function getGruposMedia3Meses(
   return res.json();
 }
 
+const BASE_BUDGET = `${API_CONFIG.BACKEND_URL}/api/v1/budget`;
+
 /** Salva metas em bulk via budget/planning (mes_referencia + budgets) */
 export async function putOrcamentoBulk(
   mes_referencia: string,
   budgets: { grupo: string; valor_planejado: number }[]
 ): Promise<unknown[]> {
-  const BASE_BUDGET = `${API_CONFIG.BACKEND_URL}/api/v1/budget`;
   const res = await fetchWithAuth(`${BASE_BUDGET}/planning/bulk-upsert`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -218,6 +221,48 @@ export async function putOrcamentoBulk(
   });
   if (!res.ok) throw new Error('Erro ao salvar metas');
   return res.json();
+}
+
+const MESES_LABEL = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+/** Retorna { count, mesFimLabel } de mes_inicio até hoje+12 meses */
+export function getOrcamentoRangeInfo(mes_inicio: string): { count: number; mesFimLabel: string } {
+  const hoje = new Date();
+  const mesFim = new Date(hoje.getFullYear(), hoje.getMonth() + 12, 1);
+  const mesFimStr = `${mesFim.getFullYear()}-${String(mesFim.getMonth() + 1).padStart(2, '0')}`;
+  const [yFim, mFim] = mesFimStr.split('-').map(Number);
+  const mesFimLabel = `${MESES_LABEL[mFim - 1]}/${yFim}`;
+  const [y1, m1] = mes_inicio.split('-').map(Number);
+  let count = 0;
+  let y = y1, m = m1;
+  while (y < yFim || (y === yFim && m <= mFim)) {
+    count++;
+    m += 1;
+    if (m > 12) { m = 1; y += 1; }
+  }
+  return { count, mesFimLabel };
+}
+
+/** Aplica metas de mes_inicio até hoje+12 meses em budget_planning */
+export async function putOrcamentoBulkRange(
+  mes_inicio: string,
+  budgets: { grupo: string; valor_planejado: number }[]
+): Promise<void> {
+  const hoje = new Date();
+  const mesFim = new Date(hoje.getFullYear(), hoje.getMonth() + 12, 1);
+  const mesFimStr = `${mesFim.getFullYear()}-${String(mesFim.getMonth() + 1).padStart(2, '0')}`;
+  const [y1, m1] = mes_inicio.split('-').map(Number);
+  const [y2, m2] = mesFimStr.split('-').map(Number);
+  const meses: string[] = [];
+  let y = y1, m = m1;
+  while (y < y2 || (y === y2 && m <= m2)) {
+    meses.push(`${y}-${String(m).padStart(2, '0')}`);
+    m += 1;
+    if (m > 12) { m = 1; y += 1; }
+  }
+  for (const mesRef of meses) {
+    await putOrcamentoBulk(mesRef, budgets);
+  }
 }
 
 export interface PerfilResponse {
@@ -256,6 +301,14 @@ export async function putPerfil(payload: PerfilUpdatePayload): Promise<PerfilUpd
 
 // ─── Expectativas (gastos/rendas extraordinárias) ────────────────────────────
 
+/** Grupos Despesa para vincular gastos sazonais (planning + excepcional por grupo) */
+export async function getGruposDespesa(): Promise<string[]> {
+  const res = await fetchWithAuth(`${BASE_BUDGET}/planning/grupos-com-categoria`);
+  if (!res.ok) return [];
+  const data: { nome_grupo: string; categoria_geral: string }[] = await res.json();
+  return data.filter((g) => g.categoria_geral === 'Despesa').map((g) => g.nome_grupo);
+}
+
 export interface ExpectativaItem {
   id: number;
   descricao: string | null;
@@ -265,6 +318,8 @@ export interface ExpectativaItem {
   mes_referencia: string;
   tipo_expectativa: string;
   status: string;
+  recorrencia?: string;
+  parcelas?: number;
 }
 
 export interface ExpectativaCreatePayload {
@@ -276,6 +331,7 @@ export interface ExpectativaCreatePayload {
   tipo_lancamento?: 'debito' | 'credito';
   tipo_expectativa?: 'sazonal_plano' | 'renda_plano' | 'parcela_futura';
   recorrencia?: 'unico' | 'bimestral' | 'trimestral' | 'semestral' | 'anual';
+  parcelas?: number; // 1 = à vista, 2-24 = parcelado
 }
 
 export async function getExpectativas(mes?: string): Promise<ExpectativaItem[]> {
@@ -298,6 +354,7 @@ export async function postExpectativa(payload: ExpectativaCreatePayload): Promis
       tipo_lancamento: payload.tipo_lancamento ?? 'debito',
       tipo_expectativa: payload.tipo_expectativa ?? 'sazonal_plano',
       recorrencia: payload.recorrencia ?? 'unico',
+      parcelas: payload.parcelas ?? 1,
     }),
   });
   if (!res.ok) throw new Error('Erro ao criar expectativa');

@@ -266,6 +266,7 @@ def criar_expectativa(
         tipo_lancamento=data.tipo_lancamento,
         tipo_expectativa=data.tipo_expectativa,
         recorrencia=data.recorrencia,
+        parcelas=data.parcelas,
     )
 
 
@@ -308,10 +309,11 @@ def projecao_poupanca(
     ano: int = Query(None, ge=2020, le=2100),
     meses: int = Query(12, ge=1, le=60),
     reducao_pct: float = Query(0, ge=0, le=100),
+    sem_patrimonio: bool = Query(False, description="Se True, inicia em 0 (só poupança do ano, não patrimônio)"),
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ):
     """Poupança acumulada mês a mês. reducao_pct = % de redução nos gastos."""
     ano = ano or date.today().year
     service = PlanoService(db)
-    return service.get_projecao(user_id, ano, meses, reducao_pct)
+    return service.get_projecao(user_id, ano, meses, reducao_pct, sem_patrimonio)
