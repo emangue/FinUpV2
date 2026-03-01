@@ -11,6 +11,7 @@ import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react';
 import { MobileHeader } from '@/components/mobile/mobile-header';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -90,9 +91,11 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
   const [novoExtraRenda, setNovoExtraRenda] = React.useState<{
     descricao: string;
     valor: number;
+    ano: number;
     mes: number;
     recorrencia: 'unico' | 'bimestral' | 'trimestral' | 'semestral' | 'anual';
-  }>({ descricao: '', valor: 0, mes: 1, recorrencia: 'anual' });
+    parcelas: number;
+  }>({ descricao: '', valor: 0, ano: new Date().getFullYear(), mes: 1, recorrencia: 'anual', parcelas: 1 });
   const [novoSazonal, setNovoSazonal] = React.useState<{
     descricao: string;
     valor: number;
@@ -260,9 +263,12 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
   };
 
   const handleAddExtraRenda = async () => {
-    if (!novoExtraRenda.descricao || novoExtraRenda.valor <= 0) return;
+    if (!novoExtraRenda.descricao || novoExtraRenda.valor <= 0) {
+      toast.error('Preencha descrição e valor');
+      return;
+    }
     try {
-      const mesRef = `${ano}-${String(novoExtraRenda.mes).padStart(2, '0')}`;
+      const mesRef = `${novoExtraRenda.ano}-${String(novoExtraRenda.mes).padStart(2, '0')}`;
       await postExpectativa({
         descricao: novoExtraRenda.descricao,
         valor: novoExtraRenda.valor,
@@ -270,12 +276,14 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
         tipo_lancamento: 'credito',
         tipo_expectativa: 'renda_plano',
         recorrencia: novoExtraRenda.recorrencia,
+        parcelas: novoExtraRenda.parcelas,
       });
-      setNovoExtraRenda({ descricao: '', valor: 0, mes: 1, recorrencia: 'anual' });
+      setNovoExtraRenda({ descricao: '', valor: 0, ano: planInicioAno, mes: 1, recorrencia: 'anual', parcelas: 1 });
       const list = await getExpectativas();
       setExtraRendas(list.filter((e) => e.tipo_expectativa === 'renda_plano'));
-    } catch {
-      /* ignore */
+      toast.success('Receita extraordinária adicionada');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Erro ao salvar receita extraordinária');
     }
   };
 
@@ -384,7 +392,11 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
                     <div key={e.id} className="flex items-center justify-between py-2 px-3 bg-green-50 rounded-xl">
                       <div>
                         <p className="font-medium">{e.descricao || '(sem descrição)'}</p>
-                        <p className="text-sm text-gray-600">{formatCurrency(e.valor)} · {e.mes_referencia}</p>
+                        <p className="text-sm text-gray-600">
+                          {formatCurrency(e.valor)} · {e.mes_referencia}
+                          {(e.parcelas ?? 1) > 1 && ` · ${e.parcelas}x`}
+                          {e.recorrencia && e.recorrencia !== 'unico' && ` · ${RECORRENCIAS.find((r) => r.value === e.recorrencia)?.label ?? e.recorrencia}`}
+                        </p>
                       </div>
                       <button
                         type="button"
@@ -405,7 +417,7 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
                     onChange={(e) => setNovoExtraRenda((n) => ({ ...n, descricao: e.target.value }))}
                     className="w-full rounded-lg border border-gray-200 px-3 py-2"
                   />
-                  <div className="flex gap-2 flex-wrap">
+                  <div className="flex gap-2 flex-wrap items-center">
                     <input
                       type="number"
                       min={0}
@@ -415,10 +427,22 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
                       onChange={(e) => setNovoExtraRenda((n) => ({ ...n, valor: parseFloat(e.target.value) || 0 }))}
                       className="flex-1 min-w-[80px] rounded-lg border border-gray-200 px-3 py-2"
                     />
+                    <span className="text-xs text-gray-500">Desde:</span>
+                    <select
+                      value={novoExtraRenda.ano}
+                      onChange={(e) => setNovoExtraRenda((n) => ({ ...n, ano: Number(e.target.value) }))}
+                      className="rounded-lg border border-gray-200 px-3 py-2"
+                      title="Ano"
+                    >
+                      {[planInicioAno - 1, planInicioAno, planInicioAno + 1].map((a) => (
+                        <option key={a} value={a}>{a}</option>
+                      ))}
+                    </select>
                     <select
                       value={novoExtraRenda.mes}
                       onChange={(e) => setNovoExtraRenda((n) => ({ ...n, mes: Number(e.target.value) }))}
                       className="rounded-lg border border-gray-200 px-3 py-2"
+                      title="Mês"
                     >
                       {[1,2,3,4,5,6,7,8,9,10,11,12].map((m) => (
                         <option key={m} value={m}>{['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][m-1]}</option>
@@ -431,6 +455,16 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
                     >
                       {RECORRENCIAS.map((r) => (
                         <option key={r.value} value={r.value}>{r.label}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={novoExtraRenda.parcelas}
+                      onChange={(e) => setNovoExtraRenda((n) => ({ ...n, parcelas: Number(e.target.value) }))}
+                      className="rounded-lg border border-gray-200 px-3 py-2"
+                      title="Parcelas"
+                    >
+                      {PARCELAS_OPCOES.map((p) => (
+                        <option key={p.value} value={p.value}>{p.label}</option>
                       ))}
                     </select>
                   </div>

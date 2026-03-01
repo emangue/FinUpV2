@@ -248,10 +248,11 @@ class PlanoService:
             "taxa_retorno_anual": profile.taxa_retorno_anual,
         }
 
-    def get_cashflow(self, user_id: int, ano: int) -> dict:
+    def get_cashflow(self, user_id: int, ano: int, modo_plano_sempre: bool = False) -> dict:
         """
         GET /plano/cashflow?ano= - 12 meses: renda, gastos, aporte, saldo, status.
-        Sem base_expectativas: gastos_extras_esperados=0, expectativas=[].
+        modo_plano_sempre: se True, usa sempre dados do plano (renda, budget, expectativas) em todos os meses,
+        incluindo passados — para projeção de poupança refletir aporte + extraordinários.
         """
         profile = self.db.query(UserFinancialProfile).filter(
             UserFinancialProfile.user_id == user_id
@@ -323,7 +324,8 @@ class PlanoService:
             gastos_realizados = abs(float(gastos_real)) if gastos_real else None
 
             # Troca para realizado quando receita >= 90% do esperado (receita, despesas, investimentos)
-            use_realizado = (
+            # modo_plano_sempre: força uso do plano em todos os meses (para projeção incluir expectativas)
+            use_realizado = False if modo_plano_sempre else (
                 renda_realizada is not None
                 and renda is not None
                 and renda > 0
@@ -341,8 +343,8 @@ class PlanoService:
 
             # Fase 4: base_expectativas — APENAS em modo planejado (não misturar real com expectativa)
             exp_mes = self.get_expectativas_por_mes(user_id, ano).get(mes_ref, {"debitos": 0.0, "creditos": 0.0, "items": []})
-            gastos_extras = exp_mes["debitos"] - exp_mes["creditos"] if not use_realizado else 0.0
-            expectativas_items = exp_mes.get("items", []) if not use_realizado else []
+            gastos_extras = exp_mes["debitos"] - exp_mes["creditos"] if (not use_realizado or modo_plano_sempre) else 0.0
+            expectativas_items = exp_mes.get("items", []) if (not use_realizado or modo_plano_sempre) else []
 
             total_gastos = gastos_usados + gastos_extras
             # Saldo = Renda - Gastos (aporte não entra no saldo; é o que sobra após despesas)
@@ -399,33 +401,56 @@ class PlanoService:
         reducao_pct: 0-100, percentual de redução nos gastos planejados.
         sem_patrimonio: se True, inicia em 0 (só poupança do ano, não patrimônio total).
         """
-        cashflow = self.get_cashflow(user_id, ano)
+        # modo_plano_sempre: incluir expectativas (aportes extraordinários) em todos os meses
+        cashflow = self.get_cashflow(user_id, ano, modo_plano_sempre=sem_patrimonio)
         profile = self.db.query(UserFinancialProfile).filter(
             UserFinancialProfile.user_id == user_id
         ).first()
         patrimonio = 0.0 if sem_patrimonio else (float(profile.patrimonio_atual or 0) if profile else 0.0)
+        aporte_planejado = float(profile.aporte_planejado or 0) if profile else 0.0
 
         fator = 1.0 - (reducao_pct / 100.0)
         acumulado = patrimonio
         serie = []
-        for i, m in enumerate(cashflow["meses"][:meses]):
-            renda_mes = m.get("renda_usada") or 0.0
-            gastos_base = m.get("gastos_usados") or (m["gastos_realizados"] or m["gastos_recorrentes"])
-            extras = m.get("gastos_extras_esperados", 0) or 0
-            # Redução só em meses não realizados — janeiro já foi, não dá pra economizar nele
-            if m.get("use_realizado"):
-                gastos = gastos_base + extras
-            else:
-                gastos = (gastos_base * fator) + extras
-            aporte_mes = m.get("aporte_usado") or m["aporte_planejado"]
-            saldo_mes = renda_mes - gastos - aporte_mes
-            acumulado += saldo_mes
-            serie.append({
-                "mes": i + 1,
-                "mes_referencia": m["mes_referencia"],
-                "saldo_mes": round(saldo_mes, 2),
-                "acumulado": round(acumulado, 2),
-            })
+
+        if sem_patrimonio and reducao_pct == 0:
+            # Curva azul (base) = soma acumulada de aporte do plano + extraordinários (créditos - débitos)
+            # Valores definidos no wizard: aporte mensal + receitas extras - gastos sazonais
+            exp_por_mes = self.get_expectativas_por_mes(user_id, ano)
+            acumulado_aportes = 0.0
+            for i, m in enumerate(cashflow["meses"][:meses]):
+                mes_ref = m["mes_referencia"]
+                exp = exp_por_mes.get(mes_ref, {"debitos": 0.0, "creditos": 0.0})
+                creditos = exp["creditos"]
+                debitos = exp["debitos"]
+                aporte_mes = aporte_planejado
+                extras_mes = creditos - debitos  # positivo = receita extra, negativo = gasto sazonal
+                aporte_total_mes = aporte_mes + extras_mes
+                acumulado_aportes += aporte_total_mes
+                serie.append({
+                    "mes": i + 1,
+                    "mes_referencia": mes_ref,
+                    "saldo_mes": round(aporte_total_mes, 2),
+                    "acumulado": round(acumulado_aportes, 2),
+                })
+        else:
+            for i, m in enumerate(cashflow["meses"][:meses]):
+                renda_mes = m.get("renda_usada") or 0.0
+                gastos_base = m.get("gastos_usados") or (m["gastos_realizados"] or m["gastos_recorrentes"])
+                extras = m.get("gastos_extras_esperados", 0) or 0
+                if m.get("use_realizado"):
+                    gastos = gastos_base + extras
+                else:
+                    gastos = (gastos_base * fator) + extras
+                aporte_mes = m.get("aporte_usado") or m["aporte_planejado"]
+                saldo_mes = renda_mes - gastos - aporte_mes
+                acumulado += saldo_mes
+                serie.append({
+                    "mes": i + 1,
+                    "mes_referencia": m["mes_referencia"],
+                    "saldo_mes": round(saldo_mes, 2),
+                    "acumulado": round(acumulado, 2),
+                })
         return {
             "patrimonio_inicial": patrimonio,
             "reducao_pct": reducao_pct,
@@ -567,7 +592,7 @@ class PlanoService:
     def _expandir_meses_recorrencia(
         self, mes_referencia: str, recorrencia: str, num_meses: int = 12
     ) -> list[str]:
-        """Expande recorrência para lista de YYYY-MM nos próximos num_meses a partir de hoje."""
+        """Expande recorrência para lista de YYYY-MM. unico: sempre inclui mes_referencia; demais: a partir de hoje."""
         ano_inicio, mes_inicio = int(mes_referencia[:4]), int(mes_referencia[5:7])
         hoje = date.today()
         ano_hoje, mes_hoje = hoje.year, hoje.month
@@ -576,10 +601,12 @@ class PlanoService:
         mes_cal, ano_cal = mes_inicio, ano_inicio
         count = 0
         while count <= num_meses + 12:
+            if interval == 0:
+                # unico: sempre inclui o mês de referência (para recibo do ano)
+                meses_out.append(f"{ano_cal}-{str(mes_cal).zfill(2)}")
+                break
             if (ano_cal > ano_hoje) or (ano_cal == ano_hoje and mes_cal >= mes_hoje):
                 meses_out.append(f"{ano_cal}-{str(mes_cal).zfill(2)}")
-            if interval == 0:
-                break
             mes_cal += interval
             while mes_cal > 12:
                 mes_cal -= 12
