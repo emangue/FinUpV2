@@ -20,8 +20,7 @@ export default function ConstruirPlanoPage() {
   const [state, setState] = React.useState<PlanoWizardState>(initialPlanoWizardState);
 
   const handleFinish = () => {
-    // Fase 5: persistir e redirecionar. Por ora, volta ao plano.
-    router.push('/mobile/budget');
+    router.push('/mobile/plano');
   };
 
   return (

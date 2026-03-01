@@ -7,6 +7,7 @@ import { Pencil } from 'lucide-react'
 import type { AporteExtraordinario, PlanoProfile } from '../types'
 import { planProfiles } from '../lib/plan-profiles'
 import { salvarPlano, atualizarPlano, carregarPlano } from '../services/plano-api'
+import { getPerfil } from '@/features/plano/api'
 import { useDashboardMetrics } from '@/features/dashboard/hooks/use-dashboard'
 import { fetchLastMonthWithData } from '@/features/dashboard/services/dashboard-api'
 
@@ -52,6 +53,24 @@ export function PersonalizarPlanoLayout({ cenarioId }: PersonalizarPlanoLayoutPr
     didInitPatrimonioFromMetrics.current = true
     setPatrimonio(patrimonioLiquido)
   }, [patrimonioLiquido, cenarioId])
+
+  // Fase 3: Usar aporte do plano quando disponível (ao criar novo cenário)
+  const didInitAporteFromPlano = useRef(false)
+  useEffect(() => {
+    if (cenarioId || didInitAporteFromPlano.current) return
+    didInitAporteFromPlano.current = true
+    getPerfil()
+      .then((p) => {
+        if (p.aporte_planejado != null && p.aporte_planejado > 0) {
+          setAporte(p.aporte_planejado)
+        }
+        if (p.idade_atual != null) setAge(p.idade_atual)
+        if (p.idade_aposentadoria != null) setRetire(p.idade_aposentadoria)
+        if (p.patrimonio_atual != null && p.patrimonio_atual > 0) setPatrimonio(p.patrimonio_atual)
+        if (p.renda_mensal_liquida != null && p.renda_mensal_liquida > 0) setRendaMensal(p.renda_mensal_liquida)
+      })
+      .catch(() => {})
+  }, [cenarioId])
 
   // Sprint H: Carregar cenário ao editar
   useEffect(() => {

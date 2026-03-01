@@ -280,6 +280,29 @@ def deletar_expectativa(
     service.delete_expectativa(user_id, expectativa_id)
 
 
+@router.get("/projecao-longa")
+def projecao_longa(
+    inflacao_pct: float = Query(4.5, ge=0, le=20, description="Expectativa de inflação % a.a."),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Projeção de patrimônio até aposentadoria (até 30 anos)."""
+    service = PlanoService(db)
+    return service.get_projecao_longa(user_id, inflacao_pct)
+
+
+@router.get("/grupos-media-3-meses")
+def grupos_media_3_meses(
+    ano: int = Query(..., ge=2020, le=2100),
+    mes: int = Query(..., ge=1, le=12),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Grupos Despesa com valor_planejado e valor_medio_3_meses para o mês."""
+    service = PlanoService(db)
+    return service.get_grupos_media_3_meses(user_id, ano, mes)
+
+
 @router.get("/projecao")
 def projecao_poupanca(
     ano: int = Query(None, ge=2020, le=2100),

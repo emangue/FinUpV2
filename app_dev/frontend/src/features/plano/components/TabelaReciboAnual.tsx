@@ -87,7 +87,7 @@ export function TabelaReciboAnual({ ano }: { ano: number }) {
   const meses = data.meses;
   const totalRenda = meses.reduce((s, m) => s + (m.renda_usada ?? m.renda_esperada ?? 0), 0);
   const totalGastos = meses.reduce((s, m) => {
-    const g = m.gastos_usados ?? m.gastos_realizados ?? m.gastos_recorrentes;
+    const g = m.total_gastos ?? m.gastos_usados ?? m.gastos_realizados ?? m.gastos_recorrentes;
     return s + (g || 0);
   }, 0);
   const totalAporte = meses.reduce((s, m) => s + (m.aporte_usado ?? m.aporte_planejado ?? 0), 0);
@@ -162,7 +162,7 @@ export function TabelaReciboAnual({ ano }: { ano: number }) {
               {meses.map((m) => {
                 const [y, mm] = m.mes_referencia.split('-').map(Number);
                 const mesNome = MESES_NOME[mm] || String(mm);
-                const gastos = m.gastos_usados ?? m.gastos_realizados ?? m.gastos_recorrentes;
+                const gastos = m.total_gastos ?? m.gastos_usados ?? m.gastos_realizados ?? m.gastos_recorrentes;
                 return (
                   <tr key={m.mes_referencia} className="border-t border-gray-100">
                     <td className="py-1 px-2 text-gray-600">{mesNome}/{y}</td>

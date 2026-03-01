@@ -430,6 +430,107 @@ class PlanoService:
             "serie": serie,
         }
 
+    def get_projecao_longa(
+        self,
+        user_id: int,
+        inflacao_pct: float = 4.5,
+    ) -> dict:
+        """
+        Projeção de patrimônio até aposentadoria (até 30 anos).
+        Usa user_financial_profile + expectativas tipo credito (aportes extras).
+        Retorna série mês a mês: patrimonio_nominal, patrimonio_real.
+        """
+        profile = self.db.query(UserFinancialProfile).filter(
+            UserFinancialProfile.user_id == user_id
+        ).first()
+        if not profile:
+            return {"serie": [], "patrimonio_final_nominal": 0, "patrimonio_final_real": 0}
+        patrimonio = float(profile.patrimonio_atual or 0)
+        aporte = float(profile.aporte_planejado or 0)
+        taxa = float(profile.taxa_retorno_anual or 0.08)
+        idade = profile.idade_atual or 35
+        idade_apos = profile.idade_aposentadoria or 65
+        anos = max(1, idade_apos - idade)
+        meses_total = anos * 12
+        inflacao = inflacao_pct / 100.0
+        taxa_real = (1 + taxa) / (1 + inflacao) - 1 if inflacao < 1 else 0
+        rate_nom = (1 + taxa) ** (1 / 12) - 1
+        rate_real = (1 + taxa_real) ** (1 / 12) - 1 if taxa_real > -0.99 else 0
+
+        extras = self.db.query(BaseExpectativa).filter(
+            BaseExpectativa.user_id == user_id,
+            BaseExpectativa.tipo_lancamento == "credito",
+            BaseExpectativa.status == "pendente",
+        ).all()
+        from datetime import date
+        hoje = date.today()
+        ano_base, mes_base = hoje.year, hoje.month
+        extra_map: dict[int, float] = {}
+        for e in extras:
+            meta = {}
+            if e.metadata_json:
+                try:
+                    meta = json.loads(e.metadata_json)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            rec = meta.get("recorrencia", "unico")
+            meses_exp = self._expandir_meses_recorrencia(e.mes_referencia, rec, meses_total)
+            for i, yyyy_mm in enumerate(meses_exp):
+                y, m = int(yyyy_mm[:4]), int(yyyy_mm[5:7])
+                idx = (y - ano_base) * 12 + (m - mes_base)
+                if 0 <= idx < meses_total:
+                    extra_map[idx] = extra_map.get(idx, 0) + float(e.valor)
+
+        p_nom, p_real = patrimonio, patrimonio
+        serie = []
+        for mes_idx in range(meses_total):
+            extra = extra_map.get(mes_idx, 0)
+            aporte_mes = aporte + extra
+            p_nom = (p_nom + aporte_mes) * (1 + rate_nom)
+            p_real = (p_real + aporte_mes) * (1 + rate_real)
+            ano_m = ano_base + (mes_base - 1 + mes_idx) // 12
+            mes_m = (mes_base - 1 + mes_idx) % 12 + 1
+            serie.append({
+                "mes_num": mes_idx + 1,
+                "ano": ano_m,
+                "mes": mes_m,
+                "patrimonio_nominal": round(p_nom, 2),
+                "patrimonio_real": round(p_real, 2),
+                "aporte_mes": round(aporte_mes, 2),
+            })
+        return {
+            "patrimonio_inicial": patrimonio,
+            "patrimonio_final_nominal": round(p_nom, 2),
+            "patrimonio_final_real": round(p_real, 2),
+            "meses": meses_total,
+            "serie": serie,
+        }
+
+    def get_grupos_media_3_meses(self, user_id: int, ano: int, mes: int) -> list:
+        """Grupos Despesa com valor_planejado e valor_medio_3_meses para o mês."""
+        mes_ref = f"{ano}-{str(mes).zfill(2)}"
+        from app.domains.budget.models import BudgetPlanning
+        from app.domains.grupos.models import BaseGruposConfig
+        rows = (
+            self.db.query(BudgetPlanning.grupo, BudgetPlanning.valor_planejado, BudgetPlanning.valor_medio_3_meses)
+            .join(
+                BaseGruposConfig,
+                (BudgetPlanning.user_id == BaseGruposConfig.user_id)
+                & (BudgetPlanning.grupo == BaseGruposConfig.nome_grupo),
+            )
+            .filter(
+                BudgetPlanning.user_id == user_id,
+                BudgetPlanning.mes_referencia == mes_ref,
+                BudgetPlanning.ativo == True,
+                BaseGruposConfig.categoria_geral == "Despesa",
+            )
+            .all()
+        )
+        return [
+            {"grupo": r.grupo, "valor_planejado": float(r.valor_planejado or 0), "valor_medio_3_meses": float(r.valor_medio_3_meses or 0)}
+            for r in rows
+        ]
+
     def list_expectativas(self, user_id: int, mes: Optional[str] = None) -> list:
         """Lista expectativas do usuário, opcionalmente filtradas por mês."""
         q = self.db.query(BaseExpectativa).filter(
