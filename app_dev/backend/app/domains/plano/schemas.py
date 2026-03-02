@@ -18,7 +18,6 @@ class PerfilUpdate(BaseModel):
     crescimento_renda: Optional[float] = Field(None, ge=0, le=100)  # % a.a.
     reajuste_mes: Optional[int] = Field(None, ge=1, le=12)
     reajuste_ano: Optional[int] = Field(None, ge=2000, le=2100)
-    modo_reajuste: Optional[str] = Field(None, pattern="^(proporcional|tudo_investimento)$")
     crescimento_gastos: Optional[float] = Field(None, ge=0, le=100)  # % a.a. inflação dos gastos
 
 

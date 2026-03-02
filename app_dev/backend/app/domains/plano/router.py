@@ -115,7 +115,6 @@ def obter_perfil(
         "crescimento_renda": profile.crescimento_renda,
         "reajuste_mes": profile.reajuste_mes,
         "reajuste_ano": profile.reajuste_ano,
-        "modo_reajuste": profile.modo_reajuste,
         "crescimento_gastos": profile.crescimento_gastos,
     }
 
@@ -139,7 +138,6 @@ def atualizar_perfil(
         crescimento_renda=data.crescimento_renda,
         reajuste_mes=data.reajuste_mes,
         reajuste_ano=data.reajuste_ano,
-        modo_reajuste=data.modo_reajuste,
         crescimento_gastos=data.crescimento_gastos,
     )
 

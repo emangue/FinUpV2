@@ -144,7 +144,6 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
     crescimentoRenda: 0,
     reajusteMes: new Date().getMonth() + 1,
     reajusteAno: new Date().getFullYear(),
-    modoReajuste: 'proporcional' as const,
     crescimentoGastos: 0,
     activeProfile: 'moderado',
   });
@@ -191,7 +190,6 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
           crescimentoRenda: p.crescimento_renda ?? 0,
           reajusteMes: p.reajuste_mes ?? (new Date().getMonth() + 1),
           reajusteAno: p.reajuste_ano ?? new Date().getFullYear(),
-          modoReajuste: (p.modo_reajuste as 'proporcional' | 'tudo_investimento') ?? 'proporcional',
           crescimentoGastos: p.crescimento_gastos ?? 0,
         }));
       })
@@ -296,7 +294,6 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
           crescimento_renda: aposentadoriaState.crescimentoRenda ?? 0,
           reajuste_mes: aposentadoriaState.reajusteMes,
           reajuste_ano: aposentadoriaState.reajusteAno,
-          modo_reajuste: aposentadoriaState.modoReajuste ?? 'proporcional',
           crescimento_gastos: aposentadoriaState.crescimentoGastos ?? 0,
         });
       } catch {

@@ -275,7 +275,6 @@ export interface PerfilResponse {
   crescimento_renda: number | null;
   reajuste_mes: number | null;
   reajuste_ano: number | null;
-  modo_reajuste: string | null;
   crescimento_gastos: number | null;
 }
 
@@ -289,7 +288,6 @@ export interface PerfilUpdatePayload {
   crescimento_renda?: number;
   reajuste_mes?: number;
   reajuste_ano?: number;
-  modo_reajuste?: string;
   crescimento_gastos?: number;
 }
 

@@ -220,7 +220,6 @@ class PlanoService:
         crescimento_renda: Optional[float] = None,
         reajuste_mes: Optional[int] = None,
         reajuste_ano: Optional[int] = None,
-        modo_reajuste: Optional[str] = None,
         crescimento_gastos: Optional[float] = None,
     ) -> dict:
         """PUT /plano/perfil - atualiza parâmetros do plano financeiro"""
@@ -248,8 +247,6 @@ class PlanoService:
             profile.reajuste_mes = reajuste_mes
         if reajuste_ano is not None:
             profile.reajuste_ano = reajuste_ano
-        if modo_reajuste is not None:
-            profile.modo_reajuste = modo_reajuste
         if crescimento_gastos is not None:
             profile.crescimento_gastos = crescimento_gastos
         self.db.commit()
@@ -264,7 +261,6 @@ class PlanoService:
             "crescimento_renda": profile.crescimento_renda,
             "reajuste_mes": profile.reajuste_mes,
             "reajuste_ano": profile.reajuste_ano,
-            "modo_reajuste": profile.modo_reajuste,
             "crescimento_gastos": profile.crescimento_gastos,
         }
 

@@ -246,8 +246,6 @@ export interface PlanoAposentadoriaState {
   reajusteMes?: number;
   /** Ano do primeiro reajuste. */
   reajusteAno?: number;
-  /** Modo de crescimento da renda: proporcional (renda+aporte crescem) ou tudo_investimento */
-  modoReajuste?: 'proporcional' | 'tudo_investimento';
   /** Inflação dos gastos recorrentes (% a.a.), aplicada todo janeiro */
   crescimentoGastos?: number;
   activeProfile: PlanoProfile;
