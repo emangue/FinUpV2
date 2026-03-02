@@ -148,9 +148,8 @@ function ParametrosSummary({
               {crescRenda > 0 && (
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Crescimento renda</span>
-                  <span className="font-medium text-indigo-600">
+                  <span className="text-[11px] font-medium text-indigo-600">
                     +{crescRenda.toFixed(1)}% a.a. a partir de {MESES_ABREV[(state.reajusteMes ?? 1) - 1]}/{state.reajusteAno}
-                    {' — '}{state.modoReajuste === 'tudo_investimento' ? 'todo extra p/ investimento' : 'proporcional'}
                   </span>
                 </div>
               )}
@@ -190,7 +189,7 @@ function ParametrosSummary({
               {crescGastos > 0 && (
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Inflação gastos</span>
-                  <span className="font-medium text-orange-500">+{crescGastos.toFixed(1)}% a.a. todo janeiro</span>
+                  <span className="text-[11px] font-medium text-orange-500">+{crescGastos.toFixed(1)}% a.a. todo janeiro</span>
                 </div>
               )}
               {sazonais.length > 0 && (
@@ -206,7 +205,7 @@ function ParametrosSummary({
             <p className="text-[10px] font-bold uppercase text-gray-400 mb-2">Projeção</p>
             <div className="space-y-1.5">
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Aporte/mês</span>
+                <span className="text-gray-600">Aporte inicial/mês</span>
                 <span className="font-medium">{fmtC(state.aporte)}</span>
               </div>
               <div className="flex justify-between text-sm">
@@ -403,18 +402,19 @@ export function PlanoAposentadoriaStepContent({
   const aporteEfetivo = temPlanData ? Math.min(state.aporte, maxAporte) : state.aporte;
   const aporteUsado = aporteEfetivo > 0 ? aporteEfetivo : state.aporte;
 
-  // Aporte por mês da projeção: (aporte base + extras - sazonais) * crescimento anual
+  // Aporte por mês da projeção:
+  //   Com dados do plano: aporte(t) = renda(t) - gastos(t) + extras(t) - sazonais(t)
+  //   Sem dados:          aporte(t) = aporteUsado fixo (slider manual)
   const anoBase = hoje.getFullYear();
   const mesBase = hoje.getMonth() + 1;
   const crescimentoRenda = state.crescimentoRenda ?? 0;
   const reajusteMes = state.reajusteMes ?? mesBase;
   const reajusteAno = state.reajusteAno ?? anoBase;
-  const modoReajuste = state.modoReajuste ?? 'proporcional';
   const rendaBase = state.rendaMensal > 0 ? state.rendaMensal : 0;
   const aportePorMesProjecao = React.useMemo(() => {
     const out: number[] = [];
-    const fatorAnual = 1 + crescimentoRenda / 100;
-    const fatorGastosAnual = 1 + crescimentoGastos / 100;
+    const fatorRenda = 1 + crescimentoRenda / 100;
+    const fatorGastos = 1 + crescimentoGastos / 100;
     for (let m = 0; m < months; m++) {
       const anoOffset = Math.floor((mesBase - 1 + m) / 12);
       const ano_m = anoBase + anoOffset;
@@ -422,29 +422,25 @@ export function PlanoAposentadoriaStepContent({
       const saz = expandirPorMes(ano_m, sazonais, -1);
       const ext = expandirPorMes(ano_m, extraRendas, 1);
       const netExtra = (ext[mes_m - 1] ?? 0) + (saz[mes_m - 1] ?? 0);
-      // Conta quantos reajustes anuais ocorreram até (ano_m, mes_m) para a renda
-      const reajusteCount =
-        ano_m < reajusteAno || (ano_m === reajusteAno && mes_m < reajusteMes)
-          ? 0
-          : (ano_m - reajusteAno) + (mes_m >= reajusteMes ? 1 : 0);
-      // Gastos crescem todo janeiro: (1+cg)^n onde n = anos completos desde anoBase
-      const gastosGrowthFactor = crescimentoGastos > 0 ? Math.pow(fatorGastosAnual, anoOffset) : 1;
-      const gastosExtra = totalGastosRecorrentes * (gastosGrowthFactor - 1);
       let aporteNoMes: number;
-      if (modoReajuste === 'tudo_investimento' && crescimentoRenda > 0 && rendaBase > 0) {
-        // Gastos ficam fixos nominalmente; todo aumento de renda vira aporte
-        // aporte_n = aporteBase + rendaBase * ((1+g)^n - 1) - gastosExtra
-        const incremento = rendaBase * (Math.pow(fatorAnual, reajusteCount) - 1);
-        aporteNoMes = aporteUsado + incremento - gastosExtra + netExtra;
+      if (temPlanData && rendaBase > 0) {
+        // renda cresce anualmente a partir de reajusteMes/reajusteAno
+        const reajusteCount =
+          ano_m < reajusteAno || (ano_m === reajusteAno && mes_m < reajusteMes)
+            ? 0
+            : (ano_m - reajusteAno) + (mes_m >= reajusteMes ? 1 : 0);
+        const rendaNoMes = rendaBase * Math.pow(fatorRenda, reajusteCount);
+        // gastos crescem todo janeiro (anos completos desde anoBase)
+        const gastosNoMes = totalGastosRecorrentes * Math.pow(fatorGastos, anoOffset);
+        aporteNoMes = rendaNoMes - gastosNoMes + netExtra;
       } else {
-        // Proporcional: aporte e renda crescem na mesma proporção; gastos crescem separadamente
-        const multiplicador = Math.pow(fatorAnual, reajusteCount);
-        aporteNoMes = (aporteUsado + netExtra) * multiplicador - gastosExtra;
+        // Sem dados do plano: aporte fixo do slider
+        aporteNoMes = aporteUsado + netExtra;
       }
       out.push(Math.max(0, aporteNoMes));
     }
     return out;
-  }, [months, anoBase, mesBase, aporteUsado, sazonais, extraRendas, crescimentoRenda, crescimentoGastos, totalGastosRecorrentes, reajusteMes, reajusteAno, modoReajuste, rendaBase]);
+  }, [months, anoBase, mesBase, rendaBase, totalGastosRecorrentes, crescimentoRenda, crescimentoGastos, reajusteMes, reajusteAno, sazonais, extraRendas, temPlanData, aporteUsado]);
 
   const projection = React.useMemo(() => {
     const monthlyRateNom = Math.pow(1 + state.retorno / 100, 1 / 12) - 1;

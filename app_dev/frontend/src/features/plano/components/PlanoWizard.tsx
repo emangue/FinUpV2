@@ -573,35 +573,6 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
                       </select>
                       <span className="text-xs text-gray-400">— todo ano nesse mês</span>
                     </div>
-                    <div>
-                      <p className="text-xs text-gray-500 mb-2">O que fazer com o aumento?</p>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setAposentadoriaState((s) => ({ ...s, modoReajuste: 'proporcional' }))}
-                          className={`px-3 py-2 rounded-lg border text-left transition-colors ${
-                            (aposentadoriaState.modoReajuste ?? 'proporcional') === 'proporcional'
-                              ? 'border-indigo-500 bg-indigo-50'
-                              : 'border-gray-200 bg-white'
-                          }`}
-                        >
-                          <span className="block text-xs font-semibold text-gray-900">Proporcional</span>
-                          <span className="text-[10px] text-gray-500">Gastos e investimentos crescem juntos</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setAposentadoriaState((s) => ({ ...s, modoReajuste: 'tudo_investimento' }))}
-                          className={`px-3 py-2 rounded-lg border text-left transition-colors ${
-                            (aposentadoriaState.modoReajuste ?? 'proporcional') === 'tudo_investimento'
-                              ? 'border-emerald-500 bg-emerald-50'
-                              : 'border-gray-200 bg-white'
-                          }`}
-                        >
-                          <span className="block text-xs font-semibold text-gray-900">Tudo em investimentos</span>
-                          <span className="text-[10px] text-gray-500">Gastos fixos, aumento vira aporte</span>
-                        </button>
-                      </div>
-                    </div>
                   </div>
                 )}
               </div>
@@ -912,33 +883,6 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
                   ))}
                 </div>
               )}
-              <div className="bg-white rounded-xl border border-gray-200 p-4">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">
-                  Crescimento dos gastos
-                </h3>
-                <p className="text-sm text-gray-600 mb-3">
-                  % de inflação dos seus gastos por ano. Aplicado todo janeiro na projeção de longo prazo.
-                </p>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="range"
-                    min={0}
-                    max={15}
-                    step={0.5}
-                    value={aposentadoriaState.crescimentoGastos ?? 0}
-                    onChange={(e) =>
-                      setAposentadoriaState((s) => ({
-                        ...s,
-                        crescimentoGastos: parseFloat(e.target.value),
-                      }))
-                    }
-                    className="flex-1 h-2 bg-gray-200 rounded-lg accent-orange-500"
-                  />
-                  <span className="text-sm font-semibold text-gray-900 w-14">
-                    {(aposentadoriaState.crescimentoGastos ?? 0).toFixed(1).replace('.', ',')}% a.a.
-                  </span>
-                </div>
-              </div>
             </div>
           ) : step === 3 ? (
             <div className="space-y-4">
