@@ -384,6 +384,8 @@ class PlanoService:
                 "renda_usada": r,
                 "gastos_recorrentes": gastos_recorrentes,
                 "gastos_extras_esperados": round(gastos_extras, 2),
+                "extras_debitos": round(exp_mes["debitos"], 2),
+                "extras_creditos": round(exp_mes["creditos"], 2),
                 "gastos_realizados": gastos_realizados,
                 "gastos_usados": round(gastos_usados, 2),
                 "total_gastos": g,

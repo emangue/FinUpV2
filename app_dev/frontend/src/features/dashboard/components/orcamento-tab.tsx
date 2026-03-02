@@ -169,9 +169,9 @@ export function OrcamentoTab({
   const vezesAcimaPlano = totalPlanejadoInv > 0 ? totalInvestido / totalPlanejadoInv : 0
 
   // Valores do plano para o Resumo do Mês (cashflow: budget_planning + sazonais/extras)
-  const resumoRendaPlanejada = planoMes?.renda_esperada ?? 0
+  const resumoRendaPlanejada = planoMes ? (planoMes.renda_esperada + planoMes.extras_creditos) : 0
   const resumoGastosPlanejados = planoMes
-    ? (planoMes.gastos_recorrentes + planoMes.gastos_extras_esperados)
+    ? (planoMes.gastos_recorrentes + planoMes.extras_debitos)
     : totalPlanejadoDesp
   const resumoDiffReceita = totalReceitas - resumoRendaPlanejada
   const resumoDiffDesp = resumoGastosPlanejados - totalDespesas

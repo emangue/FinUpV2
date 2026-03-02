@@ -237,8 +237,9 @@ export async function fetchAportePrincipalPorMes(
  */
 export interface PlanoCashflowMes {
   renda_esperada: number
+  extras_creditos: number   // rendas extras planejadas (13º, bônus, etc.)
   gastos_recorrentes: number
-  gastos_extras_esperados: number
+  extras_debitos: number    // despesas extras planejadas (sazonais, parcelas)
   aporte_planejado: number
 }
 
@@ -247,7 +248,7 @@ export async function fetchPlanoCashflowMes(
   month: number
 ): Promise<PlanoCashflowMes | null> {
   try {
-    const response = await fetchWithAuth(`${BASE_URL}/plano/cashflow?ano=${year}`)
+    const response = await fetchWithAuth(`${BASE_URL}/plano/cashflow?ano=${year}&modo_plano=true`)
     if (!response.ok) return null
     const data = await response.json()
     const mes = (data.meses ?? []).find((m: any) => {
@@ -257,8 +258,9 @@ export async function fetchPlanoCashflowMes(
     if (!mes) return null
     return {
       renda_esperada: mes.renda_esperada ?? 0,
+      extras_creditos: mes.extras_creditos ?? 0,
       gastos_recorrentes: mes.gastos_recorrentes ?? 0,
-      gastos_extras_esperados: mes.gastos_extras_esperados ?? 0,
+      extras_debitos: mes.extras_debitos ?? 0,
       aporte_planejado: mes.aporte_planejado ?? 0,
     }
   } catch {
