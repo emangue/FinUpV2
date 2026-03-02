@@ -14,9 +14,20 @@ export interface EmptyStateProps {
   description: string
   ctaLabel: string
   ctaHref: string
+  /** CTA secundário (ex: "Subir extrato primeiro") */
+  ctaSecondaryLabel?: string
+  ctaSecondaryHref?: string
 }
 
-export function EmptyState({ icon, title, description, ctaLabel, ctaHref }: EmptyStateProps) {
+export function EmptyState({
+  icon,
+  title,
+  description,
+  ctaLabel,
+  ctaHref,
+  ctaSecondaryLabel,
+  ctaSecondaryHref,
+}: EmptyStateProps) {
   return (
     <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
       <span className="text-5xl mb-4" role="img" aria-hidden>
@@ -24,9 +35,16 @@ export function EmptyState({ icon, title, description, ctaLabel, ctaHref }: Empt
       </span>
       <h3 className="text-lg font-semibold mb-2 text-gray-900">{title}</h3>
       <p className="text-sm text-muted-foreground mb-6 max-w-xs">{description}</p>
-      <Link href={ctaHref}>
-        <Button>{ctaLabel} →</Button>
-      </Link>
+      <div className="flex flex-col gap-2">
+        <Link href={ctaHref}>
+          <Button>{ctaLabel} →</Button>
+        </Link>
+        {ctaSecondaryLabel && ctaSecondaryHref && (
+          <Link href={ctaSecondaryHref} className="text-sm text-muted-foreground hover:underline">
+            {ctaSecondaryLabel}
+          </Link>
+        )}
+      </div>
     </div>
   )
 }

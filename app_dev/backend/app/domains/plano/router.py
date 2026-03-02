@@ -100,6 +100,10 @@ def obter_perfil(
             "idade_aposentadoria": None,
             "patrimonio_atual": None,
             "taxa_retorno_anual": None,
+            "crescimento_renda": None,
+            "reajuste_mes": None,
+            "reajuste_ano": None,
+            "modo_reajuste": None,
         }
     return {
         "renda_mensal_liquida": profile.renda_mensal_liquida,
@@ -108,6 +112,11 @@ def obter_perfil(
         "idade_aposentadoria": profile.idade_aposentadoria,
         "patrimonio_atual": profile.patrimonio_atual,
         "taxa_retorno_anual": profile.taxa_retorno_anual,
+        "crescimento_renda": profile.crescimento_renda,
+        "reajuste_mes": profile.reajuste_mes,
+        "reajuste_ano": profile.reajuste_ano,
+        "modo_reajuste": profile.modo_reajuste,
+        "crescimento_gastos": profile.crescimento_gastos,
     }
 
 
@@ -127,6 +136,11 @@ def atualizar_perfil(
         idade_aposentadoria=data.idade_aposentadoria,
         patrimonio_atual=data.patrimonio_atual,
         taxa_retorno_anual=data.taxa_retorno_anual,
+        crescimento_renda=data.crescimento_renda,
+        reajuste_mes=data.reajuste_mes,
+        reajuste_ano=data.reajuste_ano,
+        modo_reajuste=data.modo_reajuste,
+        crescimento_gastos=data.crescimento_gastos,
     )
 
 
@@ -267,6 +281,9 @@ def criar_expectativa(
         tipo_expectativa=data.tipo_expectativa,
         recorrencia=data.recorrencia,
         parcelas=data.parcelas,
+        evoluir=data.evoluir or False,
+        evolucao_valor=data.evolucao_valor or 0.0,
+        evolucao_tipo=data.evolucao_tipo or "percentual",
     )
 
 
@@ -290,6 +307,9 @@ def atualizar_expectativa(
         tipo_lancamento=data.tipo_lancamento,
         recorrencia=data.recorrencia,
         parcelas=data.parcelas,
+        evoluir=data.evoluir or False,
+        evolucao_valor=data.evolucao_valor or 0.0,
+        evolucao_tipo=data.evolucao_tipo or "percentual",
     )
     if result is None:
         raise HTTPException(status_code=404, detail="Expectativa não encontrada")

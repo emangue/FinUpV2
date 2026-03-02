@@ -3,6 +3,7 @@ Configurações do Backend FastAPI
 """
 import os
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import field_validator
 from typing import Union
 
 class Settings(BaseSettings):
@@ -19,15 +20,13 @@ class Settings(BaseSettings):
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = False  # ✅ False por padrão (segurança)
     
-    # Database — PostgreSQL obrigatório (Docker fornece via DATABASE_URL)
+    # Database — PostgreSQL (Docker fornece via DATABASE_URL)
     # Formato: postgresql://user:password@host:port/database
-    # Definido no docker-compose.yml → container backend
-    # ❌ SQLite não é mais suportado neste projeto
-    DATABASE_URL: str  # OBRIGATÓRIO — sem fallback SQLite
+    DATABASE_URL: str  # OBRIGATÓRIO — via .env
 
     @property
     def is_postgres(self) -> bool:
-        """Sempre True — apenas PostgreSQL é suportado"""
+        """True — apenas PostgreSQL é suportado"""
         return self.DATABASE_URL.startswith("postgresql")
     
     # CORS - Aceita tanto lista quanto string separada por vírgulas
@@ -42,6 +41,13 @@ class Settings(BaseSettings):
     JWT_SECRET_KEY: str  # ✅ OBRIGATÓRIO via .env (sem fallback inseguro)
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60  # 1 hora
+
+    @field_validator("JWT_SECRET_KEY")
+    @classmethod
+    def validate_jwt_secret(cls, v: str) -> str:
+        if len(v) < 32:
+            raise ValueError("JWT_SECRET_KEY deve ter no mínimo 32 caracteres. Gere com: openssl rand -hex 32")
+        return v
     
     @property
     def cors_origins_list(self) -> list[str]:

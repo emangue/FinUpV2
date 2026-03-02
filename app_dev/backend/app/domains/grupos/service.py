@@ -15,25 +15,25 @@ class GrupoService:
     def __init__(self, db: Session):
         self.repository = GrupoRepository(db)
     
-    def list_grupos(self) -> GrupoListResponse:
-        """Lista todos os grupos configurados"""
-        grupos = self.repository.get_all()
+    def list_grupos(self, user_id: int) -> GrupoListResponse:
+        """Lista todos os grupos configurados do usuário"""
+        grupos = self.repository.get_all(user_id)
         return GrupoListResponse(
             grupos=[GrupoResponse.model_validate(grupo) for grupo in grupos],
             total=len(grupos)
         )
-    
-    def get_grupo(self, grupo_id: int) -> GrupoResponse:
+
+    def get_grupo(self, user_id: int, grupo_id: int) -> GrupoResponse:
         """Busca grupo por ID"""
-        grupo = self.repository.get_by_id(grupo_id)
+        grupo = self.repository.get_by_id(user_id, grupo_id)
         if not grupo:
             raise HTTPException(status_code=404, detail="Grupo não encontrado")
         return GrupoResponse.model_validate(grupo)
     
-    def create_grupo(self, grupo_data: GrupoCreate) -> GrupoResponse:
-        """Cria novo grupo"""
-        # Verificar se nome já existe
-        existing = self.repository.get_by_nome(grupo_data.nome_grupo)
+    def create_grupo(self, user_id: int, grupo_data: GrupoCreate) -> GrupoResponse:
+        """Cria novo grupo para o usuário"""
+        # Verificar se nome já existe (para este usuário)
+        existing = self.repository.get_by_nome(user_id, grupo_data.nome_grupo)
         if existing:
             raise HTTPException(
                 status_code=400, 
@@ -56,19 +56,19 @@ class GrupoService:
                 detail=f"Categoria geral deve ser uma de: {', '.join(categorias_validas)}"
             )
         
-        grupo = self.repository.create(grupo_data)
+        grupo = self.repository.create(user_id, grupo_data)
         return GrupoResponse.model_validate(grupo)
-    
-    def update_grupo(self, grupo_id: int, grupo_data: GrupoUpdate) -> GrupoResponse:
+
+    def update_grupo(self, user_id: int, grupo_id: int, grupo_data: GrupoUpdate) -> GrupoResponse:
         """Atualiza grupo existente"""
         # Verificar se grupo existe
-        existing = self.repository.get_by_id(grupo_id)
+        existing = self.repository.get_by_id(user_id, grupo_id)
         if not existing:
             raise HTTPException(status_code=404, detail="Grupo não encontrado")
         
         # Se mudando nome, verificar se novo nome já existe
         if grupo_data.nome_grupo and grupo_data.nome_grupo != existing.nome_grupo:
-            nome_exists = self.repository.get_by_nome(grupo_data.nome_grupo)
+            nome_exists = self.repository.get_by_nome(user_id, grupo_data.nome_grupo)
             if nome_exists:
                 raise HTTPException(
                     status_code=400,
@@ -93,13 +93,13 @@ class GrupoService:
                     detail=f"Categoria geral deve ser uma de: {', '.join(categorias_validas)}"
                 )
         
-        grupo = self.repository.update(grupo_id, grupo_data)
+        grupo = self.repository.update(user_id, grupo_id, grupo_data)
         return GrupoResponse.model_validate(grupo)
-    
-    def delete_grupo(self, grupo_id: int) -> dict:
+
+    def delete_grupo(self, user_id: int, grupo_id: int) -> dict:
         """Exclui grupo"""
         # Verificar se grupo existe
-        existing = self.repository.get_by_id(grupo_id)
+        existing = self.repository.get_by_id(user_id, grupo_id)
         if not existing:
             raise HTTPException(status_code=404, detail="Grupo não encontrado")
         
@@ -111,7 +111,7 @@ class GrupoService:
                 detail=f"Não é possível excluir o grupo '{existing.nome_grupo}' pois ele possui {transacoes_count} transações associadas. Exclua ou reclassifique as transações primeiro."
             )
         
-        success = self.repository.delete(grupo_id)
+        success = self.repository.delete(user_id, grupo_id)
         if not success:
             raise HTTPException(status_code=500, detail="Erro ao excluir grupo")
         

@@ -6,7 +6,7 @@
  */
 
 import { useState } from 'react'
-import { updateGoal, deleteGoal as deleteGoalApi } from '../services/goals-api'
+import { updateGoal, updateGoalValor, deleteGoal as deleteGoalApi } from '../services/goals-api'
 import type { EditGoalData } from '../components/EditGoalModal'
 
 export function useEditGoal() {
@@ -29,6 +29,12 @@ export function useEditGoal() {
         valor_planejado: data.orcamento,
         cor: data.cor
       })
+
+      // Se marcou "aplicar para meses posteriores", propaga valor até dezembro
+      // Usa grupo original (_goalNome) para encontrar registros nos outros meses
+      if (data.aplicarMesesFuturos) {
+        await updateGoalValor(goalId, _goalNome, data.orcamento, mesReferencia, true)
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erro ao atualizar meta'
       setError(errorMessage)

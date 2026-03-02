@@ -29,7 +29,7 @@ const RECORRENCIA_INTERVAL: Record<string, number> = {
   anual: 12,
 };
 
-/** Expande expectativas (sazonais ou extras) por mês do ano. Parcelado: valor/parcelas nos meses consecutivos. Não parcelado: valor no mês conforme recorrência. */
+/** Expande expectativas (sazonais ou extras) por mês do ano. Parcelado: valor/parcelas nos meses consecutivos. Não parcelado: valor no mês conforme recorrência, aplicando evolução por ocorrência. */
 function expandirPorMes(
   planAno: number,
   items: ExpectativaItem[],
@@ -42,7 +42,7 @@ function expandirPorMes(
     const recorrencia = (e.recorrencia ?? 'unico') as string;
 
     if (parcelas > 1) {
-      // Parcelado: valor/parcelas em N meses consecutivos a partir de mes_referencia
+      // Parcelado: valor/parcelas em N meses consecutivos — sem evolução por parcela
       const valorParcela = e.valor / parcelas;
       let ano = refAno;
       let mes = refMes;
@@ -57,14 +57,23 @@ function expandirPorMes(
         }
       }
     } else {
-      // Não parcelado: valor no mês conforme recorrência
+      // Não parcelado: valor no mês conforme recorrência, com evolução por ocorrência
       const interval = RECORRENCIA_INTERVAL[recorrencia] ?? 0;
       let ano = refAno;
       let mes = refMes;
       let count = 0;
       while (count <= 24) {
         if (ano === planAno && mes >= 1 && mes <= 12) {
-          porMes[mes - 1] += sinal * e.valor;
+          // count = número da ocorrência (0 = primeira, 1 = segunda, ...); evolução a partir da 2ª
+          let val = e.valor;
+          if (e.evoluir && e.evolucaoValor && count > 0) {
+            if (e.evolucaoTipo === 'percentual') {
+              val = e.valor * Math.pow(1 + e.evolucaoValor / 100, count);
+            } else {
+              val = e.valor + e.evolucaoValor * count;
+            }
+          }
+          porMes[mes - 1] += sinal * val;
         }
         if (interval === 0) break;
         mes += interval;
@@ -88,6 +97,142 @@ function fF(v: number): string {
   return 'R$ ' + Math.round(v).toLocaleString('pt-BR');
 }
 
+// ─── Componente de resumo de parâmetros ─────────────────────────────────────
+const MESES_ABREV = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+function ParametrosSummary({
+  state,
+  totalGastosRecorrentes,
+  extraRendas,
+  sazonais,
+  fC: fmtC,
+}: {
+  state: PlanoAposentadoriaState;
+  totalGastosRecorrentes: number;
+  extraRendas: ExpectativaItem[];
+  sazonais: ExpectativaItem[];
+  fC: (v: number) => string;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const crescRenda = state.crescimentoRenda ?? 0;
+  const crescGastos = state.crescimentoGastos ?? 0;
+  const extrasAnual = extraRendas.reduce((s, e) => s + e.valor, 0);
+  const sazonaisAnual = sazonais.reduce((s, e) => s + e.valor, 0);
+  return (
+    <div className="bg-white rounded-2xl border border-gray-200">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between p-5 text-left"
+      >
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wider text-gray-400">Parâmetros da projeção</p>
+          <p className="text-sm text-gray-600 mt-0.5">
+            Renda {fmtC(state.rendaMensal ?? 0)}/mês
+            {crescRenda > 0 && <span className="text-indigo-600"> · +{crescRenda.toFixed(1)}% a.a. renda</span>}
+            {crescGastos > 0 && <span className="text-orange-500"> · +{crescGastos.toFixed(1)}% a.a. gastos</span>}
+          </p>
+        </div>
+        <span className="text-gray-400 ml-3">{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div className="px-5 pb-5 space-y-4 border-t border-gray-100">
+          {/* Renda */}
+          <div className="pt-3">
+            <p className="text-[10px] font-bold uppercase text-gray-400 mb-2">Renda</p>
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Recorrente</span>
+                <span className="font-medium">{fmtC(state.rendaMensal ?? 0)}/mês</span>
+              </div>
+              {crescRenda > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Crescimento renda</span>
+                  <span className="font-medium text-indigo-600">
+                    +{crescRenda.toFixed(1)}% a.a. a partir de {MESES_ABREV[(state.reajusteMes ?? 1) - 1]}/{state.reajusteAno}
+                    {' — '}{state.modoReajuste === 'tudo_investimento' ? 'todo extra p/ investimento' : 'proporcional'}
+                  </span>
+                </div>
+              )}
+              {extraRendas.length > 0 && (
+                <div className="mt-1 pt-1 border-t border-gray-100 space-y-1">
+                  {extraRendas.map((e) => (
+                    <div key={e.id} className="flex justify-between text-sm">
+                      <span className="text-gray-500">
+                        {e.descricao || '(sem descrição)'}
+                        {e.evoluir && e.evolucaoValor ? (
+                          <span className="ml-1 text-[10px] text-indigo-500">
+                            +{e.evolucaoTipo === 'percentual'
+                              ? `${e.evolucaoValor}%/ano`
+                              : `R$${Math.round(e.evolucaoValor/1000)}k/ano`}
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="font-medium text-emerald-700">{fmtC(e.valor)}</span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between text-xs pt-1 text-gray-400">
+                    <span>Total extraordinárias/ano</span>
+                    <span className="font-semibold text-emerald-600">{fmtC(extrasAnual)}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+          {/* Gastos */}
+          <div>
+            <p className="text-[10px] font-bold uppercase text-gray-400 mb-2">Gastos</p>
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Recorrentes</span>
+                <span className="font-medium">{fmtC(totalGastosRecorrentes)}/mês</span>
+              </div>
+              {crescGastos > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Inflação gastos</span>
+                  <span className="font-medium text-orange-500">+{crescGastos.toFixed(1)}% a.a. todo janeiro</span>
+                </div>
+              )}
+              {sazonais.length > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Sazonais/ano</span>
+                  <span className="font-medium text-red-600">{fmtC(sazonaisAnual)}</span>
+                </div>
+              )}
+            </div>
+          </div>
+          {/* Projeção */}
+          <div>
+            <p className="text-[10px] font-bold uppercase text-gray-400 mb-2">Projeção</p>
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Aporte/mês</span>
+                <span className="font-medium">{fmtC(state.aporte)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Retorno esperado</span>
+                <span className="font-medium">{state.retorno.toFixed(1)}% a.a. nominal</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Inflação</span>
+                <span className="font-medium">{state.inflacao.toFixed(1)}% a.a.</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Horizonte</span>
+                <span className="font-medium">{state.age} → {state.retire} anos ({state.retire - state.age} anos)</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Patrimônio atual</span>
+                <span className="font-medium">{fmtC(state.patrimonio)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export interface PlanoAposentadoriaState {
   age: number;
   retire: number;
@@ -98,6 +243,14 @@ export interface PlanoAposentadoriaState {
   inflacao: number;
   /** Evolução da renda (% a.a.) — renda e aporte crescem ao longo do tempo */
   crescimentoRenda: number;
+  /** Mês em que o reajuste ocorre todo ano (1-12). Padrão: mês atual. */
+  reajusteMes?: number;
+  /** Ano do primeiro reajuste. */
+  reajusteAno?: number;
+  /** Modo de crescimento da renda: proporcional (renda+aporte crescem) ou tudo_investimento */
+  modoReajuste?: 'proporcional' | 'tudo_investimento';
+  /** Inflação dos gastos recorrentes (% a.a.), aplicada todo janeiro */
+  crescimentoGastos?: number;
   activeProfile: PlanoProfile;
 }
 
@@ -110,6 +263,8 @@ export interface PlanoAposentadoriaStepContentProps {
   totalGastosRecorrentes?: number;
   /** Gastos sazonais (Etapa 3) — expandidos por mês (parcelado vs recorrência) */
   sazonais: ExpectativaItem[];
+  /** Inflação anual dos gastos (% a.a.), aplicada todo janeiro na projeção */
+  crescimentoGastos?: number;
 }
 
 export function PlanoAposentadoriaStepContent({
@@ -119,6 +274,7 @@ export function PlanoAposentadoriaStepContent({
   extraRendas,
   totalGastosRecorrentes = 0,
   sazonais = [],
+  crescimentoGastos = 0,
 }: PlanoAposentadoriaStepContentProps) {
   const hoje = new Date();
   const { metrics } = useDashboardMetrics(hoje.getFullYear(), hoje.getMonth() + 1);
@@ -251,22 +407,44 @@ export function PlanoAposentadoriaStepContent({
   const anoBase = hoje.getFullYear();
   const mesBase = hoje.getMonth() + 1;
   const crescimentoRenda = state.crescimentoRenda ?? 0;
+  const reajusteMes = state.reajusteMes ?? mesBase;
+  const reajusteAno = state.reajusteAno ?? anoBase;
+  const modoReajuste = state.modoReajuste ?? 'proporcional';
+  const rendaBase = state.rendaMensal > 0 ? state.rendaMensal : 0;
   const aportePorMesProjecao = React.useMemo(() => {
     const out: number[] = [];
     const fatorAnual = 1 + crescimentoRenda / 100;
+    const fatorGastosAnual = 1 + crescimentoGastos / 100;
     for (let m = 0; m < months; m++) {
       const anoOffset = Math.floor((mesBase - 1 + m) / 12);
       const ano_m = anoBase + anoOffset;
       const mes_m = ((mesBase - 1 + m) % 12) + 1;
       const saz = expandirPorMes(ano_m, sazonais, -1);
       const ext = expandirPorMes(ano_m, extraRendas, 1);
-      const netExtra = (ext[mes_m - 1] ?? 0) + (saz[mes_m - 1] ?? 0); // saz é negativo
-      const base = aporteUsado + netExtra;
-      const multiplicador = Math.pow(fatorAnual, anoOffset);
-      out.push(Math.max(0, base * multiplicador));
+      const netExtra = (ext[mes_m - 1] ?? 0) + (saz[mes_m - 1] ?? 0);
+      // Conta quantos reajustes anuais ocorreram até (ano_m, mes_m) para a renda
+      const reajusteCount =
+        ano_m < reajusteAno || (ano_m === reajusteAno && mes_m < reajusteMes)
+          ? 0
+          : (ano_m - reajusteAno) + (mes_m >= reajusteMes ? 1 : 0);
+      // Gastos crescem todo janeiro: (1+cg)^n onde n = anos completos desde anoBase
+      const gastosGrowthFactor = crescimentoGastos > 0 ? Math.pow(fatorGastosAnual, anoOffset) : 1;
+      const gastosExtra = totalGastosRecorrentes * (gastosGrowthFactor - 1);
+      let aporteNoMes: number;
+      if (modoReajuste === 'tudo_investimento' && crescimentoRenda > 0 && rendaBase > 0) {
+        // Gastos ficam fixos nominalmente; todo aumento de renda vira aporte
+        // aporte_n = aporteBase + rendaBase * ((1+g)^n - 1) - gastosExtra
+        const incremento = rendaBase * (Math.pow(fatorAnual, reajusteCount) - 1);
+        aporteNoMes = aporteUsado + incremento - gastosExtra + netExtra;
+      } else {
+        // Proporcional: aporte e renda crescem na mesma proporção; gastos crescem separadamente
+        const multiplicador = Math.pow(fatorAnual, reajusteCount);
+        aporteNoMes = (aporteUsado + netExtra) * multiplicador - gastosExtra;
+      }
+      out.push(Math.max(0, aporteNoMes));
     }
     return out;
-  }, [months, anoBase, mesBase, aporteUsado, sazonais, extraRendas, crescimentoRenda]);
+  }, [months, anoBase, mesBase, aporteUsado, sazonais, extraRendas, crescimentoRenda, crescimentoGastos, totalGastosRecorrentes, reajusteMes, reajusteAno, modoReajuste, rendaBase]);
 
   const projection = React.useMemo(() => {
     const monthlyRateNom = Math.pow(1 + state.retorno / 100, 1 / 12) - 1;
@@ -615,30 +793,14 @@ export function PlanoAposentadoriaStepContent({
         </div>
       </div>
 
-      {/* Aportes Extraordinários (resumo da Etapa 1) */}
-      {extraRendas.length > 0 && (
-        <div className="bg-white rounded-2xl border border-gray-200 p-5">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">
-            Receitas Extraordinárias
-          </h3>
-          <div className="space-y-2">
-            {extraRendas.map((e) => (
-              <div
-                key={e.id}
-                className="flex justify-between py-2 px-3 bg-green-50 rounded-xl"
-              >
-                <span className="font-medium">{e.descricao || '(sem descrição)'}</span>
-                <span className="text-sm text-gray-600">
-                  R$ {e.valor.toLocaleString('pt-BR')} · {e.mes_referencia}
-                </span>
-              </div>
-            ))}
-          </div>
-          <p className="text-[10px] text-gray-400 mt-2">
-            Adicione mais na Etapa 1 (Renda).
-          </p>
-        </div>
-      )}
+      {/* Resumo de parâmetros da projeção — colapsável */}
+      <ParametrosSummary
+        state={state}
+        totalGastosRecorrentes={totalGastosRecorrentes}
+        extraRendas={extraRendas}
+        sazonais={sazonais}
+        fC={fC}
+      />
 
       {/* Projeção — Gráfico + Cards */}
       <div className="bg-white rounded-2xl border border-gray-200 p-5">

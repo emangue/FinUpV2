@@ -48,7 +48,7 @@ export function EditGoalModal({ goal, isOpen, onClose, onSave, onDelete }: EditG
   const [descricao, setDescricao] = React.useState('')
   const [orcamento, setOrcamento] = React.useState(goal.valor_planejado.toString())
   const [cor, setCor] = React.useState(goal.cor || '')
-  const [aplicarFuturos, setAplicarFuturos] = React.useState(false)
+  const [aplicarFuturos, setAplicarFuturos] = React.useState(true)
   const [isLoading, setIsLoading] = React.useState(false)
   const [isDeleting, setIsDeleting] = React.useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false)
@@ -59,7 +59,7 @@ export function EditGoalModal({ goal, isOpen, onClose, onSave, onDelete }: EditG
     setDescricao('')
     setOrcamento(goal.valor_planejado.toString())
     setCor(goal.cor || '')
-    setAplicarFuturos(false)
+    setAplicarFuturos(true) // default: propagar para meses posteriores
   }, [goal])
 
   const handleSave = async () => {

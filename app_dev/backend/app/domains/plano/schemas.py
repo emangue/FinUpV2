@@ -15,6 +15,11 @@ class PerfilUpdate(BaseModel):
     idade_aposentadoria: Optional[int] = Field(None, ge=18, le=120)
     patrimonio_atual: Optional[float] = Field(None, ge=0)
     taxa_retorno_anual: Optional[float] = Field(None, ge=0, le=1)
+    crescimento_renda: Optional[float] = Field(None, ge=0, le=100)  # % a.a.
+    reajuste_mes: Optional[int] = Field(None, ge=1, le=12)
+    reajuste_ano: Optional[int] = Field(None, ge=2000, le=2100)
+    modo_reajuste: Optional[str] = Field(None, pattern="^(proporcional|tudo_investimento)$")
+    crescimento_gastos: Optional[float] = Field(None, ge=0, le=100)  # % a.a. inflação dos gastos
 
 
 class OrcamentoItem(BaseModel):
@@ -41,6 +46,11 @@ class ExpectativaCreate(BaseModel):
     mes_referencia: str = Field(..., pattern=r"^\d{4}-\d{2}$")  # YYYY-MM (mês de início)
     tipo_expectativa: str = Field("sazonal_plano", pattern="^(sazonal_plano|renda_plano|parcela_futura)$")
     recorrencia: Optional[str] = Field("unico", pattern="^(unico|bimestral|trimestral|semestral|anual)$")
+    parcelas: Optional[int] = Field(1, ge=1, le=24)  # 1 = à vista, 2-24 = parcelado
+    # Evolução anual do valor (para recorrências como anual/semestral)
+    evoluir: Optional[bool] = Field(False)
+    evolucao_valor: Optional[float] = Field(None, ge=0)  # valor do incremento (% ou R$)
+    evolucao_tipo: Optional[str] = Field("percentual", pattern="^(percentual|nominal)$")
 
 
 class ExpectativaResponse(BaseModel):

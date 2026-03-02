@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useCallback } from "react"
+import useSWR from "swr"
 import { fetchWithAuth } from "@/core/utils/api-client"
 import { API_CONFIG } from "@/core/config/api.config"
 import { Button } from "@/components/ui/button"
@@ -30,7 +31,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Edit, Key, Trash2, Copy, RefreshCw } from "lucide-react"
+import { Plus, Edit, Key, Trash2, Copy, RefreshCw, UserPlus, UserMinus } from "lucide-react"
 import {
   Select,
   SelectContent,
@@ -38,6 +39,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { UserStatsCell } from "@/components/UserStatsCell"
+import { PurgeUserModal } from "@/components/PurgeUserModal"
 
 interface Usuario {
   id: number
@@ -50,6 +53,17 @@ interface Usuario {
 
 const API_URL = `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}`
 
+const usersFetcher = (url: string) =>
+  fetchWithAuth(url).then((r) => (r.ok ? r.json() : Promise.reject(new Error("Erro ao carregar usuários"))))
+
+interface SystemStats {
+  total_usuarios: number
+  total_usuarios_ativos: number
+  total_uploads: number
+  total_transacoes: number
+  total_planos: number
+}
+
 function generatePassword(length = 12): string {
   const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%"
   let result = ""
@@ -60,8 +74,13 @@ function generatePassword(length = 12): string {
 }
 
 export default function ContasPage() {
-  const [usuarios, setUsuarios] = useState<Usuario[]>([])
-  const [loading, setLoading] = useState(true)
+  const [verInativos, setVerInativos] = useState(false)
+  const { data, error, isLoading, mutate } = useSWR<{ users: Usuario[]; total: number }>(
+    `${API_URL}/users/?apenas_ativos=${!verInativos}`,
+    usersFetcher
+  )
+  const usuarios = data?.users ?? []
+
   const [modalOpen, setModalOpen] = useState(false)
   const [senhaModalOpen, setSenhaModalOpen] = useState(false)
   const [nome, setNome] = useState("")
@@ -71,31 +90,22 @@ export default function ContasPage() {
   const [editingUsuario, setEditingUsuario] = useState<Usuario | null>(null)
   const [senhaUsuarioId, setSenhaUsuarioId] = useState<number | null>(null)
   const [novaSenha, setNovaSenha] = useState("")
-  const [error, setError] = useState<string | null>(null)
+  const [formError, setFormError] = useState<string | null>(null)
+  const [purgeModalOpen, setPurgeModalOpen] = useState(false)
+  const [purgeUser, setPurgeUser] = useState<Usuario | null>(null)
+  const [purgeStats, setPurgeStats] = useState<{
+    total_transacoes: number
+    total_uploads: number
+    total_grupos: number
+    tem_investimentos: boolean
+  } | null>(null)
 
-  const fetchUsuarios = useCallback(async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      const response = await fetchWithAuth(`${API_URL}/users/`)
-      if (response.ok) {
-        const data = await response.json()
-        setUsuarios(data.users || [])
-      } else {
-        setError(`Erro ${response.status}: ${response.statusText}`)
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      setError(msg)
-      console.error("Erro ao buscar usuários:", err)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  const fetchUsuarios = useCallback(() => mutate(), [mutate])
 
-  React.useEffect(() => {
-    fetchUsuarios()
-  }, [fetchUsuarios])
+  const { data: systemStats } = useSWR<SystemStats>(
+    `${API_URL}/users/stats/summary`,
+    (url) => fetchWithAuth(url).then((r) => (r.ok ? r.json() : Promise.reject(new Error("Erro ao carregar stats"))))
+  )
 
   const handleAdd = () => {
     setNome("")
@@ -103,7 +113,7 @@ export default function ContasPage() {
     setSenha("")
     setRole("user")
     setEditingUsuario(null)
-    setError(null)
+    setFormError(null)
     setModalOpen(true)
   }
 
@@ -113,7 +123,7 @@ export default function ContasPage() {
     setEmail(usuario.email)
     setSenha("")
     setRole(usuario.role)
-    setError(null)
+    setFormError(null)
     setModalOpen(true)
   }
 
@@ -127,15 +137,15 @@ export default function ContasPage() {
 
   const handleSave = async () => {
     if (!nome.trim() || !email.trim()) {
-      setError("Nome e email são obrigatórios")
+      setFormError("Nome e email são obrigatórios")
       return
     }
     if (!editingUsuario && !senha.trim()) {
-      setError("Senha é obrigatória para novos usuários")
+      setFormError("Senha é obrigatória para novos usuários")
       return
     }
 
-    setError(null)
+    setFormError(null)
     try {
       const url = editingUsuario
         ? `${API_URL}/users/${editingUsuario.id}`
@@ -158,16 +168,16 @@ export default function ContasPage() {
         setModalOpen(false)
       } else {
         const errData = await response.json()
-        setError(errData.detail || errData.error || "Erro ao salvar")
+        setFormError(errData.detail || errData.error || "Erro ao salvar")
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao salvar")
+      setFormError(err instanceof Error ? err.message : "Erro ao salvar")
     }
   }
 
-  const handleDelete = async (id: number) => {
+  const handleDesativar = async (id: number) => {
     if (id === 1) {
-      setError("Não é possível desativar o usuário administrador principal")
+      setFormError("Não é possível desativar o usuário administrador principal")
       return
     }
     if (!confirm("Deseja realmente desativar este usuário?")) return
@@ -187,25 +197,74 @@ export default function ContasPage() {
     }
   }
 
+  const handleReativar = async (id: number) => {
+    try {
+      const response = await fetchWithAuth(`${API_URL}/users/${id}/reativar`, {
+        method: "POST",
+      })
+      if (response.ok) {
+        fetchUsuarios()
+      } else {
+        const errData = await response.json()
+        alert(errData.detail || errData.error || "Erro ao reativar")
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Erro ao reativar")
+    }
+  }
+
+  const handleOpenPurge = async (u: Usuario) => {
+    try {
+      const r = await fetchWithAuth(`${API_URL}/users/${u.id}/stats`)
+      if (!r.ok) throw new Error("Erro ao carregar stats")
+      const stats = await r.json()
+      setPurgeUser(u)
+      setPurgeStats({
+        total_transacoes: stats.total_transacoes,
+        total_uploads: stats.total_uploads,
+        total_grupos: stats.total_grupos,
+        tem_investimentos: stats.tem_investimentos,
+      })
+      setPurgeModalOpen(true)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Erro ao carregar dados")
+    }
+  }
+
+  const handleConfirmPurge = async (userId: number, emailUsuario: string) => {
+    const response = await fetchWithAuth(`${API_URL}/users/${userId}/purge`, {
+      method: "DELETE",
+      body: JSON.stringify({
+        confirmacao: "EXCLUIR PERMANENTEMENTE",
+        email_usuario: emailUsuario,
+      }),
+    })
+    if (!response.ok) {
+      const errData = await response.json()
+      throw new Error(errData.detail || errData.error || "Erro ao excluir")
+    }
+    fetchUsuarios()
+  }
+
   const handleAlterarSenha = (id: number) => {
     setSenhaUsuarioId(id)
     setNovaSenha("")
-    setError(null)
+    setFormError(null)
     setSenhaModalOpen(true)
   }
 
   const handleSalvarNovaSenha = async () => {
     if (!novaSenha.trim()) {
-      setError("Digite a nova senha")
+      setFormError("Digite a nova senha")
       return
     }
     if (novaSenha.length < 6) {
-      setError("A senha deve ter no mínimo 6 caracteres")
+      setFormError("A senha deve ter no mínimo 6 caracteres")
       return
     }
     if (!senhaUsuarioId) return
 
-    setError(null)
+    setFormError(null)
     try {
       const response = await fetchWithAuth(`${API_URL}/users/${senhaUsuarioId}`, {
         method: "PUT",
@@ -215,10 +274,10 @@ export default function ContasPage() {
         setSenhaModalOpen(false)
       } else {
         const errData = await response.json()
-        setError(errData.detail || errData.error || "Erro ao alterar senha")
+        setFormError(errData.detail || errData.error || "Erro ao alterar senha")
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao alterar senha")
+      setFormError(err instanceof Error ? err.message : "Erro ao alterar senha")
     }
   }
 
@@ -228,80 +287,207 @@ export default function ContasPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Contas</h1>
-        <p className="text-muted-foreground">Gerencie usuários do sistema</p>
+        <h1 className="text-xl sm:text-2xl font-bold">Contas</h1>
+        <p className="text-sm text-muted-foreground">Gerencie usuários do sistema</p>
       </div>
 
+      {systemStats && (
+        <div className="rounded-lg border bg-muted/50 p-4">
+          <p className="font-medium text-muted-foreground mb-3 text-sm">Indicadores do sistema</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div>
+              <span className="text-xs text-muted-foreground block">Usuários ativos</span>
+              <p className="font-semibold text-lg">{systemStats.total_usuarios_ativos}</p>
+            </div>
+            <div>
+              <span className="text-xs text-muted-foreground block">Uploads</span>
+              <p className="font-semibold text-lg">{systemStats.total_uploads.toLocaleString("pt-BR")}</p>
+            </div>
+            <div>
+              <span className="text-xs text-muted-foreground block">Transações</span>
+              <p className="font-semibold text-lg">{systemStats.total_transacoes.toLocaleString("pt-BR")}</p>
+            </div>
+            <div>
+              <span className="text-xs text-muted-foreground block">Planos</span>
+              <p className="font-semibold text-lg">{systemStats.total_planos.toLocaleString("pt-BR")}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <CardTitle>Usuários</CardTitle>
+            <CardTitle className="text-lg">Usuários</CardTitle>
             <CardDescription>{usuarios.length} usuário(s) cadastrado(s)</CardDescription>
           </div>
-          <Button onClick={handleAdd}>
-            <Plus className="mr-2 h-4 w-4" />
-            Novo Usuário
-          </Button>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+            <label className="flex cursor-pointer items-center gap-2 text-sm min-h-[44px]">
+              <input
+                type="checkbox"
+                checked={verInativos}
+                onChange={(e) => setVerInativos(e.target.checked)}
+                className="w-4 h-4"
+              />
+              Ver inativos
+            </label>
+            <Button onClick={handleAdd} className="min-h-[44px] w-full sm:w-auto">
+              <Plus className="mr-2 h-4 w-4" />
+              Novo Usuário
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {error && !modalOpen && (
             <div className="mb-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-              {error}
-              <Button variant="ghost" size="sm" className="ml-2" onClick={fetchUsuarios}>
+              {error.message}
+              <Button variant="ghost" size="sm" className="ml-2 min-h-[44px]" onClick={fetchUsuarios}>
                 <RefreshCw className="mr-1 h-3 w-3" />
                 Tentar novamente
               </Button>
             </div>
           )}
-          {loading ? (
+          {isLoading ? (
             <div className="py-8 text-center text-muted-foreground">Carregando...</div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nome</TableHead>
-                    <TableHead>E-mail</TableHead>
-                    <TableHead>Perfil</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="w-[140px]">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {usuarios.map((u) => (
-                    <TableRow key={u.id}>
-                      <TableCell className="font-medium">{u.nome}</TableCell>
-                      <TableCell>{u.email}</TableCell>
-                      <TableCell>
-                        <Badge variant={u.role === "admin" ? "default" : "secondary"}>
-                          {u.role === "admin" ? "Admin" : "Usuário"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={u.ativo ? "default" : "destructive"}>
-                          {u.ativo ? "Ativo" : "Inativo"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="flex gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => handleEdit(u)} title="Editar">
-                          <Edit className="h-4 w-4" />
+            <>
+              {/* Mobile: lista em cards */}
+              <div className="md:hidden space-y-3">
+                {usuarios.map((u) => (
+                  <div
+                    key={u.id}
+                    className={`rounded-lg border p-4 ${!u.ativo ? "bg-muted/50 opacity-75" : "bg-card"}`}
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium truncate">{u.nome}</span>
+                          {!u.ativo && (
+                            <Badge variant="outline" className="shrink-0">INATIVA</Badge>
+                          )}
+                          <Badge variant={u.role === "admin" ? "default" : "secondary"} className="shrink-0">
+                            {u.role === "admin" ? "Admin" : "Usuário"}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground truncate mt-0.5">{u.email}</p>
+                      </div>
+                      <Badge variant={u.ativo ? "default" : "destructive"} className="shrink-0">
+                        {u.ativo ? "Ativo" : "Inativo"}
+                      </Badge>
+                    </div>
+                    <div className="text-xs text-muted-foreground mb-3">
+                      <UserStatsCell userId={u.id} />
+                    </div>
+                    <div className="flex gap-1 flex-wrap">
+                      <Button variant="ghost" size="icon" className="h-11 w-11 shrink-0" onClick={() => handleEdit(u)} title="Editar">
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-11 w-11 shrink-0" onClick={() => handleAlterarSenha(u.id)} title="Alterar Senha">
+                        <Key className="h-4 w-4" />
+                      </Button>
+                      {u.id !== 1 && u.ativo && (
+                        <Button variant="ghost" size="icon" className="h-11 w-11 shrink-0" onClick={() => handleDesativar(u.id)} title="Desativar">
+                          <UserMinus className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleAlterarSenha(u.id)} title="Alterar Senha">
-                          <Key className="h-4 w-4" />
+                      )}
+                      {u.id !== 1 && !u.ativo && (
+                        <Button variant="ghost" size="icon" className="h-11 w-11 shrink-0" onClick={() => handleReativar(u.id)} title="Reativar">
+                          <UserPlus className="h-4 w-4" />
                         </Button>
-                        {u.id !== 1 && (
-                          <Button variant="ghost" size="icon" onClick={() => handleDelete(u.id)} title="Desativar">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </TableCell>
+                      )}
+                      {u.id !== 1 && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-11 w-11 shrink-0"
+                          onClick={() => handleOpenPurge(u)}
+                          title="Excluir permanentemente"
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop: tabela */}
+              <div className="hidden md:block overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Nome</TableHead>
+                      <TableHead>E-mail</TableHead>
+                      <TableHead>Perfil</TableHead>
+                      <TableHead>Stats</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="w-[180px]">Ações</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {usuarios.map((u) => (
+                      <TableRow
+                        key={u.id}
+                        className={!u.ativo ? "bg-muted/50 opacity-75" : ""}
+                      >
+                        <TableCell className="font-medium">
+                          {u.nome}
+                          {!u.ativo && (
+                            <Badge variant="outline" className="ml-2">
+                              INATIVA
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>{u.email}</TableCell>
+                        <TableCell>
+                          <Badge variant={u.role === "admin" ? "default" : "secondary"}>
+                            {u.role === "admin" ? "Admin" : "Usuário"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <UserStatsCell userId={u.id} />
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={u.ativo ? "default" : "destructive"}>
+                            {u.ativo ? "Ativo" : "Inativo"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="flex gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => handleEdit(u)} title="Editar">
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => handleAlterarSenha(u.id)} title="Alterar Senha">
+                            <Key className="h-4 w-4" />
+                          </Button>
+                          {u.id !== 1 && u.ativo && (
+                            <Button variant="ghost" size="icon" onClick={() => handleDesativar(u.id)} title="Desativar">
+                              <UserMinus className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {u.id !== 1 && !u.ativo && (
+                            <Button variant="ghost" size="icon" onClick={() => handleReativar(u.id)} title="Reativar">
+                              <UserPlus className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {u.id !== 1 && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleOpenPurge(u)}
+                              title="Excluir permanentemente"
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
@@ -316,8 +502,8 @@ export default function ContasPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            {error && (
-              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
+            {formError && (
+              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{formError}</div>
             )}
             <div className="space-y-2">
               <Label htmlFor="nome">Nome Completo</Label>
@@ -377,8 +563,8 @@ export default function ContasPage() {
             <DialogDescription>Digite a nova senha para o usuário</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            {error && (
-              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
+            {formError && (
+              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{formError}</div>
             )}
             <div className="space-y-2">
               <Label htmlFor="novaSenha">Nova Senha</Label>
@@ -407,6 +593,20 @@ export default function ContasPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {purgeUser && purgeStats && (
+        <PurgeUserModal
+          user={purgeUser}
+          stats={purgeStats}
+          open={purgeModalOpen}
+          onClose={() => {
+            setPurgeModalOpen(false)
+            setPurgeUser(null)
+            setPurgeStats(null)
+          }}
+          onConfirm={handleConfirmPurge}
+        />
+      )}
     </div>
   )
 }

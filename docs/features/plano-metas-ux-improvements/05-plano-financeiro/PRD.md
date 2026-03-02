@@ -21,7 +21,7 @@ Transformar o app em uma ferramenta de planejamento financeiro real: o usuário 
 | ID | Feature | Sprint |
 |----|---------|--------|
 | S5 | Declaração de renda mensal líquida | 6 |
-| S6 | Parcelas comprometidas (histórico de compromissos fixos) | 6 |
+| S6 | Metas por grupo (via budget_planning — volta ao legado) | 6 |
 | S7 | Nudge de desvio por categoria (real vs. planejado) | 6 |
 | S8 | Seletor de mês de referência + preview de projeção 12 meses | 7 |
 | S9 | Tabela detalhada por categoria com % do orçamento | 7 |
@@ -62,18 +62,17 @@ Transformar o app em uma ferramenta de planejamento financeiro real: o usuário 
 - [ ] Se renda não declarada: nudge "Declare sua renda para ver sua taxa de poupança"
 - [ ] Renda pode ser atualizada a qualquer momento
 
-### S6 — Parcelas comprometidas
+### S6 — Metas por grupo (budget_planning)
 
-**Como** usuário com compras parceladas,  
-**Quero** registrar o total de parcelas fixas mensais já comprometidas,  
-**Para que** o app exclua esse valor do orçamento disponível para gastos discricionários.
+**Como** usuário,  
+**Quero** definir metas de gasto por grupo (Casa, Alimentação, etc.),  
+**Para que** o app compare gasto real vs. planejado e mostre desvios.
 
 **Acceptance Criteria:**
-- [ ] Seção "Compromissos fixos" em Perfil > Financeiro
-- [ ] Adicionar compromisso: nome, valor mensal, meses restantes, grupo
-- [ ] Dashboard mostra: Renda - Comprometido fixo = Disponível real
-- [ ] Compromissos com meses esgotados somem automaticamente do cálculo
-- [ ] Total de comprometimento mensal visível no cabeçalho do plano
+- [ ] Perfil > Financeiro → link "Gerenciar metas por grupo" → `/mobile/budget/manage`
+- [ ] Metas salvas em `budget_planning` (modelo legado)
+- [ ] Dashboard mostra: Renda | Gasto | Poupança %
+- [ ] Orçamento por categoria com barras de progresso (gasto vs. meta)
 
 ### S7 — Nudge de desvio por categoria
 

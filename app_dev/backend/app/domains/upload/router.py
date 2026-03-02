@@ -5,8 +5,28 @@ Endpoints HTTP - apenas validação e chamadas de service
 from typing import List, Optional
 from dataclasses import asdict
 import json
-from fastapi import APIRouter, Depends, UploadFile, File, Form, Query
+from fastapi import APIRouter, Depends, UploadFile, File, Form, Query, HTTPException
 from sqlalchemy.orm import Session
+
+# Validação de upload — segurança contra DoS e arquivos maliciosos
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50MB
+EXTENSOES_PERMITIDAS = {"csv", "xls", "xlsx", "pdf", "ofx", "txt"}
+MIME_TYPES_PERMITIDOS = {
+    "text/csv", "text/plain",
+    "application/pdf",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/octet-stream",  # .ofx em alguns browsers
+    "application/x-ofx",
+}
+
+def _validar_arquivo(file: UploadFile) -> None:
+    """Valida extensão, MIME type. Tamanho é validado após leitura."""
+    ext = (file.filename or "").rsplit(".", 1)[-1].lower()
+    if ext not in EXTENSOES_PERMITIDAS:
+        raise HTTPException(400, f"Extensão .{ext} não permitida. Use: {', '.join(sorted(EXTENSOES_PERMITIDAS))}")
+    if file.content_type and file.content_type.split(";")[0].strip() not in MIME_TYPES_PERMITIDOS:
+        raise HTTPException(400, f"Tipo de arquivo não permitido: {file.content_type}")
 
 from app.core.database import get_db
 from app.shared.dependencies import get_current_user_id

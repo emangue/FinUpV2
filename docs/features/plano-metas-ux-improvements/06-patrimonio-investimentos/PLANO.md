@@ -4,6 +4,27 @@
 
 ---
 
+## Alinhamento ao PRD Legado (S11–S18)
+
+Este sub-projeto, quando implementado, atende aos requisitos do PRD legado:
+
+| Legado | Descrição |
+|--------|------------|
+| S11 | Vínculos de aportes (transação → investimento) |
+| S12 | Match automático (sugestões de vínculo) |
+| S13 | Rentabilidade CDI para renda fixa |
+| S14 | Posição de ações (custo médio, P&L) |
+| S15 | IR estimado (ações, FIIs, renda fixa) |
+| S16 | Resgate/venda de investimentos |
+| S17 | Saldo por corretora |
+| S18 | Carteira agrupada por tipo |
+
+**Integração com 05-plano:** O aporte planejado (`user_financial_profile.aporte_planejado`) definido no wizard do plano é usado como sugestão ao criar cenários de aposentadoria em PersonalizarPlanoLayout. O cashflow e a projeção do plano consideram o aporte do perfil.
+
+**Badge Carteira (S19.4):** Verificar badge dinâmico na aba Carteira quando implementada (ex.: total investido, variação do dia).
+
+---
+
 ## Sprint 8 — Vínculos + Renda Fixa + Match (~13h)
 
 ### Backend (8h)

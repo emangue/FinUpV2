@@ -84,20 +84,22 @@ Enquanto o wizard não estiver completo, o "Editar plano" pode:
 
 ---
 
-### Fase 2 — Projeção e tabela (≈ 10h)
+### Fase 2 — Cashflow e recibo anual (≈ 10h)
 
-**Objetivo:** Projeção de 12 meses e tabela de recibo anual, conforme Sprint 7 do PLANO.md.
+**Objetivo:** Alinhado ao legado (TECH_SPEC, UX). Cashflow engine + tabela recibo. Projeção opcional.
+
+**Referência:** `COMPARATIVO_FASE2_LEGADO.md`
 
 | # | Task | Descrição | Est. | Dep. |
 |---|------|-----------|------|------|
-| 2.1 | Backend: `GET /plano/projecao?meses=12&reducao_pct=0` | Média histórica por grupo + projeção com slider de redução | 2h | — |
-| 2.2 | Componente `ProjecaoChart` | Gráfico Recharts + slider "Reduzir gastos em X%" | 2.5h | 2.1 |
-| 2.3 | Backend: `GET /plano/cashflow-mensal?ano=` | Retorna 12 meses: receita, despesa, aporte, saldo (sem base_expectativas por ora) | 2h | — |
-| 2.4 | Componente `TabelaReciboAnual` | Tabela: Mês \| Receita \| Despesa \| Aporte \| Saldo | 2h | 2.3 |
-| 2.5 | Integrar na tela `/mobile/plano` | Aba ou seção "Ver cashflow anual" | 0.5h | 2.4 |
-| 2.6 | Backend: `PUT /plano/perfil` | Atualizar idade, aposentadoria, patrimônio, taxa retorno (para cálculos) | 1h | — |
+| 2.1 | Backend: `GET /plano/cashflow?ano=` | 12 meses: renda_esperada, gastos_recorrentes, gastos_realizados, aporte_planejado, saldo_projetado, status_mes (sem base_expectativas) | 2.5h | — |
+| 2.2 | Componente `TabelaReciboAnual` | Mês \| Renda \| Gastos \| Aporte \| Saldo + status (✅⚠️❌) + resumo do ano | 2.5h | 2.1 |
+| 2.3 | Integrar na tela `/mobile/plano` | CTA "Ver cashflow anual" → expande tabela | 0.5h | 2.2 |
+| 2.4 | Backend: `PUT /plano/perfil` | Atualizar idade, aposentadoria, patrimônio, taxa retorno | 1h | — |
+| 2.5 | Backend: `GET /plano/projecao?meses=12&reducao_pct=0` | Média histórica + projeção com slider (05-plano) | 2h | — |
+| 2.6 | Componente `ProjecaoChart` | Gráfico + slider "Reduzir gastos em X%" (opcional) | 2.5h | 2.5 |
 
-**Entregável:** Projeção visual + tabela de 12 meses na tela Plano.
+**Entregável:** Tabela recibo anual na tela Plano (core legado). ProjecaoChart como evolução.
 
 ---
 
@@ -155,7 +157,7 @@ FASE 0 (preparação do solo) → 2h   ← começar aqui: frame do wizard
     ↓
 FASE 1 (consolidação)      → 8h   ← hub + CTA "Editar plano"
     ↓
-FASE 2 (projeção/tabela)   → 10h
+FASE 2 (cashflow/recibo)    → 10h  ← cashflow primeiro, projeção opcional
     ↓
 FASE 3 (aposentadoria)     → 4h
     ↓
@@ -206,6 +208,7 @@ FASE 5 (conteúdo do wizard)→ 10h  ← preenche o frame
 ## 7. Referências
 
 - **Legado:** `_legado/PRD.md`, `_legado/UX_PLANO_FINANCEIRO_INTEGRADO.md`, `_legado/02-TECH_SPEC/TECH_SPEC.md`
-- **Comparativo:** `05-plano-financeiro/COMPARATIVO_LEGADO_VS_ATUAL.md`
+- **Comparativo geral:** `05-plano-financeiro/COMPARATIVO_LEGADO_VS_ATUAL.md`
+- **Comparativo Fase 2:** `05-plano-financeiro/COMPARATIVO_FASE2_LEGADO.md`
 - **Plano atual:** `05-plano-financeiro/PLANO.md`
 - **Volta ao legado:** `05-plano-financeiro/PLANO_VOLTA_LEGADO.md`

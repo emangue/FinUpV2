@@ -119,16 +119,16 @@ echo ""
 
 # Backend (porta 8000) - usa Python do venv explicitamente (nohup não herda source)
 cd "$PROJECT_ROOT/app_dev/backend"
-nohup "$PROJECT_ROOT/app_dev/venv/bin/python" run.py > "$PROJECT_ROOT/temp/logs/backend.log" 2>&1 &
+PORT=8000 nohup "$PROJECT_ROOT/app_dev/venv/bin/python" run.py > "$PROJECT_ROOT/temp/logs/backend.log" 2>&1 &
 BACKEND_PID=$!
 echo $BACKEND_PID > "$PROJECT_ROOT/temp/pids/backend.pid"
 cd "$PROJECT_ROOT"
 
 sleep 3
 
-# Frontend (porta 3000)
+# Frontend (porta 3000 fixa — evita CORS ao usar 3005)
 cd "$PROJECT_ROOT/app_dev/frontend"
-nohup npm run dev > "$PROJECT_ROOT/temp/logs/frontend.log" 2>&1 &
+PORT=3000 nohup npm run dev > "$PROJECT_ROOT/temp/logs/frontend.log" 2>&1 &
 FRONTEND_PID=$!
 echo $FRONTEND_PID > "$PROJECT_ROOT/temp/pids/frontend.pid"
 cd "$PROJECT_ROOT"

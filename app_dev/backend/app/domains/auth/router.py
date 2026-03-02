@@ -2,12 +2,15 @@
 Router do domínio Auth.
 Endpoints FastAPI isolados aqui.
 """
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Header, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from typing import Optional
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+
+security_logger = logging.getLogger("security_audit")
 
 from app.core.database import get_db
 from app.core.config import settings
@@ -21,7 +24,7 @@ limiter = Limiter(key_func=get_remote_address)
 
 
 @router.post("/login")
-@limiter.limit("5/minute")  # Máximo 5 tentativas de login por minuto
+@limiter.limit("3/minute")  # Máximo 3 tentativas de login por minuto por IP
 def login(
     request: Request,
     credentials: LoginRequest,
@@ -32,7 +35,15 @@ def login(
     Define cookie httpOnly para maior segurança (não acessível via JS).
     """
     service = AuthService(db)
-    token_response = service.login(credentials)
+    try:
+        token_response = service.login(credentials)
+    except HTTPException:
+        security_logger.warning(
+            "login_failed ip=%s email=%s",
+            request.client.host if request.client else "unknown",
+            credentials.email,
+        )
+        raise
     data = {
         "access_token": token_response.access_token,
         "token_type": token_response.token_type,

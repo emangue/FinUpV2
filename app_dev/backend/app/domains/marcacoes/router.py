@@ -27,9 +27,9 @@ def list_marcacoes(
     db: Session = Depends(get_db),
     user_id: int = Depends(get_current_user_id)
 ):
-    """Lista todas as marcações (grupo + subgrupo)"""
+    """Lista todas as marcações do usuário (grupo + subgrupo)"""
     service = MarcacaoService(db)
-    return service.list_marcacoes()
+    return service.list_marcacoes(user_id)
 
 
 @router.get("/grupos-com-subgrupos", response_model=List[GrupoComSubgrupos])
@@ -37,9 +37,9 @@ def get_grupos_com_subgrupos(
     db: Session = Depends(get_db),
     user_id: int = Depends(get_current_user_id)
 ):
-    """Retorna todos os grupos com seus subgrupos"""
+    """Retorna todos os grupos com seus subgrupos do usuário"""
     service = MarcacaoService(db)
-    return service.get_grupos_com_subgrupos()
+    return service.get_grupos_com_subgrupos(user_id)
 
 
 @router.get("/grupos/{grupo}", response_model=List[MarcacaoResponse])
@@ -48,9 +48,9 @@ def get_marcacoes_by_grupo(
     db: Session = Depends(get_db),
     user_id: int = Depends(get_current_user_id)
 ):
-    """Lista marcações de um grupo específico"""
+    """Lista marcações de um grupo específico do usuário"""
     service = MarcacaoService(db)
-    return service.get_marcacoes_by_grupo(grupo)
+    return service.get_marcacoes_by_grupo(user_id, grupo)
 
 
 @router.post("/grupos", status_code=201)
@@ -65,6 +65,7 @@ def create_grupo_com_subgrupo(
     """
     service = MarcacaoService(db)
     return service.create_grupo_com_subgrupo(
+        user_id=user_id,
         grupo=data.grupo,
         subgrupo=data.subgrupo,
         tipo_gasto=data.tipo_gasto,
@@ -84,7 +85,7 @@ def create_subgrupo(
     Busca tipo_gasto e categoria de base_grupos_config automaticamente.
     """
     service = MarcacaoService(db)
-    return service.create_subgrupo(grupo, subgrupo_data)
+    return service.create_subgrupo(user_id, grupo, subgrupo_data)
 
 
 @router.delete("/grupos/{grupo}/subgrupos/{subgrupo}")
@@ -94,6 +95,6 @@ def delete_subgrupo(
     db: Session = Depends(get_db),
     user_id: int = Depends(get_current_user_id)
 ):
-    """Exclui subgrupo específico"""
+    """Exclui subgrupo específico do usuário"""
     service = MarcacaoService(db)
-    return service.delete_subgrupo(grupo, subgrupo)
+    return service.delete_subgrupo(user_id, grupo, subgrupo)

@@ -241,13 +241,15 @@ export async function toggleGoalAtivo(goalId: number, ativo: boolean): Promise<v
 
 /**
  * Atualiza APENAS o valor_planejado de uma meta (edição inline)
- * @param goalId ID do budget_planning
+ * @param goalId ID do budget_planning (mês atual)
+ * @param grupo Nome do grupo (necessário para propagar para outros meses)
  * @param novoValor Novo valor de orçamento
  * @param prazo Mês de referência (YYYY-MM)
  * @param aplicarAteFinAno Se true, aplica para todos os meses seguintes até dezembro
  */
 export async function updateGoalValor(
   goalId: number,
+  grupo: string,
   novoValor: number,
   prazo: string,
   aplicarAteFinAno: boolean = false
@@ -264,8 +266,11 @@ export async function updateGoalValor(
       }
       
       // Fazer múltiplas chamadas (uma por mês)
-      const promises = mesesParaAtualizar.map(mesRef =>
-        fetchWithAuth(`${BASE_URL}/budget/planning/bulk-upsert`, {
+      // Mês 1: usa id (registro que estamos editando) - backend exige grupo em todos
+      // Meses 2..N: usa grupo (cada mês tem seu próprio registro)
+      const promises = mesesParaAtualizar.map((mesRef, idx) => {
+        const isFirstMonth = idx === 0
+        return fetchWithAuth(`${BASE_URL}/budget/planning/bulk-upsert`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -273,16 +278,17 @@ export async function updateGoalValor(
           body: JSON.stringify({
             mes_referencia: mesRef,
             budgets: [{
-              id: goalId,
+              grupo,
+              ...(isFirstMonth ? { id: goalId } : {}),
               valor_planejado: novoValor
             }]
           })
         })
-      )
+      })
       
       await Promise.all(promises)
     } else {
-      // Atualizar apenas o mês atual
+      // Atualizar apenas o mês atual (backend exige grupo)
       const response = await fetchWithAuth(`${BASE_URL}/budget/planning/bulk-upsert`, {
         method: 'POST',
         headers: {
@@ -292,6 +298,7 @@ export async function updateGoalValor(
           mes_referencia: prazo,
           budgets: [{
             id: goalId,
+            grupo,
             valor_planejado: novoValor
           }]
         })

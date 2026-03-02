@@ -76,6 +76,11 @@ class UserFinancialProfile(Base):
     idade_aposentadoria = Column(Integer, nullable=True, default=65)
     patrimonio_atual = Column(Float, nullable=True, default=0)
     taxa_retorno_anual = Column(Float, nullable=True, default=0.08)
+    crescimento_renda = Column(Float, nullable=True, default=0)  # % a.a. crescimento da renda recorrente
+    reajuste_mes = Column(Integer, nullable=True)   # mês em que ocorre o reajuste anual (1-12)
+    reajuste_ano = Column(Integer, nullable=True)   # ano do primeiro reajuste
+    modo_reajuste = Column(String(20), nullable=True, default='proporcional')  # proporcional | tudo_investimento
+    crescimento_gastos = Column(Float, nullable=True, default=0)  # % a.a. inflação dos gastos recorrentes
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
 

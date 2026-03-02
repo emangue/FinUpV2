@@ -9,25 +9,25 @@
 
 ### Backend (~3h)
 
-- [ ] **A.01** Migration: `journal_entries.fonte` (string) + `is_demo` (boolean)
+- [x] **A.01** Migration: `journal_entries.fonte` (string) + `is_demo` (boolean)
   ```bash
   docker exec finup_backend_dev alembic revision --autogenerate -m "add_fonte_is_demo_journal_entries"
   docker exec finup_backend_dev alembic upgrade head
   ```
-- [ ] **A.02** `GET /onboarding/progress` — 4 flags de completude
-- [ ] **A.03** Definir e implementar dataset demo (~90 transações em `DEMO_SEED`)
-- [ ] **A.04** `POST /onboarding/modo-demo` — inserir seed com `fonte='demo'`
-- [ ] **A.05** `DELETE /onboarding/modo-demo` — limpar `WHERE fonte='demo'`
+- [x] **A.02** `GET /onboarding/progress` — 4 flags de completude
+- [x] **A.03** Definir e implementar dataset demo (~70 transações em `DEMO_SEED`)
+- [x] **A.04** `POST /onboarding/modo-demo` — inserir seed com `fonte='demo'`
+- [x] **A.05** `DELETE /onboarding/modo-demo` — limpar `WHERE fonte='demo'`
 
 ### Frontend (~5h)
 
-- [ ] **F.01** Middleware: detectar primeiro acesso → redirect para `/mobile/onboarding/welcome`
-- [ ] **F.02** Layout `/mobile/onboarding/` (sem bottom nav)
-- [ ] **F.03** Tela `welcome/page.tsx` — headline + 3 bullets + 2 CTAs + "Pular"
-- [ ] **F.04** Tela `choose-path/page.tsx` — "Meus dados" (upload) vs. "Explorar" (demo)
-- [ ] **F.05** `OnboardingChecklist` no `/mobile/inicio` com useSWR + desaparece quando completo
-- [ ] **F.06** `DemoModeBanner` — detectar dados demo + CTA "Usar meus dados →"
-- [ ] **F.07** 4 banners S29 (nudges contextuais) com localStorage para "não mostrar de novo"
+- [x] **F.01** OnboardingGuard: detectar primeiro acesso → redirect para `/mobile/onboarding/welcome`
+- [x] **F.02** Layout `/mobile/onboarding/` (sem bottom nav)
+- [x] **F.03** Tela `welcome/page.tsx` — headline + 3 bullets + 2 CTAs + "Pular"
+- [x] **F.04** Tela `choose-path/page.tsx` — "Meus dados" (upload) vs. "Explorar" (demo)
+- [x] **F.05** `OnboardingChecklist` no `/mobile/dashboard` + desaparece quando completo
+- [x] **F.06** `DemoModeBanner` — detectar dados demo + CTA "Usar meus dados →"
+- [x] **F.07** 4 banners S29 (nudges contextuais) com localStorage para "não mostrar de novo"
 
 ---
 

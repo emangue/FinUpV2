@@ -49,3 +49,28 @@ class UserListResponse(BaseModel):
     """Schema de resposta de lista de usuários"""
     users: list[UserResponse]
     total: int
+
+
+class UserStatsResponse(BaseModel):
+    """Schema de resposta de estatísticas do usuário"""
+    total_transacoes: int
+    total_uploads: int
+    ultimo_upload_em: Optional[datetime] = None
+    total_grupos: int
+    tem_plano: bool
+    tem_investimentos: bool
+
+
+class PurgeConfirmacao(BaseModel):
+    """Schema para confirmação de purge de usuário"""
+    confirmacao: str  # deve ser "EXCLUIR PERMANENTEMENTE"
+    email_usuario: str  # deve bater com user.email
+
+
+class SystemStatsResponse(BaseModel):
+    """Estatísticas gerais do sistema (admin)"""
+    total_usuarios: int
+    total_usuarios_ativos: int
+    total_uploads: int
+    total_transacoes: int
+    total_planos: int

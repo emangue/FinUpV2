@@ -716,7 +716,7 @@ class BudgetService:
             )
         
         # Atualizar apenas campo ativo (repository.update precisa de dict)
-        updated_budget = self.repository.update(budget, {"ativo": ativo})
+        updated_budget = self.repository.update(budget, {"ativo": bool(ativo)})
         
         return {
             "id": updated_budget.id,

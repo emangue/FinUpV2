@@ -83,6 +83,14 @@ function GoalsMobilePageContent() {
     return () => { cancelled = true }
   }, [mesFromUrl, router])
   const { goals, loading, error, refreshGoals } = useGoals(selectedMonth)
+
+  // Recarregar e reordenar ao voltar do detalhe após edição
+  React.useEffect(() => {
+    if (typeof window !== 'undefined' && sessionStorage.getItem('goals-need-refresh') === '1') {
+      sessionStorage.removeItem('goals-need-refresh')
+      refreshGoals()
+    }
+  }, [refreshGoals])
   
   // Sprint E: Apenas metas de gastos (Investimentos removido do budget)
   const filteredGoals = React.useMemo(() => {

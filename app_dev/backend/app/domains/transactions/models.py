@@ -42,6 +42,8 @@ class JournalEntry(Base):
     TotalParcelas = Column(Integer)        # ✅ Ex: 12
     
     # Origem
+    fonte = Column(String, nullable=True, index=True)  # 'upload' | 'demo' | null (legado)
+    is_demo = Column(Integer, default=0)  # 1 = transação de modo exploração
     arquivo_origem = Column(String)
     banco_origem = Column(String)
     tipodocumento = Column(String)
@@ -74,7 +76,8 @@ class BaseParcelas(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, index=True)
-    
+    upload_history_id = Column(Integer, ForeignKey("upload_history.id"), nullable=True, index=True)
+
     # Identificação
     id_parcela = Column(String, index=True)
     estabelecimento_base = Column(String)

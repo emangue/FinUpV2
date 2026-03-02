@@ -2,7 +2,7 @@
 Domínio Users - Router
 Endpoints HTTP - apenas validação e chamadas de service
 """
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -12,22 +12,78 @@ from .schemas import (
     UserResponse,
     UserCreate,
     UserUpdate,
-    UserListResponse
+    UserListResponse,
+    UserStatsResponse,
+    SystemStatsResponse,
+    PurgeConfirmacao,
 )
 
 router = APIRouter(prefix="/users", tags=["users"])
+
+
+@router.get("/stats/summary", response_model=SystemStatsResponse)
+def get_system_stats(
+    db: Session = Depends(get_db),
+    admin=Depends(require_admin),
+):
+    """🔐 ADMIN ONLY - Estatísticas gerais do sistema."""
+    return UserService(db).get_system_stats()
+
 
 @router.get("/", response_model=UserListResponse)
 def list_users(
     apenas_ativos: bool = Query(True, description="Listar apenas usuários ativos"),
     db: Session = Depends(get_db),
-    admin = Depends(require_admin)  # 🔐 Apenas admin
+    admin=Depends(require_admin),  # 🔐 Apenas admin
 ):
     """
-    🔐 ADMIN ONLY - Lista todos os usuários
+    🔐 ADMIN ONLY - Lista todos os usuários.
+    Use apenas_ativos=false para incluir usuários inativos.
     """
     service = UserService(db)
     return service.list_users(apenas_ativos)
+
+
+@router.get("/{user_id}/stats", response_model=UserStatsResponse)
+def get_user_stats(
+    user_id: int,
+    db: Session = Depends(get_db),
+    admin=Depends(require_admin),  # 🔐 Apenas admin
+):
+    """🔐 ADMIN ONLY - Estatísticas do usuário (transações, uploads, grupos, etc)."""
+    return UserService(db).get_stats(user_id)
+
+
+@router.post("/{user_id}/reativar")
+def reativar_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    admin=Depends(require_admin),  # 🔐 Apenas admin
+):
+    """🔐 ADMIN ONLY - Reativa usuário inativo."""
+    return UserService(db).reativar(user_id)
+
+
+@router.delete("/{user_id}/purge")
+def purge_user(
+    user_id: int,
+    body: PurgeConfirmacao,
+    db: Session = Depends(get_db),
+    admin=Depends(require_admin),  # 🔐 Apenas admin
+):
+    """🔐 ADMIN ONLY - Remove permanentemente usuário e todos os seus dados. user_id=1 protegido."""
+    if user_id == 1:
+        raise HTTPException(403, "Admin principal não pode ser purgado")
+    if body.confirmacao != "EXCLUIR PERMANENTEMENTE":
+        raise HTTPException(400, "Confirmação inválida")
+    from .models import User
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(404, "Usuário não encontrado")
+    if body.email_usuario.lower() != user.email.lower():
+        raise HTTPException(400, "E-mail não confere")
+    return UserService(db).purge_user(user_id, executado_por=admin.id)
+
 
 @router.get("/{user_id}", response_model=UserResponse)
 def get_user(

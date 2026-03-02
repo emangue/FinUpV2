@@ -73,7 +73,7 @@ export default function ManageGoalsPage() {
 
     try {
       const { updateGoalValor } = await import('@/features/goals/services/goals-api')
-      await updateGoalValor(Number(goalId), novoValor, goal.mes_referencia, aplicarAteFinAno)
+      await updateGoalValor(Number(goalId), goal.grupo, novoValor, goal.mes_referencia, aplicarAteFinAno)
       
       console.log(`✅ Valor da meta ${goal.grupo} atualizado: R$ ${novoValor} ${aplicarAteFinAno ? '(até fim do ano)' : '(apenas este mês)'}`)
       

@@ -31,6 +31,8 @@ from .domains.marcacoes.router import router as marcacoes_router
 from .domains.screen_visibility.router import router as screen_visibility_router
 from .domains.classification.router import router as classification_router
 from .domains.investimentos.router import router as investimentos_router
+from .domains.onboarding.router import router as onboarding_router
+from .domains.plano.router import router as plano_router
 
 # Cria app FastAPI
 # docs/redoc desabilitados em produção (segurança)
@@ -72,6 +74,8 @@ app.include_router(marcacoes_router, prefix="/api/v1", tags=["Marcações"])
 app.include_router(screen_visibility_router, prefix="/api/v1/screens", tags=["Screen Visibility"])
 app.include_router(classification_router, prefix="/api/v1", tags=["Classification"])
 app.include_router(investimentos_router, prefix="/api/v1", tags=["Investimentos"])
+app.include_router(onboarding_router, prefix="/api/v1", tags=["Onboarding"])
+app.include_router(plano_router, prefix="/api/v1", tags=["Plano"])
 
 @app.get("/")
 def root():

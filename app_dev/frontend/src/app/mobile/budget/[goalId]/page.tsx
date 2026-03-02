@@ -146,6 +146,10 @@ function GoalDetailContent() {
     await updateGoal(goal.id, goal.grupo, goal.mes_referencia, data)
     await refreshGoal()
     setIsEditModalOpen(false)
+    // Sinaliza para a lista recarregar e reordenar ao voltar
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('goals-need-refresh', '1')
+    }
   }
 
   const handleDelete = async () => {

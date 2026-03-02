@@ -704,8 +704,9 @@ class DashboardRepository:
         Returns:
             total_investido, total_planejado, items: [{ grupo, valor, plano }]
         """
-        # Grupos com categoria_geral = Investimentos
+        # Grupos com categoria_geral = Investimentos (do usuário)
         grupos_inv = self.db.query(BaseGruposConfig.nome_grupo).filter(
+            BaseGruposConfig.user_id == user_id,
             BaseGruposConfig.categoria_geral == 'Investimentos'
         ).all()
         nomes_inv = [r.nome_grupo for r in grupos_inv]

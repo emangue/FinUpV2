@@ -39,13 +39,13 @@ export default function AdminLayout({
   return (
     <RequireAdmin>
       <div className="min-h-screen bg-slate-50">
-        <header className="sticky top-0 z-10 border-b bg-white shadow-sm">
-          <div className="flex h-14 items-center justify-between px-4">
-            <Link href="/admin" className="flex items-center gap-2 font-semibold">
+        <header className="sticky top-0 z-10 border-b bg-white shadow-sm safe-area-inset-top">
+          <div className="flex min-h-[56px] items-center justify-between px-4">
+            <Link href="/admin" className="flex min-h-[44px] min-w-[44px] items-center gap-2 font-semibold -ml-2 pl-2">
               <ChevronLeft className="h-5 w-5" />
-              FinUp Admin
+              <span className="hidden sm:inline">FinUp Admin</span>
             </Link>
-            <Button variant="ghost" size="sm" onClick={handleLogout}>
+            <Button variant="ghost" size="sm" onClick={handleLogout} className="min-h-[44px]">
               <LogOut className="mr-2 h-4 w-4" />
               Sair
             </Button>
@@ -53,14 +53,14 @@ export default function AdminLayout({
         </header>
 
         <nav className="border-b bg-white">
-          <div className="flex gap-1 overflow-x-auto px-4 py-2">
+          <div className="flex gap-1 overflow-x-auto px-4 py-2 scrollbar-hide -webkit-overflow-scrolling-touch">
             {navItems.map(({ href, label, icon: Icon }) => {
               const isActive = pathname === href || (href !== "/admin" && pathname.startsWith(href))
               return (
                 <Link
                   key={href}
                   href={href}
-                  className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  className={`flex min-h-[44px] shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                     isActive
                       ? "bg-primary text-primary-foreground"
                       : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -74,7 +74,7 @@ export default function AdminLayout({
           </div>
         </nav>
 
-        <main className="p-4">{children}</main>
+        <main className="p-4 max-w-4xl mx-auto">{children}</main>
       </div>
     </RequireAdmin>
   )

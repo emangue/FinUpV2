@@ -19,9 +19,9 @@ def list_grupos(
     db: Session = Depends(get_db),
     user_id: int = Depends(get_current_user_id)
 ):
-    """Lista todos os grupos configurados"""
+    """Lista todos os grupos configurados do usuário"""
     service = GrupoService(db)
-    return service.list_grupos()
+    return service.list_grupos(user_id)
 
 
 @router.get("/opcoes")
@@ -42,7 +42,7 @@ def get_grupo(
 ):
     """Busca grupo por ID"""
     service = GrupoService(db)
-    return service.get_grupo(grupo_id)
+    return service.get_grupo(user_id, grupo_id)
 
 
 @router.post("/", response_model=GrupoResponse)
@@ -51,9 +51,9 @@ def create_grupo(
     db: Session = Depends(get_db),
     user_id: int = Depends(get_current_user_id)
 ):
-    """Cria novo grupo"""
+    """Cria novo grupo para o usuário"""
     service = GrupoService(db)
-    return service.create_grupo(grupo_data)
+    return service.create_grupo(user_id, grupo_data)
 
 
 @router.put("/{grupo_id}", response_model=GrupoResponse)
@@ -65,7 +65,7 @@ def update_grupo(
 ):
     """Atualiza grupo existente"""
     service = GrupoService(db)
-    return service.update_grupo(grupo_id, grupo_data)
+    return service.update_grupo(user_id, grupo_id, grupo_data)
 
 
 @router.delete("/{grupo_id}")
@@ -76,4 +76,4 @@ def delete_grupo(
 ):
     """Exclui grupo"""
     service = GrupoService(db)
-    return service.delete_grupo(grupo_id)
+    return service.delete_grupo(user_id, grupo_id)

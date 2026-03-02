@@ -2,13 +2,13 @@
 
 /**
  * F.07: 4 banners S29 (nudges contextuais) com localStorage "não mostrar de novo"
- * Prioridade: 1) sem upload, 2) sem investimento (com plano), 3) upload > 30 dias
+ * Prioridade: 1) sem upload, 2) sem plano (S29), 3) sem investimento, 4) upload > 30 dias
  */
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { X, Upload, Wallet, RefreshCw } from 'lucide-react';
+import { X, Upload, Wallet, RefreshCw, Target } from 'lucide-react';
 import { fetchWithAuth } from '@/core/utils/api-client';
 
 const apiUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
@@ -57,12 +57,17 @@ export function NudgeBanners() {
       setVisible('sem_upload');
       return;
     }
-    // Prioridade 2: Plano criado, sem investimento
+    // Prioridade 2: Upload feito, sem plano (S29)
+    if (progress.primeiro_upload && !progress.plano_criado && !isDismissed('sem_plano')) {
+      setVisible('sem_plano');
+      return;
+    }
+    // Prioridade 3: Plano criado, sem investimento
     if (progress.plano_criado && !progress.investimento_adicionado && !isDismissed('sem_investimento')) {
       setVisible('sem_investimento');
       return;
     }
-    // Prioridade 3: Último upload há > 30 dias
+    // Prioridade 4: Último upload há > 30 dias
     if (progress.ultimo_upload_em) {
       const dias = diasAtras(progress.ultimo_upload_em);
       if (dias > 30 && !isDismissed('upload_30_dias')) {
@@ -99,6 +104,31 @@ export function NudgeBanners() {
         <button
           onClick={() => handleClose('sem_upload')}
           className="p-1 text-blue-600 hover:text-blue-800"
+          aria-label="Fechar"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+    );
+  }
+
+  if (visible === 'sem_plano') {
+    return (
+      <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 mb-4 flex items-start justify-between gap-3">
+        <div className="flex-1">
+          <p className="text-sm font-medium text-indigo-900">
+            Ótimo início! Crie seu Plano para ter um orçamento real
+          </p>
+          <Link href="/mobile/plano" className="inline-block mt-2">
+            <Button size="sm" variant="outline" className="border-indigo-300 text-indigo-800">
+              <Target className="w-4 h-4 mr-1" />
+              Criar plano
+            </Button>
+          </Link>
+        </div>
+        <button
+          onClick={() => handleClose('sem_plano')}
+          className="p-1 text-indigo-600 hover:text-indigo-800"
           aria-label="Fechar"
         >
           <X className="w-4 h-4" />

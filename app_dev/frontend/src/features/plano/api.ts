@@ -272,6 +272,11 @@ export interface PerfilResponse {
   idade_aposentadoria: number | null;
   patrimonio_atual: number | null;
   taxa_retorno_anual: number | null;
+  crescimento_renda: number | null;
+  reajuste_mes: number | null;
+  reajuste_ano: number | null;
+  modo_reajuste: string | null;
+  crescimento_gastos: number | null;
 }
 
 export interface PerfilUpdatePayload {
@@ -281,6 +286,11 @@ export interface PerfilUpdatePayload {
   idade_aposentadoria?: number;
   patrimonio_atual?: number;
   taxa_retorno_anual?: number;
+  crescimento_renda?: number;
+  reajuste_mes?: number;
+  reajuste_ano?: number;
+  modo_reajuste?: string;
+  crescimento_gastos?: number;
 }
 
 export async function getPerfil(): Promise<PerfilResponse> {
@@ -320,6 +330,9 @@ export interface ExpectativaItem {
   status: string;
   recorrencia?: string;
   parcelas?: number;
+  evoluir?: boolean;
+  evolucaoValor?: number;
+  evolucaoTipo?: 'percentual' | 'nominal';
 }
 
 export interface ExpectativaCreatePayload {
@@ -332,6 +345,9 @@ export interface ExpectativaCreatePayload {
   tipo_expectativa?: 'sazonal_plano' | 'renda_plano' | 'parcela_futura';
   recorrencia?: 'unico' | 'bimestral' | 'trimestral' | 'semestral' | 'anual';
   parcelas?: number; // 1 = à vista, 2-24 = parcelado
+  evoluir?: boolean;
+  evolucaoValor?: number;
+  evolucaoTipo?: 'percentual' | 'nominal';
 }
 
 export async function getExpectativas(mes?: string): Promise<ExpectativaItem[]> {
@@ -355,6 +371,9 @@ export async function postExpectativa(payload: ExpectativaCreatePayload): Promis
       tipo_expectativa: payload.tipo_expectativa ?? 'sazonal_plano',
       recorrencia: payload.recorrencia ?? 'unico',
       parcelas: payload.parcelas ?? 1,
+      evoluir: payload.evoluir ?? false,
+      evolucao_valor: payload.evolucaoValor ?? 0,
+      evolucao_tipo: payload.evolucaoTipo ?? 'percentual',
     }),
   });
   if (!res.ok) throw new Error('Erro ao criar expectativa');
@@ -378,6 +397,9 @@ export async function putExpectativa(
       tipo_expectativa: payload.tipo_expectativa ?? 'sazonal_plano',
       recorrencia: payload.recorrencia ?? 'unico',
       parcelas: payload.parcelas ?? 1,
+      evoluir: payload.evoluir ?? false,
+      evolucao_valor: payload.evolucaoValor ?? 0,
+      evolucao_tipo: payload.evolucaoTipo ?? 'percentual',
     }),
   });
   if (!res.ok) throw new Error('Erro ao atualizar expectativa');

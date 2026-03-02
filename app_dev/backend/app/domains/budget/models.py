@@ -7,7 +7,7 @@ CHANGELOG 13/02/2026:
 - ✅ Apenas BudgetPlanning ativo
 - ✅ Migration: 635e060a2434_consolidate_budget_tables
 """
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Boolean
 from datetime import datetime
 
 from app.core.database import Base
@@ -41,8 +41,8 @@ class BudgetPlanning(Base):
     # Cor no gráfico donut (hex, ex: #3b82f6)
     cor = Column(String(7), nullable=True)
     
-    # Status
-    ativo = Column(Integer, nullable=False, default=1)  # 0=inativo, 1=ativo (SQLite boolean as int)
+    # Status (PostgreSQL: boolean; SQLite aceita 0/1)
+    ativo = Column(Boolean, nullable=False, default=True)
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.now, nullable=False)

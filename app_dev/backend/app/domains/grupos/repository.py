@@ -14,29 +14,44 @@ class GrupoRepository:
     def __init__(self, db: Session):
         self.db = db
     
-    def get_all(self) -> List[BaseGruposConfig]:
-        """Busca todos os grupos configurados"""
-        return self.db.query(BaseGruposConfig).order_by(BaseGruposConfig.nome_grupo).all()
-    
-    def get_by_id(self, grupo_id: int) -> Optional[BaseGruposConfig]:
-        """Busca grupo por ID"""
-        return self.db.query(BaseGruposConfig).filter(BaseGruposConfig.id == grupo_id).first()
-    
-    def get_by_nome(self, nome_grupo: str) -> Optional[BaseGruposConfig]:
-        """Busca grupo por nome"""
-        return self.db.query(BaseGruposConfig).filter(BaseGruposConfig.nome_grupo == nome_grupo).first()
-    
-    def create(self, grupo_data: GrupoCreate) -> BaseGruposConfig:
-        """Cria novo grupo"""
-        grupo = BaseGruposConfig(**grupo_data.model_dump())
+    def get_all(self, user_id: int) -> List[BaseGruposConfig]:
+        """Busca todos os grupos configurados do usuário"""
+        return (
+            self.db.query(BaseGruposConfig)
+            .filter(BaseGruposConfig.user_id == user_id)
+            .order_by(BaseGruposConfig.nome_grupo)
+            .all()
+        )
+
+    def get_by_id(self, user_id: int, grupo_id: int) -> Optional[BaseGruposConfig]:
+        """Busca grupo por ID (do usuário)"""
+        return (
+            self.db.query(BaseGruposConfig)
+            .filter(BaseGruposConfig.user_id == user_id, BaseGruposConfig.id == grupo_id)
+            .first()
+        )
+
+    def get_by_nome(self, user_id: int, nome_grupo: str) -> Optional[BaseGruposConfig]:
+        """Busca grupo por nome (do usuário)"""
+        return (
+            self.db.query(BaseGruposConfig)
+            .filter(BaseGruposConfig.user_id == user_id, BaseGruposConfig.nome_grupo == nome_grupo)
+            .first()
+        )
+
+    def create(self, user_id: int, grupo_data: GrupoCreate) -> BaseGruposConfig:
+        """Cria novo grupo para o usuário"""
+        data = grupo_data.model_dump()
+        data["user_id"] = user_id
+        grupo = BaseGruposConfig(**data)
         self.db.add(grupo)
         self.db.commit()
         self.db.refresh(grupo)
         return grupo
     
-    def update(self, grupo_id: int, grupo_data: GrupoUpdate) -> Optional[BaseGruposConfig]:
+    def update(self, user_id: int, grupo_id: int, grupo_data: GrupoUpdate) -> Optional[BaseGruposConfig]:
         """Atualiza grupo existente"""
-        grupo = self.get_by_id(grupo_id)
+        grupo = self.get_by_id(user_id, grupo_id)
         if not grupo:
             return None
         
@@ -48,9 +63,9 @@ class GrupoRepository:
         self.db.refresh(grupo)
         return grupo
     
-    def delete(self, grupo_id: int) -> bool:
+    def delete(self, user_id: int, grupo_id: int) -> bool:
         """Exclui grupo"""
-        grupo = self.get_by_id(grupo_id)
+        grupo = self.get_by_id(user_id, grupo_id)
         if not grupo:
             return False
         

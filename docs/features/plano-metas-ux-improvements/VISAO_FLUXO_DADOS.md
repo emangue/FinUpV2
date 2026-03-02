@@ -65,7 +65,7 @@ A camada 2 (`base_expectativas`) está fora do escopo da fase atual, mas o model
 
 Sem renda declarada, metas e aportes não têm âncora. O sub-projeto 05 (Plano) traz:
 - Declaração de renda em `user_financial_profile`
-- Compromissos fixos (financiamento, aluguel)
+- Metas por grupo em `budget_planning` (aluguel, financiamento etc. entram aqui — modelo legado)
 - Desvio real vs. planejado por categoria
 - Card "Anos perdidos" quando gasto > plano
 
@@ -112,7 +112,7 @@ Fora do escopo da fase atual, mas é o destino da evolução.
 | **02-ux-fundacao** | Bugs, nav, empty states, Perfil na engrenagem | Base de navegação e UX para o resto |
 | **03-onboarding** | Welcome, demo, checklist, nudges | Jornada do novo usuário até o primeiro upload |
 | **04-upload** | Detecção, rollback, multi-file, planilha | Entrada de dados com menos fricção |
-| **05-plano** | Renda, compromissos, desvio, anos perdidos | Âncora de renda e consciência de desvio |
+| **05-plano** | Renda, metas (budget_planning), desvio, anos perdidos | Âncora de renda e consciência de desvio |
 | **06-patrimonio** | Vínculos, CDI, IR, ações, resgate | Fecha o ciclo Budget ↔ Patrimônio |
 
 ---
@@ -157,3 +157,10 @@ Fora do escopo da fase atual, mas é o destino da evolução.
 > O app conecta **extrato** (real) → **plano** (meta) → **patrimônio** (investimentos), com **renda** como âncora e **nudges** mostrando o impacto de cada desvio no longo prazo.
 
 A fase atual implementa essa cadeia de forma incremental. Os itens fora de escopo (wizard, expectativas, gasto parcelado) já estão documentados para evoluções futuras.
+
+---
+
+## 9. Documentos de alinhamento
+
+- **COMPARATIVO_GERAL_LEGADO.md** — Mapeamento legado → pastas 01–06
+- **AJUSTE_GERAL_LEGADO.md** — Ações para garantir que cada pasta seja parte do grande plano legado

@@ -336,6 +336,7 @@ class TransactionService:
             if transaction.GRUPO:
                 from app.domains.grupos.models import BaseGruposConfig
                 grupo_config = self.repository.db.query(BaseGruposConfig).filter(
+                    BaseGruposConfig.user_id == user_id,
                     BaseGruposConfig.nome_grupo == transaction.GRUPO
                 ).first()
                 
@@ -455,6 +456,7 @@ class TransactionService:
         categoria_geral = None
         if grupo:
             grupo_config = self.repository.db.query(BaseGruposConfig).filter(
+                BaseGruposConfig.user_id == user_id,
                 BaseGruposConfig.nome_grupo == grupo
             ).first()
             if grupo_config:
@@ -516,6 +518,7 @@ class TransactionService:
         categoria_geral = None
         if grupo:
             grupo_config = self.repository.db.query(BaseGruposConfig).filter(
+                BaseGruposConfig.user_id == user_id,
                 BaseGruposConfig.nome_grupo == grupo
             ).first()
             if grupo_config:
@@ -568,50 +571,26 @@ class TransactionService:
     
     def _buscar_tipo_gasto_base_marcacoes(
         self, 
+        user_id: int,
         grupo: Optional[str], 
         subgrupo: Optional[str],
         valor: float
     ) -> Optional[str]:
         """
-        Busca TipoGasto na base_marcacoes baseado em GRUPO e SUBGRUPO
-        
-        Para combinações com múltiplos TipoGasto (ex: Outros | Outros),
-        usa o valor da transação para decidir:
-        - Valor >= 0 → Receita - Outras
-        - Valor < 0 → Ajustável (despesa)
+        Busca TipoGasto na base_grupos_config baseado em GRUPO.
+        Sprint 2.0: TipoGasto vem de base_grupos_config, não de base_marcacoes.
         """
-        if not grupo or not subgrupo:
+        if not grupo:
             return None
         
-        from app.domains.categories.models import BaseMarcacao
+        from app.domains.grupos.models import BaseGruposConfig
         
-        # Buscar TipoGasto na base_marcacoes
-        marcacoes = self.repository.db.query(BaseMarcacao).filter(
-            BaseMarcacao.GRUPO == grupo,
-            BaseMarcacao.SUBGRUPO == subgrupo
-        ).all()
+        grupo_config = self.repository.db.query(BaseGruposConfig).filter(
+            BaseGruposConfig.user_id == user_id,
+            BaseGruposConfig.nome_grupo == grupo
+        ).first()
         
-        if not marcacoes:
-            return None
-        
-        # Se há apenas um TipoGasto, usar esse
-        if len(marcacoes) == 1:
-            return marcacoes[0].TipoGasto
-        
-        # Se há múltiplos (ex: Outros | Outros), decidir pelo valor
-        # Valor >= 0 → buscar TipoGasto que contenha "Receita"
-        # Valor < 0 → buscar TipoGasto que não contenha "Receita"
-        if valor >= 0:
-            for m in marcacoes:
-                if m.TipoGasto and 'Receita' in m.TipoGasto:
-                    return m.TipoGasto
-        else:
-            for m in marcacoes:
-                if m.TipoGasto and 'Receita' not in m.TipoGasto:
-                    return m.TipoGasto
-        
-        # Fallback: retornar o primeiro
-        return marcacoes[0].TipoGasto
+        return grupo_config.tipo_gasto_padrao if grupo_config else None
     
     def delete_transaction(
         self,
@@ -780,7 +759,7 @@ class TransactionService:
         
         # Buscar tipo_gasto e categoria_geral do grupo destino
         grupo_repo = GrupoRepository(self.repository.db)
-        grupo_config = grupo_repo.get_by_nome(grupo_destino)
+        grupo_config = grupo_repo.get_by_nome(user_id, grupo_destino)
         
         if not grupo_config:
             raise HTTPException(
@@ -812,7 +791,7 @@ class TransactionService:
         
         # Buscar configuração do grupo destino
         grupo_repo = GrupoRepository(self.repository.db)
-        grupo_config = grupo_repo.get_by_nome(grupo_destino)
+        grupo_config = grupo_repo.get_by_nome(user_id, grupo_destino)
         
         if not grupo_config:
             raise HTTPException(
@@ -925,18 +904,19 @@ class TransactionService:
     
     def _ensure_marcacao_exists(self, grupo: str, subgrupo: str, tipo_gasto: str, user_id: int = None):
         """
-        Garante que a combinação grupo+subgrupo existe em base_marcacoes.
+        Garante que a combinação grupo+subgrupo existe em base_marcacoes do usuário.
         Sprint 2.0: base_marcacoes tem apenas GRUPO+SUBGRUPO (TipoGasto em base_grupos_config).
         """
         from app.domains.categories.models import BaseMarcacao
         
         existing = self.repository.db.query(BaseMarcacao).filter(
+            BaseMarcacao.user_id == user_id,
             BaseMarcacao.GRUPO == grupo,
             BaseMarcacao.SUBGRUPO == subgrupo
         ).first()
         
         if not existing:
-            nova_marcacao = BaseMarcacao(GRUPO=grupo, SUBGRUPO=subgrupo)
+            nova_marcacao = BaseMarcacao(user_id=user_id, GRUPO=grupo, SUBGRUPO=subgrupo)
             self.repository.db.add(nova_marcacao)
             self.repository.db.flush()
             print(f"➕ Nova marcação criada: {grupo} > {subgrupo}")

@@ -79,7 +79,7 @@ const RECORRENCIA_INTERVAL: Record<string, number> = {
   anual: 12,
 };
 
-/** Expande receitas extraordinárias por mês do ano (parcelado ou recorrência). */
+/** Expande receitas extraordinárias por mês do ano (parcelado ou recorrência), aplicando evolução por ocorrência. */
 function expandirExtrasPorMes(planAno: number, items: ExpectativaItem[]): number[] {
   const porMes = new Array(12).fill(0);
   for (const e of items) {
@@ -93,10 +93,7 @@ function expandirExtrasPorMes(planAno: number, items: ExpectativaItem[]): number
       for (let i = 0; i < parcelas; i++) {
         if (ano === planAno && mes >= 1 && mes <= 12) porMes[mes - 1] += valorParcela;
         mes += 1;
-        if (mes > 12) {
-          mes = 1;
-          ano += 1;
-        }
+        if (mes > 12) { mes = 1; ano += 1; }
       }
     } else {
       const interval = RECORRENCIA_INTERVAL[recorrencia] ?? 0;
@@ -104,13 +101,21 @@ function expandirExtrasPorMes(planAno: number, items: ExpectativaItem[]): number
       let mes = refMes;
       let count = 0;
       while (count <= 24) {
-        if (ano === planAno && mes >= 1 && mes <= 12) porMes[mes - 1] += e.valor;
+        if (ano === planAno && mes >= 1 && mes <= 12) {
+          // Aplica evolução com base no número da ocorrência (count=0 → valor base, count=1 → 2ª ocorrência, etc.)
+          let val = e.valor;
+          if (e.evoluir && e.evolucaoValor && count > 0) {
+            if (e.evolucaoTipo === 'percentual') {
+              val = e.valor * Math.pow(1 + e.evolucaoValor / 100, count);
+            } else {
+              val = e.valor + e.evolucaoValor * count;
+            }
+          }
+          porMes[mes - 1] += val;
+        }
         if (interval === 0) break;
         mes += interval;
-        while (mes > 12) {
-          mes -= 12;
-          ano += 1;
-        }
+        while (mes > 12) { mes -= 12; ano += 1; }
         count += 1;
       }
     }
@@ -118,45 +123,7 @@ function expandirExtrasPorMes(planAno: number, items: ExpectativaItem[]): number
   return porMes;
 }
 
-const MESES_LABEL = ['J','F','M','A','M','J','J','A','S','O','N','D'];
 
-function EvolucaoMensalExtras({
-  porMes,
-  formatCurrency,
-}: {
-  porMes: number[];
-  formatCurrency: (v: number) => string;
-}) {
-  const maxVal = Math.max(...porMes, 1);
-  const total = porMes.reduce((s, v) => s + v, 0);
-  return (
-    <div>
-      <div className="flex items-end gap-1 h-16 mb-2">
-        {porMes.map((v, i) => {
-          const pct = (v / maxVal) * 100;
-          return (
-            <div
-              key={i}
-              className="flex-1 min-w-0 flex flex-col items-center justify-end h-full"
-              title={`${MESES_LABEL[i]} ${i + 1}: ${formatCurrency(v)}`}
-            >
-              <div
-                className="w-full bg-emerald-500 rounded-t transition-all"
-                style={{ height: `${Math.max(4, pct)}%` }}
-              />
-            </div>
-          );
-        })}
-      </div>
-      <div className="flex justify-between text-[10px] text-gray-500">
-        <span>{MESES_LABEL.join(' ')}</span>
-        <span className="font-semibold text-emerald-700">
-          Total ano: {formatCurrency(total)}
-        </span>
-      </div>
-    </div>
-  );
-}
 
 export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps) {
   const [step, setStep] = React.useState(1);
@@ -175,6 +142,10 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
     retorno: 10,
     inflacao: 4.5,
     crescimentoRenda: 0,
+    reajusteMes: new Date().getMonth() + 1,
+    reajusteAno: new Date().getFullYear(),
+    modoReajuste: 'proporcional' as const,
+    crescimentoGastos: 0,
     activeProfile: 'moderado',
   });
   const [novoExtraRenda, setNovoExtraRenda] = React.useState<{
@@ -184,7 +155,10 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
     mes: number;
     recorrencia: 'unico' | 'bimestral' | 'trimestral' | 'semestral' | 'anual';
     parcelas: number;
-  }>({ descricao: '', valor: 0, ano: new Date().getFullYear(), mes: 1, recorrencia: 'anual', parcelas: 1 });
+    evoluir: boolean;
+    evolucaoValor: number;
+    evolucaoTipo: 'percentual' | 'nominal';
+  }>({ descricao: '', valor: 0, ano: new Date().getFullYear(), mes: 1, recorrencia: 'anual', parcelas: 1, evoluir: false, evolucaoValor: 0, evolucaoTipo: 'percentual' });
   const [novoSazonal, setNovoSazonal] = React.useState<{
     descricao: string;
     valor: number;
@@ -212,6 +186,14 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
         if (p.renda_mensal_liquida != null && p.renda_mensal_liquida > 0) {
           onStateChange((s) => ({ ...s, renda_mensal: p.renda_mensal_liquida! }));
         }
+        setAposentadoriaState((s) => ({
+          ...s,
+          crescimentoRenda: p.crescimento_renda ?? 0,
+          reajusteMes: p.reajuste_mes ?? (new Date().getMonth() + 1),
+          reajusteAno: p.reajuste_ano ?? new Date().getFullYear(),
+          modoReajuste: (p.modo_reajuste as 'proporcional' | 'tudo_investimento') ?? 'proporcional',
+          crescimentoGastos: p.crescimento_gastos ?? 0,
+        }));
       })
       .catch(() => {});
   }, [step, rendaLoaded]);
@@ -311,6 +293,11 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
           idade_aposentadoria: aposentadoriaState.retire,
           patrimonio_atual: aposentadoriaState.patrimonio,
           renda_mensal_liquida: aposentadoriaState.rendaMensal > 0 ? aposentadoriaState.rendaMensal : undefined,
+          crescimento_renda: aposentadoriaState.crescimentoRenda ?? 0,
+          reajuste_mes: aposentadoriaState.reajusteMes,
+          reajuste_ano: aposentadoriaState.reajusteAno,
+          modo_reajuste: aposentadoriaState.modoReajuste ?? 'proporcional',
+          crescimento_gastos: aposentadoriaState.crescimentoGastos ?? 0,
         });
       } catch {
         /* não bloqueia */
@@ -399,6 +386,9 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
         tipo_expectativa: 'renda_plano' as const,
         recorrencia: novoExtraRenda.recorrencia,
         parcelas: novoExtraRenda.parcelas,
+        evoluir: novoExtraRenda.evoluir,
+        evolucaoValor: novoExtraRenda.evolucaoValor,
+        evolucaoTipo: novoExtraRenda.evolucaoTipo,
       };
       if (editingExtraRendaId) {
         await putExpectativa(editingExtraRendaId, payload);
@@ -408,7 +398,7 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
         await postExpectativa(payload);
         toast.success('Receita extraordinária adicionada');
       }
-      setNovoExtraRenda({ descricao: '', valor: 0, ano: planInicioAno, mes: 1, recorrencia: 'anual', parcelas: 1 });
+      setNovoExtraRenda({ descricao: '', valor: 0, ano: planInicioAno, mes: 1, recorrencia: 'anual', parcelas: 1, evoluir: false, evolucaoValor: 0, evolucaoTipo: 'percentual' });
       const list = await getExpectativas();
       setExtraRendas(list.filter((e) => e.tipo_expectativa === 'renda_plano'));
     } catch (e) {
@@ -425,13 +415,16 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
       mes: m || 1,
       recorrencia: (e.recorrencia as typeof novoExtraRenda.recorrencia) || 'anual',
       parcelas: e.parcelas ?? 1,
+      evoluir: e.evoluir ?? false,
+      evolucaoValor: e.evolucaoValor ?? 0,
+      evolucaoTipo: e.evolucaoTipo ?? 'percentual',
     });
     setEditingExtraRendaId(e.id);
   };
 
   const handleCancelEditExtraRenda = () => {
     setEditingExtraRendaId(null);
-    setNovoExtraRenda({ descricao: '', valor: 0, ano: planInicioAno, mes: 1, recorrencia: 'anual', parcelas: 1 });
+    setNovoExtraRenda({ descricao: '', valor: 0, ano: planInicioAno, mes: 1, recorrencia: 'anual', parcelas: 1, evoluir: false, evolucaoValor: 0, evolucaoTipo: 'percentual' });
   };
 
   const handleRemoveExtraRenda = async (id: number) => {
@@ -532,10 +525,10 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
               </div>
               <div className="bg-white rounded-xl border border-gray-200 p-4">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">
-                  Evolução da renda
+                  Crescimento da renda recorrente
                 </h3>
                 <p className="text-sm text-gray-600 mb-3">
-                  Renda e aporte crescem ao longo do tempo na projeção até aposentadoria.
+                  % de aumento médio da sua renda recorrente por ano. Afeta apenas a renda fixa mensal na projeção de longo prazo.
                 </p>
                 <div className="flex items-center gap-3">
                   <input
@@ -556,6 +549,61 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
                     {(aposentadoriaState.crescimentoRenda ?? 0).toFixed(1).replace('.', ',')}% a.a.
                   </span>
                 </div>
+                {(aposentadoriaState.crescimentoRenda ?? 0) > 0 && (
+                  <div className="mt-3 space-y-3">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs text-gray-500">Primeiro reajuste em</span>
+                      <select
+                        value={aposentadoriaState.reajusteMes ?? (new Date().getMonth() + 1)}
+                        onChange={(e) => setAposentadoriaState((s) => ({ ...s, reajusteMes: Number(e.target.value) }))}
+                        className="rounded-lg border border-gray-200 px-2 py-1 text-sm bg-white"
+                      >
+                        {['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'].map((m, i) => (
+                          <option key={i + 1} value={i + 1}>{m}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={aposentadoriaState.reajusteAno ?? new Date().getFullYear()}
+                        onChange={(e) => setAposentadoriaState((s) => ({ ...s, reajusteAno: Number(e.target.value) }))}
+                        className="rounded-lg border border-gray-200 px-2 py-1 text-sm bg-white"
+                      >
+                        {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 1 + i).map((y) => (
+                          <option key={y} value={y}>{y}</option>
+                        ))}
+                      </select>
+                      <span className="text-xs text-gray-400">— todo ano nesse mês</span>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 mb-2">O que fazer com o aumento?</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setAposentadoriaState((s) => ({ ...s, modoReajuste: 'proporcional' }))}
+                          className={`px-3 py-2 rounded-lg border text-left transition-colors ${
+                            (aposentadoriaState.modoReajuste ?? 'proporcional') === 'proporcional'
+                              ? 'border-indigo-500 bg-indigo-50'
+                              : 'border-gray-200 bg-white'
+                          }`}
+                        >
+                          <span className="block text-xs font-semibold text-gray-900">Proporcional</span>
+                          <span className="text-[10px] text-gray-500">Gastos e investimentos crescem juntos</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAposentadoriaState((s) => ({ ...s, modoReajuste: 'tudo_investimento' }))}
+                          className={`px-3 py-2 rounded-lg border text-left transition-colors ${
+                            (aposentadoriaState.modoReajuste ?? 'proporcional') === 'tudo_investimento'
+                              ? 'border-emerald-500 bg-emerald-50'
+                              : 'border-gray-200 bg-white'
+                          }`}
+                        >
+                          <span className="block text-xs font-semibold text-gray-900">Tudo em investimentos</span>
+                          <span className="text-[10px] text-gray-500">Gastos fixos, aumento vira aporte</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
               <div>
                 <p className={mobileTypography.frequency.tailwind}>
@@ -570,6 +618,11 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
                           {formatCurrency(e.valor)} · {e.mes_referencia}
                           {(e.parcelas ?? 1) > 1 && ` · ${e.parcelas}x`}
                           {e.recorrencia && e.recorrencia !== 'unico' && ` · ${RECORRENCIAS.find((r) => r.value === e.recorrencia)?.label ?? e.recorrencia}`}
+                          {e.evoluir && e.evolucaoValor && e.evolucaoValor > 0 && (
+                            <span className="text-emerald-600">
+                              {' · '}+{e.evolucaoTipo === 'percentual' ? `${e.evolucaoValor}%` : formatCurrency(e.evolucaoValor)}/ano
+                            </span>
+                          )}
                         </p>
                       </div>
                       <div className="flex items-center gap-1">
@@ -593,17 +646,32 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
                     </div>
                   ))}
                 </div>
-                {extraRendas.length > 0 && (
-                  <div className="mt-4 p-4 bg-white rounded-xl border border-gray-200">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">
-                      Evolução mensal ({planInicioAno})
-                    </h3>
-                    <EvolucaoMensalExtras
-                      porMes={expandirExtrasPorMes(planInicioAno, extraRendas)}
-                      formatCurrency={formatCurrency}
-                    />
-                  </div>
-                )}
+                {(() => {
+                  const recorrenteAnual = (state.renda_mensal ?? 0) * 12;
+                  const extrasAnual = expandirExtrasPorMes(planInicioAno, extraRendas).reduce((s, v) => s + v, 0);
+                  const totalAnual = recorrenteAnual + extrasAnual;
+                  return (
+                    <div className="mt-4 p-4 bg-gray-50 rounded-xl border border-gray-200 space-y-2">
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">
+                        O que cai na conta em {planInicioAno}
+                      </h3>
+                      <div className="flex justify-between text-sm text-gray-600">
+                        <span>Renda recorrente</span>
+                        <span className="font-medium text-gray-900">{formatCurrency(recorrenteAnual)}</span>
+                      </div>
+                      {extraRendas.length > 0 && (
+                        <div className="flex justify-between text-sm text-gray-600">
+                          <span>Receitas extraordinárias</span>
+                          <span className="font-medium text-emerald-700">{formatCurrency(extrasAnual)}</span>
+                        </div>
+                      )}
+                      <div className="border-t border-gray-200 pt-2 flex justify-between text-sm font-bold">
+                        <span>Total no ano</span>
+                        <span className="text-indigo-700">{formatCurrency(totalAnual)}</span>
+                      </div>
+                    </div>
+                  );
+                })()}
                 <div className="border border-gray-200 rounded-xl p-4 space-y-2 mt-2">
                   <input
                     type="text"
@@ -663,6 +731,58 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
                       ))}
                     </select>
                   </div>
+                  {/* Evolução anual — disponível para recorrências (não para parcelado ou único) */}
+                  {novoExtraRenda.recorrencia !== 'unico' && novoExtraRenda.parcelas === 1 && (
+                    <div className="pt-2 border-t border-gray-100 space-y-2">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={novoExtraRenda.evoluir}
+                          onChange={(e) => setNovoExtraRenda((n) => ({ ...n, evoluir: e.target.checked }))}
+                          className="w-4 h-4 rounded accent-emerald-600"
+                        />
+                        <span className="text-sm text-gray-700 font-medium">Evoluir a cada recorrência</span>
+                      </label>
+                      {novoExtraRenda.evoluir && (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            min={0}
+                            step={0.5}
+                            placeholder="Valor"
+                            value={novoExtraRenda.evolucaoValor || ''}
+                            onChange={(e) => setNovoExtraRenda((n) => ({ ...n, evolucaoValor: parseFloat(e.target.value) || 0 }))}
+                            className="flex-1 min-w-0 rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                          />
+                          <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
+                            <button
+                              type="button"
+                              onClick={() => setNovoExtraRenda((n) => ({ ...n, evolucaoTipo: 'percentual' }))}
+                              className={`px-3 py-2 font-medium transition-colors ${
+                                novoExtraRenda.evolucaoTipo === 'percentual'
+                                  ? 'bg-gray-900 text-white'
+                                  : 'bg-white text-gray-600 hover:bg-gray-50'
+                              }`}
+                            >
+                              %
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setNovoExtraRenda((n) => ({ ...n, evolucaoTipo: 'nominal' }))}
+                              className={`px-3 py-2 font-medium transition-colors ${
+                                novoExtraRenda.evolucaoTipo === 'nominal'
+                                  ? 'bg-gray-900 text-white'
+                                  : 'bg-white text-gray-600 hover:bg-gray-50'
+                              }`}
+                            >
+                              R$
+                            </button>
+                          </div>
+                          <span className="text-xs text-gray-400 whitespace-nowrap">a.a.</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <div className="flex gap-2">
                     {editingExtraRendaId && (
                       <Button type="button" variant="outline" size="sm" onClick={handleCancelEditExtraRenda} className="flex-1">
@@ -708,6 +828,31 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
                     A soma dos gastos não pode ultrapassar a renda recorrente. Ajuste os valores abaixo.
                   </p>
                 )}
+              </div>
+              {/* Slider crescimento de gastos — topo, antes dos grupos */}
+              <div className="bg-white rounded-xl border border-gray-200 p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">
+                    Inflação dos gastos
+                  </h3>
+                  <span className="text-sm font-semibold text-orange-600">
+                    {(aposentadoriaState.crescimentoGastos ?? 0).toFixed(1).replace('.', ',')}% a.a.
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={15}
+                  step={0.5}
+                  value={aposentadoriaState.crescimentoGastos ?? 0}
+                  onChange={(e) =>
+                    setAposentadoriaState((s) => ({
+                      ...s,
+                      crescimentoGastos: parseFloat(e.target.value),
+                    }))
+                  }
+                  className="w-full h-2 bg-gray-200 rounded-lg accent-orange-500"
+                />
               </div>
               <div className="space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
@@ -767,6 +912,33 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
                   ))}
                 </div>
               )}
+              <div className="bg-white rounded-xl border border-gray-200 p-4">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">
+                  Crescimento dos gastos
+                </h3>
+                <p className="text-sm text-gray-600 mb-3">
+                  % de inflação dos seus gastos por ano. Aplicado todo janeiro na projeção de longo prazo.
+                </p>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range"
+                    min={0}
+                    max={15}
+                    step={0.5}
+                    value={aposentadoriaState.crescimentoGastos ?? 0}
+                    onChange={(e) =>
+                      setAposentadoriaState((s) => ({
+                        ...s,
+                        crescimentoGastos: parseFloat(e.target.value),
+                      }))
+                    }
+                    className="flex-1 h-2 bg-gray-200 rounded-lg accent-orange-500"
+                  />
+                  <span className="text-sm font-semibold text-gray-900 w-14">
+                    {(aposentadoriaState.crescimentoGastos ?? 0).toFixed(1).replace('.', ',')}% a.a.
+                  </span>
+                </div>
+              </div>
             </div>
           ) : step === 3 ? (
             <div className="space-y-4">
@@ -935,6 +1107,7 @@ export function PlanoWizard({ state, onStateChange, onFinish }: PlanoWizardProps
               extraRendas={extraRendas}
               totalGastosRecorrentes={totalGastos}
               sazonais={sazonais}
+              crescimentoGastos={aposentadoriaState.crescimentoGastos ?? 0}
             />
           ) : null}
         </div>

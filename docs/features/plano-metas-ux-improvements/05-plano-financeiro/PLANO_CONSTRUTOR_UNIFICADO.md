@@ -39,9 +39,9 @@ O Construtor de Plano (`/mobile/construir-plano`) hoje tem 4 etapas: Renda | Gas
 - **Evoluir valor:** checkbox
 - Se evoluir: valor de evolução + tipo (% ou R$)
 
-**Persistência:** Integrar com `base_expectativas` (tipo `renda_plano`) ou criar modelo específico para ganhos extraordinários no plano financeiro.
+**Persistência:** Ver **AVALIACAO_MERGE_PLANO_APOSENTADORIA.md** — recomendação: usar `base_expectativas` (tipo `renda_plano`) com extensão `metadata_json` para recorrência/evolução. Construtor = fonte de verdade; aposentadoria consome.
 
-**Backend:** Endpoints já existem em `/plano/expectativas` (POST, GET, DELETE). Tipo `renda_plano` para ganhos extras.
+**Backend:** Endpoints já existem em `/plano/expectativas`. Estender para aceitar metadata (recorrência, evoluir).
 
 ---
 
@@ -208,6 +208,7 @@ O `PersonalizarPlanoLayout` (plano de aposentadoria) já tem:
 
 ## 7. Referências
 
+- **`AVALIACAO_MERGE_PLANO_APOSENTADORIA.md`** — merge de persistência, base_expectativas vs extras_json
 - `PLANO_VOLTA_LEGADO.md` — base_expectativas, budget_planning
 - `UX_PLANO_FINANCEIRO_INTEGRADO.md` — GanhosExtraordinariosEditor, GastosSazonaisEditor
 - `PersonalizarPlanoLayout.tsx` — dinâmica de extras (recorrência, evolução)
