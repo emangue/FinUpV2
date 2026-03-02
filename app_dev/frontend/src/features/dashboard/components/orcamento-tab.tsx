@@ -139,8 +139,11 @@ export function OrcamentoTab({
   const totalInvestido = useMetricsForResumo && totalInvestidoPeriodo != null
     ? totalInvestidoPeriodo
     : goalsInvestimentos.reduce((s, g) => s + (g.valor_realizado ?? 0), 0)
-  // Aporte planejado vem do cenário principal (plano de aposentadoria na aba Patrimônio)
-  const totalPlanejadoInv = aportePrincipal
+  // Aporte planejado: usa cashflow do plano quando disponível (mesmo valor do wizard),
+  // fallback para cenário principal
+  const totalPlanejadoInv = (planoMes?.aporte_planejado ?? 0) > 0
+    ? (planoMes?.aporte_planejado ?? 0)
+    : aportePrincipal
   const percentualDesp = totalPlanejadoDesp > 0 ? (totalDespesas / totalPlanejadoDesp) * 100 : 0
 
   const formatCurrency = (v: number) =>
