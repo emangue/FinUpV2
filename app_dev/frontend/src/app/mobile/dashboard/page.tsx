@@ -25,7 +25,6 @@ import { PlanoAposentadoriaTab } from '@/features/plano-aposentadoria/components
 import { OnboardingChecklist } from '@/features/onboarding/OnboardingChecklist'
 import { DemoModeBanner } from '@/features/onboarding/DemoModeBanner'
 import { NudgeBanners } from '@/features/onboarding/NudgeBanners'
-import { BudgetWidget } from '@/features/plano/components/BudgetWidget'
 import { useDashboardMetrics, useIncomeSources, useExpenseSources, useChartData, useChartDataYearly } from '@/features/dashboard/hooks/use-dashboard'
 import { fetchLastMonthWithData } from '@/features/dashboard/services/dashboard-api'
 import { useRequireAuth } from '@/core/hooks/use-require-auth'
@@ -187,12 +186,6 @@ export default function DashboardMobilePage() {
             {/* Tab Resultado: Resumo + Gráfico (sem Tendência) + Toggle Despesas|Receitas|Cartões + Investimentos + Transações */}
             {activeTab === 'resultado' && (
               <>
-                <BudgetWidget
-                  totalDespesas={metrics?.total_despesas ?? 0}
-                  totalReceitas={metrics?.total_receitas ?? 0}
-                  year={year}
-                  month={month}
-                />
                 <OrcamentoTab
                   year={year}
                   month={month}

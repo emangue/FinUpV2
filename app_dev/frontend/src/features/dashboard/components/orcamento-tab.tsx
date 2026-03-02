@@ -181,8 +181,11 @@ export function OrcamentoTab({
 
   return (
     <div className="space-y-4">
-      {/* Resumo do Mês */}
-      <div className="rounded-xl border border-gray-200 bg-white p-4">
+      {/* Resumo do Mês — toca para ir ao Plano */}
+      <div
+        className="rounded-xl border border-gray-200 bg-white p-4 cursor-pointer active:bg-gray-50 transition-colors"
+        onClick={() => router.push('/mobile/plano')}
+      >
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-bold text-gray-900">Resumo do Mês</h3>
           <span
