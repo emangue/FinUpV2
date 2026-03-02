@@ -367,19 +367,19 @@ export function PlanoAposentadoriaStepContent({
     extrasPorMes,
   ]);
 
-  // Máximo aporte = menor disponível entre os meses (garante que todo mês cobre)
+  // Máximo aporte = renda recorrente - gastos recorrentes (saldo mensal base)
+  // Sazonais e extras variam por mês, então não limitam o slider — a projeção já trata isso mês a mês.
   const maxAporte = React.useMemo(() => {
     const temDados =
       totalGastosRecorrentes > 0 || sazonais.length > 0 || extraRendas.length > 0;
     if (!temDados) return 50000; // Sem dados do plano: slider livre até 50k
-    const minDisp = Math.min(...disponivelPorMes);
-    return Math.max(100, Math.round(minDisp / 100) * 100);
+    const saldoBase = state.rendaMensal - totalGastosRecorrentes;
+    return Math.max(100, Math.round(saldoBase / 100) * 100);
   }, [
+    state.rendaMensal,
     totalGastosRecorrentes,
     sazonais.length,
     extraRendas.length,
-    disponivelPorMes,
-    state.aporte,
   ]);
 
   // Pré-selecionar aporte = maxAporte quando há dados; limitar se exceder; atualizar quando maxAporte aumentar (ex.: após renda carregar)
