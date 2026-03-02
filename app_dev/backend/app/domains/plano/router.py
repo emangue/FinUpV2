@@ -241,12 +241,13 @@ def cashflow_detalhe_mes(
 @router.get("/cashflow")
 def cashflow_anual(
     ano: int = Query(..., ge=2020, le=2100),
+    modo_plano: bool = Query(False, description="Se True, usa sempre valores do plano (ignora realizado)"),
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ):
     """12 meses: renda_esperada, gastos_recorrentes, gastos_realizados, aporte, saldo, status"""
     service = PlanoService(db)
-    return service.get_cashflow(user_id, ano)
+    return service.get_cashflow(user_id, ano, modo_plano_sempre=modo_plano)
 
 
 @router.get("/expectativas")
