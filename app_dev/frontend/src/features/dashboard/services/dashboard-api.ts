@@ -232,6 +232,41 @@ export async function fetchAportePrincipalPorMes(
 }
 
 /**
+ * Busca dados do plano para um mês específico (cashflow do plano).
+ * Retorna renda_esperada, gastos_recorrentes, gastos_extras_esperados, aporte_planejado.
+ */
+export interface PlanoCashflowMes {
+  renda_esperada: number
+  gastos_recorrentes: number
+  gastos_extras_esperados: number
+  aporte_planejado: number
+}
+
+export async function fetchPlanoCashflowMes(
+  year: number,
+  month: number
+): Promise<PlanoCashflowMes | null> {
+  try {
+    const response = await fetchWithAuth(`${BASE_URL}/plano/cashflow?ano=${year}`)
+    if (!response.ok) return null
+    const data = await response.json()
+    const mes = (data.meses ?? []).find((m: any) => {
+      const mm = parseInt((m.mes_referencia ?? '').split('-')[1] ?? '0', 10)
+      return mm === month
+    })
+    if (!mes) return null
+    return {
+      renda_esperada: mes.renda_esperada ?? 0,
+      gastos_recorrentes: mes.gastos_recorrentes ?? 0,
+      gastos_extras_esperados: mes.gastos_extras_esperados ?? 0,
+      aporte_planejado: mes.aporte_planejado ?? 0,
+    }
+  } catch {
+    return null
+  }
+}
+
+/**
  * Soma aportes planejados do cenário principal para ano ou YTD (Jan..ytdMonth).
  */
 export async function fetchAportePrincipalPeriodo(

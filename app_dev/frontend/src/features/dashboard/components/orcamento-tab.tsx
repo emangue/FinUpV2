@@ -13,7 +13,8 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ChevronDown } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { fetchIncomeSources, fetchCreditCards, fetchAportePrincipalPorMes, fetchAportePrincipalPeriodo, fetchOrcamentoInvestimentos } from '../services/dashboard-api'
+import { fetchIncomeSources, fetchCreditCards, fetchAportePrincipalPorMes, fetchAportePrincipalPeriodo, fetchOrcamentoInvestimentos, fetchPlanoCashflowMes } from '../services/dashboard-api'
+import type { PlanoCashflowMes } from '../services/dashboard-api'
 import type { IncomeSource } from '../types'
 import { fetchGoals } from '@/features/goals/services/goals-api'
 import type { Goal } from '@/features/goals/types'
@@ -61,6 +62,7 @@ export function OrcamentoTab({
   const [cardsTotal, setCardsTotal] = useState<number | null>(null)
   const [aportePrincipal, setAportePrincipal] = useState<number>(0)
   const [totalInvestidoPeriodo, setTotalInvestidoPeriodo] = useState<number | null>(null)
+  const [planoMes, setPlanoMes] = useState<PlanoCashflowMes | null>(null)
   const [loading, setLoading] = useState(true)
 
   const router = useRouter()
@@ -92,17 +94,20 @@ export function OrcamentoTab({
             ? fetchAportePrincipalPeriodo(year, ytdMonthProp)
             : fetchAportePrincipalPorMes(year, mesRef),
           isAnoOuYtd ? fetchOrcamentoInvestimentos(year, undefined, ytdMonthProp) : Promise.resolve(null),
+          !isAnoOuYtd ? fetchPlanoCashflowMes(year, mesRef) : Promise.resolve(null),
         ])
         const inc = results[0].status === 'fulfilled' ? results[0].value : null
         const budgets = results[1].status === 'fulfilled' ? results[1].value : null
         const cards = results[2].status === 'fulfilled' ? results[2].value : null
         const aporte = results[3].status === 'fulfilled' ? results[3].value : null
         const orcInv = results[4].status === 'fulfilled' ? results[4].value : null
+        const plano = results[5].status === 'fulfilled' ? results[5].value : null
         setReceitas(inc && typeof inc === 'object' && 'sources' in inc ? inc : null)
         setGoals(Array.isArray(budgets) ? budgets : [])
         setCardsTotal(Array.isArray(cards) ? cards.reduce((s: number, c: { total: number }) => s + c.total, 0) : null)
         setAportePrincipal(typeof aporte === 'number' ? aporte : 0)
         setTotalInvestidoPeriodo(orcInv && typeof orcInv === 'object' && 'total_investido' in orcInv ? orcInv.total_investido : null)
+        setPlanoMes(plano && typeof plano === 'object' && 'renda_esperada' in plano ? plano as PlanoCashflowMes : null)
       } catch {
         setReceitas(null)
         setGoals([])
@@ -163,8 +168,17 @@ export function OrcamentoTab({
   const pctInvestidoVsPlano = totalPlanejadoInv > 0 ? (totalInvestido / totalPlanejadoInv) * 100 : 0
   const vezesAcimaPlano = totalPlanejadoInv > 0 ? totalInvestido / totalPlanejadoInv : 0
 
+  // Valores do plano para o Resumo do Mês (cashflow: budget_planning + sazonais/extras)
+  const resumoRendaPlanejada = planoMes?.renda_esperada ?? 0
+  const resumoGastosPlanejados = planoMes
+    ? (planoMes.gastos_recorrentes + planoMes.gastos_extras_esperados)
+    : totalPlanejadoDesp
+  const resumoDiffReceita = totalReceitas - resumoRendaPlanejada
+  const resumoDiffDesp = resumoGastosPlanejados - totalDespesas
+  const resumoDentroDoPlano = resumoGastosPlanejados > 0 ? totalDespesas <= resumoGastosPlanejados : totalDespesas <= 0
+
   // Quando totalPlanejadoDesp é 0: mostrar "Dentro do plano" só se despesas também forem 0
-  const badgeDentro = totalPlanejadoDesp > 0 ? dentroDoPlanoDesp : totalDespesas <= 0
+  const badgeDentro = resumoDentroDoPlano
 
   // Label investimentos: % correto ou "X vezes o plano"
   const labelInvestidos = totalPlanejadoInv > 0
@@ -200,17 +214,27 @@ export function OrcamentoTab({
           <div className="py-2">
             <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-0.5">Receitas</p>
             <p className="text-sm font-bold text-emerald-600">{formatCurrency(totalReceitas)}</p>
-            <p className="text-[9px] text-gray-400 mt-0.5">sem plano</p>
+            <p className="text-[9px] font-medium mt-0.5">
+              {resumoRendaPlanejada > 0 ? (
+                resumoDiffReceita >= 0 ? (
+                  <span className="text-emerald-500">{formatCurrency(resumoDiffReceita)} acima</span>
+                ) : (
+                  <span className="text-amber-500">{formatCurrency(-resumoDiffReceita)} abaixo</span>
+                )
+              ) : (
+                <span className="text-gray-400">sem plano</span>
+              )}
+            </p>
           </div>
           <div className="py-2 border-x border-gray-100">
             <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-0.5">Despesas</p>
             <p className="text-sm font-bold text-red-500">{formatCurrency(totalDespesas)}</p>
             <p className="text-[9px] font-medium mt-0.5">
-              {totalPlanejadoDesp > 0 ? (
-                diffDesp >= 0 ? (
-                  <span className="text-emerald-500">{formatCurrency(diffDesp)} abaixo</span>
+              {resumoGastosPlanejados > 0 ? (
+                resumoDiffDesp >= 0 ? (
+                  <span className="text-emerald-500">{formatCurrency(resumoDiffDesp)} abaixo</span>
                 ) : (
-                  <span className="text-red-500">{formatCurrency(-diffDesp)} acima</span>
+                  <span className="text-red-500">{formatCurrency(-resumoDiffDesp)} acima</span>
                 )
               ) : (
                 <span className="text-gray-400">sem plano</span>
