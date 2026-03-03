@@ -268,18 +268,47 @@ class PlanoService:
     def get_cashflow(self, user_id: int, ano: int, modo_plano_sempre: bool = False) -> dict:
         """
         GET /plano/cashflow?ano= - 12 meses: renda, gastos, aporte, saldo, status.
-        modo_plano_sempre: se True, usa sempre dados do plano (renda, budget, expectativas) em todos os meses,
-        incluindo passados — para projeção de poupança refletir aporte + extraordinários.
+
+        Lógica de crescimento anual:
+        - renda_planejada: renda_base * (1 + crescimento_renda%) ^ n_reajustes
+          onde n_reajustes conta quantos reajustes ocorreram até o mês/ano consultado,
+          a partir de reajuste_ano / reajuste_mes (primeiro reajuste).
+        - gastos_recorrentes: multiplicados por (1 + crescimento_gastos%) ^ n_anos
+          onde n_anos = max(0, ano - reajuste_ano) — cresce a cada ano completo.
+
+        Extraordinários (base_expectativas):
+        - creditos_extras → somados à RENDA planejada (receitas não-recorrentes)
+        - debitos_extras  → somados aos GASTOS planejados (despesas sazonais/parcelas)
+
+        modo_plano_sempre: força uso do plano em todos os meses (para projeção incluir
+        expectativas), incluindo meses passados.
         """
         profile = self.db.query(UserFinancialProfile).filter(
             UserFinancialProfile.user_id == user_id
         ).first()
-        renda = float(profile.renda_mensal_liquida) if profile and profile.renda_mensal_liquida else 0.0
+        renda_base = float(profile.renda_mensal_liquida) if profile and profile.renda_mensal_liquida else 0.0
         aporte = float(profile.aporte_planejado or 0) if profile else 0.0
+
+        # Parâmetros de crescimento anual
+        crescimento_renda_pct = float(profile.crescimento_renda or 0) if profile else 0.0
+        crescimento_gastos_pct = float(profile.crescimento_gastos or 0) if profile else 0.0
+        reajuste_mes_num = int(profile.reajuste_mes or 1) if profile else 1
+        reajuste_ano_num = int(profile.reajuste_ano or ano) if profile else ano
 
         from app.domains.budget.models import BudgetPlanning
         from app.domains.transactions.models import JournalEntry
         from app.domains.grupos.models import BaseGruposConfig
+
+        # Pré-carrega extraordinários do ano inteiro UMA vez (evita N+1 queries)
+        # get_expectativas_por_mes_para_ano: expande recorrências de BaseExpectativa → totais confiáveis
+        # get_expectativas_por_mes: lê de expectativas_mes (materializado) → itens com descrição
+        exp_totais_por_mes = self.get_expectativas_por_mes_para_ano(user_id, ano)
+        exp_items_por_mes = self.get_expectativas_por_mes(user_id, ano)
+
+        # Fator de crescimento de gastos: aplica por ano completo após reajuste_ano
+        # Ex: reajuste_ano=2026, crescimento=5% → 2026: ×1.0, 2027: ×1.05, 2028: ×1.1025
+        n_anos_gastos = max(0, ano - reajuste_ano_num) if crescimento_gastos_pct > 0 else 0
+        fator_gastos = (1 + crescimento_gastos_pct / 100) ** n_anos_gastos
 
         meses = []
         hoje_ano = 0
@@ -295,7 +324,7 @@ class PlanoService:
             mes_ref = f"{ano}-{str(m).zfill(2)}"
             mes_fatura = f"{ano}{str(m).zfill(2)}"
 
-            # renda_realizada: sum(Valor) de CategoriaGeral=Receita (sem exigir GRUPO, como gastos)
+            # ── Dados realizados ────────────────────────────────────────────────
             renda_total = self.db.query(func.sum(JournalEntry.Valor)).filter(
                 JournalEntry.user_id == user_id,
                 JournalEntry.MesFatura == mes_fatura,
@@ -304,7 +333,6 @@ class PlanoService:
             ).scalar()
             renda_realizada = max(0.0, float(renda_total)) if renda_total else None
 
-            # investimentos_realizados: sum(Valor) de CategoriaGeral=Investimentos (sem exigir GRUPO, como gastos)
             inv_total = self.db.query(func.sum(JournalEntry.Valor)).filter(
                 JournalEntry.user_id == user_id,
                 JournalEntry.MesFatura == mes_fatura,
@@ -313,8 +341,7 @@ class PlanoService:
             ).scalar()
             investimentos_realizados = abs(float(inv_total)) if inv_total else None
 
-            # gastos_recorrentes: budget_planning APENAS grupos com categoria_geral = 'Despesa'
-            gastos_rec = (
+            gastos_rec_raw = (
                 self.db.query(func.sum(BudgetPlanning.valor_planejado))
                 .join(
                     BaseGruposConfig,
@@ -329,9 +356,8 @@ class PlanoService:
                 )
                 .scalar()
             )
-            gastos_recorrentes = float(gastos_rec or 0)
+            gastos_recorrentes = float(gastos_rec_raw or 0)
 
-            # gastos_realizados: sum(Valor) real (como dashboard) — neta estornos; abs só para exibição
             gastos_real = self.db.query(func.sum(JournalEntry.Valor)).filter(
                 JournalEntry.user_id == user_id,
                 JournalEntry.MesFatura == mes_fatura,
@@ -340,37 +366,67 @@ class PlanoService:
             ).scalar()
             gastos_realizados = abs(float(gastos_real)) if gastos_real else None
 
-            # Troca para realizado quando receita >= 90% do esperado (receita, despesas, investimentos)
-            # modo_plano_sempre: força uso do plano em todos os meses (para projeção incluir expectativas)
+            # ── Renda planejada com crescimento anual ───────────────────────────
+            # Conta quantos reajustes ocorreram até este mês/ano
+            if crescimento_renda_pct > 0:
+                if ano < reajuste_ano_num:
+                    n_reajustes = 0
+                elif ano == reajuste_ano_num:
+                    n_reajustes = 1 if m >= reajuste_mes_num else 0
+                else:
+                    # anos completos após o primeiro reajuste + reajuste do ano atual se já passou
+                    n_reajustes = (ano - reajuste_ano_num) + (1 if m >= reajuste_mes_num else 0)
+                renda_planejada = renda_base * ((1 + crescimento_renda_pct / 100) ** n_reajustes)
+            else:
+                renda_planejada = renda_base
+
+            # Gastos recorrentes com inflação anual (fator_gastos já calculado antes do loop)
+            gastos_rec_corr = gastos_recorrentes * fator_gastos
+
+            # ── use_realizado: switch planejado→realizado ───────────────────────
             use_realizado = False if modo_plano_sempre else (
                 renda_realizada is not None
-                and renda is not None
-                and renda > 0
-                and renda_realizada >= 0.9 * renda
+                and renda_planejada > 0
+                and renda_realizada >= 0.9 * renda_planejada
             )
 
-            if use_realizado:
-                renda_usada = max(0.9 * renda, renda_realizada)
-                gastos_usados = gastos_realizados if gastos_realizados is not None else gastos_recorrentes
-                aporte_usado = investimentos_realizados if investimentos_realizados is not None else aporte
+            # ── Extraordinários do mês ──────────────────────────────────────────
+            # Fonte: get_expectativas_por_mes_para_ano (expande recorrências corretamente)
+            exp_totais = exp_totais_por_mes.get(mes_ref, {"debitos": 0.0, "creditos": 0.0})
+            exp_items = exp_items_por_mes.get(mes_ref, {"debitos": 0.0, "creditos": 0.0, "items": []})
+
+            if not use_realizado or modo_plano_sempre:
+                # creditos → aumentam a renda do mês (ex: LTRP, Bônus, 13º)
+                # debitos  → aumentam os gastos do mês (ex: IPVA, Viagem, Seguro)
+                creditos_extras = exp_totais["creditos"]
+                debitos_extras = exp_totais["debitos"]
+                expectativas_items = exp_items.get("items", [])
             else:
-                renda_usada = renda
-                gastos_usados = gastos_recorrentes
+                creditos_extras = 0.0
+                debitos_extras = 0.0
+                expectativas_items = []
+
+            # ── Valores finais do mês ───────────────────────────────────────────
+            if use_realizado:
+                renda_usada = max(0.9 * renda_planejada, renda_realizada)
+                gastos_usados = gastos_realizados if gastos_realizados is not None else gastos_rec_corr
+                aporte_usado = investimentos_realizados if investimentos_realizados is not None else aporte
+                total_gastos = gastos_usados
+            else:
+                # Planejado: creditos somam à renda, debitos somam aos gastos
+                renda_usada = renda_planejada + creditos_extras
+                gastos_usados = gastos_rec_corr
+                total_gastos = gastos_rec_corr + debitos_extras
                 aporte_usado = aporte
 
-            # Fase 4: base_expectativas — APENAS em modo planejado (não misturar real com expectativa)
-            exp_mes = self.get_expectativas_por_mes(user_id, ano).get(mes_ref, {"debitos": 0.0, "creditos": 0.0, "items": []})
-            gastos_extras = exp_mes["debitos"] - exp_mes["creditos"] if (not use_realizado or modo_plano_sempre) else 0.0
-            expectativas_items = exp_mes.get("items", []) if (not use_realizado or modo_plano_sempre) else []
-
-            total_gastos = gastos_usados + gastos_extras
-            # Saldo = Renda - Gastos (aporte não entra no saldo; é o que sobra após despesas)
+            # Arredondamento para exibição (centenas)
             r = round(renda_usada / 100) * 100
             g = round(total_gastos / 100) * 100
             a = round(aporte_usado / 100) * 100
+            # Saldo = Renda - Gastos (aporte exibido separadamente na tabela)
             saldo = r - g if renda_usada else None
 
-            # status_mes: ok, parcial, futuro, negativo
+            # ── Status do mês ───────────────────────────────────────────────────
             if m < hoje_mes and ano <= hoje_ano:
                 status_mes = "ok" if (saldo is None or saldo >= 0) else "negativo"
             elif m == hoje_mes and ano == hoje_ano:
@@ -380,13 +436,14 @@ class PlanoService:
 
             meses.append({
                 "mes_referencia": mes_ref,
-                "renda_esperada": renda,
+                "renda_esperada": round(renda_planejada, 2),
                 "renda_realizada": round(renda_realizada, 2) if renda_realizada is not None else None,
                 "renda_usada": r,
-                "gastos_recorrentes": gastos_recorrentes,
-                "gastos_extras_esperados": round(gastos_extras, 2),
-                "extras_debitos": round(exp_mes["debitos"], 2),
-                "extras_creditos": round(exp_mes["creditos"], 2),
+                "gastos_recorrentes": round(gastos_rec_corr, 2),
+                "extras_creditos": round(creditos_extras, 2),
+                "extras_debitos": round(debitos_extras, 2),
+                # backward-compat: gastos_extras_esperados agora representa só debitos (positivo)
+                "gastos_extras_esperados": round(debitos_extras, 2),
                 "gastos_realizados": gastos_realizados,
                 "gastos_usados": round(gastos_usados, 2),
                 "total_gastos": g,
