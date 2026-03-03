@@ -1065,7 +1065,8 @@ class PlanoService:
             # Apenas créditos viram aporte extra (receitas extraordinárias → investimento)
             aporte_extra = round(max(0.0, exp["creditos"]), 2)
             gastos_extras = round(max(0.0, exp["debitos"]), 2)
-            aporte_total = round(aporte_fixo_mensal + aporte_extra, 2)
+            # Gastos extraordinários reduzem o aporte total do mês
+            aporte_total = round(aporte_fixo_mensal + aporte_extra - gastos_extras, 2)
 
             # Monta listas separadas de créditos e débitos com descrição
             items = exp_items_por_mes.get(mes_ref, {}).get("items", [])
