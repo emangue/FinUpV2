@@ -1031,83 +1031,70 @@ class PlanoService:
     ) -> AporteInvestimentoResponse:
         """
         GET /plano/aporte-investimento — aporte de investimento planejado (fixo + extras).
-        Consolida cenário principal (InvestimentoCenario + CenarioProjecao) e perfil financeiro.
-        - fonte='cenario': CenarioProjecao.aporte (fixo + extras já calculados)
-        - fonte='perfil': user_financial_profile.aporte_planejado (sem extras)
-        - fonte=None: sem plano configurado
-        Referência cruzada: InvestimentoService._calcular_projecao_mensal (parse de extras_json).
-        Import cruzado documentado: PlanoService é orquestrador de cenário + perfil.
+
+        Fonte: wizard do plano financeiro pessoal (construir-plano), NÃO o cenário de aposentadoria.
+        - aporte_fixo_mensal = user_financial_profile.aporte_planejado (R$2.700, definido no wizard)
+        - extras por mês = base_expectativas (tipo_lancamento='credito') expandidas para o ano
+          → LTRP, Bônus, 13º Salário, etc. — receitas extraordinárias que viram investimento
+        - fonte='perfil': quando há aporte_planejado configurado
+        - fonte=None: sem plano configurado (zeros)
+
+        Mesma lógica de get_projecao(sem_patrimonio=True):
+          aporte_total_mes = aporte_planejado + creditos_extras_mes
         """
-        # Import cruzado justificado — PlanoService consolida fontes de dados do plano
-        from app.domains.investimentos.models import InvestimentoCenario, CenarioProjecao
-
-        # 1. Busca cenário principal
-        cenario = self.db.query(InvestimentoCenario).filter(
-            InvestimentoCenario.user_id == user_id,
-            InvestimentoCenario.principal.is_(True),
-            InvestimentoCenario.ativo.is_(True),
+        # 1. Perfil financeiro — fonte do aporte fixo
+        profile = self.db.query(UserFinancialProfile).filter(
+            UserFinancialProfile.user_id == user_id
         ).first()
+        aporte_fixo_mensal = float(profile.aporte_planejado or 0) if profile else 0.0
+        fonte = "perfil" if aporte_fixo_mensal > 0 else None
 
-        if cenario:
-            fonte = "cenario"
-            cenario_id = cenario.id
-            aporte_fixo_mensal = float(cenario.aporte_mensal or 0)
+        # 2. Receitas extraordinárias do wizard (base_expectativas credito) expandidas por mês
+        # get_expectativas_por_mes_para_ano expande recorrências (anual, semestral, etc.) corretamente
+        exp_por_mes = self.get_expectativas_por_mes_para_ano(user_id, ano)
 
-            # Busca projeções do ano (CenarioProjecao.aporte = fixo + extras já calculados)
-            projecoes = self.db.query(CenarioProjecao).filter(
-                CenarioProjecao.cenario_id == cenario.id,
-                CenarioProjecao.anomes >= ano * 100 + 1,
-                CenarioProjecao.anomes <= ano * 100 + 12,
-            ).all()
-            # {mes (1-12): aporte_total do mês}
-            proj_map = {p.anomes % 100: float(p.aporte or 0) for p in projecoes}
+        # 3. Busca descrições das expectativas para montar AporteExtraDetalhe
+        # { mes_referencia: [ {descricao, valor, tipo_lancamento, ...} ] }
+        exp_items_por_mes = self.get_expectativas_por_mes(user_id, ano)
 
-            # Parse extras_json para metadados (descrição, recorrência) por mês
-            extras_por_mes = self._get_extras_por_mes_cenario(
-                cenario.extras_json, cenario.anomes_inicio, ano
-            )
-        else:
-            # Fallback: perfil financeiro (sem extras)
-            profile = self.db.query(UserFinancialProfile).filter(
-                UserFinancialProfile.user_id == user_id
-            ).first()
-            aporte_fixo_mensal = float(profile.aporte_planejado or 0) if profile else 0.0
-            fonte = "perfil" if aporte_fixo_mensal > 0 else None
-            cenario_id = None
-            proj_map = {}
-            extras_por_mes = {}
-
-        # 2. Montar lista dos 12 meses do ano
+        # 4. Montar lista dos 12 meses do ano
         meses_list: list[AporteMesDetalhe] = []
         for m in range(1, 13):
             mes_ref = f"{ano}-{m:02d}"
-            aporte_total = proj_map.get(m, aporte_fixo_mensal) if cenario else aporte_fixo_mensal
-            aporte_extra = max(0.0, round(aporte_total - aporte_fixo_mensal, 2))
+            exp = exp_por_mes.get(mes_ref, {"debitos": 0.0, "creditos": 0.0})
+            # Apenas créditos viram aporte extra (receitas extraordinárias → investimento)
+            aporte_extra = round(max(0.0, exp["creditos"]), 2)
+            aporte_total = round(aporte_fixo_mensal + aporte_extra, 2)
+
+            # Monta lista de extras com descrição (apenas créditos)
+            items = exp_items_por_mes.get(mes_ref, {}).get("items", [])
             extras_obj = [
                 AporteExtraDetalhe(
-                    descricao=ex['descricao'],
-                    valor=ex['valor'],
-                    recorrencia=ex['recorrencia'],
-                    evoluir=ex.get('evoluir', False),
-                    evolucaoValor=ex.get('evolucaoValor', 0.0),
-                    evolucaoTipo=ex.get('evolucaoTipo', 'percentual'),
+                    descricao=it.get("descricao") or "(extra)",
+                    valor=round(it["valor"], 2),
+                    recorrencia="anual",   # base_expectativas não expõe recorrência aqui; default visual
+                    evoluir=False,
+                    evolucaoValor=0.0,
+                    evolucaoTipo="percentual",
                 )
-                for ex in extras_por_mes.get(m, [])
+                for it in items
+                if it.get("tipo_lancamento") == "credito"
             ]
+
             meses_list.append(AporteMesDetalhe(
                 mes_referencia=mes_ref,
                 aporte_fixo=round(aporte_fixo_mensal, 2),
                 aporte_extra=aporte_extra,
-                aporte_total=round(aporte_total, 2),
+                aporte_total=aporte_total,
                 extras=extras_obj,
             ))
 
-        # 3. Totais anuais
+        # 5. Totais anuais
         total_fixo_ano = round(aporte_fixo_mensal * 12, 2)
         total_extras_ano = round(sum(md.aporte_extra for md in meses_list), 2)
         total_ano = round(sum(md.aporte_total for md in meses_list), 2)
 
-        # 4. Montar resposta
+        # 6. Montar resposta
         if mes is not None:
             mes_detalhe = next(
                 (md for md in meses_list if md.mes_referencia == f"{ano}-{mes:02d}"),
@@ -1115,7 +1102,7 @@ class PlanoService:
             )
             return AporteInvestimentoResponse(
                 fonte=fonte,
-                cenario_id=cenario_id,
+                cenario_id=None,
                 aporte_fixo_mensal=round(aporte_fixo_mensal, 2),
                 total_fixo_ano=total_fixo_ano,
                 total_extras_ano=total_extras_ano,
@@ -1126,7 +1113,7 @@ class PlanoService:
 
         return AporteInvestimentoResponse(
             fonte=fonte,
-            cenario_id=cenario_id,
+            cenario_id=None,
             aporte_fixo_mensal=round(aporte_fixo_mensal, 2),
             total_fixo_ano=total_fixo_ano,
             total_extras_ano=total_extras_ano,

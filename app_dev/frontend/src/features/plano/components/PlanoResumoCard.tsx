@@ -9,7 +9,7 @@ import { useState, useEffect } from 'react';
 import { getResumoPlano } from '../api';
 import { fetchIncomeSources } from '@/features/dashboard/services/dashboard-api';
 import { fetchGoals } from '@/features/goals/services/goals-api';
-import { fetchAportePrincipalPorMes } from '@/features/dashboard/services/dashboard-api';
+import { fetchAporteInvestimentoDetalhado } from '@/features/dashboard/services/dashboard-api';
 
 function formatCurrency(v: number) {
   return new Intl.NumberFormat('pt-BR', {
@@ -40,13 +40,15 @@ export function PlanoResumoCard({ year, month }: PlanoResumoCardProps) {
       getResumoPlano(year, month),
       fetchIncomeSources(year, month),
       fetchGoals(selectedMonth),
-      fetchAportePrincipalPorMes(year, month),
+      fetchAporteInvestimentoDetalhado(year, month),
     ])
-      .then(([r, inc, g, aporte]) => {
+      .then(([r, inc, g, aporteDetalhe]) => {
         setResumo(r);
         setReceitas(inc && 'total_receitas' in inc ? inc : null);
         setGoals(Array.isArray(g) ? g : []);
-        setAportePrincipal(typeof aporte === 'number' ? aporte : 0);
+        // Nova API: fixo (perfil) + extras (base_expectativas creditos) para o mês
+        const aporte = aporteDetalhe?.mes?.aporte_total ?? 0
+        setAportePrincipal(aporte);
       })
       .catch(() => {
         setResumo(null);
