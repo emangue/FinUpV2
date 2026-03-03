@@ -4,8 +4,19 @@
  * OrcamentoTab - Tab Orçamento completo
  * Usa os MESMOS dados da tela Metas: GET /budget/planning (budget_planning + valor_realizado)
  * Layout: Resumo do Mês, Rendimentos, Despesas vs Plano, Investimentos vs Plano
- * Sprint E: Investimentos vs Plano = aporte do cenário (única fonte); sem cenário = CTA
  * Sprint G: Despesas, Receitas e Cartões como collapses (total vs plano visível no header de Despesas)
+ *
+ * Paridade com tela Plano (03/2026):
+ * - Despesas: usa valor_planejado_com_extras (budget_planning + expectativas_mes) por grupo
+ * - Investimentos: usa CenarioProjecao via /cenarios/principal/aporte-mes como fonte primária
+ *   (regular + extraordinários — idêntico ao PlanoResumoCard).
+ *   Fallback: user_financial_profile.aporte_planejado (wizard) quando cenário = 0 ou inexistente.
+ *   YTD: usa /cenarios/principal/aporte-periodo (soma Jan..N, inclui extraordinários).
+ *   → sem plano configurado (ambas as fontes = 0): exibe CTA.
+ *
+ * I1 (03/2026): invertida a prioridade das fontes — cenário agora é primário, wizard é fallback.
+ *   Razão: CenarioProjecao.aporte já agrega aporte_mensal + AporteExtraordinario por mês.
+ *   Sem I1: meses com aporte extraordinário (ex: 13º em dez) subestimavam o planejado.
  */
 
 import { useState, useEffect } from 'react'
@@ -13,7 +24,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ChevronDown } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { fetchIncomeSources, fetchCreditCards, fetchAportePrincipalPorMes, fetchAportePrincipalPeriodo, fetchOrcamentoInvestimentos, fetchPlanoCashflowMes } from '../services/dashboard-api'
+import { fetchIncomeSources, fetchCreditCards, fetchOrcamentoInvestimentos, fetchPlanoCashflowMes, fetchAportePrincipalPorMes, fetchAportePrincipalPeriodo } from '../services/dashboard-api'
 import type { PlanoCashflowMes } from '../services/dashboard-api'
 import type { IncomeSource } from '../types'
 import { fetchGoals } from '@/features/goals/services/goals-api'
@@ -60,9 +71,9 @@ export function OrcamentoTab({
   const [receitas, setReceitas] = useState<{ sources: IncomeSource[]; total_receitas: number } | null>(null)
   const [goals, setGoals] = useState<Goal[]>([])
   const [cardsTotal, setCardsTotal] = useState<number | null>(null)
-  const [aportePrincipal, setAportePrincipal] = useState<number>(0)
   const [totalInvestidoPeriodo, setTotalInvestidoPeriodo] = useState<number | null>(null)
   const [planoMes, setPlanoMes] = useState<PlanoCashflowMes | null>(null)
+  const [aportePrincipalCenario, setAportePrincipalCenario] = useState<number>(0)
   const [loading, setLoading] = useState(true)
 
   const router = useRouter()
@@ -90,30 +101,31 @@ export function OrcamentoTab({
           fetchIncomeSources(year, month ?? undefined),
           fetchGoals(selectedMonth),
           fetchCreditCards(year, month ?? undefined),
+          isAnoOuYtd ? fetchOrcamentoInvestimentos(year, undefined, ytdMonthProp) : Promise.resolve(null),
+          !isAnoOuYtd ? fetchPlanoCashflowMes(year, mesRef) : Promise.resolve(null),
+          // I1: buscar aporte do cenário (regular + extraordinários) — fonte primária igual ao PlanoResumoCard
           isAnoOuYtd
             ? fetchAportePrincipalPeriodo(year, ytdMonthProp)
             : fetchAportePrincipalPorMes(year, mesRef),
-          isAnoOuYtd ? fetchOrcamentoInvestimentos(year, undefined, ytdMonthProp) : Promise.resolve(null),
-          !isAnoOuYtd ? fetchPlanoCashflowMes(year, mesRef) : Promise.resolve(null),
         ])
         const inc = results[0].status === 'fulfilled' ? results[0].value : null
         const budgets = results[1].status === 'fulfilled' ? results[1].value : null
         const cards = results[2].status === 'fulfilled' ? results[2].value : null
-        const aporte = results[3].status === 'fulfilled' ? results[3].value : null
-        const orcInv = results[4].status === 'fulfilled' ? results[4].value : null
-        const plano = results[5].status === 'fulfilled' ? results[5].value : null
+        const orcInv = results[3].status === 'fulfilled' ? results[3].value : null
+        const plano = results[4].status === 'fulfilled' ? results[4].value : null
+        const cenarioAporte = results[5].status === 'fulfilled' ? (results[5].value as number ?? 0) : 0
         setReceitas(inc && typeof inc === 'object' && 'sources' in inc ? inc : null)
         setGoals(Array.isArray(budgets) ? budgets : [])
         setCardsTotal(Array.isArray(cards) ? cards.reduce((s: number, c: { total: number }) => s + c.total, 0) : null)
-        setAportePrincipal(typeof aporte === 'number' ? aporte : 0)
         setTotalInvestidoPeriodo(orcInv && typeof orcInv === 'object' && 'total_investido' in orcInv ? orcInv.total_investido : null)
         setPlanoMes(plano && typeof plano === 'object' && 'renda_esperada' in plano ? plano as PlanoCashflowMes : null)
+        setAportePrincipalCenario(typeof cenarioAporte === 'number' ? cenarioAporte : 0)
       } catch {
         setReceitas(null)
         setGoals([])
         setCardsTotal(null)
-        setAportePrincipal(0)
         setTotalInvestidoPeriodo(null)
+        setAportePrincipalCenario(0)
       } finally {
         setLoading(false)
       }
@@ -135,15 +147,20 @@ export function OrcamentoTab({
   const totalDespesas = useMetricsForResumo
     ? (metricsProp?.total_despesas ?? 0)
     : goalsDespesas.reduce((s, g) => s + (g.valor_realizado ?? 0), 0)
-  const totalPlanejadoDesp = goalsDespesas.reduce((s, g) => s + (g.valor_planejado ?? 0), 0)
+  const totalPlanejadoDesp = goalsDespesas.reduce(
+    (s, g) => s + (g.valor_planejado_com_extras ?? g.valor_planejado ?? 0),
+    0,
+  )
   const totalInvestido = useMetricsForResumo && totalInvestidoPeriodo != null
     ? totalInvestidoPeriodo
     : goalsInvestimentos.reduce((s, g) => s + (g.valor_realizado ?? 0), 0)
-  // Aporte planejado: usa cashflow do plano quando disponível (mesmo valor do wizard),
-  // fallback para cenário principal
-  const totalPlanejadoInv = (planoMes?.aporte_planejado ?? 0) > 0
-    ? (planoMes?.aporte_planejado ?? 0)
-    : aportePrincipal
+  // I1: Aporte planejado — cenário (regular + extraordinários) como primário, wizard como fallback.
+  // CenarioProjecao.aporte já agrega aporte_mensal + AporteExtraordinario → igual ao PlanoResumoCard.
+  // Se cenário = 0 (sem cenário configurado), fallback para user_financial_profile.aporte_planejado (wizard).
+  // Se ambos = 0 → exibe CTA "sem plano".
+  const totalPlanejadoInv = aportePrincipalCenario > 0
+    ? aportePrincipalCenario
+    : (planoMes?.aporte_planejado ?? 0)
   const percentualDesp = totalPlanejadoDesp > 0 ? (totalDespesas / totalPlanejadoDesp) * 100 : 0
 
   const formatCurrency = (v: number) =>
@@ -308,7 +325,7 @@ export function OrcamentoTab({
                   .filter((g) => (g.valor_realizado ?? 0) > 0 || (g.valor_planejado ?? 0) > 0)
                   .map((cat, idx) => {
                     const realizado = cat.valor_realizado ?? 0
-                    const planejado = cat.valor_planejado ?? 0
+                    const planejado = cat.valor_planejado_com_extras ?? cat.valor_planejado ?? 0
                     const diff = realizado - planejado
                     const pct = planejado > 0 ? (realizado / planejado) * 100 : 0
                     const isOver = realizado > planejado
@@ -464,7 +481,7 @@ export function OrcamentoTab({
                 .filter((g) => (g.valor_realizado ?? 0) > 0 || (g.valor_planejado ?? 0) > 0)
                 .map((cat, idx) => {
                   const realizado = cat.valor_realizado ?? 0
-                  const planejado = cat.valor_planejado ?? 0
+                  const planejado = cat.valor_planejado_com_extras ?? cat.valor_planejado ?? 0
                   const diff = realizado - planejado
                   const pct = planejado > 0 ? (realizado / planejado) * 100 : 0
                   const isOver = realizado > planejado
