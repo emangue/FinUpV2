@@ -307,7 +307,9 @@ export interface AporteMesDetalhe {
   aporte_fixo: number
   aporte_extra: number
   aporte_total: number
-  extras: AporteExtraDetalhe[]
+  extras: AporteExtraDetalhe[]           // receitas extraordinárias (créditos)
+  gastos_extras: number                   // total de débitos extraordinários do mês
+  gastos_extras_items: AporteExtraDetalhe[]  // lista de débitos (sazonais, parcelas)
 }
 
 export interface AporteInvestimentoResponse {
@@ -316,6 +318,7 @@ export interface AporteInvestimentoResponse {
   aporte_fixo_mensal: number
   total_fixo_ano: number
   total_extras_ano: number
+  total_gastos_extras_ano: number          // soma dos débitos extraordinários no ano
   total_ano: number
   mes?: AporteMesDetalhe      // preenchido quando ?mes= informado
   meses?: AporteMesDetalhe[]  // preenchido quando sem ?mes

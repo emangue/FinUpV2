@@ -1064,21 +1064,34 @@ class PlanoService:
             exp = exp_por_mes.get(mes_ref, {"debitos": 0.0, "creditos": 0.0})
             # Apenas créditos viram aporte extra (receitas extraordinárias → investimento)
             aporte_extra = round(max(0.0, exp["creditos"]), 2)
+            gastos_extras = round(max(0.0, exp["debitos"]), 2)
             aporte_total = round(aporte_fixo_mensal + aporte_extra, 2)
 
-            # Monta lista de extras com descrição (apenas créditos)
+            # Monta listas separadas de créditos e débitos com descrição
             items = exp_items_por_mes.get(mes_ref, {}).get("items", [])
             extras_obj = [
                 AporteExtraDetalhe(
                     descricao=it.get("descricao") or "(extra)",
                     valor=round(it["valor"], 2),
-                    recorrencia="anual",   # base_expectativas não expõe recorrência aqui; default visual
+                    recorrencia="anual",
                     evoluir=False,
                     evolucaoValor=0.0,
                     evolucaoTipo="percentual",
                 )
                 for it in items
                 if it.get("tipo_lancamento") == "credito"
+            ]
+            gastos_extras_items = [
+                AporteExtraDetalhe(
+                    descricao=it.get("descricao") or "(gasto extra)",
+                    valor=round(it["valor"], 2),
+                    recorrencia="anual",
+                    evoluir=False,
+                    evolucaoValor=0.0,
+                    evolucaoTipo="percentual",
+                )
+                for it in items
+                if it.get("tipo_lancamento") == "debito"
             ]
 
             meses_list.append(AporteMesDetalhe(
@@ -1087,11 +1100,14 @@ class PlanoService:
                 aporte_extra=aporte_extra,
                 aporte_total=aporte_total,
                 extras=extras_obj,
+                gastos_extras=gastos_extras,
+                gastos_extras_items=gastos_extras_items,
             ))
 
         # 5. Totais anuais
         total_fixo_ano = round(aporte_fixo_mensal * 12, 2)
         total_extras_ano = round(sum(md.aporte_extra for md in meses_list), 2)
+        total_gastos_extras_ano = round(sum(md.gastos_extras for md in meses_list), 2)
         total_ano = round(sum(md.aporte_total for md in meses_list), 2)
 
         # 6. Montar resposta
@@ -1106,6 +1122,7 @@ class PlanoService:
                 aporte_fixo_mensal=round(aporte_fixo_mensal, 2),
                 total_fixo_ano=total_fixo_ano,
                 total_extras_ano=total_extras_ano,
+                total_gastos_extras_ano=total_gastos_extras_ano,
                 total_ano=total_ano,
                 mes=mes_detalhe,
                 meses=None,
@@ -1117,6 +1134,7 @@ class PlanoService:
             aporte_fixo_mensal=round(aporte_fixo_mensal, 2),
             total_fixo_ano=total_fixo_ano,
             total_extras_ano=total_extras_ano,
+            total_gastos_extras_ano=total_gastos_extras_ano,
             total_ano=total_ano,
             mes=None,
             meses=meses_list,

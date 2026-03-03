@@ -86,22 +86,24 @@ class AporteMesDetalhe(BaseModel):
     aporte_fixo: float
     aporte_extra: float
     aporte_total: float
-    extras: list[AporteExtraDetalhe]
+    extras: list[AporteExtraDetalhe]           # receitas extraordinárias (créditos)
+    gastos_extras: float                        # total de débitos extraordinários do mês
+    gastos_extras_items: list[AporteExtraDetalhe]  # lista de débitos (sazonais, parcelas)
 
 
 class AporteInvestimentoResponse(BaseModel):
     """
     Resposta de GET /plano/aporte-investimento.
-    Consolida cenário principal (fixo + extras) ou perfil financeiro (fallback).
-    - fonte='cenario': dados do InvestimentoCenario + CenarioProjecao
-    - fonte='perfil': dados do user_financial_profile.aporte_planejado
+    Consolida perfil financeiro + base_expectativas (créditos e débitos).
+    - fonte='perfil': user_financial_profile.aporte_planejado + base_expectativas
     - fonte=None: sem plano configurado (zeros)
     """
-    fonte: Optional[str]          # "cenario" | "perfil" | None
+    fonte: Optional[str]          # "perfil" | None
     cenario_id: Optional[int]
     aporte_fixo_mensal: float
     total_fixo_ano: float
     total_extras_ano: float
+    total_gastos_extras_ano: float              # soma dos débitos extraordinários no ano
     total_ano: float
     mes: Optional[AporteMesDetalhe] = None      # preenchido quando ?mes= informado
     meses: Optional[list[AporteMesDetalhe]] = None  # preenchido quando sem ?mes
