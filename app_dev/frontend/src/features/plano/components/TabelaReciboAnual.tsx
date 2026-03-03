@@ -90,9 +90,9 @@ export function TabelaReciboAnual({ ano }: { ano: number }) {
     const g = m.total_gastos ?? m.gastos_usados ?? m.gastos_realizados ?? m.gastos_recorrentes;
     return s + (g || 0);
   }, 0);
-  const totalAporte = meses.reduce((s, m) => s + (m.aporte_usado ?? m.aporte_planejado ?? 0), 0);
-  const totalSaldo = meses.reduce((s, m) => s + ((m.saldo_projetado ?? 0)), 0);
-  const mesesNegativos = meses.filter((m) => (m.saldo_projetado ?? 0) < 0).length;
+  // aporte_usado = renda - gastos (inclui extraordinários em ambos os lados)
+  const totalAporte = meses.reduce((s, m) => s + (m.aporte_usado ?? 0), 0);
+  const mesesNegativos = meses.filter((m) => (m.aporte_usado ?? 0) < 0).length;
 
   const handleVerCalculo = (y: number, mm: number) => {
     setDetalheMes({ ano: y, mes: mm });
@@ -153,7 +153,6 @@ export function TabelaReciboAnual({ ano }: { ano: number }) {
                 <th className="text-right py-1 px-2 font-semibold text-gray-700">Renda</th>
                 <th className="text-right py-1 px-2 font-semibold text-gray-700">Gastos</th>
                 <th className="text-right py-1 px-2 font-semibold text-gray-700">Aporte</th>
-                <th className="text-right py-1 px-2 font-semibold text-gray-700">Saldo</th>
                 <th className="w-6" />
                 <th className="w-14" />
               </tr>
@@ -168,9 +167,8 @@ export function TabelaReciboAnual({ ano }: { ano: number }) {
                     <td className="py-1 px-2 text-gray-600">{mesNome}/{y}</td>
                     <td className="py-1 px-2 text-right text-gray-600">{fmtCompact(m.renda_usada ?? m.renda_esperada)}</td>
                     <td className="py-1 px-2 text-right text-gray-600">{fmtCompact(gastos)}</td>
-                    <td className="py-1 px-2 text-right text-gray-600">{fmtCompact(m.aporte_usado ?? m.aporte_planejado)}</td>
-                    <td className={`py-1 px-2 text-right font-medium ${(m.saldo_projetado ?? 0) < 0 ? 'text-red-600' : 'text-gray-900'}`}>
-                      {fmtCompact(m.saldo_projetado)}
+                    <td className={`py-1 px-2 text-right font-medium ${(m.aporte_usado ?? 0) < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                      {fmtCompact(m.aporte_usado)}
                     </td>
                     <td className="py-1 px-1">
                       <StatusIcon status={m.status_mes} />
@@ -195,9 +193,8 @@ export function TabelaReciboAnual({ ano }: { ano: number }) {
                 <td className="py-1 px-2 text-gray-900">Resumo {ano}</td>
                 <td className="py-1 px-2 text-right text-gray-900">{fmtCompact(totalRenda)}</td>
                 <td className="py-1 px-2 text-right text-gray-900">{fmtCompact(totalGastos)}</td>
-                <td className="py-1 px-2 text-right text-gray-900">{fmtCompact(totalAporte)}</td>
-                <td className={`py-1 px-2 text-right ${totalSaldo < 0 ? 'text-red-600' : 'text-gray-900'}`}>
-                  {fmtCompact(totalSaldo)}
+                <td className={`py-1 px-2 text-right font-medium ${totalAporte < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                  {fmtCompact(totalAporte)}
                 </td>
                 <td />
                 <td />

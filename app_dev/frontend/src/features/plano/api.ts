@@ -79,13 +79,15 @@ export interface CashflowMes {
   renda_usada?: number;
   gastos_recorrentes: number;
   gastos_usados?: number;
-  total_gastos?: number; // gastos_usados + gastos_extras (para Renda - Gastos - Aporte = Saldo)
+  total_gastos?: number;                 // gastos_recorrentes + debitos_extras
   investimentos_realizados?: number | null;
-  aporte_usado?: number; // = investimentos quando use_realizado
+  aporte_usado?: number;                  // = renda_usada - total_gastos (o que sobra para investir)
   gastos_extras_esperados: number;
+  extras_creditos?: number;               // receitas extraordinárias do mês
+  extras_debitos?: number;                // despesas extraordinárias do mês
   gastos_realizados: number | null;
-  aporte_planejado: number;
-  saldo_projetado: number | null;
+  aporte_planejado: number;               // valor fixo do wizard (referência)
+  saldo_projetado: number | null;         // @deprecated — alias de aporte_usado
   status_mes: 'ok' | 'parcial' | 'futuro' | 'negativo';
   use_realizado?: boolean;
   grupos: unknown[];

@@ -410,25 +410,24 @@ class PlanoService:
             if use_realizado:
                 renda_usada = max(0.9 * renda_planejada, renda_realizada)
                 gastos_usados = gastos_realizados if gastos_realizados is not None else gastos_rec_corr
-                aporte_usado = investimentos_realizados if investimentos_realizados is not None else aporte
                 total_gastos = gastos_usados
             else:
                 # Planejado: creditos somam à renda, debitos somam aos gastos
                 renda_usada = renda_planejada + creditos_extras
                 gastos_usados = gastos_rec_corr
                 total_gastos = gastos_rec_corr + debitos_extras
-                aporte_usado = aporte
 
             # Arredondamento para exibição (centenas)
             r = round(renda_usada / 100) * 100
             g = round(total_gastos / 100) * 100
-            a = round(aporte_usado / 100) * 100
-            # Saldo = Renda - Gastos (aporte exibido separadamente na tabela)
-            saldo = r - g if renda_usada else None
+            # Aporte = Renda - Gastos: o que sobra para investir (inclui extraordinários)
+            # Em modo realizado: renda_real - gastos_real
+            # Em modo planejado: (renda_base + creditos_extras) - (gastos_rec + debitos_extras)
+            a = (r - g) if renda_usada else 0
 
             # ── Status do mês ───────────────────────────────────────────────────
             if m < hoje_mes and ano <= hoje_ano:
-                status_mes = "ok" if (saldo is None or saldo >= 0) else "negativo"
+                status_mes = "ok" if a >= 0 else "negativo"
             elif m == hoje_mes and ano == hoje_ano:
                 status_mes = "parcial"
             else:
@@ -447,11 +446,11 @@ class PlanoService:
                 "gastos_realizados": gastos_realizados,
                 "gastos_usados": round(gastos_usados, 2),
                 "total_gastos": g,
-                "aporte_planejado": aporte,
+                "aporte_planejado": aporte,             # valor fixo do wizard (referência)
                 "investimentos_realizados": round(investimentos_realizados, 2) if investimentos_realizados is not None else None,
-                "aporte_usado": a,
+                "aporte_usado": a,                          # = renda_usada - total_gastos
                 "use_realizado": use_realizado,
-                "saldo_projetado": saldo,
+                "saldo_projetado": a,                       # alias de aporte_usado (backward-compat)
                 "status_mes": status_mes,
                 "grupos": [],
                 "expectativas": expectativas_items,
@@ -459,8 +458,8 @@ class PlanoService:
 
         # nudge_acumulado: soma dos saldos negativos
         nudge = sum(
-            (m["saldo_projetado"] or 0) for m in meses
-            if m["saldo_projetado"] is not None and m["saldo_projetado"] < 0
+            (m["aporte_usado"] or 0) for m in meses
+            if (m["aporte_usado"] or 0) < 0
         )
         return {"ano": ano, "nudge_acumulado": round(nudge, 2), "meses": meses}
 
