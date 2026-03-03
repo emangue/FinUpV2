@@ -61,6 +61,10 @@ class UserStatsResponse(BaseModel):
     tem_investimentos: bool
 
 
+class ResetPasswordRequest(BaseModel):
+    """Schema para reset de senha pelo admin"""
+    nova_senha: str = Field(..., min_length=12, description="Nova senha (mínimo 12 caracteres)")
+
 class PurgeConfirmacao(BaseModel):
     """Schema para confirmação de purge de usuário"""
     confirmacao: str  # deve ser "EXCLUIR PERMANENTEMENTE"

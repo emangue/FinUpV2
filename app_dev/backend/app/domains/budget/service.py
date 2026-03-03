@@ -228,7 +228,32 @@ class BudgetService:
                 "ativo": 1,
                 "valor_medio_3_meses": 0.0
             })
-        
+
+        # Somar expectativas_mes (sazonais/parcelas, tipo=debito) por grupo
+        # para expor valor_planejado_com_extras (usado pelo Dashboard para paridade com tela Plano)
+        try:
+            from app.domains.plano.models import ExpectativaMes
+            extras_rows = (
+                self.db.query(ExpectativaMes.grupo, func.sum(ExpectativaMes.valor))
+                .filter(
+                    ExpectativaMes.user_id == user_id,
+                    ExpectativaMes.mes_referencia == mes_referencia,
+                    ExpectativaMes.tipo == "debito",
+                    ExpectativaMes.grupo.isnot(None),
+                    ExpectativaMes.grupo != "",
+                )
+                .group_by(ExpectativaMes.grupo)
+                .all()
+            )
+            extras_por_grupo = {r[0]: float(r[1] or 0) for r in extras_rows}
+        except Exception as e:
+            logger.warning("_get_budget_planning_impl: falha ao buscar expectativas_mes: %s", e)
+            extras_por_grupo = {}
+
+        for item in resultado:
+            extra = extras_por_grupo.get(item["grupo"], 0.0)
+            item["valor_planejado_com_extras"] = item["valor_planejado"] + extra
+
         return {
             "mes_referencia": mes_referencia,
             "budgets": resultado

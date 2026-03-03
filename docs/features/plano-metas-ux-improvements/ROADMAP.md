@@ -8,7 +8,7 @@
 
 | # | Pasta | Foco | Sprint(s) | Estimativa | Dep. de |
 |---|-------|------|-----------|-----------|---------|
-| 01 | `01-admin-gestao-usuarios/` | Ciclo de vida de contas + grupos por usuário | 0 | ~14h | — |
+| 01 | `01-admin-gestao-usuarios/` | Ciclo de vida de contas no app_admin | 0 | ~6h | — |
 | 02 | `02-ux-fundacao/` | Bugs críticos + Nav redesign + Empty states | 1 | ~10h | — |
 | 03 | `03-onboarding-grupos/` | Primeiro login, grupos padrão, checklist, notificações | 2 | ~8h | 01 (trigger) |
 | 04 | `04-upload-completo/` | Smart detection, rollback, multi-file, import, demo | 3, 3.5, 4, 5 | ~32h | 03 (grupos) |
@@ -68,21 +68,12 @@ FASE 4 — Patrimônio (depende de FASE 3 completa)
 
 | Sub-projeto | PRD | TECH_SPEC | PLANO | Implementado | Observações |
 |-------------|-----|-----------|-------|--------------|-------------|
-| 01-admin | ✅ | ✅ | ✅ | ✅ | A.00–A.17 + T.01–T.06 concluídos; A.18 opcional |
-| 02-ux-fundacao | ✅ | ✅ | ✅ | ✅ | Bugs + Nav + Empty states + FAB Upload + detecção por conteúdo |
-| 03-onboarding | ✅ | ✅ | ✅ | ✅ | Welcome, choose-path, demo mode, checklist, nudges |
-| 04-upload | ✅ | ✅ | ✅ | 🔄 | Sprint 3–5 ✅ (planilha genérica, import-planilha, FAB, batch, BatchClassifyModal) |
+| 01-admin | ✅ | ✅ | ✅ | ❌ | Pronto para Sprint 0 |
+| 02-ux-fundacao | ✅ | ✅ | ✅ | ❌ | Pronto para Sprint 1 |
+| 03-onboarding | ✅ | ✅ | ✅ | ❌ | Aguarda 01 |
+| 04-upload | ✅ | ✅ | ✅ | ❌ | Aguarda 03 |
 | 05-plano | ✅ | ✅ | ✅ | ❌ | Aguarda 03 |
 | 06-patrimonio | ✅ | ✅ | ✅ | ❌ | Aguarda 04+05 |
-
----
-
-## 🚀 Próximos passos (ordem sugerida)
-
-1. **05-plano** — Pode iniciar (03 concluído): renda, meta anual, desvio, aposentadoria
-2. **05-plano — Volta ao legado** — Ver `05-plano-financeiro/PLANO_VOLTA_LEGADO.md`: remover `plano_compromissos`, alinhar ao modelo de 3 camadas (budget_planning + base_expectativas futura)
-3. **05-plano — Plano de ajuste** — Ver `05-plano-financeiro/PLANO_DE_AJUSTE.md`: **Fase 0 primeiro** (shell do wizard em `/mobile/construir-plano`), depois hub, cashflow, etc. Regra: toda edição do plano passa pelo wizard.
-4. **Alinhamento ao legado** — Ver `COMPARATIVO_GERAL_LEGADO.md` e `AJUSTE_GERAL_LEGADO.md`: garantir que cada pasta (01–06) seja parte coerente do grande plano legado.
 
 ---
 
@@ -113,12 +104,6 @@ XX-nome-do-subprojeto/
 
 ---
 
-## 📚 Documentos de alinhamento e legado
+## 📚 Arquivos legados (referência)
 
-| Documento | Uso |
-|-----------|-----|
-| `COMPARATIVO_GERAL_LEGADO.md` | Mapeamento legado → pastas 01–06; gaps por sub-projeto |
-| `AJUSTE_GERAL_LEGADO.md` | Ações concretas para alinhar cada pasta ao legado |
-| `VISAO_FLUXO_DADOS.md` | Fluxo extrato → plano → patrimônio; 3 camadas |
-| `05-plano-financeiro/ADDITIONAIS_UX.md` | Melhorias incrementais: números compactos, legenda gráfico, gastos extraordinários |
-| `_legado/` | PRD, PLANO_IMPLEMENTACAO, UX, TECH_SPEC originais |
+Os arquivos originais (PRD monolítico, TECH_SPEC monolítico, UX doc, PLANO original) estão em `_legado/` para consulta. Eles cobrem o mesmo conteúdo mas de forma não estruturada.

@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from app.core.database import get_db
-from app.shared.dependencies import get_current_user_id, require_admin
+from app.shared.dependencies import get_current_user_id, get_current_user, require_admin
 from .service import ScreenVisibilityService
 from .schemas import (
     ScreenVisibilityResponse,
@@ -20,17 +20,17 @@ router = APIRouter()
 
 @router.get("/list", response_model=List[ScreenVisibilityResponse])
 def list_screens(
-    is_admin: bool = False,  # TODO: Pegar do token/session do usuário
     db: Session = Depends(get_db),
-    user_id: int = Depends(get_current_user_id)
+    current_user=Depends(get_current_user),
 ):
     """
-    Lista telas visíveis para o usuário
-    - Admin (is_admin=True): vê todas as telas (P, A, D)
-    - User regular (is_admin=False): vê só telas em produção (P)
+    Lista telas visíveis para o usuário autenticado.
+    - Admin: vê todas as telas (P, A, D)
+    - Usuário regular: vê só telas em produção (P)
+    A role é extraída do token JWT — não é aceita como parâmetro externo.
     """
     service = ScreenVisibilityService(db)
-    return service.list_for_user(is_admin=is_admin)
+    return service.list_for_user(is_admin=current_user.role == 'admin')
 
 
 @router.get("/admin/all", response_model=List[ScreenVisibilityResponse])

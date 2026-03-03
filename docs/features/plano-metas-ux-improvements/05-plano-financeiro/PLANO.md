@@ -4,26 +4,26 @@
 
 ---
 
-## Sprint 6 — Renda, Metas e Desvio (~14h)
-
-> **Volta ao legado:** Compromissos fixos removidos. Metas por grupo via `budget_planning` (ver PLANO_VOLTA_LEGADO.md).
+## Sprint 6 — Renda, Compromissos e Desvio (~14h)
 
 ### Backend (8h)
 
 | Task | Descrição | Est. |
 |------|-----------|------|
-| A.01 | Migrations: criar `user_financial_profile` (se não existe), `plano_metas_categoria` | 1h |
+| A.01 | Migrations: criar `user_financial_profile` (se não existe), `plano_metas_categoria`, `plano_compromissos` | 1h |
 | A.02 | Endpoint `POST /plano/renda` — upsert renda no perfil | 0.5h |
+| A.03 | Endpoints `GET /plano/compromissos`, `POST`, `DELETE /{id}` | 1.5h |
 | A.04 | Endpoint `GET /plano/orcamento?ano=&mes=` — gasto real vs. meta por grupo | 2h |
 | A.05 | Endpoint `POST /plano/metas/{grupo_id}` — salvar meta de um grupo | 1h |
-| A.06 | Testes: renda salva corretamente, orçamento retorna percentuais | 1h |
-| A.07 | Integrar cálculo de `disponivel_real` = renda - total budget (se aplicável) | 1h |
+| A.06 | Testes: renda salva corretamente, compromissos desativam (não deletam), orçamento retorna percentuais | 1h |
+| A.07 | Integrar cálculo de `disponivel_real` = renda - comprometido fixo | 1h |
 
 ### Frontend (6h)
 
 | Task | Descrição | Est. |
 |------|-----------|------|
-| F.01 | Tela `/mobile/perfil/financeiro` com `RendaDeclaracaoForm` + link para Metas | 1.5h |
+| F.01 | Tela `/mobile/perfil/financeiro` com `RendaDeclaracaoForm` | 1.5h |
+| F.02 | Componente `CompromissosFixosList` + modal de adição | 2h |
 | F.03 | Componente `OrcamentoCategorias` com barras de progresso coloridas | 1.5h |
 | F.04 | Widget `BudgetWidget` no dashboard (nudge se renda não declarada) | 1h |
 
@@ -58,7 +58,7 @@
 **Sprint 6:**
 1. [ ] Acessar Perfil → Financeiro → Declarar renda R$ 8.000 → salvo ✅
 2. [ ] Dashboard mostra: "Renda R$ 8.000 | Gasto R$ X | Poupança Y%"
-3. [ ] Perfil Financeiro → "Gerenciar metas por grupo" → leva a `/mobile/budget/manage`
+3. [ ] Adicionar compromisso fixo "Financiamento R$ 800/mês, 24 meses" → aparece na lista
 4. [ ] Gasto em Alimentação ultrapassa meta → barra fica vermelha no dashboard
 
 **Sprint 7:**
@@ -75,11 +75,11 @@
 ```
 A.01 (migrations — precisa estar pronto antes de tudo)
   ↓
-A.02 + A.05 (renda + metas)
+A.02 + A.03 + A.05 (renda + compromissos + metas)
   ↓
 A.04 (orcamento — usa metas criadas no A.05)
   ↓
-F.01 → F.03 → F.04 (Sprint 6 front)
+F.01 → F.02 → F.03 → F.04 (Sprint 6 front)
   ↓
 A.08 (projecao — usa renda + histórico)
 A.09 (detalhado — usa metas do A.05)

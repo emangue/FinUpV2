@@ -104,7 +104,7 @@ export default function AdminPage() {
 
   const handleSave = async () => {
     logger.log('Salvando usuário. Modo edição:', !!editingUsuario)
-    
+
     if (!nome.trim() || !email.trim()) {
       alert('Nome e email são obrigatórios')
       return
@@ -116,26 +116,23 @@ export default function AdminPage() {
     }
 
     try {
-      const url = editingUsuario && editingUsuario.id 
-        ? `/api/users/${editingUsuario.id}` 
-        : '/api/users'
+      const url = editingUsuario && editingUsuario.id
+        ? `${apiUrl}/users/${editingUsuario.id}`
+        : `${apiUrl}/users`
       const method = editingUsuario && editingUsuario.id ? 'PUT' : 'POST'
-      
-      logger.log('URL:', url)
-      logger.log('Method:', method)
-      
+
       const body: any = {
         nome: nome.trim(),
         email: email.trim(),
         role: role
       }
-      
+
       // Só envia senha se for novo usuário ou se foi preenchida
       if (senha.trim()) {
         body.password = senha.trim()
       }
-      
-      const response = await fetch(url, {
+
+      const response = await fetchWithAuth(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
@@ -181,7 +178,7 @@ export default function AdminPage() {
     if (!confirm('Deseja realmente desativar este usuário?')) return
 
     try {
-      const response = await fetch(`/api/users/${id}`, {
+      const response = await fetchWithAuth(`${apiUrl}/users/${id}`, {
         method: 'DELETE'
       })
 
@@ -189,11 +186,11 @@ export default function AdminPage() {
         fetchUsuarios()
       } else {
         const errorData = await response.json()
-        alert(errorData.error || 'Erro ao deletar usuário')
+        alert(errorData.error || errorData.detail || 'Erro ao desativar usuário')
       }
     } catch (error) {
-      console.error('Erro ao deletar usuário:', error)
-      alert('Erro ao deletar usuário')
+      console.error('Erro ao desativar usuário:', error)
+      alert('Erro ao desativar usuário')
     }
   }
 
@@ -210,16 +207,16 @@ export default function AdminPage() {
       return
     }
 
-    if (novaSenha.length < 6) {
-      alert('A senha deve ter no mínimo 6 caracteres')
+    if (novaSenha.length < 12) {
+      alert('A senha deve ter no mínimo 12 caracteres')
       return
     }
 
     try {
-      const response = await fetch(`/api/users/${senhaUsuarioId}`, {
-        method: 'PUT',
+      const response = await fetchWithAuth(`${apiUrl}/users/${senhaUsuarioId}/reset-password`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: novaSenha })
+        body: JSON.stringify({ nova_senha: novaSenha })
       })
 
       if (response.ok) {
@@ -415,7 +412,7 @@ export default function AdminPage() {
                     type={mostrarSenha ? "text" : "password"}
                     value={novaSenha}
                     onChange={(e) => setNovaSenha(e.target.value)}
-                    placeholder="Digite a nova senha (mínimo 6 caracteres)"
+                    placeholder="Digite a nova senha (mínimo 12 caracteres)"
                   />
                   <Button
                     type="button"

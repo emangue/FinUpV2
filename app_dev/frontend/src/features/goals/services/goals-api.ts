@@ -80,6 +80,7 @@ export async function fetchGoals(selectedMonth?: Date): Promise<Goal[]> {
         grupo: b.grupo,
         mes_referencia: data.mes_referencia || mes_referencia,
         valor_planejado: b.valor_planejado ?? 0,
+        valor_planejado_com_extras: b.valor_planejado_com_extras ?? b.valor_planejado ?? 0,
         valor_realizado: b.valor_realizado ?? 0,
         percentual: b.percentual ?? 0,
         ativo: b.ativo ?? 1,

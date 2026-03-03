@@ -16,6 +16,7 @@ from .schemas import (
     UserStatsResponse,
     SystemStatsResponse,
     PurgeConfirmacao,
+    ResetPasswordRequest,
 )
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -88,11 +89,10 @@ def purge_user(
 @router.get("/{user_id}", response_model=UserResponse)
 def get_user(
     user_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    admin=Depends(require_admin),  # 🔐 Apenas admin
 ):
-    """
-    Busca usuário por ID
-    """
+    """🔐 ADMIN ONLY - Busca usuário por ID."""
     service = UserService(db)
     return service.get_user(user_id)
 
@@ -102,11 +102,9 @@ def create_user(
     db: Session = Depends(get_db),
     admin = Depends(require_admin)  # 🔐 Apenas admin
 ):
-    """
-    🔐 ADMIN ONLY - Cria novo usuário
-    """
+    """🔐 ADMIN ONLY - Cria novo usuário."""
     service = UserService(db)
-    return service.create_user(user)
+    return service.create_user(user, admin_id=admin.id)
 
 @router.put("/{user_id}", response_model=UserResponse)
 def update_user(
@@ -115,11 +113,9 @@ def update_user(
     db: Session = Depends(get_db),
     admin = Depends(require_admin)  # 🔐 Apenas admin
 ):
-    """
-    🔐 ADMIN ONLY - Atualiza usuário
-    """
+    """🔐 ADMIN ONLY - Atualiza usuário."""
     service = UserService(db)
-    return service.update_user(user_id, update_data)
+    return service.update_user(user_id, update_data, admin_id=admin.id)
 
 @router.delete("/{user_id}")
 def delete_user(
@@ -127,24 +123,20 @@ def delete_user(
     db: Session = Depends(get_db),
     admin = Depends(require_admin)  # 🔐 Apenas admin
 ):
-    """
-    🔐 ADMIN ONLY - Desativa usuário (soft delete)
-    """
+    """🔐 ADMIN ONLY - Desativa usuário (soft delete)."""
     service = UserService(db)
-    return service.delete_user(user_id)
+    return service.delete_user(user_id, admin_id=admin.id)
 
 @router.post("/{user_id}/reset-password")
 def reset_password(
     user_id: int,
-    nova_senha: str,
+    body: ResetPasswordRequest,  # senha no body, não na query string
     db: Session = Depends(get_db),
     admin = Depends(require_admin)  # 🔐 Apenas admin
 ):
-    """
-    🔐 ADMIN ONLY - Reseta a senha de um usuário
-    """
+    """🔐 ADMIN ONLY - Reseta a senha de um usuário."""
     service = UserService(db)
-    return service.reset_password(user_id, nova_senha)
+    return service.reset_password(user_id, body.nova_senha, admin_id=admin.id)
 
 # TODO: Adicionar endpoints de perfil após completar plano de autenticação
 # @router.put("/profile") - Requer get_current_user_from_jwt

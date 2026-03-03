@@ -19,6 +19,8 @@ export interface Goal {
   grupo: string                    // ANTES: categoria_geral - nome da meta/grupo
   mes_referencia: string           // Era "prazo" - formato YYYY-MM
   valor_planejado: number          // Era "valor_alvo" ou "orcamento"
+  /** Planejado + expectativas_mes (sazonais/parcelas) do mês — fonte de paridade com tela Plano */
+  valor_planejado_com_extras?: number
   valor_medio_3_meses?: number      // Média calculada dos 3 meses anteriores
   valor_realizado?: number         // Calculado pelo backend a partir de journal_entries
   percentual?: number              // Calculado pelo backend

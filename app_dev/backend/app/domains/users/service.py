@@ -102,18 +102,19 @@ class UserService:
             db.add(BaseMarcacao(user_id=user_id, GRUPO=t.GRUPO, SUBGRUPO=t.SUBGRUPO))
         db.flush()
 
-    def create_user(self, user_data: UserCreate) -> UserResponse:
+    def create_user(self, user_data: UserCreate, admin_id: Optional[int] = None) -> UserResponse:
         """
         Cria novo usuário e inicializa grupos/marcações do template.
-        
+
         Lógica de negócio:
         - Verifica se email já existe
+        - Valida comprimento mínimo da senha
         - Hash da senha
         - Define timestamps
         - Copia grupos e marcações do template para o novo usuário
-        
+
         Raises:
-            HTTPException: Se email já existe
+            HTTPException: Se email já existe ou senha fraca
         """
         # Verificar se email já existe
         if self.repository.email_exists(user_data.email):
@@ -121,7 +122,14 @@ class UserService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Email '{user_data.email}' já está cadastrado"
             )
-        
+
+        # Validar força da senha
+        if len(user_data.password) < 12:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A senha deve ter no mínimo 12 caracteres"
+            )
+
         # Criar modelo
         now = datetime.now()
         user = User(
@@ -133,7 +141,7 @@ class UserService:
             created_at=now,
             updated_at=now
         )
-        
+
         # Salvar (add + flush para obter ID) e inicializar grupos antes do commit
         db = self.repository.db
         db.add(user)
@@ -141,16 +149,22 @@ class UserService:
         self._inicializar_grupos_usuario(user.id)
         db.commit()
         db.refresh(user)
+
+        logger.warning(
+            "ADMIN_ACTION action=create_user target_email=%s role=%s executado_por=%s",
+            user_data.email, user_data.role, admin_id
+        )
         return UserResponse.from_orm(user)
     
     def update_user(
         self,
         user_id: int,
-        update_data: UserUpdate
+        update_data: UserUpdate,
+        admin_id: Optional[int] = None,
     ) -> UserResponse:
         """
         Atualiza usuário
-        
+
         Raises:
             HTTPException: Se usuário não encontrado ou email duplicado
         """
@@ -161,7 +175,7 @@ class UserService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Usuário com ID {user_id} não encontrado"
             )
-        
+
         # Verificar email duplicado
         if update_data.email and update_data.email != user.email:
             if self.repository.email_exists(update_data.email, user_id):
@@ -169,7 +183,10 @@ class UserService:
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Email '{update_data.email}' já está cadastrado"
                 )
-        
+
+        # Registrar campos que mudam para auditoria
+        changed_fields = list(update_data.dict(exclude_unset=True).keys())
+
         # Aplicar mudanças (apenas campos não-None)
         update_dict = update_data.dict(exclude_unset=True)
         for field, value in update_dict.items():
@@ -177,11 +194,16 @@ class UserService:
                 user.password_hash = hash_password(value)
             else:
                 setattr(user, field, value)
-        
+
         user.updated_at = datetime.now()
-        
+
         # Salvar
         updated = self.repository.update(user)
+
+        logger.warning(
+            "ADMIN_ACTION action=update_user target_user_id=%s fields=%s executado_por=%s",
+            user_id, changed_fields, admin_id
+        )
         return UserResponse.from_orm(updated)
     
     def get_stats(self, user_id: int) -> UserStatsResponse:
@@ -302,10 +324,10 @@ class UserService:
         logger.warning("PURGE user_id=%s por admin_id=%s", user_id, executado_por)
         return {"message": f"Usuário {user_id} removido permanentemente"}
 
-    def delete_user(self, user_id: int) -> dict:
+    def delete_user(self, user_id: int, admin_id: Optional[int] = None) -> dict:
         """
         Desativa usuário (soft delete)
-        
+
         Raises:
             HTTPException: Se usuário não encontrado ou é admin principal
         """
@@ -314,36 +336,52 @@ class UserService:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Não é possível desativar o usuário administrador principal"
             )
-        
+
         user = self.repository.get_by_id(user_id)
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Usuário com ID {user_id} não encontrado"
             )
-        
+
         user.updated_at = datetime.now()
         self.repository.soft_delete(user)
+
+        logger.warning(
+            "ADMIN_ACTION action=deactivate_user target_user_id=%s executado_por=%s",
+            user_id, admin_id
+        )
         return {"message": "Usuário desativado com sucesso"}
     
-    def reset_password(self, user_id: int, nova_senha: str) -> dict:
+    def reset_password(self, user_id: int, nova_senha: str, admin_id: Optional[int] = None) -> dict:
         """
         Reseta a senha de um usuário
-        
+
         Raises:
-            HTTPException: Se usuário não encontrado
+            HTTPException: Se usuário não encontrado ou senha fraca
         """
+        if len(nova_senha) < 12:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A senha deve ter no mínimo 12 caracteres"
+            )
+
         user = self.repository.get_by_id(user_id)
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Usuário com ID {user_id} não encontrado"
             )
-        
+
         user.password_hash = hash_password(nova_senha)
         user.updated_at = datetime.now()
-        
+
         self.repository.update(user)
+
+        logger.warning(
+            "ADMIN_ACTION action=reset_password target_user_id=%s executado_por=%s",
+            user_id, admin_id
+        )
         return {"message": "Senha alterada com sucesso"}
     
     def update_profile(
