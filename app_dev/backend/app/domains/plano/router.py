@@ -238,6 +238,25 @@ def cashflow_detalhe_mes(
     }
 
 
+@router.get("/cashflow/mes")
+def cashflow_mes_unico(
+    ano: int = Query(..., ge=2020, le=2100),
+    mes: int = Query(..., ge=1, le=12),
+    modo_plano: bool = Query(False, description="Se True, usa sempre valores do plano (ignora realizado)"),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """P1-3: Retorna cashflow de um único mês (subset do /cashflow anual — evita 91% de payload)."""
+    service = PlanoService(db)
+    resultado = service.get_cashflow(user_id, ano, modo_plano_sempre=modo_plano)
+    meses = resultado.get("meses", []) if isinstance(resultado, dict) else []
+    mes_ref = f"{ano}-{str(mes).zfill(2)}"
+    mes_data = next((m for m in meses if m.get("mes_referencia") == mes_ref), None)
+    if not mes_data:
+        raise HTTPException(status_code=404, detail=f"Mês {mes_ref} não encontrado no cashflow")
+    return mes_data
+
+
 @router.get("/cashflow")
 def cashflow_anual(
     ano: int = Query(..., ge=2020, le=2100),

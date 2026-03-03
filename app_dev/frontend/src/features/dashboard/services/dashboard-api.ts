@@ -16,19 +16,43 @@ const BASE_URL = `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}`
 
 export type LastMonthSource = 'transactions' | 'patrimonio'
 
+// ─── CACHE: Last Month With Data (P1-1) ────────────────────────────────────────
+interface _LmwdEntry { value: { year: number; month: number }; ts: number }
+const _lmwdCache = new Map<string, _LmwdEntry>()
+const LMWD_TTL_MS = 5 * 60 * 1000 // 5 minutos
+
+/** Invalida cache de last-month-with-data. Chamar após upload bem-sucedido. */
+export function invalidateLastMonthCache(source?: LastMonthSource) {
+  if (source) {
+    _lmwdCache.delete(`lastMonth:${source}`)
+  } else {
+    _lmwdCache.clear()
+  }
+}
+// ────────────────────────────────────────────────────────────────────────────────
+
 /**
  * Busca o último mês com dados para inicializar scrolls.
  * - transactions: journal_entries (transações, metas, dashboard resultado)
  * - patrimonio: investimentos_historico (ativos/passivos, tela investimentos)
+ * Cache em memória de 5 minutos (P1-1).
  */
 export async function fetchLastMonthWithData(
   source: LastMonthSource = 'transactions'
 ): Promise<{ year: number; month: number }> {
+  const key = `lastMonth:${source}`
+  const hit = _lmwdCache.get(key)
+  if (hit && Date.now() - hit.ts < LMWD_TTL_MS) {
+    return hit.value
+  }
+
   const response = await fetchWithAuth(
     `${BASE_URL}/dashboard/last-month-with-data?source=${source}`
   )
   if (!response.ok) throw new Error(`Failed to fetch last month: ${response.status}`)
-  return response.json()
+  const value: { year: number; month: number } = await response.json()
+  _lmwdCache.set(key, { value, ts: Date.now() })
+  return value
 }
 
 /**
@@ -248,14 +272,12 @@ export async function fetchPlanoCashflowMes(
   month: number
 ): Promise<PlanoCashflowMes | null> {
   try {
-    const response = await fetchWithAuth(`${BASE_URL}/plano/cashflow?ano=${year}&modo_plano=true`)
+    // P1-3: endpoint dedicado retorna apenas 1 mês (evita 91% de payload desnecessário)
+    const response = await fetchWithAuth(
+      `${BASE_URL}/plano/cashflow/mes?ano=${year}&mes=${month}&modo_plano=true`
+    )
     if (!response.ok) return null
-    const data = await response.json()
-    const mes = (data.meses ?? []).find((m: any) => {
-      const mm = parseInt((m.mes_referencia ?? '').split('-')[1] ?? '0', 10)
-      return mm === month
-    })
-    if (!mes) return null
+    const mes = await response.json()
     return {
       renda_esperada: mes.renda_esperada ?? 0,
       extras_creditos: mes.extras_creditos ?? 0,

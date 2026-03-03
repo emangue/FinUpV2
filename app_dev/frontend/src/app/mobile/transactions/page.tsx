@@ -113,6 +113,7 @@ function TransactionsMobileContent() {
   const [filtrosOpen, setFiltrosOpen] = useState(false)
 
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const periodFilterRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current)
@@ -124,6 +125,21 @@ function TransactionsMobileContent() {
     }
   }, [searchQuery])
 
+  // P1-4: debounce 400ms nos filtros de período — evita 3 fetches por interação com selects
+  const [debouncedPeriod, setDebouncedPeriod] = useState({
+    yearInicio, monthInicio, yearFim, monthFim, semFiltroPeriodo
+  })
+
+  useEffect(() => {
+    if (periodFilterRef.current) clearTimeout(periodFilterRef.current)
+    periodFilterRef.current = setTimeout(() => {
+      setDebouncedPeriod({ yearInicio, monthInicio, yearFim, monthFim, semFiltroPeriodo })
+    }, 400)
+    return () => {
+      if (periodFilterRef.current) clearTimeout(periodFilterRef.current)
+    }
+  }, [yearInicio, monthInicio, yearFim, monthFim, semFiltroPeriodo])
+
   const filters = useMemo(() => {
     const base: Record<string, string | number | boolean | undefined | null> = {
       search: searchDebounced || undefined,
@@ -133,20 +149,20 @@ function TransactionsMobileContent() {
       subgrupo_null: subgrupoFilter === '__null__' ? true : undefined,
       estabelecimento: estabelecimentoFilter || undefined,
     }
-    if (!semFiltroPeriodo) {
-      const isSingleMonth = yearInicio === yearFim && monthInicio === monthFim
+    if (!debouncedPeriod.semFiltroPeriodo) {
+      const isSingleMonth = debouncedPeriod.yearInicio === debouncedPeriod.yearFim && debouncedPeriod.monthInicio === debouncedPeriod.monthFim
       if (isSingleMonth) {
-        base.year = yearInicio
-        base.month = monthInicio
+        base.year = debouncedPeriod.yearInicio
+        base.month = debouncedPeriod.monthInicio
       } else {
-        base.year_inicio = yearInicio
-        base.month_inicio = monthInicio
-        base.year_fim = yearFim
-        base.month_fim = monthFim
+        base.year_inicio = debouncedPeriod.yearInicio
+        base.month_inicio = debouncedPeriod.monthInicio
+        base.year_fim = debouncedPeriod.yearFim
+        base.month_fim = debouncedPeriod.monthFim
       }
     }
     return base
-  }, [semFiltroPeriodo, yearInicio, monthInicio, yearFim, monthFim, searchDebounced, categoriaGeral, grupoFilter, subgrupoFilter, estabelecimentoFilter])
+  }, [debouncedPeriod, searchDebounced, categoriaGeral, grupoFilter, subgrupoFilter, estabelecimentoFilter])
 
   const fetchTransactions = useCallback(async () => {
     const BASE = `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/transactions`

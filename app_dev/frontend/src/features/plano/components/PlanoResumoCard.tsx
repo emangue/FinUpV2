@@ -22,24 +22,29 @@ function formatCurrency(v: number) {
 interface PlanoResumoCardProps {
   year: number;
   month: number;
+  /** P1-2: resumo pré-buscado pelo pai (PlanoHubPage) — evita chamada duplicada a getResumoPlano */
+  resumoExterno?: { renda: number | null; total_budget: number; disponivel_real: number | null } | null;
 }
 
-export function PlanoResumoCard({ year, month }: PlanoResumoCardProps) {
+export function PlanoResumoCard({ year, month, resumoExterno }: PlanoResumoCardProps) {
   const [resumo, setResumo] = useState<{
     renda: number | null;
     total_budget: number;
     disponivel_real: number | null;
-  } | null>(null);
+  } | null>(resumoExterno ?? null);
   const [receitas, setReceitas] = useState<{ total_receitas: number } | null>(null);
   const [goals, setGoals] = useState<Array<{ categoria_geral?: string; valor_realizado?: number; valor_planejado?: number }>>([]);
   const [aportePrincipal, setAportePrincipal] = useState<number>(0);
 
   useEffect(() => {
-    const selectedMonth = new Date(year, month - 1, 1);
+    const selectedMonthDate = new Date(year, month - 1, 1);
+    const resumoPromise = resumoExterno !== undefined
+      ? Promise.resolve(resumoExterno)
+      : getResumoPlano(year, month);
     Promise.all([
-      getResumoPlano(year, month),
+      resumoPromise,
       fetchIncomeSources(year, month),
-      fetchGoals(selectedMonth),
+      fetchGoals(selectedMonthDate),
       fetchAporteInvestimentoDetalhado(year, month),
     ])
       .then(([r, inc, g, aporteDetalhe]) => {
@@ -56,7 +61,7 @@ export function PlanoResumoCard({ year, month }: PlanoResumoCardProps) {
         setGoals([]);
         setAportePrincipal(0);
       });
-  }, [year, month]);
+  }, [year, month, resumoExterno]);
 
   if (!resumo || resumo.renda == null) return null;
   if (resumo.total_budget === 0) return null;

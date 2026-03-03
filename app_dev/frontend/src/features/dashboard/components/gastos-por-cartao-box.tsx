@@ -45,19 +45,27 @@ interface GastosPorCartaoBoxProps {
   year: number
   month?: number
   monthLabel?: string
+  /** P0-3: quando fornecido pelo pai (OrcamentoTab), evita fetch duplicado */
+  cards?: CreditCardExpense[]
 }
 
-export function GastosPorCartaoBox({ year, month, monthLabel }: GastosPorCartaoBoxProps) {
-  const [cards, setCards] = useState<CreditCardExpense[]>([])
-  const [loading, setLoading] = useState(true)
+export function GastosPorCartaoBox({ year, month, monthLabel, cards: cardsProp }: GastosPorCartaoBoxProps) {
+  const [cards, setCards] = useState<CreditCardExpense[]>(cardsProp ?? [])
+  const [loading, setLoading] = useState(!cardsProp)
   const [selectedIndex, setSelectedIndex] = useState(0)
 
   useEffect(() => {
+    if (cardsProp !== undefined) {
+      setCards(cardsProp)
+      setLoading(false)
+      return
+    }
+    setLoading(true)
     fetchCreditCards(year, month)
       .then(setCards)
       .catch(() => setCards([]))
       .finally(() => setLoading(false))
-  }, [year, month])
+  }, [year, month, cardsProp])
 
   const formatCurrency = (v: number) =>
     new Intl.NumberFormat('pt-BR', {

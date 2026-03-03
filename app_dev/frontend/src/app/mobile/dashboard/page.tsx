@@ -25,7 +25,7 @@ import { PlanoAposentadoriaTab } from '@/features/plano-aposentadoria/components
 import { OnboardingChecklist } from '@/features/onboarding/OnboardingChecklist'
 import { DemoModeBanner } from '@/features/onboarding/DemoModeBanner'
 import { NudgeBanners } from '@/features/onboarding/NudgeBanners'
-import { useDashboardMetrics, useIncomeSources, useExpenseSources, useChartData, useChartDataYearly } from '@/features/dashboard/hooks/use-dashboard'
+import { useDashboardMetrics, useChartData, useChartDataYearly } from '@/features/dashboard/hooks/use-dashboard'
 import { fetchLastMonthWithData } from '@/features/dashboard/services/dashboard-api'
 import { useRequireAuth } from '@/core/hooks/use-require-auth'
 
@@ -34,15 +34,19 @@ const YEARS_RANGE = 7 // Últimos N anos no scroll/gráfico anual
 export default function DashboardMobilePage() {
   const router = useRouter()
   const isAuth = useRequireAuth() // 🔐 Hook de proteção de rota
-  const [selectedMonth, setSelectedMonth] = useState<Date>(new Date())
+  const [selectedMonth, setSelectedMonth] = useState<Date | null>(null)
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear())
   const [period, setPeriod] = useState<YTDToggleValue>('month')
   const [activeTab, setActiveTab] = useState<'resultado' | 'patrimonio'>('resultado')
   const [lastMonthWithData, setLastMonthWithData] = useState<{ year: number; month: number } | null>(null)
 
   // year/month/ytdMonth para métricas e OrcamentoTab
-  const year = period === 'month' ? selectedMonth.getFullYear() : selectedYear
-  const month = period === 'month' ? selectedMonth.getMonth() + 1 : undefined
+  const year = selectedMonth
+    ? (period === 'month' ? selectedMonth.getFullYear() : selectedYear)
+    : new Date().getFullYear()
+  const month = selectedMonth
+    ? (period === 'month' ? selectedMonth.getMonth() + 1 : undefined)
+    : undefined
   const ytdMonth = period === 'ytd' ? (lastMonthWithData?.month ?? undefined) : undefined
 
   // Lista de anos para scroll/gráfico (YTD e Ano)
@@ -55,25 +59,29 @@ export default function DashboardMobilePage() {
     return result
   }, [lastMonthWithData?.year])
 
+  // P0-1: bloqueia todos os hooks até selectedMonth resolver (evita re-fire com mês errado)
+  const enabled = selectedMonth !== null
+
   // ✅ TODOS OS HOOKS PRIMEIRO (antes de any return)
-  const { metrics, loading: loadingMetrics } = useDashboardMetrics(year, month, ytdMonth)
-  const { loading: loadingSources } = useIncomeSources(year, month)
-  const { loading: loadingExpenses } = useExpenseSources(year, month)
-  
-  // Chart data: mensal (Mês) ou anual (YTD/Ano)
+  const { metrics, loading: loadingMetrics } = useDashboardMetrics(year, month, ytdMonth, { enabled })
+
+  // P0-4: só dispara o hook do período ativo (evita 1 call descartada por abertura)
   const { chartData: chartDataMonthly, loading: loadingChartMonthly } = useChartData(
-    selectedMonth.getFullYear(),
-    selectedMonth.getMonth() + 1
+    selectedMonth?.getFullYear() ?? new Date().getFullYear(),
+    selectedMonth ? selectedMonth.getMonth() + 1 : undefined,
+    { enabled: enabled && period === 'month' }
   )
   const { chartData: chartDataYearly, loading: loadingChartYearly } = useChartDataYearly(
     yearsList,
-    period === 'ytd' ? (lastMonthWithData?.month ?? undefined) : undefined
+    period === 'ytd' ? (lastMonthWithData?.month ?? undefined) : undefined,
+    { enabled: enabled && period !== 'month' }
   )
-  
+
   const chartData = period === 'month' ? chartDataMonthly : chartDataYearly
   const loadingChart = period === 'month' ? loadingChartMonthly : loadingChartYearly
 
-  const isLoading = loadingMetrics || loadingSources || loadingExpenses || loadingChart
+  // P0-2+P2-3: income/expense hooks removidos (OrcamentoTab já busca internamente)
+  const isLoading = !enabled || loadingMetrics || loadingChart
 
   // Default: último mês com dados
   useEffect(() => {
@@ -110,7 +118,7 @@ export default function DashboardMobilePage() {
           <div className="flex-1 min-w-0">
             {period === 'month' ? (
               <MonthScrollPicker
-                selectedMonth={selectedMonth}
+                selectedMonth={selectedMonth ?? new Date()}
                 onMonthChange={setSelectedMonth}
               />
             ) : (
@@ -195,15 +203,16 @@ export default function DashboardMobilePage() {
                   insertBetweenResumoAndRest={
                     <BarChart
                       data={chartData}
-                      selectedMonth={selectedMonth}
+                      selectedMonth={selectedMonth ?? new Date()}
                       selectedYear={selectedYear}
                       mode={period === 'month' ? 'monthly' : 'yearly'}
                     />
                   }
-                  gastosPorCartao={
+                  gastosPorCartao={(cards) => (
                     <GastosPorCartaoBox
                       year={year}
                       month={month}
+                      cards={cards}
                       monthLabel={
                         month
                           ? `${['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'][month - 1]}/${year}`
@@ -212,7 +221,7 @@ export default function DashboardMobilePage() {
                             : `${year}`
                       }
                     />
-                  }
+                  )}
                 />
               </>
             )}

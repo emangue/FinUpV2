@@ -53,7 +53,9 @@ export function PatrimonioTab({ selectedMonth, variant = 'standalone', planoApos
   const [data, setData] = useState<PatrimonioMensal[]>([])
   const [distribuicaoAtivo, setDistribuicaoAtivo] = useState<DistribuicaoTipo[]>([])
   const [distribuicaoPassivo, setDistribuicaoPassivo] = useState<DistribuicaoTipo[]>([])
-  const [distribuicaoLoading, setDistribuicaoLoading] = useState(true)
+  const [distribuicaoLoading, setDistribuicaoLoading] = useState(false)
+  const [distribuicaoOpen, setDistribuicaoOpen] = useState(false)
+  const [distribuicaoFetched, setDistribuicaoFetched] = useState(false)
   const [distribuicaoToggle, setDistribuicaoToggle] = useState<DistribuicaoToggle>('ativo')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -94,9 +96,13 @@ export function PatrimonioTab({ selectedMonth, variant = 'standalone', planoApos
       .finally(() => setDistribuicaoLoading(false))
   }, [])
 
+  // P2-2: lazy load — busca distribuição apenas na primeira abertura do Collapsible
   useEffect(() => {
-    fetchDistribuicao()
-  }, [fetchDistribuicao])
+    if (distribuicaoOpen && !distribuicaoFetched) {
+      setDistribuicaoFetched(true)
+      fetchDistribuicao()
+    }
+  }, [distribuicaoOpen, distribuicaoFetched, fetchDistribuicao])
 
   if (loading) {
     return (
@@ -208,8 +214,8 @@ export function PatrimonioTab({ selectedMonth, variant = 'standalone', planoApos
         />
       </div>
 
-      {/* Distribuição por tipo - Collapsible */}
-      <Collapsible defaultOpen={false} className="group rounded-xl border border-gray-200 bg-white overflow-hidden">
+      {/* Distribuição por tipo - Collapsible (lazy load P2-2: só busca na 1ª abertura) */}
+      <Collapsible open={distribuicaoOpen} onOpenChange={setDistribuicaoOpen} className="group rounded-xl border border-gray-200 bg-white overflow-hidden">
         <CollapsibleTrigger asChild>
           <div className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors text-left cursor-pointer">
             <div className="flex gap-6">

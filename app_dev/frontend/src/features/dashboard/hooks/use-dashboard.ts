@@ -14,16 +14,20 @@ import {
 } from '../services/dashboard-api'
 import type { DashboardMetrics, IncomeSource, ExpenseSource, ChartDataPoint } from '../types'
 
+interface HookOptions { enabled?: boolean }
+
 /**
  * Hook para buscar métricas do dashboard
  * ytdMonth: quando informado com month undefined, retorna YTD (Jan..ytdMonth)
  */
-export function useDashboardMetrics(year: number, month?: number, ytdMonth?: number) {
+export function useDashboardMetrics(year: number, month?: number, ytdMonth?: number, options: HookOptions = {}) {
+  const { enabled = true } = options
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(enabled)
   const [error, setError] = useState<Error | null>(null)
 
   useEffect(() => {
+    if (!enabled) { setLoading(false); return }
     let cancelled = false
 
     async function load() {
@@ -41,7 +45,7 @@ export function useDashboardMetrics(year: number, month?: number, ytdMonth?: num
 
     load()
     return () => { cancelled = true }
-  }, [year, month, ytdMonth])
+  }, [year, month, ytdMonth, enabled])
 
   return { metrics, loading, error }
 }
@@ -84,12 +88,14 @@ export function useIncomeSources(year: number, month?: number) {
 /**
  * Hook para buscar dados do gráfico
  */
-export function useChartData(year: number, month?: number) {
+export function useChartData(year: number, month?: number, options: HookOptions = {}) {
+  const { enabled = true } = options
   const [chartData, setChartData] = useState<ChartDataPoint[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(enabled)
   const [error, setError] = useState<Error | null>(null)
 
   useEffect(() => {
+    if (!enabled) { setLoading(false); return }
     let cancelled = false
 
     async function load() {
@@ -107,7 +113,7 @@ export function useChartData(year: number, month?: number) {
 
     load()
     return () => { cancelled = true }
-  }, [year, month])
+  }, [year, month, enabled])
 
   return { chartData, loading, error }
 }
@@ -117,13 +123,16 @@ export function useChartData(year: number, month?: number) {
  */
 export function useChartDataYearly(
   years: number[],
-  ytdMonth?: number
+  ytdMonth?: number,
+  options: HookOptions = {}
 ) {
+  const { enabled = true } = options
   const [chartData, setChartData] = useState<ChartDataPoint[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(enabled)
   const [error, setError] = useState<Error | null>(null)
 
   useEffect(() => {
+    if (!enabled) { setLoading(false); return }
     let cancelled = false
 
     async function load() {
@@ -146,7 +155,7 @@ export function useChartDataYearly(
 
     load()
     return () => { cancelled = true }
-  }, [years.join(','), ytdMonth])
+  }, [years.join(','), ytdMonth, enabled])
 
   return { chartData, loading, error }
 }

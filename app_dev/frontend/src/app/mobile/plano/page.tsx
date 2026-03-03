@@ -24,6 +24,7 @@ export default function PlanoHubPage() {
   const isAuth = useRequireAuth();
   const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
   const [isEmpty, setIsEmpty] = useState<boolean | null>(null);
+  const [resumoPlano, setResumoPlano] = useState<{ renda: number | null; total_budget: number; disponivel_real: number | null } | null>(null);
 
   const year = selectedMonth.getFullYear();
   const month = selectedMonth.getMonth() + 1;
@@ -34,6 +35,7 @@ export default function PlanoHubPage() {
         const semRenda = resumo?.renda == null;
         const semMetas = (resumo?.total_budget ?? 0) === 0 && orcamento.length === 0;
         setIsEmpty(semRenda && semMetas);
+        setResumoPlano(resumo ?? null);
       })
       .catch(() => setIsEmpty(false));
   }, [year, month]);
@@ -121,7 +123,7 @@ export default function PlanoHubPage() {
             <span className="text-gray-400">→</span>
           </Link>
 
-          <PlanoResumoCard year={year} month={month} />
+          <PlanoResumoCard year={year} month={month} resumoExterno={resumoPlano} />
           <AnosPerdidasCard ano={year} mes={month} />
 
           <TabelaReciboAnual ano={year} />

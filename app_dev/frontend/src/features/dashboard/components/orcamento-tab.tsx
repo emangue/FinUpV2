@@ -25,7 +25,7 @@ import Link from 'next/link'
 import { ChevronDown } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { fetchIncomeSources, fetchCreditCards, fetchOrcamentoInvestimentos, fetchPlanoCashflowMes, fetchAporteInvestimentoDetalhado } from '../services/dashboard-api'
-import type { PlanoCashflowMes, AporteInvestimentoResponse } from '../services/dashboard-api'
+import type { PlanoCashflowMes, AporteInvestimentoResponse, CreditCardExpense } from '../services/dashboard-api'
 import type { IncomeSource } from '../types'
 import { fetchGoals } from '@/features/goals/services/goals-api'
 import type { Goal } from '@/features/goals/types'
@@ -51,8 +51,8 @@ interface OrcamentoTabProps {
   variant?: 'full' | 'resultado'
   /** Sprint G: inserir entre Resumo e o restante (ex: gráfico) */
   insertBetweenResumoAndRest?: React.ReactNode
-  /** Sprint G: componente GastosPorCartaoBox para collapse Cartões */
-  gastosPorCartao?: React.ReactNode
+  /** Sprint G: componente GastosPorCartaoBox para collapse Cartões (render prop recebe cardsData) */
+  gastosPorCartao?: ((cards: CreditCardExpense[]) => React.ReactNode) | React.ReactNode
   /** Métricas do período (usadas no Resumo quando month undefined = ano/YTD) */
   metrics?: { total_receitas: number; total_despesas: number } | null
   /** YTD: mês limite (1-12). Quando month undefined e ytdMonth informado, usa Jan..ytdMonth para investimentos */
@@ -71,6 +71,7 @@ export function OrcamentoTab({
   const [receitas, setReceitas] = useState<{ sources: IncomeSource[]; total_receitas: number } | null>(null)
   const [goals, setGoals] = useState<Goal[]>([])
   const [cardsTotal, setCardsTotal] = useState<number | null>(null)
+  const [cardsData, setCardsData] = useState<CreditCardExpense[]>([])
   const [totalInvestidoPeriodo, setTotalInvestidoPeriodo] = useState<number | null>(null)
   const [planoMes, setPlanoMes] = useState<PlanoCashflowMes | null>(null)
   const [aportePrincipalCenario, setAportePrincipalCenario] = useState<number>(0)
@@ -132,6 +133,7 @@ export function OrcamentoTab({
         }
         setReceitas(inc && typeof inc === 'object' && 'sources' in inc ? inc : null)
         setGoals(Array.isArray(budgets) ? budgets : [])
+        setCardsData(Array.isArray(cards) ? cards : [])
         setCardsTotal(Array.isArray(cards) ? cards.reduce((s: number, c: { total: number }) => s + c.total, 0) : null)
         setTotalInvestidoPeriodo(orcInv && typeof orcInv === 'object' && 'total_investido' in orcInv ? orcInv.total_investido : null)
         setPlanoMes(plano && typeof plano === 'object' && 'renda_esperada' in plano ? plano as PlanoCashflowMes : null)
@@ -437,7 +439,7 @@ export function OrcamentoTab({
               </div>
             </CollapsibleTrigger>
             <CollapsibleContent className="px-0 pb-0">
-              {gastosPorCartao}
+              {typeof gastosPorCartao === 'function' ? gastosPorCartao(cardsData) : gastosPorCartao}
             </CollapsibleContent>
           </Collapsible>
         </>
