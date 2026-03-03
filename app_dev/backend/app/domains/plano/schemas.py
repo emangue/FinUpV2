@@ -64,3 +64,44 @@ class ExpectativaResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ============================================================================
+# APORTE INVESTIMENTO DETALHADO — GET /plano/aporte-investimento
+# ============================================================================
+
+class AporteExtraDetalhe(BaseModel):
+    """Metadados de um aporte extraordinário (bônus, 13º, LTRP, etc.)"""
+    descricao: str
+    valor: float
+    recorrencia: str       # unico | anual | semestral | trimestral
+    evoluir: bool = False
+    evolucaoValor: float = 0.0
+    evolucaoTipo: str = "percentual"
+
+
+class AporteMesDetalhe(BaseModel):
+    """Detalhamento do aporte planejado para um mês específico."""
+    mes_referencia: str    # YYYY-MM
+    aporte_fixo: float
+    aporte_extra: float
+    aporte_total: float
+    extras: list[AporteExtraDetalhe]
+
+
+class AporteInvestimentoResponse(BaseModel):
+    """
+    Resposta de GET /plano/aporte-investimento.
+    Consolida cenário principal (fixo + extras) ou perfil financeiro (fallback).
+    - fonte='cenario': dados do InvestimentoCenario + CenarioProjecao
+    - fonte='perfil': dados do user_financial_profile.aporte_planejado
+    - fonte=None: sem plano configurado (zeros)
+    """
+    fonte: Optional[str]          # "cenario" | "perfil" | None
+    cenario_id: Optional[int]
+    aporte_fixo_mensal: float
+    total_fixo_ano: float
+    total_extras_ano: float
+    total_ano: float
+    mes: Optional[AporteMesDetalhe] = None      # preenchido quando ?mes= informado
+    meses: Optional[list[AporteMesDetalhe]] = None  # preenchido quando sem ?mes

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text, func
 
 from .models import UserFinancialProfile, PlanoMetaCategoria, BaseExpectativa, ExpectativaMes
+from .schemas import AporteExtraDetalhe, AporteMesDetalhe, AporteInvestimentoResponse
 
 logger = logging.getLogger(__name__)
 
@@ -929,3 +930,207 @@ class PlanoService:
                 "tipo_lancamento": em.tipo,
             })
         return by_mes
+    # ============================================================================
+    # APORTE INVESTIMENTO DETALHADO
+    # ============================================================================
+
+    def _get_extras_por_mes_cenario(
+        self,
+        extras_json: Optional[str],
+        anomes_inicio: Optional[int],
+        ano: int,
+    ) -> dict:
+        """
+        Parse extras_json do cenário e retorna { mes (1-12): [lista de extras] } para o ano-alvo.
+        Replica lógica de InvestimentoService._calcular_projecao_mensal para determinar
+        quais extras se aplicam a cada mês calendário do ano.
+        Nota: fonte de verdade para VALORES é CenarioProjecao.aporte; este método retorna
+        apenas metadados (descrição, recorrência, valor aproximado) para enriquecer a resposta.
+        """
+        if not extras_json:
+            return {}
+        try:
+            extras = json.loads(extras_json)
+        except (json.JSONDecodeError, TypeError):
+            return {}
+        if not isinstance(extras, list):
+            return {}
+
+        # Fallback: se anomes_inicio não definido, usa hoje (igual ao InvestimentoService)
+        if anomes_inicio is None:
+            hoje = date.today()
+            anomes_inicio = hoje.year * 100 + hoje.month
+
+        ano_base = anomes_inicio // 100
+        mes_base = anomes_inicio % 100
+        result: dict = {}
+
+        for e in extras:
+            mes_calendario = int(e.get('mesAno', e.get('mes_referencia', 12)))
+            valor = float(e.get('valor', 0))
+            rec = e.get('recorrencia', 'unico')
+            interval_map = {'unico': 0, 'trimestral': 3, 'semestral': 6, 'anual': 12}
+            interval = interval_map.get(rec, 0)
+            first_match = (mes_calendario - mes_base) % 12
+            mes_minimo = first_match if mes_calendario < mes_base else 0
+
+            for mes_alvo in range(1, 13):
+                target_anomes = ano * 100 + mes_alvo
+                if target_anomes < anomes_inicio:
+                    continue  # Antes do início do cenário
+
+                # mes_num: índice 0-based desde o início do cenário
+                mes_num = (ano * 12 + mes_alvo) - (ano_base * 12 + mes_base)
+
+                # Verifica se este mes_num corresponde ao mês calendário do extra
+                total_meses = ano_base * 12 + mes_base - 1 + mes_num
+                mes_real = (total_meses % 12) + 1
+                if mes_real != mes_calendario:
+                    continue
+
+                # Guard: extras de Jan não vão para Fev quando plano inicia em Fev
+                if mes_num < mes_minimo:
+                    continue
+
+                # Verifica recorrência
+                if interval == 0:
+                    # Único: só o primeiro match do calendário
+                    if mes_num != first_match:
+                        continue
+                    val = valor
+                else:
+                    if (mes_num - first_match) % interval != 0:
+                        continue
+                    ocorrencia = (mes_num - first_match) // 12
+                    val = valor
+                    if e.get('evoluir') and ocorrencia > 0:
+                        ev_val = float(e.get('evolucaoValor', 0))
+                        if e.get('evolucaoTipo') == 'percentual':
+                            val = valor * ((1 + ev_val / 100) ** ocorrencia)
+                        else:
+                            val = valor + ev_val * ocorrencia
+
+                if mes_alvo not in result:
+                    result[mes_alvo] = []
+                result[mes_alvo].append({
+                    'descricao': e.get('descricao', e.get('nome', 'Extra')),
+                    'valor': round(val, 2),
+                    'recorrencia': rec,
+                    'evoluir': bool(e.get('evoluir', False)),
+                    'evolucaoValor': float(e.get('evolucaoValor', 0)),
+                    'evolucaoTipo': str(e.get('evolucaoTipo', 'percentual')),
+                })
+
+        return result
+
+    def get_aporte_investimento(
+        self,
+        user_id: int,
+        ano: int,
+        mes: Optional[int] = None,
+    ) -> AporteInvestimentoResponse:
+        """
+        GET /plano/aporte-investimento — aporte de investimento planejado (fixo + extras).
+        Consolida cenário principal (InvestimentoCenario + CenarioProjecao) e perfil financeiro.
+        - fonte='cenario': CenarioProjecao.aporte (fixo + extras já calculados)
+        - fonte='perfil': user_financial_profile.aporte_planejado (sem extras)
+        - fonte=None: sem plano configurado
+        Referência cruzada: InvestimentoService._calcular_projecao_mensal (parse de extras_json).
+        Import cruzado documentado: PlanoService é orquestrador de cenário + perfil.
+        """
+        # Import cruzado justificado — PlanoService consolida fontes de dados do plano
+        from app.domains.investimentos.models import InvestimentoCenario, CenarioProjecao
+
+        # 1. Busca cenário principal
+        cenario = self.db.query(InvestimentoCenario).filter(
+            InvestimentoCenario.user_id == user_id,
+            InvestimentoCenario.principal.is_(True),
+            InvestimentoCenario.ativo.is_(True),
+        ).first()
+
+        if cenario:
+            fonte = "cenario"
+            cenario_id = cenario.id
+            aporte_fixo_mensal = float(cenario.aporte_mensal or 0)
+
+            # Busca projeções do ano (CenarioProjecao.aporte = fixo + extras já calculados)
+            projecoes = self.db.query(CenarioProjecao).filter(
+                CenarioProjecao.cenario_id == cenario.id,
+                CenarioProjecao.anomes >= ano * 100 + 1,
+                CenarioProjecao.anomes <= ano * 100 + 12,
+            ).all()
+            # {mes (1-12): aporte_total do mês}
+            proj_map = {p.anomes % 100: float(p.aporte or 0) for p in projecoes}
+
+            # Parse extras_json para metadados (descrição, recorrência) por mês
+            extras_por_mes = self._get_extras_por_mes_cenario(
+                cenario.extras_json, cenario.anomes_inicio, ano
+            )
+        else:
+            # Fallback: perfil financeiro (sem extras)
+            profile = self.db.query(UserFinancialProfile).filter(
+                UserFinancialProfile.user_id == user_id
+            ).first()
+            aporte_fixo_mensal = float(profile.aporte_planejado or 0) if profile else 0.0
+            fonte = "perfil" if aporte_fixo_mensal > 0 else None
+            cenario_id = None
+            proj_map = {}
+            extras_por_mes = {}
+
+        # 2. Montar lista dos 12 meses do ano
+        meses_list: list[AporteMesDetalhe] = []
+        for m in range(1, 13):
+            mes_ref = f"{ano}-{m:02d}"
+            aporte_total = proj_map.get(m, aporte_fixo_mensal) if cenario else aporte_fixo_mensal
+            aporte_extra = max(0.0, round(aporte_total - aporte_fixo_mensal, 2))
+            extras_obj = [
+                AporteExtraDetalhe(
+                    descricao=ex['descricao'],
+                    valor=ex['valor'],
+                    recorrencia=ex['recorrencia'],
+                    evoluir=ex.get('evoluir', False),
+                    evolucaoValor=ex.get('evolucaoValor', 0.0),
+                    evolucaoTipo=ex.get('evolucaoTipo', 'percentual'),
+                )
+                for ex in extras_por_mes.get(m, [])
+            ]
+            meses_list.append(AporteMesDetalhe(
+                mes_referencia=mes_ref,
+                aporte_fixo=round(aporte_fixo_mensal, 2),
+                aporte_extra=aporte_extra,
+                aporte_total=round(aporte_total, 2),
+                extras=extras_obj,
+            ))
+
+        # 3. Totais anuais
+        total_fixo_ano = round(aporte_fixo_mensal * 12, 2)
+        total_extras_ano = round(sum(md.aporte_extra for md in meses_list), 2)
+        total_ano = round(sum(md.aporte_total for md in meses_list), 2)
+
+        # 4. Montar resposta
+        if mes is not None:
+            mes_detalhe = next(
+                (md for md in meses_list if md.mes_referencia == f"{ano}-{mes:02d}"),
+                None,
+            )
+            return AporteInvestimentoResponse(
+                fonte=fonte,
+                cenario_id=cenario_id,
+                aporte_fixo_mensal=round(aporte_fixo_mensal, 2),
+                total_fixo_ano=total_fixo_ano,
+                total_extras_ano=total_extras_ano,
+                total_ano=total_ano,
+                mes=mes_detalhe,
+                meses=None,
+            )
+
+        return AporteInvestimentoResponse(
+            fonte=fonte,
+            cenario_id=cenario_id,
+            aporte_fixo_mensal=round(aporte_fixo_mensal, 2),
+            total_fixo_ano=total_fixo_ano,
+            total_extras_ano=total_extras_ano,
+            total_ano=total_ano,
+            mes=None,
+            meses=meses_list,
+        )

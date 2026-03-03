@@ -8,7 +8,7 @@ from app.core.database import get_db
 from app.shared.dependencies import get_current_user_id
 
 from .service import PlanoService
-from .schemas import RendaUpdate, MetaCreate, PerfilUpdate, ExpectativaCreate
+from .schemas import RendaUpdate, MetaCreate, PerfilUpdate, ExpectativaCreate, AporteInvestimentoResponse
 
 router = APIRouter(prefix="/plano", tags=["plano"])
 
@@ -362,3 +362,24 @@ def projecao_poupanca(
     ano = ano or date.today().year
     service = PlanoService(db)
     return service.get_projecao(user_id, ano, meses, reducao_pct, sem_patrimonio)
+
+
+@router.get("/aporte-investimento", response_model=AporteInvestimentoResponse)
+def aporte_investimento(
+    ano: int = Query(..., ge=2020, le=2100),
+    mes: Optional[int] = Query(None, ge=1, le=12),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """
+    Aporte de investimento planejado: fixo + extras por mês ou ano inteiro.
+
+    - `?ano=2026` — retorna 12 meses com totais anuais em `.meses`
+    - `?ano=2026&mes=3` — retorna detalhes de março em `.mes`
+
+    fonte='cenario': usa CenarioProjecao.aporte (regular + extraordinários calculados).
+    fonte='perfil': fallback para user_financial_profile.aporte_planejado sem extras.
+    fonte=None: sem plano configurado (zeros).
+    """
+    service = PlanoService(db)
+    return service.get_aporte_investimento(user_id, ano, mes)

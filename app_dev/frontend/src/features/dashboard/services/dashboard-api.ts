@@ -287,6 +287,61 @@ export async function fetchAportePrincipalPeriodo(
   }
 }
 
+// ============================================================================
+// APORTE INVESTIMENTO DETALHADO — GET /plano/aporte-investimento
+// Substitui fetchAportePrincipalPorMes + fetchAportePrincipalPeriodo com uma
+// única chamada que retorna composição detalhada (fixo + extras) por mês/ano.
+// ============================================================================
+
+export interface AporteExtraDetalhe {
+  descricao: string
+  valor: number
+  recorrencia: string       // unico | anual | semestral | trimestral
+  evoluir: boolean
+  evolucaoValor: number
+  evolucaoTipo: string
+}
+
+export interface AporteMesDetalhe {
+  mes_referencia: string    // YYYY-MM
+  aporte_fixo: number
+  aporte_extra: number
+  aporte_total: number
+  extras: AporteExtraDetalhe[]
+}
+
+export interface AporteInvestimentoResponse {
+  fonte: 'cenario' | 'perfil' | null
+  cenario_id: number | null
+  aporte_fixo_mensal: number
+  total_fixo_ano: number
+  total_extras_ano: number
+  total_ano: number
+  mes?: AporteMesDetalhe      // preenchido quando ?mes= informado
+  meses?: AporteMesDetalhe[]  // preenchido quando sem ?mes
+}
+
+/**
+ * Nova API unificada de aporte planejado.
+ * - Com `month`: retorna `.mes` com detalhes do mês específico (fixo + extras)
+ * - Sem `month`: retorna `.meses` com os 12 meses + totais anuais
+ * Substitui fetchAportePrincipalPorMes + fetchAportePrincipalPeriodo.
+ */
+export async function fetchAporteInvestimentoDetalhado(
+  year: number,
+  month?: number,
+): Promise<AporteInvestimentoResponse | null> {
+  try {
+    const params = new URLSearchParams({ ano: year.toString() })
+    if (month != null) params.append('mes', month.toString())
+    const response = await fetchWithAuth(`${BASE_URL}/plano/aporte-investimento?${params}`)
+    if (!response.ok) return null
+    return response.json()
+  } catch {
+    return null
+  }
+}
+
 /**
  * Busca Investimentos vs Plano para o tab Orçamento
  */

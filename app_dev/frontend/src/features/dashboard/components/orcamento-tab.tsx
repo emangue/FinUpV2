@@ -24,8 +24,8 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ChevronDown } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { fetchIncomeSources, fetchCreditCards, fetchOrcamentoInvestimentos, fetchPlanoCashflowMes, fetchAportePrincipalPorMes, fetchAportePrincipalPeriodo } from '../services/dashboard-api'
-import type { PlanoCashflowMes } from '../services/dashboard-api'
+import { fetchIncomeSources, fetchCreditCards, fetchOrcamentoInvestimentos, fetchPlanoCashflowMes, fetchAporteInvestimentoDetalhado } from '../services/dashboard-api'
+import type { PlanoCashflowMes, AporteInvestimentoResponse } from '../services/dashboard-api'
 import type { IncomeSource } from '../types'
 import { fetchGoals } from '@/features/goals/services/goals-api'
 import type { Goal } from '@/features/goals/types'
@@ -103,23 +103,39 @@ export function OrcamentoTab({
           fetchCreditCards(year, month ?? undefined),
           isAnoOuYtd ? fetchOrcamentoInvestimentos(year, undefined, ytdMonthProp) : Promise.resolve(null),
           !isAnoOuYtd ? fetchPlanoCashflowMes(year, mesRef) : Promise.resolve(null),
-          // I1: buscar aporte do cenário (regular + extraordinários) — fonte primária igual ao PlanoResumoCard
-          isAnoOuYtd
-            ? fetchAportePrincipalPeriodo(year, ytdMonthProp)
-            : fetchAportePrincipalPorMes(year, mesRef),
+          // T6: API unificada — retorna composição de aporte (fixo + extras) por mês/ano
+          // Substitui fetchAportePrincipalPorMes + fetchAportePrincipalPeriodo
+          fetchAporteInvestimentoDetalhado(year, isAnoOuYtd ? undefined : mesRef),
         ])
         const inc = results[0].status === 'fulfilled' ? results[0].value : null
         const budgets = results[1].status === 'fulfilled' ? results[1].value : null
         const cards = results[2].status === 'fulfilled' ? results[2].value : null
         const orcInv = results[3].status === 'fulfilled' ? results[3].value : null
         const plano = results[4].status === 'fulfilled' ? results[4].value : null
-        const cenarioAporte = results[5].status === 'fulfilled' ? (results[5].value as number ?? 0) : 0
+        const aporteDetalhe = results[5].status === 'fulfilled'
+          ? (results[5].value as AporteInvestimentoResponse | null)
+          : null
+        // T6: extrai aporte do cenário/perfil da nova API
+        // YTD: soma Jan..ytdMonthProp a partir de meses[] (paridade com aporte-periodo anterior)
+        // Mês específico: .mes.aporte_total (fixo + extras do mês)
+        let cenarioAporte = 0
+        if (aporteDetalhe) {
+          if (isAnoOuYtd) {
+            const ytdMes = ytdMonthProp ?? 12
+            const meses = aporteDetalhe.meses ?? []
+            cenarioAporte = meses
+              .filter((m) => parseInt(m.mes_referencia.split('-')[1], 10) <= ytdMes)
+              .reduce((sum, m) => sum + m.aporte_total, 0)
+          } else {
+            cenarioAporte = aporteDetalhe.mes?.aporte_total ?? 0
+          }
+        }
         setReceitas(inc && typeof inc === 'object' && 'sources' in inc ? inc : null)
         setGoals(Array.isArray(budgets) ? budgets : [])
         setCardsTotal(Array.isArray(cards) ? cards.reduce((s: number, c: { total: number }) => s + c.total, 0) : null)
         setTotalInvestidoPeriodo(orcInv && typeof orcInv === 'object' && 'total_investido' in orcInv ? orcInv.total_investido : null)
         setPlanoMes(plano && typeof plano === 'object' && 'renda_esperada' in plano ? plano as PlanoCashflowMes : null)
-        setAportePrincipalCenario(typeof cenarioAporte === 'number' ? cenarioAporte : 0)
+        setAportePrincipalCenario(cenarioAporte)
       } catch {
         setReceitas(null)
         setGoals([])
