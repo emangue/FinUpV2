@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { logger } from '@/lib/logger';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -173,7 +174,7 @@ export default function BudgetDetalhadaPage() {
       
       if (response.ok) {
         const result = await response.json();
-        console.log('Categorias carregadas:', result.categorias?.length, result.categorias);
+        logger.log('Categorias carregadas:', result.categorias?.length, result.categorias);
         setCategorias(result.categorias || []);
       }
     } catch (error) {

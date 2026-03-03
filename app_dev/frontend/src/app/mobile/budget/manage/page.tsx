@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Plus } from 'lucide-react'
+import { logger } from '@/lib/logger'
 import { ManageGoalsListItem } from '@/features/goals/components'
 import { useGoals } from '@/features/goals/hooks/use-goals'
 import { fetchLastMonthWithData } from '@/features/dashboard/services/dashboard-api'
@@ -52,7 +53,7 @@ export default function ManageGoalsPage() {
       const { toggleGoalAtivo } = await import('@/features/goals/services/goals-api')
       await toggleGoalAtivo(Number(goalId), !currentState)
       
-      console.log(`✅ Meta ${goal.grupo} ${!currentState ? 'ativada' : 'desativada'}`)
+      logger.log(`✅ Meta ${goal.grupo} ${!currentState ? 'ativada' : 'desativada'}`)
     } catch (error) {
       console.error('Failed to toggle goal:', error)
       // Revert local state on error
@@ -75,7 +76,7 @@ export default function ManageGoalsPage() {
       const { updateGoalValor } = await import('@/features/goals/services/goals-api')
       await updateGoalValor(Number(goalId), goal.grupo, novoValor, goal.mes_referencia, aplicarAteFinAno)
       
-      console.log(`✅ Valor da meta ${goal.grupo} atualizado: R$ ${novoValor} ${aplicarAteFinAno ? '(até fim do ano)' : '(apenas este mês)'}`)
+      logger.log(`✅ Valor da meta ${goal.grupo} atualizado: R$ ${novoValor} ${aplicarAteFinAno ? '(até fim do ano)' : '(apenas este mês)'}`)
       
       // Refresh goals to show updated value
       await refreshGoals()

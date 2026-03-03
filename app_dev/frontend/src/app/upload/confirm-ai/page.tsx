@@ -4,6 +4,7 @@ import * as React from "react"
 import { Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { toast } from 'sonner'
+import { logger } from '@/lib/logger'
 import DashboardLayout from "@/components/dashboard-layout"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -166,7 +167,7 @@ function UploadConfirmPageContent() {
       }
 
       const processData = await processResponse.json()
-      console.log('Dados processados:', processData)
+      logger.log('Dados processados:', processData)
       
       // 2. Classificar transações com IA
       const classifyResponse = await fetch('/api/upload/classify', {
@@ -186,7 +187,7 @@ function UploadConfirmPageContent() {
       }
 
       const classifyData = await classifyResponse.json()
-      console.log('Dados classificados:', classifyData)
+      logger.log('Dados classificados:', classifyData)
       
       // 3. Combinar dados do processamento com classificação
       const enrichedTransactions = processData.transactions.map((transaction: any, index: number) => ({
@@ -315,7 +316,7 @@ function UploadConfirmPageContent() {
       }
 
       const result = await response.json()
-      console.log('Transações confirmadas:', result)
+      logger.log('Transações confirmadas:', result)
       
       toast.success(`${result.inserted} transações importadas com sucesso!`)
       router.push('/transactions')

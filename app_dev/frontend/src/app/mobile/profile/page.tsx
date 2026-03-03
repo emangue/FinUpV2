@@ -193,9 +193,13 @@ export default function ProfileMobilePage() {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('access_token');
-    router.push('/auth/login');
+  const handleLogout = async () => {
+    const apiUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+    try {
+      await fetch(`${apiUrl}/api/v1/auth/logout`, { method: 'POST', credentials: 'include' });
+    } finally {
+      router.push('/auth/login');
+    }
   };
 
   const cancelEdit = () => {

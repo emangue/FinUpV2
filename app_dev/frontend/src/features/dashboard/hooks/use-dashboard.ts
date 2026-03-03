@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect } from 'react'
+import { logger } from '@/lib/logger'
 import {
   fetchDashboardMetrics,
   fetchIncomeSources,
@@ -167,14 +168,14 @@ export function useExpenseSources(year: number, month?: number) {
       try {
         setLoading(true)
         setError(null)
-        console.log('🔍 useExpenseSources - Buscando despesas:', { year, month })
+        logger.log('🔍 useExpenseSources - Buscando despesas:', { year, month })
         const data = await fetchExpenseSources(year, month)
-        console.log('✅ useExpenseSources - Dados recebidos:', data)
+        logger.log('✅ useExpenseSources - Dados recebidos:', data)
         if (!cancelled) {
           setSources(data.sources)
           setTotalDespesas(data.total_despesas)
-          console.log('📊 useExpenseSources - Sources:', data.sources)
-          console.log('💰 useExpenseSources - Total:', data.total_despesas)
+          logger.log('📊 useExpenseSources - Sources:', data.sources)
+          logger.log('💰 useExpenseSources - Total:', data.total_despesas)
         }
       } catch (err) {
         if (!cancelled) setError(err as Error)

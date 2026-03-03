@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { logger } from '@/lib/logger';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -69,7 +70,7 @@ export default function BudgetPage() {
       
       if (response.ok) {
         const grupos = await response.json();
-        console.log('Grupos carregados da API:', grupos.length, grupos);
+        logger.log('Grupos carregados da API:', grupos.length, grupos);
         setCategoriasGerais(grupos);
         // Carregar budget logo após receber grupos
         if (grupos.length > 0) {
@@ -108,7 +109,7 @@ export default function BudgetPage() {
           budgetMap[item.grupo] = item.valor_planejado;
         });
         
-        console.log('Budget carregado:', Object.keys(budgetMap).length, 'grupos');
+        logger.log('Budget carregado:', Object.keys(budgetMap).length, 'grupos');
         setBudgetData(budgetMap);
       } else {
         // Se não houver dados, inicializar com zeros para todos os grupos

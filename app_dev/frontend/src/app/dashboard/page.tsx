@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { fetchWithAuth } from '@/core/utils/api-client';
+import { logger } from '@/lib/logger';
 import ChartAreaInteractive from '@/features/dashboard/components/chart-area-interactive';
 import DateFilters from '@/features/dashboard/components/date-filters';
 import CompactMetrics from '@/features/dashboard/components/compact-metrics';
@@ -357,7 +358,7 @@ const DashboardPage = () => {
       <div className="mt-6 flex justify-center items-center gap-4">
         <button
           onClick={() => {
-            console.log('🔄 Atualizando dashboard manualmente...');
+            logger.log('🔄 Atualizando dashboard manualmente...');
             fetchData(selectedYear, selectedMonth);
           }}
           className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"

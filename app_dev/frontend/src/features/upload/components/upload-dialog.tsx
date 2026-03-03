@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { fetchWithAuth } from '@/core/utils/api-client'  // ✅ FASE 3 - Autenticação obrigatória
+import { logger } from '@/lib/logger'
 import { API_CONFIG } from '@/core/config/api.config'
 import { useRouter } from "next/navigation"
 import { Upload, X, Plus } from "lucide-react"
@@ -265,7 +266,7 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
       fetchWithAuth(BASE_URL_COMPATIBILITY)
         .then(res => res.json())
         .then(data => {
-          console.log('🔍 Compatibilidade carregada:', data)
+          logger.log('🔍 Compatibilidade carregada:', data)
           
           // Transformar array de banks em objeto {[bank]: {CSV: status, Excel: status, ...}}
           const compatibilityMap: BankCompatibility = {}
@@ -279,7 +280,7 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
               }
             })
           }
-          console.log('📊 Compatibilidade processada:', compatibilityMap)
+          logger.log('📊 Compatibilidade processada:', compatibilityMap)
           setCompatibility(compatibilityMap)
         })
         .catch(err => console.error('❌ Erro ao buscar compatibilidade:', err))
@@ -288,7 +289,7 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
       fetchWithAuth(BASE_URL_CARDS)
         .then(res => res.json())
         .then(data => {
-          console.log('💳 Cartões carregados:', data)
+          logger.log('💳 Cartões carregados:', data)
           setCards(data.cards || [])
         })
         .catch(err => console.error('❌ Erro ao buscar cartões:', err))

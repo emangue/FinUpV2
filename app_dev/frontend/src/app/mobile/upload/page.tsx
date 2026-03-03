@@ -14,6 +14,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import { logger } from '@/lib/logger';
 import { TabType, FileFormat } from '@/features/upload/types';
 import { months, years, fileFormats } from '@/features/upload/mocks/mockUploadData';
 import { 
@@ -278,7 +279,7 @@ export default function UploadPage() {
       });
       
       // ✅ Redirecionar para preview MOBILE com sessionId
-      console.log('✅ [MOBILE-UPLOAD] Upload bem-sucedido! SessionId:', result.sessionId);
+      logger.log('✅ [MOBILE-UPLOAD] Upload bem-sucedido! SessionId:', result.sessionId);
       router.push(`/mobile/preview/${result.sessionId}`);
       
     } catch (error) {
@@ -343,7 +344,7 @@ export default function UploadPage() {
         formato: isExcel ? 'excel' : 'pdf-password',
         senha: retryPassword,
       });
-      console.log('✅ [MOBILE-UPLOAD] Upload com senha bem-sucedido! SessionId:', result.sessionId);
+      logger.log('✅ [MOBILE-UPLOAD] Upload com senha bem-sucedido! SessionId:', result.sessionId);
       router.push(`/mobile/preview/${result.sessionId}`);
     } catch (error) {
       if (error instanceof PasswordRequiredError) {

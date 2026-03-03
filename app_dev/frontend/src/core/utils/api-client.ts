@@ -1,6 +1,7 @@
 /**
- * Cliente HTTP com autenticação
- * Usa cookie httpOnly (credentials: 'include') - token não fica em localStorage
+ * Cliente HTTP com autenticação via cookie httpOnly.
+ * Autenticação é gerenciada exclusivamente pelo cookie `auth_token`
+ * setado pelo backend — não há leitura/escrita em localStorage.
  * @module api-client
  */
 
@@ -9,22 +10,19 @@ export async function fetchWithAuth(
   options: RequestInit = {}
 ): Promise<Response> {
   const isFormData = options.body instanceof FormData
-  const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null
   const headers: HeadersInit = {
     ...(!isFormData && { 'Content-Type': 'application/json' }),
-    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
     ...options.headers,
   }
 
   const response = await fetch(url, {
     ...options,
     headers,
-    credentials: 'include',
+    credentials: 'include', // cookie httpOnly enviado automaticamente
     redirect: 'follow',
   })
 
   if (response.status === 401 && typeof window !== 'undefined') {
-    localStorage.removeItem('authToken')
     window.location.href = '/auth/login'
   }
 
@@ -72,16 +70,22 @@ export async function fetchJsonWithAuth<T>(
   return response.json()
 }
 
-/** @deprecated Use useAuth() from AuthContext. Cookie httpOnly não é legível via JS. */
+/** @deprecated Removido — autenticação via cookie httpOnly não é detectável via JS.
+ * Use AuthContext para verificar estado de autenticação. */
 export function isAuthenticated(): boolean {
-  return !!localStorage.getItem('authToken')
+  // Mantido apenas para compatibilidade de tipos — sempre retorna false
+  // Migrar chamadores para AuthContext.isAuthenticated
+  return false
 }
 
+/** @deprecated Removido — cookie httpOnly é limpo pelo backend no logout.
+ * Chame POST /api/v1/auth/logout em vez disso. */
 export function clearAuth(): void {
-  localStorage.removeItem('authToken')
+  // no-op intencional
 }
 
-/** @deprecated Backend seta cookie httpOnly. Mantido para compatibilidade. */
-export function setAuthToken(token: string): void {
-  localStorage.setItem('authToken', token)
+/** @deprecated Removido — backend seta cookie httpOnly automaticamente no login.
+ * Não armazenar token em localStorage. */
+export function setAuthToken(_token: string): void {
+  // no-op intencional
 }

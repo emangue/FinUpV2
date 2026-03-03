@@ -5,6 +5,7 @@
 
 import { useCallback } from 'react'
 import { toast } from 'sonner'
+import { logger } from '@/lib/logger'
 
 type NotificationType = 'success' | 'error' | 'info' | 'warning'
 
@@ -16,7 +17,7 @@ interface ToastOptions {
 
 export function useToastNotifications() {
   const show = useCallback((type: NotificationType, options: ToastOptions) => {
-    console.log(`[${type.toUpperCase()}] ${options.title}`, options.description)
+    logger.log(`[${type.toUpperCase()}] ${options.title}`, options.description)
     const desc = options.description
     if (type === 'error') {
       toast.error(options.title, { description: desc })

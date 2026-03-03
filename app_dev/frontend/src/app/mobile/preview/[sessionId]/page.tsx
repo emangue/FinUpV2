@@ -9,6 +9,7 @@
 
 import { use } from 'react';
 import { useRouter } from 'next/navigation';
+import { logger } from '@/lib/logger';
 import { usePreviewData } from '@/features/upload/hooks';
 import PreviewLayout from '@/features/preview/templates/PreviewLayout';
 
@@ -69,8 +70,8 @@ export default function PreviewPage({ params }: PreviewPageProps) {
   };
 
   // DEBUG: Log dos dados recebidos do backend
-  console.log('🔍 DEBUG - Dados recebidos do backend:', data);
-  console.log('🔍 DEBUG - Primeiro registro:', data.dados?.[0]);
+  logger.log('🔍 DEBUG - Dados recebidos do backend:', data);
+  logger.log('🔍 DEBUG - Primeiro registro:', data.dados?.[0]);
 
   // Converter dados da API para formato do componente (transações individuais)
   const individualTransactions = (data.dados || []).map((tx: any) => {
@@ -131,8 +132,8 @@ export default function PreviewPage({ params }: PreviewPageProps) {
     // Ordenar por valor decrescente (maior gasto primeiro)
     .sort((a, b) => b.value - a.value);
 
-  console.log('🔍 DEBUG - Transações agrupadas:', transactions);
-  console.log('🔍 DEBUG - Total de grupos/transações:', transactions.length);
+  logger.log('🔍 DEBUG - Transações agrupadas:', transactions);
+  logger.log('🔍 DEBUG - Total de grupos/transações:', transactions.length);
 
   // Calcular soma total (usando transações individuais)
   const somaTotal = individualTransactions.reduce((sum, tx) => sum + tx.value, 0);

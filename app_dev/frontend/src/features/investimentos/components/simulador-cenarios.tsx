@@ -15,6 +15,7 @@
  */
 
 import React, { useState, useCallback } from 'react'
+import { logger } from '@/lib/logger'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -357,7 +358,7 @@ export function SimuladorCenarios() {
 
     const { patrimonio_inicial = 0, patrimonio_final = 0, total_aportes = 0, total_rendimentos = 0 } = simulacao
 
-    console.log('📊 Valores da Simulação:', {
+    logger.log('📊 Valores da Simulação:', {
       patrimonio_inicial,
       patrimonio_final,
       total_aportes,
@@ -373,7 +374,7 @@ export function SimuladorCenarios() {
     // (em simulações, a taxa aplicada É a rentabilidade esperada)
     const rentabilidadeAnual = parametros.taxaRendimentoAnual
     
-    console.log('💰 Cálculo Rentabilidade:', {
+    logger.log('💰 Cálculo Rentabilidade:', {
       formula: `(${total_rendimentos} / ${total_aportes}) × 100`,
       rentabilidadeTotal,
       rentabilidadeAnual,

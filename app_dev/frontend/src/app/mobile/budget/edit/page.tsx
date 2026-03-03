@@ -12,6 +12,7 @@ import { Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { format } from 'date-fns'
 import { Save, ArrowLeft } from 'lucide-react'
+import { logger } from '@/lib/logger'
 import { MobileHeader } from '@/components/mobile/mobile-header'
 import { CategoryIcon } from '@/components/mobile/category-icon'
 import { fetchWithAuth } from '@/core/utils/api-client'
@@ -69,7 +70,7 @@ function BudgetEditContent() {
       }
       
       const data = await response.json()
-      console.log('Dados recebidos:', data)
+      logger.log('Dados recebidos:', data)
       
       // A API pode retornar data.planning ou data.items
       const planningData = data.planning || data.items || []

@@ -1,4 +1,5 @@
 import { FileInfo, Transaction, PreviewStats, TabOption } from '../types';
+import { logger } from '@/lib/logger';
 
 // ============================================
 // INFORMAÇÕES DO ARQUIVO
@@ -26,8 +27,8 @@ export function setGruposSubgrupos(data: { grupos: string[]; subgruposPorGrupo: 
   GRUPOS = data.grupos || [];
   SUBGRUPOS = data.subgruposPorGrupo || {};
   
-  console.log('✅ Grupos carregados:', GRUPOS.length);
-  console.log('✅ Subgrupos por grupo:', Object.keys(SUBGRUPOS).length, 'grupos');
+  logger.log('✅ Grupos carregados:', GRUPOS.length);
+  logger.log('✅ Subgrupos por grupo:', Object.keys(SUBGRUPOS).length, 'grupos');
 }
 
 // ============================================

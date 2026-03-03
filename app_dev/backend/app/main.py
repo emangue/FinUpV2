@@ -4,12 +4,30 @@ FastAPI Main Application - Arquitetura Modular em Domínios
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 from .core.config import settings
 from .core.database import engine, Base
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """
+    Adiciona headers HTTP de segurança em todas as respostas.
+    Proteções: clickjacking, MIME sniffing, HSTS (prod), referrer.
+    """
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+        # HSTS apenas em produção (HTTPS obrigatório)
+        if not settings.DEBUG:
+            response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
+        return response
 
 # Import models para SQLAlchemy resolver relationships
 from .domains.upload.history_models import UploadHistory  # CRITICAL: importar antes dos routers
@@ -54,9 +72,11 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
 )
+
+app.add_middleware(SecurityHeadersMiddleware)
 
 # Routers Modularizados (arquitetura DDD - Domain-Driven Design)
 app.include_router(auth_router, prefix="/api/v1", tags=["Authentication"])

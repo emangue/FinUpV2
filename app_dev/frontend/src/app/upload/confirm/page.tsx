@@ -4,6 +4,7 @@ import * as React from "react"
 import { Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { toast } from 'sonner'
+import { logger } from '@/lib/logger'
 import DashboardLayout from "@/components/dashboard-layout"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -247,7 +248,7 @@ function ConfirmarUploadPageContent() {
       // TODO: Implementar chamada ao backend
       // await uploadAPI.confirmAndSave(sessionId, selectedTransactions)
       
-      console.log('Salvando transações:', selectedTransactions)
+      logger.log('Salvando transações:', selectedTransactions)
       
       // Simular delay
       await new Promise(resolve => setTimeout(resolve, 2000))

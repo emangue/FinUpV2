@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
+import { logger } from '@/lib/logger'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
@@ -175,7 +176,7 @@ export function ExportInvestimentos({ investimentos, filtrosAtivos }: ExportInve
       
       downloadFile(csv, filename, 'text/csv;charset=utf-8;')
       
-      console.log(`✅ ${investimentos.length} investimentos exportados para CSV`)
+      logger.log(`✅ ${investimentos.length} investimentos exportados para CSV`)
       toast.success(`${investimentos.length} investimentos exportados para CSV`)
     } catch (error) {
       console.error('Erro ao exportar CSV:', error)
@@ -196,7 +197,7 @@ export function ExportInvestimentos({ investimentos, filtrosAtivos }: ExportInve
       
       downloadFile(excel, filename, 'application/vnd.ms-excel')
       
-      console.log(`✅ ${investimentos.length} investimentos exportados para Excel`)
+      logger.log(`✅ ${investimentos.length} investimentos exportados para Excel`)
       toast.success(`${investimentos.length} investimentos exportados para Excel`)
     } catch (error) {
       console.error('Erro ao exportar Excel:', error)

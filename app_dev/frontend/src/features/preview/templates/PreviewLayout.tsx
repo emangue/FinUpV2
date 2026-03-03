@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { logger } from '@/lib/logger';
 import { Transaction, TabFilter, ClassificationData, FileInfo, ClassificationSource } from '../types';
 
 /**
@@ -242,7 +243,7 @@ export default function PreviewLayout({ sessionId, initialFileInfo, initialTrans
       
       if (response.ok) {
         const data = await response.json();
-        console.log('✅ Upload confirmado:', data);
+        logger.log('✅ Upload confirmado:', data);
         
         // Navegar para dashboard
         router.push('/mobile/dashboard');

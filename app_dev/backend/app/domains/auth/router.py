@@ -149,14 +149,16 @@ def update_profile(
 
 
 @router.post("/change-password")
+@limiter.limit("5/hour")  # Protege contra força bruta na senha atual
 def change_password(
+    request: Request,
     password_data: PasswordChangeRequest,
     user_id: int = Depends(get_user_id_from_token),
     db: Session = Depends(get_db)
 ):
     """
     Altera senha do usuário autenticado
-    
+
     Requer token JWT válido no header Authorization.
     Requer senha atual para validação.
     """

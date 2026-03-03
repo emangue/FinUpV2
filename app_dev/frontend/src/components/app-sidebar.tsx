@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useAuth } from '@/contexts/AuthContext'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { logger } from '@/lib/logger'
 import {
   BarChart3,
   CreditCard,
@@ -374,20 +375,13 @@ const data = {
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const { user } = useAuth()
+  const { user, logout: authLogout, isAuthenticated } = useAuth()
   const router = useRouter()
   const [isAdmin, setIsAdmin] = useState(false)
   const [screenStatuses, setScreenStatuses] = React.useState<Record<string, 'P' | 'A' | 'D'>>({})
 
-  const handleLogout = () => {
-    // Verificar se estamos no cliente antes de acessar localStorage
-    if (typeof window === 'undefined') return
-
-    // Limpar dados de autenticação
-    localStorage.removeItem('authToken')
-    localStorage.removeItem('user')
-    
-    // Redirecionar para login
+  const handleLogout = async () => {
+    await authLogout()
     router.push('/login')
   }
 
@@ -400,20 +394,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     // ✅ FASE 3 - Buscar status com autenticação
     const loadScreenStatuses = async () => {
       try {
-        // Verificar se estamos no cliente antes de acessar localStorage
-        if (typeof window === 'undefined') return
-
-        const token = localStorage.getItem('authToken')
-        if (!token) {
-          console.log('[AppSidebar] Sem token, não carregando status de telas')
+        // Verificar autenticação via AuthContext (sem localStorage)
+        if (!isAuthenticated) {
+          logger.log('[AppSidebar] Sem autenticação, não carregando status de telas')
           return
         }
 
         const apiUrl = process.env.NEXT_PUBLIC_BACKEND_URL ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1` : 'http://localhost:8000/api/v1';
         const response = await fetch(`${apiUrl}/screens/admin/all`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
+          credentials: 'include',  // cookie httpOnly enviado automaticamente
         })
 
         if (!response.ok) {

@@ -2,12 +2,15 @@
 Domínio Transactions - Service
 Lógica de negócio isolada
 """
+import logging
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import Optional, List
 from fastapi import HTTPException
 from datetime import datetime, timedelta
 from .repository import TransactionRepository
+
+logger = logging.getLogger(__name__)
 from .models import JournalEntry
 from .schemas import (
     TransactionCreate,
@@ -665,11 +668,11 @@ class TransactionService:
             BudgetPlanning.valor_medio_3_meses > 0  # Apenas com média válida
         ).all()
         
-        print(f"⚡ OTIMIZADO: Encontrados {len(planning_records)} registros pré-calculados")  # Debug
+        logger.debug("Encontrados %d registros pré-calculados para %s", len(planning_records), mes_referencia)
         
         # Se não encontrou médias pré-calculadas, buscar todos os grupos disponíveis
         if not planning_records:
-            print(f"⚠️ AVISO: Nenhum valor pré-calculado para {mes_referencia}. Buscar grupos únicos...")
+            logger.debug("Nenhum valor pré-calculado para %s — buscando grupos únicos", mes_referencia)
             
             # Buscar grupos únicos de todas as transações de Despesa do usuário
             grupos_unicos = self.repository.db.query(JournalEntry.GRUPO).filter(
@@ -698,7 +701,7 @@ class TransactionService:
                 media_3_meses=round(record.valor_medio_3_meses, 2)
             ))
         
-        print(f"✅ Retornando {len(grupos_com_media)} grupos com médias pré-calculadas")
+        logger.debug("Retornando %d grupos com médias pré-calculadas", len(grupos_com_media))
         
         return TiposGastoComMediaResponse(
             tipos_gasto=grupos_com_media,  # Mantém nome do schema por compatibilidade
@@ -919,4 +922,4 @@ class TransactionService:
             nova_marcacao = BaseMarcacao(user_id=user_id, GRUPO=grupo, SUBGRUPO=subgrupo)
             self.repository.db.add(nova_marcacao)
             self.repository.db.flush()
-            print(f"➕ Nova marcação criada: {grupo} > {subgrupo}")
+            logger.debug("Nova marcação criada: %s > %s", grupo, subgrupo)

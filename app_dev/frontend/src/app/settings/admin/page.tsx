@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { fetchWithAuth } from "@/core/utils/api-client"
+import { logger } from '@/lib/logger'
 import DashboardLayout from "@/components/dashboard-layout"
 import { RequireAdmin } from "@/core/components/require-admin"
 import { Button } from "@/components/ui/button"
@@ -92,7 +93,7 @@ export default function AdminPage() {
   }
 
   const handleEdit = (usuario: Usuario) => {
-    console.log('Editando usuário:', usuario)
+    logger.log('Editando usuário:', usuario)
     setEditingUsuario(usuario)
     setNome(usuario.nome)
     setEmail(usuario.email)
@@ -102,7 +103,7 @@ export default function AdminPage() {
   }
 
   const handleSave = async () => {
-    console.log('Salvando usuário. Modo edição:', !!editingUsuario)
+    logger.log('Salvando usuário. Modo edição:', !!editingUsuario)
     
     if (!nome.trim() || !email.trim()) {
       alert('Nome e email são obrigatórios')
@@ -120,8 +121,8 @@ export default function AdminPage() {
         : '/api/users'
       const method = editingUsuario && editingUsuario.id ? 'PUT' : 'POST'
       
-      console.log('URL:', url)
-      console.log('Method:', method)
+      logger.log('URL:', url)
+      logger.log('Method:', method)
       
       const body: any = {
         nome: nome.trim(),

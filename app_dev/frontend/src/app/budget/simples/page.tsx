@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { logger } from '@/lib/logger';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -107,8 +108,8 @@ export default function BudgetSimplesPage() {
         }
       });
       
-      console.log('Grupos carregados:', grupos.length);
-      console.log('Médias calculadas:', Object.keys(medias).length);
+      logger.log('Grupos carregados:', grupos.length);
+      logger.log('Médias calculadas:', Object.keys(medias).length);
       
       setGruposDisponiveis(grupos);
       setMediaHistorica(medias);
