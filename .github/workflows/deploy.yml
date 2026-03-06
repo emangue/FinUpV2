@@ -1,0 +1,274 @@
+name: Deploy FinUp → Produção
+
+on:
+  push:
+    branches: [main]
+  # Permite acionar manualmente (ex: rollback) com tag específica
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Tag da imagem para deploy (ex: abc1234 para rollback)'
+        required: false
+        default: ''
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/finup
+
+jobs:
+  # ============================================================
+  # JOB 1 — Build e push das imagens para GHCR
+  # ============================================================
+  build:
+    name: Build e Push imagens
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.sha_short }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Gerar SHA curto (tag da imagem)
+        id: meta
+        run: |
+          # Se dispatch manual com tag, usa ela; caso contrário, SHA do commit
+          if [[ -n "${{ github.event.inputs.image_tag }}" ]]; then
+            echo "sha_short=${{ github.event.inputs.image_tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login no GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── Backend ───────────────────────────────────────────────────────────
+      - name: Build e Push — Backend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./app_dev/backend
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-backend:${{ steps.meta.outputs.sha_short }}
+            ${{ env.IMAGE_PREFIX }}-backend:latest
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,scope=backend,mode=max
+
+      # ── Frontend App ──────────────────────────────────────────────────────
+      - name: Build e Push — Frontend App
+        uses: docker/build-push-action@v5
+        with:
+          context: ./app_dev/frontend
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-frontend:${{ steps.meta.outputs.sha_short }}
+            ${{ env.IMAGE_PREFIX }}-frontend:latest
+          build-args: |
+            NEXT_PUBLIC_BACKEND_URL=${{ secrets.NEXT_PUBLIC_BACKEND_URL }}
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,scope=frontend,mode=max
+
+      # ── Frontend Admin ────────────────────────────────────────────────────
+      - name: Build e Push — Admin
+        uses: docker/build-push-action@v5
+        with:
+          context: ./app_admin/frontend
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-admin:${{ steps.meta.outputs.sha_short }}
+            ${{ env.IMAGE_PREFIX }}-admin:latest
+          build-args: |
+            NEXT_PUBLIC_BACKEND_URL=${{ secrets.NEXT_PUBLIC_BACKEND_URL }}
+          cache-from: type=gha,scope=admin
+          cache-to: type=gha,scope=admin,mode=max
+
+  # ============================================================
+  # JOB 2 — Deploy no servidor via SSH (porta 50022)
+  # ============================================================
+  deploy:
+    name: Deploy no servidor
+    runs-on: ubuntu-latest
+    needs: build
+    environment: production
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          # Timeout generoso para docker pull + restart
+          command_timeout: 10m
+          script: |
+            set -euo pipefail
+            cd /opt/finup
+
+            IMAGE_TAG="${{ needs.build.outputs.image_tag }}"
+            REGISTRY="ghcr.io"
+            OWNER="${{ github.repository_owner }}"
+
+            echo "====================================="
+            echo "Deploy FinUp — tag: ${IMAGE_TAG}"
+            echo "====================================="
+
+            # ── Salvar tag atual para rollback ───────────────────────────
+            PREV_TAG=$(grep "^IMAGE_TAG=" .env.prod 2>/dev/null | cut -d= -f2 || echo "latest")
+            echo "${PREV_TAG}" > .previous_tag
+            echo "[INFO] Tag anterior salva para rollback: ${PREV_TAG}"
+
+            # ── Autenticar no GHCR ───────────────────────────────────────
+            echo "${{ secrets.GHCR_TOKEN }}" | \
+              docker login ${REGISTRY} -u "${OWNER}" --password-stdin
+            echo "[OK] Autenticado no GHCR"
+
+            # ── Atualizar IMAGE_TAG no .env.prod ─────────────────────────
+            if grep -q "^IMAGE_TAG=" .env.prod; then
+              sed -i "s|^IMAGE_TAG=.*|IMAGE_TAG=${IMAGE_TAG}|" .env.prod
+            else
+              echo "IMAGE_TAG=${IMAGE_TAG}" >> .env.prod
+            fi
+
+            # ── Atualizar refs das imagens no .env.prod ──────────────────
+            BACKEND_IMAGE="${REGISTRY}/${OWNER}/finup-backend:${IMAGE_TAG}"
+            FRONTEND_IMAGE="${REGISTRY}/${OWNER}/finup-frontend:${IMAGE_TAG}"
+            ADMIN_IMAGE="${REGISTRY}/${OWNER}/finup-admin:${IMAGE_TAG}"
+
+            for VAR in GHCR_IMAGE_BACKEND GHCR_IMAGE_FRONTEND GHCR_IMAGE_ADMIN; do
+              IMAGE_VAL=""
+              case $VAR in
+                GHCR_IMAGE_BACKEND)  IMAGE_VAL="${BACKEND_IMAGE}" ;;
+                GHCR_IMAGE_FRONTEND) IMAGE_VAL="${FRONTEND_IMAGE}" ;;
+                GHCR_IMAGE_ADMIN)    IMAGE_VAL="${ADMIN_IMAGE}" ;;
+              esac
+              if grep -q "^${VAR}=" .env.prod; then
+                sed -i "s|^${VAR}=.*|${VAR}=${IMAGE_VAL}|" .env.prod
+              else
+                echo "${VAR}=${IMAGE_VAL}" >> .env.prod
+              fi
+            done
+
+            # ── Pull das imagens pré-buildadas ───────────────────────────
+            echo "[INFO] Puxando imagens (${IMAGE_TAG})..."
+            docker pull "${BACKEND_IMAGE}"
+            docker pull "${FRONTEND_IMAGE}"
+            docker pull "${ADMIN_IMAGE}"
+            echo "[OK] Imagens baixadas"
+
+            # ── Rodar migrations ANTES de atualizar o backend ────────────
+            echo "[INFO] Rodando migrations Alembic..."
+            docker compose -f docker-compose.prod.yml --env-file .env.prod \
+              run --rm migrate
+            echo "[OK] Migrations concluídas"
+
+            # ── Atualizar backend ────────────────────────────────────────
+            echo "[INFO] Atualizando backend..."
+            docker compose -f docker-compose.prod.yml --env-file .env.prod \
+              up -d --no-deps backend
+            echo "[OK] Backend atualizado"
+
+            # ── Health check backend (60s timeout) ───────────────────────
+            echo "[INFO] Aguardando backend ficar saudável..."
+            HEALTHY=false
+            for i in $(seq 1 12); do
+              if docker compose -f docker-compose.prod.yml \
+                  exec -T backend curl -sf http://localhost:8000/api/health \
+                  > /dev/null 2>&1; then
+                HEALTHY=true
+                echo "[OK] Backend saudável após ${i} tentativas"
+                break
+              fi
+              echo "[INFO] Tentativa ${i}/12..."
+              sleep 5
+            done
+
+            if [ "$HEALTHY" = "false" ]; then
+              echo "[ERRO] Backend não ficou saudável. Deploy abortado."
+              exit 1
+            fi
+
+            # ── Atualizar frontends ──────────────────────────────────────
+            echo "[INFO] Atualizando frontends..."
+            docker compose -f docker-compose.prod.yml --env-file .env.prod \
+              up -d --no-deps frontend-app frontend-admin
+            echo "[OK] Frontends atualizados"
+
+            # ── Limpeza de imagens antigas ───────────────────────────────
+            docker image prune -f > /dev/null 2>&1 || true
+
+            echo ""
+            echo "====================================="
+            echo "[OK] Deploy ${IMAGE_TAG} concluído!"
+            echo "====================================="
+
+      # ── Rollback automático em falha ──────────────────────────────────────
+      - name: Rollback automático em falha
+        if: failure()
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          command_timeout: 10m
+          script: |
+            set -euo pipefail
+            cd /opt/finup
+
+            echo "====================================="
+            echo "ROLLBACK AUTOMÁTICO"
+            echo "====================================="
+
+            if [ ! -f .previous_tag ]; then
+              echo "[AVISO] Arquivo .previous_tag não encontrado. Usando latest."
+              PREV_TAG="latest"
+            else
+              PREV_TAG=$(cat .previous_tag)
+            fi
+
+            echo "[INFO] Revertendo para tag: ${PREV_TAG}"
+
+            REGISTRY="ghcr.io"
+            OWNER="${{ github.repository_owner }}"
+
+            # Restaurar tag anterior no .env.prod
+            sed -i "s|^IMAGE_TAG=.*|IMAGE_TAG=${PREV_TAG}|" .env.prod
+            sed -i "s|^GHCR_IMAGE_BACKEND=.*|GHCR_IMAGE_BACKEND=${REGISTRY}/${OWNER}/finup-backend:${PREV_TAG}|" .env.prod
+            sed -i "s|^GHCR_IMAGE_FRONTEND=.*|GHCR_IMAGE_FRONTEND=${REGISTRY}/${OWNER}/finup-frontend:${PREV_TAG}|" .env.prod
+            sed -i "s|^GHCR_IMAGE_ADMIN=.*|GHCR_IMAGE_ADMIN=${REGISTRY}/${OWNER}/finup-admin:${PREV_TAG}|" .env.prod
+
+            docker compose -f docker-compose.prod.yml --env-file .env.prod \
+              up -d --no-deps backend frontend-app frontend-admin
+
+            sleep 15
+            if docker compose -f docker-compose.prod.yml \
+                exec -T backend curl -sf http://localhost:8000/api/health \
+                > /dev/null 2>&1; then
+              echo "[OK] Rollback para ${PREV_TAG} bem-sucedido!"
+            else
+              echo "[ERRO] Rollback falhou. Verifique os containers manualmente."
+            fi
+
+      - name: Notificar sucesso
+        if: success()
+        run: |
+          echo "✅ Deploy realizado — commit ${{ github.sha }}"
+          echo "Tag deployada: ${{ needs.build.outputs.image_tag }}"
+
+      - name: Notificar falha
+        if: failure()
+        run: |
+          echo "❌ Deploy FALHOU — rollback automático disparado"
+          echo "Verifique os logs acima para diagnóstico"
