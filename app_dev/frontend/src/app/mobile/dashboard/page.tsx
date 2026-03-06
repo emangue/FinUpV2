@@ -63,25 +63,24 @@ export default function DashboardMobilePage() {
   const enabled = selectedMonth !== null
 
   // ✅ TODOS OS HOOKS PRIMEIRO (antes de any return)
-  const { metrics, loading: loadingMetrics } = useDashboardMetrics(year, month, ytdMonth, { enabled })
+  const { metrics } = useDashboardMetrics(year, month, ytdMonth, { enabled })
 
   // P0-4: só dispara o hook do período ativo (evita 1 call descartada por abertura)
-  const { chartData: chartDataMonthly, loading: loadingChartMonthly } = useChartData(
+  const { chartData: chartDataMonthly } = useChartData(
     selectedMonth?.getFullYear() ?? new Date().getFullYear(),
     selectedMonth ? selectedMonth.getMonth() + 1 : undefined,
     { enabled: enabled && period === 'month' }
   )
-  const { chartData: chartDataYearly, loading: loadingChartYearly } = useChartDataYearly(
+  const { chartData: chartDataYearly } = useChartDataYearly(
     yearsList,
     period === 'ytd' ? (lastMonthWithData?.month ?? undefined) : undefined,
     { enabled: enabled && period !== 'month' }
   )
 
   const chartData = period === 'month' ? chartDataMonthly : chartDataYearly
-  const loadingChart = period === 'month' ? loadingChartMonthly : loadingChartYearly
 
-  // P0-2+P2-3: income/expense hooks removidos (OrcamentoTab já busca internamente)
-  const isLoading = !enabled || loadingMetrics || loadingChart
+  // N2: mostrar estrutura imediatamente após selectedMonth resolver; sub-componentes carregam em paralelo
+  const isLoading = !enabled
 
   // Default: último mês com dados
   useEffect(() => {
@@ -92,7 +91,10 @@ export default function DashboardMobilePage() {
         setSelectedYear(last.year)
         setLastMonthWithData(last)
       })
-      .catch(() => {})
+      .catch(() => {
+        const now = new Date()
+        setSelectedMonth(new Date(now.getFullYear(), now.getMonth(), 1))
+      })
   }, [isAuth])
 
   // 🔐 Mostrar loading enquanto verifica autenticação (DEPOIS de todos os hooks)

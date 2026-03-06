@@ -61,7 +61,8 @@ import BottomActionBar from '../organisms/BottomActionBar';
 import ClassificationModal from '../molecules/ClassificationModal';
 import BatchClassifyModal from '../molecules/BatchClassifyModal';
 import { API_CONFIG } from '@/core/config/api.config';
-import { fetchWithAuth } from '@/core/utils/api-client';
+import { fetchWithAuth } from '@/core/utils/api-client'
+import { invalidateDashboardCache } from '@/features/dashboard/services/dashboard-api';
 import {
   Dialog,
   DialogContent,
@@ -244,7 +245,10 @@ export default function PreviewLayout({ sessionId, initialFileInfo, initialTrans
       if (response.ok) {
         const data = await response.json();
         logger.log('✅ Upload confirmado:', data);
-        
+
+        // Invalida cache do dashboard para forçar reload dos dados novos
+        invalidateDashboardCache();
+
         // Navegar para dashboard
         router.push('/mobile/dashboard');
       } else {

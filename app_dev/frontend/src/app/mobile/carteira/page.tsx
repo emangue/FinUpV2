@@ -254,7 +254,10 @@ function CarteiraContent() {
     if (!isAuth) return
     fetchLastMonthWithData('patrimonio')
       .then(({ year, month }) => setSelectedMonth(new Date(year, month - 1, 1)))
-      .catch(() => {})
+      .catch(() => {
+        const now = new Date()
+        setSelectedMonth(new Date(now.getFullYear(), now.getMonth(), 1))
+      })
   }, [isAuth])
 
   // Carregar dados

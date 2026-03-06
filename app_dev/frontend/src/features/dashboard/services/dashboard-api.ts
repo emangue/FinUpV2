@@ -16,17 +16,35 @@ const BASE_URL = `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}`
 
 export type LastMonthSource = 'transactions' | 'patrimonio'
 
-// ─── CACHE: Last Month With Data (P1-1) ────────────────────────────────────────
-interface _LmwdEntry { value: { year: number; month: number }; ts: number }
-const _lmwdCache = new Map<string, _LmwdEntry>()
-const LMWD_TTL_MS = 5 * 60 * 1000 // 5 minutos
+// ─── CACHE: módulo em memória (N1) ─────────────────────────────────────────────
+// Seguro apenas em componentes 'use client' (módulo isolado por usuário no browser).
+interface _CacheEntry<T> { value: T; ts: number }
+const _cache = new Map<string, _CacheEntry<unknown>>()
 
-/** Invalida cache de last-month-with-data. Chamar após upload bem-sucedido. */
+const TTL_2MIN = 2 * 60 * 1000
+const TTL_5MIN = 5 * 60 * 1000
+
+function _getCache<T>(key: string, ttl: number): T | undefined {
+  const hit = _cache.get(key)
+  if (hit && Date.now() - hit.ts < ttl) return hit.value as T
+  return undefined
+}
+function _setCache<T>(key: string, value: T): T {
+  _cache.set(key, { value, ts: Date.now() })
+  return value
+}
+
+/** Invalida todo o cache do dashboard (chamar após upload bem-sucedido). */
+export function invalidateDashboardCache() {
+  _cache.clear()
+}
+
+// Back-compat alias
 export function invalidateLastMonthCache(source?: LastMonthSource) {
   if (source) {
-    _lmwdCache.delete(`lastMonth:${source}`)
+    _cache.delete(`lastMonth:${source}`)
   } else {
-    _lmwdCache.clear()
+    _cache.clear()
   }
 }
 // ────────────────────────────────────────────────────────────────────────────────
@@ -41,18 +59,15 @@ export async function fetchLastMonthWithData(
   source: LastMonthSource = 'transactions'
 ): Promise<{ year: number; month: number }> {
   const key = `lastMonth:${source}`
-  const hit = _lmwdCache.get(key)
-  if (hit && Date.now() - hit.ts < LMWD_TTL_MS) {
-    return hit.value
-  }
+  const cached = _getCache<{ year: number; month: number }>(key, TTL_5MIN)
+  if (cached) return cached
 
   const response = await fetchWithAuth(
     `${BASE_URL}/dashboard/last-month-with-data?source=${source}`
   )
   if (!response.ok) throw new Error(`Failed to fetch last month: ${response.status}`)
   const value: { year: number; month: number } = await response.json()
-  _lmwdCache.set(key, { value, ts: Date.now() })
-  return value
+  return _setCache(key, value)
 }
 
 /**
@@ -68,11 +83,13 @@ export async function fetchDashboardMetrics(
   const params = new URLSearchParams({ year: year.toString() })
   if (month) params.append('month', month.toString())
   if (ytdMonth != null && month == null) params.append('ytd_month', ytdMonth.toString())
-  
+  const key = `metrics:${params}`
+  const cached = _getCache<DashboardMetrics>(key, TTL_2MIN)
+  if (cached) return cached
+
   const response = await fetchWithAuth(`${BASE_URL}/dashboard/metrics?${params}`)
   if (!response.ok) throw new Error(`Failed to fetch metrics: ${response.status}`)
-  
-  return response.json()
+  return _setCache(key, await response.json())
 }
 
 /**
@@ -85,11 +102,13 @@ export async function fetchIncomeSources(
 ): Promise<{ sources: IncomeSource[]; total_receitas: number }> {
   const params = new URLSearchParams({ year: year.toString() })
   if (month) params.append('month', month.toString())
-  
+  const key = `incomeSources:${params}`
+  const cached = _getCache<{ sources: IncomeSource[]; total_receitas: number }>(key, TTL_2MIN)
+  if (cached) return cached
+
   const response = await fetchWithAuth(`${BASE_URL}/dashboard/income-sources?${params}`)
   if (!response.ok) throw new Error(`Failed to fetch income sources: ${response.status}`)
-  
-  return response.json()
+  return _setCache(key, await response.json())
 }
 
 /**
@@ -101,12 +120,14 @@ export async function fetchChartData(
 ): Promise<ChartDataPoint[]> {
   const params = new URLSearchParams({ year: year.toString() })
   if (month) params.append('month', month.toString())
-  
+  const key = `chartData:${params}`
+  const cached = _getCache<ChartDataPoint[]>(key, TTL_5MIN)
+  if (cached) return cached
+
   const response = await fetchWithAuth(`${BASE_URL}/dashboard/chart-data?${params}`)
   if (!response.ok) throw new Error(`Failed to fetch chart data: ${response.status}`)
-  
   const result = await response.json()
-  return result.data || []
+  return _setCache(key, result.data || [])
 }
 
 /**
@@ -121,12 +142,14 @@ export async function fetchChartDataYearly(
   if (!years.length) return []
   const params = new URLSearchParams({ years: years.join(',') })
   if (ytdMonth != null) params.append('ytd_month', ytdMonth.toString())
-  
+  const key = `chartDataYearly:${params}`
+  const cached = _getCache<ChartDataPoint[]>(key, TTL_5MIN)
+  if (cached) return cached
+
   const response = await fetchWithAuth(`${BASE_URL}/dashboard/chart-data-yearly?${params}`)
   if (!response.ok) throw new Error(`Failed to fetch chart data yearly: ${response.status}`)
-  
   const result = await response.json()
-  return result.data || []
+  return _setCache(key, result.data || [])
 }
 
 /**
@@ -271,6 +294,9 @@ export async function fetchPlanoCashflowMes(
   year: number,
   month: number
 ): Promise<PlanoCashflowMes | null> {
+  const key = `planoCashflow:${year}:${month}`
+  const cached = _getCache<PlanoCashflowMes>(key, TTL_5MIN)
+  if (cached) return cached
   try {
     // P1-3: endpoint dedicado retorna apenas 1 mês (evita 91% de payload desnecessário)
     const response = await fetchWithAuth(
@@ -278,13 +304,14 @@ export async function fetchPlanoCashflowMes(
     )
     if (!response.ok) return null
     const mes = await response.json()
-    return {
+    const value: PlanoCashflowMes = {
       renda_esperada: mes.renda_esperada ?? 0,
       extras_creditos: mes.extras_creditos ?? 0,
       gastos_recorrentes: mes.gastos_recorrentes ?? 0,
       extras_debitos: mes.extras_debitos ?? 0,
       aporte_planejado: mes.aporte_planejado ?? 0,
     }
+    return _setCache(key, value)
   } catch {
     return null
   }
@@ -356,12 +383,15 @@ export async function fetchAporteInvestimentoDetalhado(
   year: number,
   month?: number,
 ): Promise<AporteInvestimentoResponse | null> {
+  const params = new URLSearchParams({ ano: year.toString() })
+  if (month != null) params.append('mes', month.toString())
+  const key = `aporteInvestimento:${params}`
+  const cached = _getCache<AporteInvestimentoResponse>(key, TTL_2MIN)
+  if (cached) return cached
   try {
-    const params = new URLSearchParams({ ano: year.toString() })
-    if (month != null) params.append('mes', month.toString())
     const response = await fetchWithAuth(`${BASE_URL}/plano/aporte-investimento?${params}`)
     if (!response.ok) return null
-    return response.json()
+    return _setCache(key, await response.json())
   } catch {
     return null
   }
@@ -391,9 +421,11 @@ export async function fetchCreditCards(
 ): Promise<CreditCardExpense[]> {
   const params = new URLSearchParams({ year: year.toString() })
   if (month) params.append('month', month.toString())
+  const key = `creditCards:${params}`
+  const cached = _getCache<CreditCardExpense[]>(key, TTL_2MIN)
+  if (cached) return cached
 
   const response = await fetchWithAuth(`${BASE_URL}/dashboard/credit-cards?${params}`)
   if (!response.ok) throw new Error(`Failed to fetch credit cards: ${response.status}`)
-
-  return response.json()
+  return _setCache(key, await response.json())
 }
