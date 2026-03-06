@@ -68,8 +68,8 @@ if [ -z "$NEXT_PUBLIC_BACKEND_URL" ]; then
 fi
 export NEXT_PUBLIC_BACKEND_URL="$BACKEND_URL"
 
-echo "🔨 Fase 1: Build local das imagens..."
-docker compose -p finup -f "$COMPOSE_FILE" build --no-cache
+echo "🔨 Fase 1: Build local das imagens (linux/amd64 para VM)..."
+DOCKER_DEFAULT_PLATFORM=linux/amd64 docker compose -p finup -f "$COMPOSE_FILE" build --no-cache
 echo ""
 
 echo "📦 Fase 2: Salvando imagens em tar..."
