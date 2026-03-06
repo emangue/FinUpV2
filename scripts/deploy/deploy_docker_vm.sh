@@ -146,13 +146,13 @@ ssh -o ConnectTimeout=30 -o ServerAliveInterval=60 "$VM_HOST" "
     echo ''
 $(if [ "$SKIP_BUILD" = "--skip-build" ]; then
     echo "    echo '⚡ --skip-build: pulando rebuild de imagens...'"
-    echo "    docker-compose -f '$COMPOSE_FILE' --env-file .env.prod up -d"
+    echo "    docker compose -f '$COMPOSE_FILE' --env-file .env.prod up -d"
 else
     echo "    echo '🔨 Build das imagens Docker (pode levar alguns minutos)...'"
-    echo "    docker-compose -f '$COMPOSE_FILE' --env-file .env.prod build"
+    echo "    docker compose -f '$COMPOSE_FILE' --env-file .env.prod build"
     echo "    echo ''"
     echo "    echo '🐳 Subindo containers...'"
-    echo "    docker-compose -f '$COMPOSE_FILE' --env-file .env.prod up -d"
+    echo "    docker compose -f '$COMPOSE_FILE' --env-file .env.prod up -d"
 fi)
 
     echo ''
@@ -198,7 +198,7 @@ done
 # =============================================================================
 # FASE 5 — Rollback se necessário
 # =============================================================================
-if [ "$DEPLOY_SUCCESS" = "false" ] || [ "$HEALTH_OK" = "false" ]; then
+if [ "$DEPLOY_SUCCESS" = "false" ] && [ "$HEALTH_OK" = "false" ]; then
     echo ""
     log_err "DEPLOY FALHOU! Iniciando rollback automático..."
     log_info "Rollback para commit: ${ROLLBACK_COMMIT:0:7}"
@@ -214,13 +214,13 @@ if [ "$DEPLOY_SUCCESS" = "false" ] || [ "$HEALTH_OK" = "false" ]; then
         git reset --hard '$ROLLBACK_COMMIT'
 
         echo '🛑 Parando containers atuais...'
-        docker-compose -f '$COMPOSE_FILE' --env-file .env.prod down 2>/dev/null || true
+        docker compose -f '$COMPOSE_FILE' --env-file .env.prod down 2>/dev/null || true
 
         echo '🔨 Rebuild imagens com código anterior...'
-        docker-compose -f '$COMPOSE_FILE' --env-file .env.prod build
+        docker compose -f '$COMPOSE_FILE' --env-file .env.prod build
 
         echo '🐳 Subindo containers com versão anterior...'
-        docker-compose -f '$COMPOSE_FILE' --env-file .env.prod up -d
+        docker compose -f '$COMPOSE_FILE' --env-file .env.prod up -d
 
         echo '⏳ Aguardando backend...'
         sleep 15
@@ -228,7 +228,7 @@ if [ "$DEPLOY_SUCCESS" = "false" ] || [ "$HEALTH_OK" = "false" ]; then
     " || true
 
     echo ""
-    log_err "Verifique os logs: ssh $VM_HOST 'docker-compose -f $VM_PATH/$COMPOSE_FILE logs --tail=50'"
+    log_err "Verifique os logs: ssh $VM_HOST 'docker compose -f $VM_PATH/$COMPOSE_FILE logs --tail=50'"
     exit 1
 fi
 
@@ -246,5 +246,5 @@ echo "   Frontend App  → https://meufinup.com.br"
 echo "   Frontend Admin→ http://$VM_HOST:3001"
 echo "   Backend API   → http://$VM_HOST:8000/docs"
 echo ""
-echo "   Logs: ssh $VM_HOST 'docker-compose -f $VM_PATH/$COMPOSE_FILE logs -f backend'"
+echo "   Logs: ssh $VM_HOST 'docker compose -f $VM_PATH/$COMPOSE_FILE logs -f backend'"
 echo "=========================================="
