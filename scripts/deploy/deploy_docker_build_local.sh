@@ -6,7 +6,7 @@
 #
 # Uso: ./scripts/deploy/deploy_docker_build_local.sh
 #
-# Quando usar: Quando deploy_docker_vm.sh falha por OOM ou "npm ci" na VM
+# Quando usar: Quando deploy_docker_vm.sh falha por OOM ou npm ci na VM
 #
 # Fluxo:
 #   1. Build das imagens Docker LOCALMENTE (backend + frontend-app + frontend-admin)
@@ -63,7 +63,7 @@ echo ""
 
 # Obter NEXT_PUBLIC_BACKEND_URL da VM se não definido
 if [ -z "$NEXT_PUBLIC_BACKEND_URL" ]; then
-    BACKEND_URL=$(ssh -o ConnectTimeout=5 "$VM_HOST" "grep -E '^NEXT_PUBLIC_BACKEND_URL=' $VM_PATH/.env.prod 2>/dev/null | cut -d= -f2-" || true")
+    BACKEND_URL=$(ssh -o ConnectTimeout=5 "$VM_HOST" "grep NEXT_PUBLIC_BACKEND_URL $VM_PATH/.env.prod 2>/dev/null | cut -d= -f2-" || true)
     [ -z "$BACKEND_URL" ] && BACKEND_URL="https://meufinup.com.br/api"
 fi
 export NEXT_PUBLIC_BACKEND_URL="$BACKEND_URL"
@@ -88,36 +88,17 @@ rm -f "$TAR_FILE"
 echo ""
 
 echo "📥 Fase 4: Na VM - git pull, load, up..."
-ssh -o ConnectTimeout=30 -o ServerAliveInterval=60 "$VM_HOST" "
-    set -e
-    cd $VM_PATH || exit 1
-
-    echo '📥 Git pull...'
-    git fetch origin
-    git checkout $BRANCH
-    git pull origin $BRANCH
-
-    echo '📦 Carregando imagens...'
-    docker load -i /tmp/finup-images.tar
-    rm -f /tmp/finup-images.tar
-
-    echo '🐳 Subindo containers...'
-    docker compose -p finup -f $COMPOSE_FILE --env-file .env.prod up -d
-
-    echo '🗄️  Aguardando backend...'
-    for i in \$(seq 1 12); do
-        if docker exec finup_backend_prod curl -sf http://localhost:8000/api/health >/dev/null 2>&1; then
-            echo '   Backend pronto!'
-            break
-        fi
-        [ \$i -eq 12 ] && { echo '   Timeout'; exit 1; }
-        sleep 5
-    done
-
-    echo '🗄️  Migrations...'
-    docker exec finup_backend_prod alembic upgrade head
-    echo '   OK'
-"
+ssh -o ConnectTimeout=30 -o ServerAliveInterval=60 "$VM_HOST" "cd $VM_PATH && git fetch origin && git checkout $BRANCH && git pull origin $BRANCH && docker load -i /tmp/finup-images.tar && rm -f /tmp/finup-images.tar && docker compose -p finup -f $COMPOSE_FILE --env-file .env.prod up -d"
+echo "   Aguardando backend..."
+for _ in 1 2 3 4 5 6 7 8 9 10 11 12; do
+    if ssh -o ConnectTimeout=5 "$VM_HOST" "docker exec finup_backend_prod curl -sf http://localhost:8000/api/health" >/dev/null 2>&1; then
+        echo "   Backend pronto!"
+        break
+    fi
+    sleep 5
+done
+ssh -o ConnectTimeout=10 "$VM_HOST" "docker exec finup_backend_prod alembic upgrade head"
+echo "   Migrations OK"
 
 echo ""
 echo "=========================================="
