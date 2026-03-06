@@ -35,7 +35,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      test: ["CMD-SHELL", "pg_isready -U finup_user"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -91,6 +91,9 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+    networks:
+      - default
+      - finup-net
 
   # ==========================================
   # Frontend App - Next.js standalone (usuário final)
@@ -112,6 +115,8 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
+    networks:
+      - finup-net
 
   # ==========================================
   # Frontend Admin - Next.js standalone (painel admin)
@@ -132,9 +137,16 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
+    networks:
+      - finup-net
 
 volumes:
   postgres_data:
   redis_data:
   backend_uploads:
   backend_backups:
+
+networks:
+  finup-net:
+    external: true
+    name: finup_finup-net
