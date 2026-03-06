@@ -4,7 +4,7 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
-RUN npm install --frozen-lockfile
+RUN npm ci
 COPY . .
 
 # Build Next.js (standalone output para imagem menor)
@@ -12,7 +12,7 @@ ENV NEXT_TELEMETRY_DISABLED 1
 # Variáveis públicas precisam ser disponíveis em build time (baked no bundle)
 ARG NEXT_PUBLIC_BACKEND_URL
 ENV NEXT_PUBLIC_BACKEND_URL=$NEXT_PUBLIC_BACKEND_URL
-RUN ./node_modules/.bin/next build
+RUN npm run build
 
 # ============================================
 # Stage 3: Runner (Next.js standalone)
