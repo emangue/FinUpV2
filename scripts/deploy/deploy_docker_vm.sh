@@ -4,7 +4,7 @@
 # deploy_docker_vm.sh — Deploy Docker na VM com rollback automático
 # =============================================================================
 #
-# Uso: ./scripts/deploy/deploy_docker_vm.sh [--skip-build]
+# Uso: ./scripts/deploy/deploy_docker_vm.sh [--skip-build|--no-cache]
 #
 # Fluxo:
 #   1. Validar pré-requisitos (git limpo, push feito, .env.prod na VM)
@@ -27,7 +27,10 @@ VM_HOST="${VM_HOST:-minha-vps-hostinger}"
 VM_PATH="${VM_PATH:-/var/www/finup}"
 COMPOSE_FILE="docker-compose.prod.yml"
 BRANCH=$(git branch --show-current)
-SKIP_BUILD="${1:-}"
+SKIP_BUILD=""
+BUILD_FLAGS=""
+[ "$1" = "--skip-build" ] && SKIP_BUILD="--skip-build"
+[ "$1" = "--no-cache" ] && BUILD_FLAGS="--no-cache"
 
 # ─── Cores ────────────────────────────────────────────────────────────────────
 RED='\033[0;31m'
@@ -149,7 +152,7 @@ $(if [ "$SKIP_BUILD" = "--skip-build" ]; then
     echo "    docker compose -f '$COMPOSE_FILE' --env-file .env.prod up -d"
 else
     echo "    echo '🔨 Build das imagens Docker (pode levar alguns minutos)...'"
-    echo "    docker compose -f '$COMPOSE_FILE' --env-file .env.prod build"
+    echo "    docker compose -f '$COMPOSE_FILE' --env-file .env.prod build $BUILD_FLAGS"
     echo "    echo ''"
     echo "    echo '🐳 Subindo containers...'"
     echo "    docker compose -f '$COMPOSE_FILE' --env-file .env.prod up -d"
