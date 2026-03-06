@@ -67,20 +67,25 @@ O `npm ci`:
 
 ---
 
-## Validação
+## Solução alternativa: Build local
 
-Após a correção:
+Quando o build na VM falha (npm ci "Exit handler never called", OOM), use:
 
 ```bash
-# Build local (teste)
-cd app_dev/frontend && docker build -t test-frontend .
-
-# Deploy na VM
-./scripts/deploy/deploy_docker_vm.sh
+./scripts/deploy/deploy_docker_build_local.sh
 ```
 
-Se ainda falhar por cache, forçar rebuild sem cache:
+Este script:
+1. Faz build das imagens **localmente**
+2. Salva em tar e envia para a VM
+3. Na VM: docker load + compose up -d
+
+## Validação
 
 ```bash
-ssh minha-vps-hostinger "cd /var/www/finup && docker compose -f docker-compose.prod.yml build --no-cache frontend-app"
+# Deploy padrão (build na VM)
+./scripts/deploy/deploy_docker_vm.sh
+
+# Deploy com build local (quando VM falha)
+./scripts/deploy/deploy_docker_build_local.sh
 ```
