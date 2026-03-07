@@ -20,6 +20,12 @@ export type LastMonthSource = 'transactions' | 'patrimonio'
 // Seguro apenas em componentes 'use client' (módulo isolado por usuário no browser).
 interface _CacheEntry<T> { value: T; ts: number }
 const _cache = new Map<string, _CacheEntry<unknown>>()
+// Deduplicação de requests em voo: evita cache stampede quando dois componentes
+// chamam a mesma função simultaneamente antes do primeiro request terminar.
+const _inflight = new Map<string, Promise<unknown>>()
+// Cache por ponto individual — chave: "YYYY-MM-01"
+// Permite montar janelas de 7 meses sem nova request quando todos os pontos já foram vistos.
+const _pointCache = new Map<string, ChartDataPoint>()
 
 const TTL_2MIN = 2 * 60 * 1000
 const TTL_5MIN = 5 * 60 * 1000
@@ -34,9 +40,30 @@ function _setCache<T>(key: string, value: T): T {
   return value
 }
 
+/** Deduplica requests concorrentes para a mesma key. Se já houver um request em voo,
+ *  retorna a mesma Promise em vez de iniciar um segundo request ao backend. */
+function _withInFlight<T>(key: string, fetcher: () => Promise<T>): Promise<T> {
+  if (_inflight.has(key)) return _inflight.get(key) as Promise<T>
+  const p = fetcher().finally(() => _inflight.delete(key))
+  _inflight.set(key, p)
+  return p
+}
+
+/** Computa os 7 meses (chaves YYYY-MM-01) que compõem a janela do gráfico mensal. */
+function _chartWindow(year: number, month: number): string[] {
+  const keys: string[] = []
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(year, month - 1 - i, 1)
+    keys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`)
+  }
+  return keys
+}
+
 /** Invalida todo o cache do dashboard (chamar após upload bem-sucedido). */
 export function invalidateDashboardCache() {
   _cache.clear()
+  _inflight.clear()
+  _pointCache.clear()
 }
 
 // Back-compat alias
@@ -45,6 +72,7 @@ export function invalidateLastMonthCache(source?: LastMonthSource) {
     _cache.delete(`lastMonth:${source}`)
   } else {
     _cache.clear()
+    _inflight.clear()
   }
 }
 // ────────────────────────────────────────────────────────────────────────────────
@@ -62,12 +90,14 @@ export async function fetchLastMonthWithData(
   const cached = _getCache<{ year: number; month: number }>(key, TTL_5MIN)
   if (cached) return cached
 
-  const response = await fetchWithAuth(
-    `${BASE_URL}/dashboard/last-month-with-data?source=${source}`
-  )
-  if (!response.ok) throw new Error(`Failed to fetch last month: ${response.status}`)
-  const value: { year: number; month: number } = await response.json()
-  return _setCache(key, value)
+  return _withInFlight(key, async () => {
+    const response = await fetchWithAuth(
+      `${BASE_URL}/dashboard/last-month-with-data?source=${source}`
+    )
+    if (!response.ok) throw new Error(`Failed to fetch last month: ${response.status}`)
+    const value: { year: number; month: number } = await response.json()
+    return _setCache(key, value)
+  })
 }
 
 /**
@@ -87,9 +117,11 @@ export async function fetchDashboardMetrics(
   const cached = _getCache<DashboardMetrics>(key, TTL_2MIN)
   if (cached) return cached
 
-  const response = await fetchWithAuth(`${BASE_URL}/dashboard/metrics?${params}`)
-  if (!response.ok) throw new Error(`Failed to fetch metrics: ${response.status}`)
-  return _setCache(key, await response.json())
+  return _withInFlight(key, async () => {
+    const response = await fetchWithAuth(`${BASE_URL}/dashboard/metrics?${params}`)
+    if (!response.ok) throw new Error(`Failed to fetch metrics: ${response.status}`)
+    return _setCache(key, await response.json())
+  })
 }
 
 /**
@@ -106,28 +138,51 @@ export async function fetchIncomeSources(
   const cached = _getCache<{ sources: IncomeSource[]; total_receitas: number }>(key, TTL_2MIN)
   if (cached) return cached
 
-  const response = await fetchWithAuth(`${BASE_URL}/dashboard/income-sources?${params}`)
-  if (!response.ok) throw new Error(`Failed to fetch income sources: ${response.status}`)
-  return _setCache(key, await response.json())
+  return _withInFlight(key, async () => {
+    const response = await fetchWithAuth(`${BASE_URL}/dashboard/income-sources?${params}`)
+    if (!response.ok) throw new Error(`Failed to fetch income sources: ${response.status}`)
+    return _setCache(key, await response.json())
+  })
 }
 
 /**
- * Busca dados para gráfico de área (receitas vs despesas) - modo mensal
+ * Busca dados para gráfico de área (receitas vs despesas) - modo mensal.
+ * N4a: Sliding window — se todos os 7 pontos já estão no _pointCache, monta localmente (0 requests).
  */
 export async function fetchChartData(
   year: number,
   month?: number
 ): Promise<ChartDataPoint[]> {
+  // N4a. Sliding window: se todos os 7 pontos já estão no _pointCache, monta localmente
+  if (month) {
+    const keys = _chartWindow(year, month)
+    if (keys.every(k => _pointCache.has(k))) {
+      return keys.map(k => _pointCache.get(k)!)
+    }
+  }
+
   const params = new URLSearchParams({ year: year.toString() })
   if (month) params.append('month', month.toString())
   const key = `chartData:${params}`
   const cached = _getCache<ChartDataPoint[]>(key, TTL_5MIN)
   if (cached) return cached
 
-  const response = await fetchWithAuth(`${BASE_URL}/dashboard/chart-data?${params}`)
-  if (!response.ok) throw new Error(`Failed to fetch chart data: ${response.status}`)
-  const result = await response.json()
-  return _setCache(key, result.data || [])
+  return _withInFlight(key, async () => {
+    const response = await fetchWithAuth(`${BASE_URL}/dashboard/chart-data?${params}`)
+    if (!response.ok) throw new Error(`Failed to fetch chart data: ${response.status}`)
+    const result = await response.json()
+    const data: ChartDataPoint[] = result.data || []
+    // Popula _pointCache com cada ponto retornado
+    for (const point of data) {
+      _pointCache.set(point.date, point)
+    }
+    return _setCache(key, data)
+  })
+}
+
+/** N4b. Prefetch em background — popula _pointCache sem bloquear a UI. */
+export function prefetchChartData(year: number, month: number): void {
+  fetchChartData(year, month).catch(() => {})
 }
 
 /**
@@ -146,10 +201,12 @@ export async function fetchChartDataYearly(
   const cached = _getCache<ChartDataPoint[]>(key, TTL_5MIN)
   if (cached) return cached
 
-  const response = await fetchWithAuth(`${BASE_URL}/dashboard/chart-data-yearly?${params}`)
-  if (!response.ok) throw new Error(`Failed to fetch chart data yearly: ${response.status}`)
-  const result = await response.json()
-  return _setCache(key, result.data || [])
+  return _withInFlight(key, async () => {
+    const response = await fetchWithAuth(`${BASE_URL}/dashboard/chart-data-yearly?${params}`)
+    if (!response.ok) throw new Error(`Failed to fetch chart data yearly: ${response.status}`)
+    const result = await response.json()
+    return _setCache(key, result.data || [])
+  })
 }
 
 /**
@@ -297,24 +354,27 @@ export async function fetchPlanoCashflowMes(
   const key = `planoCashflow:${year}:${month}`
   const cached = _getCache<PlanoCashflowMes>(key, TTL_5MIN)
   if (cached) return cached
-  try {
-    // P1-3: endpoint dedicado retorna apenas 1 mês (evita 91% de payload desnecessário)
-    const response = await fetchWithAuth(
-      `${BASE_URL}/plano/cashflow/mes?ano=${year}&mes=${month}&modo_plano=true`
-    )
-    if (!response.ok) return null
-    const mes = await response.json()
-    const value: PlanoCashflowMes = {
-      renda_esperada: mes.renda_esperada ?? 0,
-      extras_creditos: mes.extras_creditos ?? 0,
-      gastos_recorrentes: mes.gastos_recorrentes ?? 0,
-      extras_debitos: mes.extras_debitos ?? 0,
-      aporte_planejado: mes.aporte_planejado ?? 0,
+
+  return _withInFlight(key, async () => {
+    try {
+      // P1-3: endpoint dedicado retorna apenas 1 mês (evita 91% de payload desnecessário)
+      const response = await fetchWithAuth(
+        `${BASE_URL}/plano/cashflow/mes?ano=${year}&mes=${month}&modo_plano=true`
+      )
+      if (!response.ok) return null
+      const mes = await response.json()
+      const value: PlanoCashflowMes = {
+        renda_esperada: mes.renda_esperada ?? 0,
+        extras_creditos: mes.extras_creditos ?? 0,
+        gastos_recorrentes: mes.gastos_recorrentes ?? 0,
+        extras_debitos: mes.extras_debitos ?? 0,
+        aporte_planejado: mes.aporte_planejado ?? 0,
+      }
+      return _setCache(key, value)
+    } catch {
+      return null
     }
-    return _setCache(key, value)
-  } catch {
-    return null
-  }
+  })
 }
 
 /**
@@ -388,13 +448,16 @@ export async function fetchAporteInvestimentoDetalhado(
   const key = `aporteInvestimento:${params}`
   const cached = _getCache<AporteInvestimentoResponse>(key, TTL_2MIN)
   if (cached) return cached
-  try {
-    const response = await fetchWithAuth(`${BASE_URL}/plano/aporte-investimento?${params}`)
-    if (!response.ok) return null
-    return _setCache(key, await response.json())
-  } catch {
-    return null
-  }
+
+  return _withInFlight(key, async () => {
+    try {
+      const response = await fetchWithAuth(`${BASE_URL}/plano/aporte-investimento?${params}`)
+      if (!response.ok) return null
+      return _setCache(key, await response.json())
+    } catch {
+      return null
+    }
+  })
 }
 
 /**
@@ -425,7 +488,9 @@ export async function fetchCreditCards(
   const cached = _getCache<CreditCardExpense[]>(key, TTL_2MIN)
   if (cached) return cached
 
-  const response = await fetchWithAuth(`${BASE_URL}/dashboard/credit-cards?${params}`)
-  if (!response.ok) throw new Error(`Failed to fetch credit cards: ${response.status}`)
-  return _setCache(key, await response.json())
+  return _withInFlight(key, async () => {
+    const response = await fetchWithAuth(`${BASE_URL}/dashboard/credit-cards?${params}`)
+    if (!response.ok) throw new Error(`Failed to fetch credit cards: ${response.status}`)
+    return _setCache(key, await response.json())
+  })
 }

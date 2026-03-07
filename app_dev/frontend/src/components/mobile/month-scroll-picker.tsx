@@ -32,6 +32,11 @@ interface MonthScrollPickerProps {
    * Callback quando mês é selecionado
    */
   onMonthChange: (month: Date) => void
+
+  /**
+   * Callback opcional ao fazer hover em um mês — usado para prefetch (N4)
+   */
+  onMonthHover?: (month: Date) => void
   
   /**
    * Quantos meses mostrar antes e depois (padrão: 6)
@@ -47,6 +52,7 @@ interface MonthScrollPickerProps {
 export function MonthScrollPicker({
   selectedMonth,
   onMonthChange,
+  onMonthHover,
   monthsRange = 6,
   className
 }: MonthScrollPickerProps) {
@@ -124,6 +130,7 @@ export function MonthScrollPicker({
             <button
               key={month.toISOString()}
               ref={isSelected ? selectedMonthRef : null}
+              onMouseEnter={() => onMonthHover?.(month)}
               onClick={() => onMonthChange(month)}
               className={cn(
                 // Base
