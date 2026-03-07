@@ -13,7 +13,30 @@ import { Goal, GoalCreate, GoalUpdate } from '../types'
 
 const BASE_URL = `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}`
 
-/** Grupo com categoria_geral para filtro em cascata */
+// Cache em memória — mesmo padrão do dashboard-api (N1)
+const _goalsCache = new Map<string, { value: unknown; ts: number }>()
+const _goalsInflight = new Map<string, Promise<unknown>>()
+const TTL_2MIN = 2 * 60 * 1000
+
+function _getGoalsCache<T>(key: string): T | undefined {
+  const hit = _goalsCache.get(key)
+  if (hit && Date.now() - hit.ts < TTL_2MIN) return hit.value as T
+  return undefined
+}
+function _setGoalsCache<T>(key: string, value: T): T {
+  _goalsCache.set(key, { value, ts: Date.now() })
+  return value
+}
+function _withGoalsInflight<T>(key: string, fetcher: () => Promise<T>): Promise<T> {
+  if (_goalsInflight.has(key)) return _goalsInflight.get(key) as Promise<T>
+  const p = fetcher().finally(() => _goalsInflight.delete(key))
+  _goalsInflight.set(key, p)
+  return p
+}
+export function invalidateGoalsCache() {
+  _goalsCache.clear()
+  _goalsInflight.clear()
+}
 export interface GrupoComCategoria {
   nome_grupo: string
   categoria_geral: string
@@ -59,45 +82,51 @@ export async function fetchGoals(selectedMonth?: Date): Promise<Goal[]> {
   const year = currentDate.getFullYear()
   const month = String(currentDate.getMonth() + 1).padStart(2, '0')
   const mes_referencia = `${year}-${month}`
-  
-  try {
-    const response = await fetchWithAuth(`${BASE_URL}/budget/planning?mes_referencia=${mes_referencia}`)
-    
-    if (!response.ok) {
+  const key = `goals:${mes_referencia}`
+  const cached = _getGoalsCache<Goal[]>(key)
+  if (cached) return cached
+
+  return _withGoalsInflight(key, async () => {
+    try {
+      const response = await fetchWithAuth(`${BASE_URL}/budget/planning?mes_referencia=${mes_referencia}`)
+
+      if (!response.ok) {
+        return []
+      }
+
+      const data = await response.json()
+
+      // Backend retorna { mes_referencia, budgets: [...] }
+      const budgets = data?.budgets ?? []
+
+      const result: Goal[] = budgets.map((b: any) => {
+        const cat = b.categoria_geral || 'Despesa'
+        const planType = cat === 'Investimentos' ? 'investimentos' : 'gastos'
+        return {
+          id: b.id ?? null,
+          grupo: b.grupo,
+          mes_referencia: data.mes_referencia || mes_referencia,
+          valor_planejado: b.valor_planejado ?? 0,
+          valor_planejado_com_extras: b.valor_planejado_com_extras ?? b.valor_planejado ?? 0,
+          valor_realizado: b.valor_realizado ?? 0,
+          percentual: b.percentual ?? 0,
+          ativo: b.ativo ?? 1,
+          valor_medio_3_meses: b.valor_medio_3_meses ?? 0,
+          categoria_geral: cat,
+          planType,
+          cor: b.cor ?? undefined,
+          user_id: 0,
+          created_at: '',
+          updated_at: ''
+        }
+      })
+
+      return _setGoalsCache(key, result)
+    } catch (error) {
+      console.error('Erro ao buscar metas:', error)
       return []
     }
-    
-    const data = await response.json()
-    
-    // Backend retorna { mes_referencia, budgets: [...] }
-    const budgets = data?.budgets ?? []
-    
-    return budgets.map((b: any) => {
-      const cat = b.categoria_geral || 'Despesa'
-      const planType = cat === 'Investimentos' ? 'investimentos' : 'gastos'
-      return {
-        id: b.id ?? null,
-        grupo: b.grupo,
-        mes_referencia: data.mes_referencia || mes_referencia,
-        valor_planejado: b.valor_planejado ?? 0,
-        valor_planejado_com_extras: b.valor_planejado_com_extras ?? b.valor_planejado ?? 0,
-        valor_realizado: b.valor_realizado ?? 0,
-        percentual: b.percentual ?? 0,
-        ativo: b.ativo ?? 1,
-        valor_medio_3_meses: b.valor_medio_3_meses ?? 0,
-        categoria_geral: cat,
-        planType,
-        cor: b.cor ?? undefined,
-        user_id: 0,
-        created_at: '',
-        updated_at: ''
-      }
-    })
-    
-  } catch (error) {
-    console.error('Erro ao buscar metas:', error)
-    return []
-  }
+  })
 }
 
 /**

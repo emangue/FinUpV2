@@ -221,48 +221,53 @@ export async function fetchExpenseSources(
   const params = new URLSearchParams({ year: year.toString() })
   if (month) params.append('month', month.toString())
   else params.append('ytd', 'true')
+  const key = `expenseSources:${params}`
+  const cached = _getCache<{ sources: ExpenseSource[]; total_despesas: number }>(key, TTL_2MIN)
+  if (cached) return cached
 
-  const response = await fetchWithAuth(`${BASE_URL}/dashboard/budget-vs-actual?${params}`)
-  if (!response.ok) throw new Error(`Failed to fetch expense sources: ${response.status}`)
+  return _withInFlight(key, async () => {
+    const response = await fetchWithAuth(`${BASE_URL}/dashboard/budget-vs-actual?${params}`)
+    if (!response.ok) throw new Error(`Failed to fetch expense sources: ${response.status}`)
 
-  const data = await response.json()
-  const items = data.items || []
+    const data = await response.json()
+    const items = data.items || []
 
-  // Filtrar apenas grupos com realizado > 0 e ordenar por valor
-  const expenses = items
-    .filter((item: any) => (item.realizado ?? 0) > 0)
-    .map((item: any) => ({
-      grupo: item.grupo,
-      total: item.realizado ?? 0,
-      percentual: item.percentual ?? 0,
-      valor_planejado: item.planejado ?? 0
+    // Filtrar apenas grupos com realizado > 0 e ordenar por valor
+    const expenses = items
+      .filter((item: any) => (item.realizado ?? 0) > 0)
+      .map((item: any) => ({
+        grupo: item.grupo,
+        total: item.realizado ?? 0,
+        percentual: item.percentual ?? 0,
+        valor_planejado: item.planejado ?? 0
+      }))
+      .sort((a: any, b: any) => b.total - a.total)
+
+    const totalDespesas = data.total_realizado ?? expenses.reduce((sum: number, item: any) => sum + item.total, 0)
+
+    // TOP 5 + Outros (plano de Outros = soma do planejado dos grupos 6+)
+    const top5 = expenses.slice(0, 5)
+    const others = expenses.slice(5)
+
+    let result: ExpenseSource[] = top5.map((item: any) => ({
+      ...item,
+      valor_planejado: item.valor_planejado ?? 0
     }))
-    .sort((a: any, b: any) => b.total - a.total)
 
-  const totalDespesas = data.total_realizado ?? expenses.reduce((sum: number, item: any) => sum + item.total, 0)
+    if (others.length > 0) {
+      const outrosTotal = others.reduce((sum: number, item: any) => sum + item.total, 0)
+      const outrosPlanejado = others.reduce((sum: number, item: any) => sum + (item.valor_planejado ?? 0), 0)
+      const outrosPercentual = totalDespesas > 0 ? (outrosTotal / totalDespesas) * 100 : 0
+      result.push({
+        grupo: 'Outros',
+        total: outrosTotal,
+        percentual: outrosPercentual,
+        valor_planejado: outrosPlanejado
+      })
+    }
 
-  // TOP 5 + Outros (plano de Outros = soma do planejado dos grupos 6+)
-  const top5 = expenses.slice(0, 5)
-  const others = expenses.slice(5)
-
-  let result: ExpenseSource[] = top5.map((item: any) => ({
-    ...item,
-    valor_planejado: item.valor_planejado ?? 0
-  }))
-
-  if (others.length > 0) {
-    const outrosTotal = others.reduce((sum: number, item: any) => sum + item.total, 0)
-    const outrosPlanejado = others.reduce((sum: number, item: any) => sum + (item.valor_planejado ?? 0), 0)
-    const outrosPercentual = totalDespesas > 0 ? (outrosTotal / totalDespesas) * 100 : 0
-    result.push({
-      grupo: 'Outros',
-      total: outrosTotal,
-      percentual: outrosPercentual,
-      valor_planejado: outrosPlanejado
-    })
-  }
-
-  return { sources: result, total_despesas: totalDespesas }
+    return _setCache(key, { sources: result, total_despesas: totalDespesas })
+  })
 }
 
 export interface CreditCardExpense {
@@ -471,11 +476,15 @@ export async function fetchOrcamentoInvestimentos(
   const params = new URLSearchParams({ year: year.toString() })
   if (month) params.append('month', month.toString())
   if (ytdMonth != null && month == null) params.append('ytd_month', ytdMonth.toString())
+  const key = `orcamentoInvestimentos:${params}`
+  const cached = _getCache<OrcamentoInvestimentosResponse>(key, TTL_2MIN)
+  if (cached) return cached
 
-  const response = await fetchWithAuth(`${BASE_URL}/dashboard/orcamento-investimentos?${params}`)
-  if (!response.ok) throw new Error(`Failed to fetch orcamento investimentos: ${response.status}`)
-
-  return response.json()
+  return _withInFlight(key, async () => {
+    const response = await fetchWithAuth(`${BASE_URL}/dashboard/orcamento-investimentos?${params}`)
+    if (!response.ok) throw new Error(`Failed to fetch orcamento investimentos: ${response.status}`)
+    return _setCache(key, await response.json())
+  })
 }
 
 export async function fetchCreditCards(
