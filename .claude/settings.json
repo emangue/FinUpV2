@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ssh minha-vps-hostinger 'cd /var/www/finup && docker compose -f docker-compose.prod.yml build frontend-app 2>&1 | tail -8')",
+      "Bash(git push origin perf/performance-v2-n0-n4)"
+    ]
+  }
+}
