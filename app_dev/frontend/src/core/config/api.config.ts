@@ -55,6 +55,7 @@ export const API_ENDPOINTS = {
     METRICS: `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/dashboard/metrics`,
     CATEGORIES: `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/dashboard/categories`,
     CHART_DATA: `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/dashboard/chart/receitas-despesas`,
+    SUMMARY: `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/dashboard/summary`,
   },
   
   // Upload

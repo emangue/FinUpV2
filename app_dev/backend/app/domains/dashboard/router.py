@@ -10,6 +10,8 @@ from datetime import datetime
 from app.core.database import get_db
 from app.shared.dependencies import get_current_user_id
 from .service import DashboardService
+from app.domains.plano.service import PlanoService
+from app.domains.investimentos.service import InvestimentoService
 from .schemas import (
     DashboardMetrics, 
     ChartDataResponse, 
@@ -242,4 +244,78 @@ def get_income_sources(
     
     service = DashboardService(db)
     return service.get_income_sources(user_id, year, month)
+
+
+@router.get("/summary")
+def dashboard_summary(
+    year: int = Query(..., description="Ano"),
+    month: int = Query(..., description="Mês (1-12)"),
+    ytd_month: Optional[int] = Query(None, description="YTD: mês limite (1-12). Se informado com month, usado em seções que suportam YTD"),
+    sections: Optional[str] = Query(
+        default="metrics,chart,income-sources,budget-vs-actual,credit-cards,orcamento-investimentos,cashflow-mes,aporte-mes",
+        description="Seções a incluir, separadas por vírgula",
+    ),
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
+):
+    """
+    Endpoint agregado: consolida múltiplos dados do dashboard em 1 request.
+
+    Aceita ?sections= para retornar apenas o necessário (subset do padrão).
+    Seções disponíveis: metrics, chart, chart-yearly, income-sources,
+    budget-vs-actual, credit-cards, orcamento-investimentos, cashflow-mes, aporte-mes.
+
+    Campos ausentes na resposta = seção não solicitada (nunca null).
+    """
+    requested = set(sections.split(",")) if sections else set()
+    result: dict = {}
+
+    dashboard_svc = DashboardService(db)
+
+    if "metrics" in requested:
+        result["metrics"] = dashboard_svc.get_metrics(user_id, year, month, ytd_month)
+
+    if "chart" in requested:
+        result["chart"] = dashboard_svc.get_chart_data(user_id, year, month)
+
+    if "chart-yearly" in requested:
+        current_year = datetime.now().year
+        years = [current_year - 2, current_year - 1, current_year]
+        result["chart_yearly"] = dashboard_svc.get_chart_data_yearly(user_id, years, ytd_month)
+
+    if "income-sources" in requested:
+        result["income_sources"] = dashboard_svc.get_income_sources(user_id, year, month)
+
+    if "budget-vs-actual" in requested:
+        result["budget_vs_actual"] = dashboard_svc.get_budget_vs_actual(user_id, year, month)
+
+    if "credit-cards" in requested:
+        result["credit_cards"] = dashboard_svc.get_credit_card_expenses(user_id, year, month)
+
+    if "orcamento-investimentos" in requested:
+        result["orcamento_investimentos"] = dashboard_svc.get_orcamento_investimentos(
+            user_id, year, month, ytd_month
+        )
+
+    if "cashflow-mes" in requested:
+        try:
+            plano_svc = PlanoService(db)
+            cashflow = plano_svc.get_cashflow(user_id, year)
+            meses = cashflow.get("meses", []) if isinstance(cashflow, dict) else []
+            mes_ref = f"{year}-{str(month).zfill(2)}"
+            result["cashflow_mes"] = next(
+                (m for m in meses if m.get("mes_referencia") == mes_ref), None
+            )
+        except Exception:
+            result["cashflow_mes"] = None
+
+    if "aporte-mes" in requested:
+        try:
+            inv_svc = InvestimentoService(db)
+            aporte = inv_svc.get_aporte_principal_por_mes(user_id, year, month)
+            result["aporte_mes"] = {"aporte": aporte or 0}
+        except Exception:
+            result["aporte_mes"] = {"aporte": 0}
+
+    return result
 

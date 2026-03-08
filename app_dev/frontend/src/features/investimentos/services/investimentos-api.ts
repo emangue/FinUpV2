@@ -6,7 +6,7 @@
  */
 
 import { apiGet, apiPost, apiPatch, apiPut, apiDelete, API_ENDPOINTS } from '@/core/config/api.config'
-import { getCached, setCached, getInFlight, setInFlight } from '@/core/utils/in-memory-cache'
+import { getCached, setCached, getInFlight, setInFlight, invalidateCache } from '@/core/utils/in-memory-cache'
 
 const TTL_5MIN = 5 * 60 * 1000
 import type {
@@ -292,4 +292,61 @@ export async function listarCenarios(ativo: boolean = true): Promise<any[]> {
 export async function simularCenarioSalvo(cenarioId: number): Promise<any> {
   // ✅ FASE 1 - Autenticação automática via apiGet
   return apiGet<any>(`${BASE_URL}/cenarios/${cenarioId}/simular`)
+}
+
+// ============================================================================
+// B2 — Endpoint agregado /investimentos/overview
+// 1 request consolida: lista + resumo + distribuicao
+// Elimina 3 RTTs paralelos no mount da tela de investimentos
+// ============================================================================
+
+export interface InvestimentosOverview {
+  lista?: InvestimentoPortfolio[]
+  resumo?: PortfolioResumo
+  distribuicao?: DistribuicaoTipo[]
+}
+
+export interface InvestimentosOverviewFilters {
+  tipo_investimento?: string
+  ativo?: boolean
+  anomes?: number
+  classe_ativo?: 'Ativo' | 'Passivo'
+  include?: string
+}
+
+/**
+ * Busca lista + resumo + distribuição de investimentos em 1 request (B2).
+ * Elimina 3 chamadas paralelas por 1 única chamada agregada.
+ *
+ * @param filters - Filtros opcionais (tipo, ativo, anomes, classe_ativo, include)
+ */
+export async function fetchInvestimentosOverview(
+  filters?: InvestimentosOverviewFilters,
+): Promise<InvestimentosOverview> {
+  const params = new URLSearchParams()
+  if (filters?.tipo_investimento) params.append('tipo_investimento', filters.tipo_investimento)
+  if (filters?.ativo !== undefined) params.append('ativo', String(filters.ativo))
+  if (filters?.anomes)             params.append('anomes', String(filters.anomes))
+  if (filters?.classe_ativo)       params.append('classe_ativo', filters.classe_ativo)
+  if (filters?.include)            params.append('include', filters.include)
+
+  const key = `investimentos:overview:${params.toString()}`
+  const cached = getCached<InvestimentosOverview>(key)
+  if (cached) return cached
+
+  let inFlight = getInFlight<InvestimentosOverview>(key)
+  if (!inFlight) {
+    const url = `${BASE_URL}/overview${params.toString() ? `?${params.toString()}` : ''}`
+    inFlight = apiGet<InvestimentosOverview>(url).then(data => {
+      setCached(key, data, TTL_5MIN)
+      return data
+    })
+    setInFlight(key, inFlight)
+  }
+  return inFlight
+}
+
+/** Invalida o cache do overview (chamar após mutações no portfólio) */
+export function invalidateInvestimentosOverviewCache(): void {
+  invalidateCache('investimentos:overview:')
 }

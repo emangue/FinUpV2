@@ -2,14 +2,14 @@
 
 /**
  * Hook para gerenciar investimentos
- * Otimizado com useCallback para performance
+ * B2: refatorado para usar endpoint agregado /investimentos/overview
+ * Substitui 3 requests paralelos (lista + resumo + distribuição) por 1 único request.
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
-  getInvestimentos,
-  getPortfolioResumo,
-  getDistribuicaoPorTipo,
+  fetchInvestimentosOverview,
+  invalidateInvestimentosOverviewCache,
 } from '../services/investimentos-api'
 import type {
   InvestimentoPortfolio,
@@ -28,7 +28,7 @@ export function useInvestimentos(filters?: InvestimentosFilters) {
   // Memoizar filters para evitar re-renders desnecessários
   const memoizedFilters = useMemo(() => filters, [JSON.stringify(filters)])
 
-  // useEffect otimizado
+  // B2: 1 request agregado em vez de 3 paralelos
   useEffect(() => {
     let cancelled = false
 
@@ -37,16 +37,16 @@ export function useInvestimentos(filters?: InvestimentosFilters) {
         setLoading(true)
         setError(null)
 
-        const [investimentosData, resumoData, distribuicaoData] = await Promise.all([
-          getInvestimentos(memoizedFilters),
-          getPortfolioResumo(),
-          getDistribuicaoPorTipo(),
-        ])
+        const overview = await fetchInvestimentosOverview({
+          tipo_investimento: memoizedFilters?.tipo_investimento,
+          ativo: memoizedFilters?.ativo,
+          anomes: memoizedFilters?.anomes,
+        })
 
         if (!cancelled) {
-          setInvestimentos(investimentosData)
-          setResumo(resumoData)
-          setDistribuicao(distribuicaoData)
+          if (overview.lista)       setInvestimentos(overview.lista)
+          if (overview.resumo)      setResumo(overview.resumo)
+          if (overview.distribuicao) setDistribuicao(overview.distribuicao)
         }
       } catch (err) {
         if (!cancelled) {
@@ -67,21 +67,23 @@ export function useInvestimentos(filters?: InvestimentosFilters) {
     }
   }, [memoizedFilters])
 
-  // Função refresh otimizada com useCallback
+  // Refresh: invalida cache e recarrega via overview
   const refresh = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
-      
-      const [investimentosData, resumoData, distribuicaoData] = await Promise.all([
-        getInvestimentos(memoizedFilters),
-        getPortfolioResumo(),
-        getDistribuicaoPorTipo(),
-      ])
-      
-      setInvestimentos(investimentosData)
-      setResumo(resumoData)
-      setDistribuicao(distribuicaoData)
+
+      invalidateInvestimentosOverviewCache()
+
+      const overview = await fetchInvestimentosOverview({
+        tipo_investimento: memoizedFilters?.tipo_investimento,
+        ativo: memoizedFilters?.ativo,
+        anomes: memoizedFilters?.anomes,
+      })
+
+      if (overview.lista)        setInvestimentos(overview.lista)
+      if (overview.resumo)       setResumo(overview.resumo)
+      if (overview.distribuicao) setDistribuicao(overview.distribuicao)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao carregar dados')
     } finally {

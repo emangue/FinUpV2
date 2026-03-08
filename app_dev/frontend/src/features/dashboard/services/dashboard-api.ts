@@ -503,3 +503,59 @@ export async function fetchCreditCards(
     return _setCache(key, await response.json())
   })
 }
+
+// ============================================================================
+// A2 — Endpoint agregado /dashboard/summary
+// 1 request consolida: metrics, chart, income-sources, budget-vs-actual,
+// credit-cards, orcamento-investimentos, cashflow-mes, aporte-mes
+// ============================================================================
+
+export interface DashboardSummary {
+  metrics?: DashboardMetrics
+  chart?: { data: ChartDataPoint[] }
+  chart_yearly?: { data: ChartDataPoint[] }
+  income_sources?: { sources: IncomeSource[]; total_receitas: number }
+  budget_vs_actual?: {
+    items: { grupo: string; realizado: number; planejado: number }[]
+    total_realizado: number
+    total_planejado: number
+    percentual_geral: number
+  }
+  credit_cards?: CreditCardExpense[]
+  orcamento_investimentos?: OrcamentoInvestimentosResponse
+  cashflow_mes?: PlanoCashflowMes | null
+  aporte_mes?: { aporte: number } | null
+}
+
+/**
+ * Busca múltiplas seções do dashboard em 1 único request (A2).
+ * Reduz ~60% do tempo de cold start eliminando RTTs paralelos.
+ *
+ * @param year     - Ano
+ * @param month    - Mês (1-12)
+ * @param ytdMonth - Mês limite para YTD (quando aplicável)
+ * @param sections - Subconjunto de seções (default: todas)
+ */
+export async function fetchDashboardSummary(
+  year: number,
+  month: number,
+  ytdMonth?: number,
+  sections?: string,
+): Promise<DashboardSummary> {
+  const params = new URLSearchParams({
+    year: String(year),
+    month: String(month),
+  })
+  if (ytdMonth != null) params.set('ytd_month', String(ytdMonth))
+  if (sections)         params.set('sections', sections)
+
+  const key = `dashboardSummary:${params}`
+  const cached = _getCache<DashboardSummary>(key, TTL_2MIN)
+  if (cached) return cached
+
+  return _withInFlight(key, async () => {
+    const response = await fetchWithAuth(`${BASE_URL}/dashboard/summary?${params}`)
+    if (!response.ok) throw new Error(`Failed to fetch dashboard summary: ${response.status}`)
+    return _setCache(key, await response.json())
+  })
+}

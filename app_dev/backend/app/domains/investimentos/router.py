@@ -115,6 +115,48 @@ def copiar_mes_anterior(
     return {"copiados": count, "anomes_destino": anomes_destino}
 
 
+@router.get("/overview")
+def investimentos_overview(
+    tipo_investimento: Optional[str] = Query(None, description="Filtrar por tipo"),
+    ativo: Optional[bool] = Query(True, description="Apenas ativos"),
+    anomes: Optional[int] = Query(None, description="Filtrar por mês (YYYYMM)"),
+    classe_ativo: Optional[str] = Query(None, description="Filtrar distribuição por classe: Ativo ou Passivo"),
+    include: str = Query(
+        default="lista,resumo,distribuicao",
+        description="Seções a incluir: lista, resumo, distribuicao (qualquer subconjunto)",
+    ),
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
+):
+    """
+    Endpoint agregado: retorna lista + resumo + distribuição em 1 request (B2).
+    Reduz 3 RTTs paralelos no cold start para 1 único request.
+
+    ?include=lista,resumo,distribuicao (qualquer subconjunto separado por vírgula).
+    Campos ausentes = seção não solicitada (nunca null).
+    """
+    requested = set(include.split(","))
+    result: dict = {}
+
+    service = InvestimentoService(db)
+
+    if "lista" in requested:
+        result["lista"] = service.list_investimentos(
+            user_id=user_id,
+            tipo_investimento=tipo_investimento,
+            ativo=ativo,
+            anomes=anomes,
+        )
+
+    if "resumo" in requested:
+        result["resumo"] = service.get_portfolio_resumo(user_id)
+
+    if "distribuicao" in requested:
+        result["distribuicao"] = service.get_distribuicao_por_tipo(user_id, classe_ativo)
+
+    return result
+
+
 # ============================================================================
 # CENARIOS - Rotas ANTES de /{investimento_id} para evitar conflito (cenarios ≠ id)
 # ============================================================================
