@@ -15,8 +15,9 @@
 | Sprint | Status | Itens | Commit |
 |--------|--------|-------|--------|
 | **Sprint 1** | ✅ Concluído | A3, F3, F4, F5 | `32a40c07` |
-| **Sprint 2** | ✅ Concluído | B4, F2, G1, G2, G3 | pendente commit |
-| **Sprint 3** | ⬜ Pendente | I1, E1, F1, F6 | — |
+| **Sprint 2** | ✅ Concluído | B4, F2, G1, G2, G3 | `e8468157` |
+| **Sprint 3** | ✅ Concluído | I1, E1, F1, F6 | `e238dd7a` |
+| **Fix drift ProjecaoChart** | ✅ Concluído | G1↓, G3↓, curva laranja | `c1495221` |
 | **Sprint 4** | ⬜ Pendente | A2, B2 | — |
 | **Sprint 5** | ⬜ Pendente | A1 | — |
 | **Sprint 6** | ⬜ Pendente | B1, B3, D, C1 | — |
@@ -39,12 +40,51 @@
 | **B4** — Cache `use-categories.ts` | `features/categories/hooks/use-categories.ts` | ✅ Cache 5min. `invalidateCache('categories:')` em mutações. |
 | **F2** — Cache PatrimonioTab | `features/investimentos/services/investimentos-api.ts` | ✅ Cache 5min em `getPatrimonioTimeline` e `getDistribuicaoPorTipo`. Troca de tab sem re-fetch. |
 | **G2** — Cache Plano | `features/plano/api.ts` | ✅ Cache 2min em `getResumoPlano`, `getOrcamento`, `getCashflow`. Cache 5min em `getProjecao`, `getImpactoLongoPrazo`. |
-| **G1** — Debounce slider ProjecaoChart | `features/plano/components/ProjecaoChart.tsx` | ✅ `sliderValue` (UI imediata) + `debouncedPct` (fetch após 400ms). `projCache` ref por percentual. |
-| **G3** — Effects separados ProjecaoChart | `features/plano/components/ProjecaoChart.tsx` | ✅ Effect 1 `[ano]` → base+cashflow. Effect 2 `[debouncedPct, ano]` → curva de redução. |
+| **G1** — Debounce slider ProjecaoChart | `features/plano/components/ProjecaoChart.tsx` | ✅ `sliderValue` (UI imediata) + `debouncedPct` (debounce 400ms). ⚠️ `projCache` e fetch ao backend pelo slider foram **removidos** no fix de drift (commit `c1495221`) — ver seção abaixo. |
+| **G3** — Effects separados ProjecaoChart | `features/plano/components/ProjecaoChart.tsx` | ✅ Effect 1 `[ano]` → base+cashflow permanece. ⚠️ Effect 2 `[debouncedPct, ano]` → **removido**: curva laranja é agora 100% frontend, sem chamada ao backend. |
+
+### Sprint 3 — Detalhes (✅ Concluído)
+
+| Item | Arquivo(s) | Resultado |
+|------|-----------|-----------|
+| **I1** — Índices compostos `journal_entries` | `transactions/models.py` + migration `b52feac5cd7f` | ✅ 3 índices: `idx_je_user_mesfatura`, `idx_je_user_mesfatura_cat_valor`, `idx_je_user_ignorar_mesfatura`. Index Scan confirmado. 5–20× speedup. |
+| **E1** — Fix projeção de economia | `plano/service.py` (`get_projecao` else branch) | ✅ Fórmula corrigida: `renda - gastos_rec*fator + creditos_extras - debitos_extras`. Slider reduz só recorrentes. |
+| **F6** — Renomear campos portfolio_resumo | `investimentos/repository.py`, `dashboard/repository.py` | ✅ Novos nomes canônicos (`total_ativos`, `total_passivos`, `patrimonio_liquido`) + deprecated mantidos por backward-compat. |
+| **F1** — chart-data: 12 queries → 1 | `dashboard/repository.py` (`get_chart_data`) | ✅ Single query `IN + GROUP BY`. Cold start: ~600ms → ~50ms. Shape idêntico. |
 
 ---
 
-## Sub-planos por Sprint
+### Fix ProjecaoChart — Drift Estrutural (✅ Concluído · `c1495221`)
+
+**Contexto:** Descoberto após Sprint 3. O sprint E1 corrigiu o backend (`get_projecao`), mas a curva laranja no frontend ainda usava o retorno do backend como base, introduzindo um drift estrutural nos meses realizados.
+
+**Problema raiz:** Duas curvas acumulam grandezas completamente diferentes:
+
+| Curva | Fórmula para meses realizados |
+|-------|------------------------------|
+| 🟢 Verde | `patrimônio + Σ(investimentos_realizados)` — portfólio real |
+| 🟠 Laranja (antes do fix) | `Σ(renda_real − gastos_real − invest_real)` — fluxo de caixa |
+
+O drift acumulado Jan+Fev inflava o offset da curva laranja, tornando o FY com economia incorreto (241k exibido vs. ~204k correto com slider 10%, gastos_rec = 22.300).
+
+**Fix (`ProjecaoChart.tsx`):**
+- Removido `useEffect` que chamava `getProjecao(debouncedPct)` (Effect 2 do G3)
+- Removido `projCache` ref e `data` state (não há mais fetch pelo slider)
+- `serieRealMaisEconomia` calculado 100% no frontend ancorado na curva verde:
+  ```
+  laranja[i] = verde[i] + Σ gastos_recorrentes[j] × (pct / 100)
+               para j = (lastRealIdx + 1) .. i
+  ```
+- `ganhoEconomia` = soma direta de `gastos_recorrentes × %` nos meses futuros do cashflow (já carregado)
+
+**Resultado verificado com slider 10%:**
+- `ganhoPorMes`: 22.300 × 10% = **2.230/mês** ✅
+- `ganhoEconomia`: 2.230 × 11 = **24.530 no ano** ✅
+- `fyRealMaisEconomiaFinal`: 179.1k + 24.5k = **~203.6k** ✅
+
+**Bônus:** Eliminado 1 fetch ao backend por posição do slider — slider mais fluido.
+
+---
 
 | Sprint | Arquivo | Itens | Escopo | Dep. |
 |--------|---------|-------|--------|------|
