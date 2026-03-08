@@ -2,44 +2,62 @@
 # Microações e Exemplos de Código
 
 > Guia passo-a-passo para implementar cada melhoria. Cada item tem contexto, microações numeradas e exemplos de código prontos para uso.
+>
+> **Este arquivo é o documento de referência completo.**
+> Para implementar, use os sub-planos por sprint abaixo — cada um é autocontido e focado.
 
 ---
 
-## Índice
+## Sub-planos por Sprint
+
+| Sprint | Arquivo | Itens | Escopo | Dep. |
+|--------|---------|-------|--------|------|
+| **Sprint 1** | [sprint-1-frontend-quick-wins.md](sprint-1-frontend-quick-wins.md) | A3, F3, F4, F5 | Frontend only | — |
+| **Sprint 2** | [sprint-2-frontend-cache-layer.md](sprint-2-frontend-cache-layer.md) | B4, F2, G1, G2, G3 | Frontend only | — |
+| **Sprint 3** | [sprint-3-backend-bugs-e-queries.md](sprint-3-backend-bugs-e-queries.md) | I1, E1, F1, F6 | Backend only | — |
+| **Sprint 4** | [sprint-4-endpoints-agregados.md](sprint-4-endpoints-agregados.md) | A2, B2 | Full-stack | Sprint 2 (B4) |
+| **Sprint 5** | [sprint-5-tabela-materializada-cashflow.md](sprint-5-tabela-materializada-cashflow.md) | A1 | Backend + migration | — |
+| **Sprint 6** | [sprint-6-goals-budget-skills.md](sprint-6-goals-budget-skills.md) | B1, B3, D, C1 | Full-stack | Sprint 5 (A1) para B3 |
+
+> Sprints 1, 2 e 3 são independentes entre si — podem correr em paralelo.
+
+---
+
+## Índice completo (referência)
 
 ### Grupo A — Alta prioridade
-- [A1 — Tabela materializada cashflow](#a1--tabela-materializada-cashflow)
-- [A2 — Endpoint agregado dashboard](#a2--endpoint-agregado-dashboard)
-- [A3 — Fix scroll do mês](#a3--fix-scroll-do-mês)
+- [A1 — Tabela materializada cashflow](#a1--tabela-materializada-cashflow) → Sprint 5
+- [A2 — Endpoint agregado dashboard](#a2--endpoint-agregado-dashboard) → Sprint 4
+- [A3 — Fix scroll do mês](#a3--fix-scroll-do-mês) → Sprint 1
 
-### Grupo E — Bugs de lógica (descobertos na análise das telas)
-- [E1 — Fix projeção de economia (tela Plano)](#e1--fix-projeção-de-economia-tela-plano)
+### Grupo E — Bugs de lógica
+- [E1 — Fix projeção de economia (tela Plano)](#e1--fix-projeção-de-economia-tela-plano) → Sprint 3
 
-### Grupo F — Dashboard: melhorias identificadas na análise
-- [F1 — chart-data: 12 queries → 1](#f1--chart-data-12-queries--1)
-- [F2 — Cache em PatrimonioTab](#f2--cache-em-patrimoniotab)
-- [F3 — Prefetch OrcamentoTab em meses adjacentes](#f3--prefetch-orcamentotab-em-meses-adjacentes)
-- [F4 — Prefetch lastMonthWithData patrimônio](#f4--prefetch-lastmonthwithdata-patrimônio)
-- [F5 — Fallback parcial no sliding window N4a](#f5--fallback-parcial-no-sliding-window-n4a)
-- [F6 — Renomear campos confusos em get_portfolio_resumo](#f6--renomear-campos-confusos-em-get_portfolio_resumo)
+### Grupo F — Dashboard: melhorias
+- [F1 — chart-data: 12 queries → 1](#f1--chart-data-12-queries--1) → Sprint 3
+- [F2 — Cache em PatrimonioTab](#f2--cache-em-patrimoniotab) → Sprint 2
+- [F3 — Prefetch OrcamentoTab em meses adjacentes](#f3--prefetch-orcamentotab-em-meses-adjacentes) → Sprint 1
+- [F4 — Prefetch lastMonthWithData patrimônio](#f4--prefetch-lastmonthwithdata-patrimônio) → Sprint 1
+- [F5 — Fallback parcial no sliding window N4a](#f5--fallback-parcial-no-sliding-window-n4a) → Sprint 1
+- [F6 — Renomear campos confusos em get_portfolio_resumo](#f6--renomear-campos-confusos-em-get_portfolio_resumo) → Sprint 3
 
-### Grupo G — Plano: melhorias identificadas na análise
-- [G1 — Debounce no slider da ProjecaoChart](#g1--debounce-no-slider-da-projecaochart)
-- [G2 — Cache para endpoints do Plano](#g2--cache-para-endpoints-do-plano)
-- [G3 — Separar effect de base e slider na ProjecaoChart](#g3--separar-effect-de-base-e-slider-na-projecaochart)
+### Grupo G — Plano: melhorias
+- [G1 — Debounce no slider da ProjecaoChart](#g1--debounce-no-slider-da-projecaochart) → Sprint 2
+- [G2 — Cache para endpoints do Plano](#g2--cache-para-endpoints-do-plano) → Sprint 2
+- [G3 — Separar effect de base e slider na ProjecaoChart](#g3--separar-effect-de-base-e-slider-na-projecaochart) → Sprint 2
 
 ### Grupo B — Média prioridade
-- [B1 — Optimistic updates em Goals](#b1--optimistic-updates-em-goals)
-- [B2 — Endpoint agregado investimentos](#b2--endpoint-agregado-investimentos)
-- [B3 — Batch range update goals](#b3--batch-range-update-goals)
-- [B4 — Cache nos módulos descobertos](#b4--cache-nos-módulos-descobertos)
-- [B5 — Deduplicação global de requests](#b5--deduplicação-global-de-requests)
+- [B1 — Optimistic updates em Goals](#b1--optimistic-updates-em-goals) → Sprint 6
+- [B2 — Endpoint agregado investimentos](#b2--endpoint-agregado-investimentos) → Sprint 4
+- [B3 — Batch range update goals](#b3--batch-range-update-goals) → Sprint 6
+- [B4 — Cache nos módulos descobertos](#b4--cache-nos-módulos-descobertos) → Sprint 2
+- B5 — Deduplicação global: **resolvido automaticamente pelo B4**
 
 ### Grupo C — Baixa prioridade
-- [C1 — Cursor pagination em transações](#c1--cursor-pagination-em-transações)
+- [C1 — Cursor pagination em transações](#c1--cursor-pagination-em-transações) → Sprint 6
 
 ### Grupo D — Skills de desenvolvimento
-- [D — Skills de desenvolvimento](#d--skills-de-desenvolvimento)
+- [D — Skills de desenvolvimento](#d--skills-de-desenvolvimento) → Sprint 6
 
 ---
 

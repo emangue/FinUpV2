@@ -59,36 +59,40 @@ export function MonthScrollPicker({
   const scrollContainerRef = React.useRef<HTMLDivElement>(null)
   const selectedMonthRef = React.useRef<HTMLButtonElement>(null)
   
-  // Gerar lista de meses (antes + atual + depois)
+  // Gerar lista de meses centrada no mês selecionado (A3)
   const months = React.useMemo(() => {
     const result: Date[] = []
-    const start = subMonths(startOfMonth(new Date()), monthsRange)
-    
+    const center = startOfMonth(selectedMonth)
+    const start = subMonths(center, monthsRange)
+
     for (let i = 0; i <= monthsRange * 2; i++) {
       result.push(addMonths(start, i))
     }
-    
+
     return result
-  }, [monthsRange])
-  
+  }, [selectedMonth, monthsRange])
+
+  // Instant no mount, smooth nas mudanças do usuário (A3)
+  const isMountedRef = React.useRef(false)
+
   // Scroll para o mês selecionado ao montar ou mudar seleção
   React.useEffect(() => {
     if (selectedMonthRef.current && scrollContainerRef.current) {
       const container = scrollContainerRef.current
       const button = selectedMonthRef.current
-      
+
       // Calcular posição para centralizar
       const containerWidth = container.offsetWidth
       const buttonLeft = button.offsetLeft
       const buttonWidth = button.offsetWidth
-      
+
       const scrollPosition = buttonLeft - (containerWidth / 2) + (buttonWidth / 2)
-      
-      // Scroll suave
+
       container.scrollTo({
         left: scrollPosition,
-        behavior: 'smooth'
+        behavior: isMountedRef.current ? 'smooth' : 'instant',
       })
+      isMountedRef.current = true
     }
   }, [selectedMonth])
   

@@ -26,10 +26,23 @@ import { OnboardingChecklist } from '@/features/onboarding/OnboardingChecklist'
 import { DemoModeBanner } from '@/features/onboarding/DemoModeBanner'
 import { NudgeBanners } from '@/features/onboarding/NudgeBanners'
 import { useDashboardMetrics, useChartData, useChartDataYearly } from '@/features/dashboard/hooks/use-dashboard'
-import { fetchLastMonthWithData, prefetchChartData } from '@/features/dashboard/services/dashboard-api'
+import { fetchLastMonthWithData, prefetchChartData, fetchIncomeSources, fetchExpenseSources, fetchOrcamentoInvestimentos } from '@/features/dashboard/services/dashboard-api'
 import { useRequireAuth } from '@/core/hooks/use-require-auth'
 
 const YEARS_RANGE = 7 // Últimos N anos no scroll/gráfico anual
+
+function MonthScrollPickerSkeleton() {
+  return (
+    <div className="flex gap-2 px-5 py-2 overflow-hidden">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div
+          key={i}
+          className="shrink-0 min-w-[60px] min-h-[44px] rounded-lg bg-muted animate-pulse"
+        />
+      ))}
+    </div>
+  )
+}
 
 export default function DashboardMobilePage() {
   const router = useRouter()
@@ -60,7 +73,8 @@ export default function DashboardMobilePage() {
   }, [lastMonthWithData?.year])
 
   // N3: pré-fetch em paralelo com auth/me — elimina 1 RTT sequencial no cold start
-  const _pendingLastMonth = useRef<{ year: number; month: number } | null>(null)
+  const _lastMonthPromise = useRef<Promise<{ year: number; month: number }> | null>(null)
+  const _lastMonthPatrimonioPromise = useRef<Promise<{ year: number; month: number }> | null>(null)
 
   // P0-1: bloqueia todos os hooks até selectedMonth resolver (evita re-fire com mês errado)
   const enabled = selectedMonth !== null
@@ -86,42 +100,43 @@ export default function DashboardMobilePage() {
   const isLoading = !enabled
 
   // N3: inicia o fetch imediatamente (sem esperar auth) para eliminar 1 RTT sequencial
+  // F4: prefetch patrimônio em paralelo com transactions
   useEffect(() => {
-    fetchLastMonthWithData('transactions')
-      .then((last) => { _pendingLastMonth.current = last })
-      .catch(() => {})
+    _lastMonthPromise.current = fetchLastMonthWithData('transactions')
+    _lastMonthPatrimonioPromise.current = fetchLastMonthWithData('patrimonio')
   }, [])
 
-  // Default: último mês com dados (usa resultado pré-buscado se disponível)
+  // Default: último mês com dados (reutiliza promise já em andamento)
   useEffect(() => {
     if (!isAuth) return
-    const pending = _pendingLastMonth.current
-    if (pending) {
-      _pendingLastMonth.current = null
-      setSelectedMonth(new Date(pending.year, pending.month - 1, 1))
-      setSelectedYear(pending.year)
-      setLastMonthWithData(pending)
-    } else {
-      fetchLastMonthWithData('transactions')
-        .then((last) => {
-          setSelectedMonth(new Date(last.year, last.month - 1, 1))
-          setSelectedYear(last.year)
-          setLastMonthWithData(last)
-        })
-        .catch(() => {
-          const now = new Date()
-          setSelectedMonth(new Date(now.getFullYear(), now.getMonth(), 1))
-        })
-    }
+    const promise = _lastMonthPromise.current ?? fetchLastMonthWithData('transactions')
+    promise
+      .then((last) => {
+        setSelectedMonth(new Date(last.year, last.month - 1, 1))
+        setSelectedYear(last.year)
+        setLastMonthWithData(last)
+      })
+      .catch(() => {
+        const now = new Date()
+        setSelectedMonth(new Date(now.getFullYear(), now.getMonth(), 1))
+      })
   }, [isAuth])
 
   // N4: pré-busca mês anterior e posterior (popula _pointCache para navegação instantânea)
+  // F3: prefetch OrcamentoTab (income-sources, expense-sources, orcamento-investimentos)
   useEffect(() => {
     if (!selectedMonth || period !== 'month') return
     const prev = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() - 1, 1)
     const next = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() + 1, 1)
-    prefetchChartData(prev.getFullYear(), prev.getMonth() + 1)
-    prefetchChartData(next.getFullYear(), next.getMonth() + 1)
+
+    for (const m of [prev, next]) {
+      const y = m.getFullYear()
+      const mo = m.getMonth() + 1
+      prefetchChartData(y, mo)
+      fetchIncomeSources(y, mo).catch(() => {})
+      fetchExpenseSources(y, mo).catch(() => {})
+      fetchOrcamentoInvestimentos(y, mo, mo).catch(() => {})
+    }
   }, [selectedMonth, period])
 
   // 🔐 Mostrar loading enquanto verifica autenticação (DEPOIS de todos os hooks)
@@ -146,13 +161,17 @@ export default function DashboardMobilePage() {
         <div className="flex items-center gap-2">
           <div className="flex-1 min-w-0">
             {period === 'month' ? (
-              <MonthScrollPicker
-                selectedMonth={selectedMonth ?? new Date()}
-                onMonthChange={setSelectedMonth}
-                onMonthHover={(month) => {
-                  if (period === 'month') prefetchChartData(month.getFullYear(), month.getMonth() + 1)
-                }}
-              />
+              selectedMonth ? (
+                <MonthScrollPicker
+                  selectedMonth={selectedMonth}
+                  onMonthChange={setSelectedMonth}
+                  onMonthHover={(month) => {
+                    if (period === 'month') prefetchChartData(month.getFullYear(), month.getMonth() + 1)
+                  }}
+                />
+              ) : (
+                <MonthScrollPickerSkeleton />
+              )
             ) : (
               <YearScrollPicker
                 years={yearsList}
