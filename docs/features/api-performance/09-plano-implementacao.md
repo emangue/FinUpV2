@@ -10,7 +10,7 @@
 
 ## Status de Implementação
 
-> Última atualização: 2026-03-08
+> Última atualização: 2026-03-08 (Sprint 5 concluído)
 
 | Sprint | Status | Itens | Commit |
 |--------|--------|-------|--------|
@@ -18,9 +18,9 @@
 | **Sprint 2** | ✅ Concluído | B4, F2, G1, G2, G3 | `e8468157` |
 | **Sprint 3** | ✅ Concluído | I1, E1, F1, F6 | `e238dd7a` |
 | **Fix drift ProjecaoChart** | ✅ Concluído | G1↓, G3↓, curva laranja | `c1495221` |
-| **Sprint 4** | ⬜ Pendente | A2, B2 | — |
-| **Sprint 5** | ⬜ Pendente | A1 | — |
-| **Sprint 6** | ⬜ Pendente | B1, B3, D, C1 | — |
+| **Sprint 4** | ✅ Concluído | A2, B2 | `6573bd03` |
+| **Sprint 5** | ✅ Concluído | A1 | `a1162e8d` |
+| **Sprint 6** | ✅ Concluído | B1, B3, D, C1 | `931f0513` |
 
 ### Sprint 1 — Detalhes (✅ Concluído)
 
@@ -125,15 +125,15 @@ O drift acumulado Jan+Fev inflava o offset da curva laranja, tornando o FY com e
 ### Grupo B — Média prioridade
 - ✅ [B4 — Cache nos módulos descobertos](#b4--cache-nos-módulos-descobertos) → Sprint 2
 - ✅ B5 — Deduplicação global: **resolvido automaticamente pelo B4**
-- ⬜ [B1 — Optimistic updates em Goals](#b1--optimistic-updates-em-goals) → Sprint 6
+- ✅ [B1 — Optimistic updates em Goals](#b1--optimistic-updates-em-goals) → Sprint 6
 - ⬜ [B2 — Endpoint agregado investimentos](#b2--endpoint-agregado-investimentos) → Sprint 4
-- ⬜ [B3 — Batch range update goals](#b3--batch-range-update-goals) → Sprint 6
+- ✅ [B3 — Batch range update goals](#b3--batch-range-update-goals) → Sprint 6
 
 ### Grupo C — Baixa prioridade
-- ⬜ [C1 — Cursor pagination em transações](#c1--cursor-pagination-em-transações) → Sprint 6
+- ✅ [C1 — Cursor pagination em transações](#c1--cursor-pagination-em-transações) → Sprint 6
 
 ### Grupo D — Skills de desenvolvimento
-- ⬜ [D — Skills de desenvolvimento](#d--skills-de-desenvolvimento) → Sprint 6
+- ✅ [D — Skills de desenvolvimento](#d--skills-de-desenvolvimento) → Sprint 6
 
 ---
 
