@@ -327,18 +327,18 @@ useEffect(() => {
 
 ### Checklist B2
 
-- [ ] `GET /investimentos/overview` retorna o mesmo shape que os 3 endpoints individuais
-- [ ] `?include=lista` retorna apenas lista (sem resumo e distribuição)
-- [ ] Frontend não quebra se uma seção estiver ausente
-- [ ] DevTools: 1 request no mount (era 3)
+- [x] `GET /investimentos/overview` retorna o mesmo shape que os 3 endpoints individuais
+- [x] `?include=lista` retorna apenas lista (sem resumo e distribuição)
+- [x] Frontend não quebra se uma seção estiver ausente
+- [x] DevTools: 1 request no mount (era 3)
 
 ---
 
 ## Resumo do Sprint 4
 
+**✅ Concluído** — commit `6573bd03` (2026-03-08)
+
 | Item | Backend | Frontend | RTTs antes | RTTs depois |
 |------|---------|----------|-----------|-------------|
-| A2 | `dashboard/router.py` | `dashboard-api.ts`, `use-dashboard.ts` | 11 | 1 |
+| A2 | `dashboard/router.py` | `dashboard-api.ts`, `api.config.ts` | 11 | 1 |
 | B2 | `investimentos/router.py` | `investimentos-api.ts`, `use-investimentos.ts` | 3 | 1 |
-
-**Ordem:** A2 e B2 podem ser desenvolvidos em paralelo (domínios independentes).
