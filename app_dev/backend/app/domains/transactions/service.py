@@ -22,6 +22,7 @@ from .schemas import (
     TipoGastoComMedia
 )
 from app.shared.utils import determine_categoria_geral
+from app.domains.plano.service import invalidate_cashflow_cache
 
 class TransactionService:
     """
@@ -358,7 +359,15 @@ class TransactionService:
         
         # Salvar transação principal
         updated = self.repository.update(transaction)
-        
+
+        # Invalidar cache de cashflow para o mês desta transação
+        try:
+            if updated.MesFatura:
+                mes_fmt = f"{updated.MesFatura[:4]}-{updated.MesFatura[4:6]}"  # YYYYMM → YYYY-MM
+                invalidate_cashflow_cache(self.repository.db, user_id, mes_referencia=[mes_fmt])
+        except Exception as _inv_exc:
+            logger.warning(f"Falha ao invalidar cashflow cache após update_transaction: {_inv_exc}")
+
         # Propagação: parcelas (IdParcela)
         if propagate_parcela and updated.IdParcela and ("GRUPO" in update_dict or "SUBGRUPO" in update_dict):
             self._propagate_to_parcela(

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.shared.dependencies import get_current_user_id
 
-from .service import PlanoService
+from .service import PlanoService, get_cashflow_mes_cached
 from .schemas import RendaUpdate, MetaCreate, PerfilUpdate, ExpectativaCreate, AporteInvestimentoResponse
 
 router = APIRouter(prefix="/plano", tags=["plano"])
@@ -246,15 +246,22 @@ def cashflow_mes_unico(
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ):
-    """P1-3: Retorna cashflow de um único mês (subset do /cashflow anual — evita 91% de payload)."""
-    service = PlanoService(db)
-    resultado = service.get_cashflow(user_id, ano, modo_plano_sempre=modo_plano)
-    meses = resultado.get("meses", []) if isinstance(resultado, dict) else []
-    mes_ref = f"{ano}-{str(mes).zfill(2)}"
-    mes_data = next((m for m in meses if m.get("mes_referencia") == mes_ref), None)
-    if not mes_data:
-        raise HTTPException(status_code=404, detail=f"Mês {mes_ref} não encontrado no cashflow")
-    return mes_data
+    """P1-3: Retorna cashflow de um único mês. Cache hit ~5ms, cache miss ~300-800ms."""
+    if modo_plano:
+        # modo_plano forçado: não usar cache (lógica diferente com modo_plano_sempre=True)
+        service = PlanoService(db)
+        resultado = service.get_cashflow(user_id, ano, modo_plano_sempre=True)
+        meses = resultado.get("meses", []) if isinstance(resultado, dict) else []
+        mes_ref = f"{ano}-{str(mes).zfill(2)}"
+        mes_data = next((m for m in meses if m.get("mes_referencia") == mes_ref), None)
+        if not mes_data:
+            raise HTTPException(status_code=404, detail=f"Mês {mes_ref} não encontrado no cashflow")
+        return mes_data
+
+    result = get_cashflow_mes_cached(db, user_id, ano, mes)
+    if not result or result.get("status_mes") == "erro":
+        raise HTTPException(status_code=404, detail=f"Mês {ano}-{mes:02d} não encontrado no cashflow")
+    return result
 
 
 @router.get("/cashflow")

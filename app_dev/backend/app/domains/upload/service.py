@@ -936,6 +936,20 @@ class UploadService:
             # Salvar todas as transações
             self.db.commit()
             logger.info(f"✅ {transacoes_criadas} transações salvas no journal_entries")
+
+            # Invalida cache de cashflow para os meses afetados pelo upload
+            try:
+                from app.domains.plano.service import invalidate_cashflow_cache
+                meses_afetados = list({
+                    item.mes_fatura  # já no formato YYYY-MM
+                    for item in previews
+                    if item.mes_fatura
+                })
+                if meses_afetados:
+                    invalidate_cashflow_cache(self.db, user_id, mes_referencia=meses_afetados)
+                    logger.info(f"🗑️ Cache cashflow invalidado para {len(meses_afetados)} meses: {meses_afetados}")
+            except Exception as exc:
+                logger.warning(f"⚠️ Erro ao invalidar cache de cashflow: {exc}")
             
             # Contar duplicatas (para revisão: 0, pois preview já filtrou)
             total_duplicatas = 0 if is_revision else (history.total_registros - transacoes_criadas)

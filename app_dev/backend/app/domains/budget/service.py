@@ -370,6 +370,14 @@ class BudgetService:
                 })
         
         self.db.commit()
+
+        # Invalida cache de cashflow para o mês afetado
+        try:
+            from app.domains.plano.service import invalidate_cashflow_cache
+            invalidate_cashflow_cache(self.db, user_id, mes_referencia=[mes_referencia])
+        except Exception:
+            pass  # Não bloquear a operação se a invalidação falhar
+
         return resultado
     
     def _calcular_valor_realizado_grupo(
@@ -792,7 +800,14 @@ class BudgetService:
                 valor_medio_3_meses=media
             )
             result.append(budget)
-        
+
+        # Invalida cache de cashflow para o mês afetado
+        try:
+            from app.domains.plano.service import invalidate_cashflow_cache
+            invalidate_cashflow_cache(self.db, user_id, mes_referencia=[mes_referencia])
+        except Exception:
+            pass  # Não bloquear a operação se a invalidação falhar
+
         return [BudgetResponse.from_orm(b) for b in result]
 
     
