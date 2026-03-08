@@ -241,6 +241,47 @@ app.include_router(meus_itens_router, prefix="/api/v1")
 
 ---
 
+## Decisão de API — Criar vs Ajustar vs Agrupar
+
+Antes de criar qualquer novo endpoint, passar por esta avaliação:
+
+### Passo 1 — Verificar o que já existe
+```
+GET /api/v1/ já documentado? → ver router.py dos domínios existentes
+Dados que o frontend precisa já vêm de algum endpoint? → verificar api.config.ts
+```
+
+### Passo 2 — Escolher a estratégia certa
+
+| Situação | Estratégia |
+|----------|------------|
+| Endpoint existe mas falta um filtro ou campo | **Ajustar** — adicionar query param ou campo no schema |
+| Dois endpoints retornam dados sempre consumidos juntos | **Agrupar** — criar endpoint combinado, deprecar os antigos |
+| Lógica é genuinamente nova, sem sobreposição | **Criar** — novo endpoint seguindo o padrão de 5 arquivos |
+| Frontend faz 3+ chamadas para montar uma tela | **Agrupar** — endpoint de composição no domínio mais relevante |
+
+### Sinais de que deve AGRUPAR em vez de criar
+- O frontend já faz `Promise.all([endpointA, endpointB])` para essa tela
+- Dois endpoints sempre são chamados juntos no mesmo hook
+- A resposta do novo endpoint é subset/superset de um existente
+- Criar o endpoint novo aumenta o número de queries N+1 no carregamento de página
+
+### Sinais de que deve AJUSTAR em vez de criar
+- A diferença com o endpoint existente é só um parâmetro de filtro
+- O schema de resposta é idêntico, só muda o critério de busca
+- O endpoint existe mas retorna dados que precisam de um campo a mais
+
+### Quando criar de fato é a resposta certa
+- Domínio novo sem nenhuma sobreposição com os 17 existentes
+- Operação com efeito colateral distinto (ex: novo tipo de upload)
+- Endpoint de escrita onde agrupar criaria acoplamento indevido
+
+### Regra de ouro
+**Menos endpoints, mais úteis** — um endpoint que responde o que a tela precisa vale mais
+do que três endpoints CRUD puros que exigem composição no frontend.
+
+---
+
 ## O Que É OK Fazer
 
 - ✅ Adicionar novos domínios seguindo o padrão de 5 arquivos acima
