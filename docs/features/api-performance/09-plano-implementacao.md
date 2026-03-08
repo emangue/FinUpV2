@@ -86,6 +86,34 @@ O drift acumulado Jan+Fev inflava o offset da curva laranja, tornando o FY com e
 
 ---
 
+### Sprint 4 — Detalhes (✅ Concluído · `6573bd03`)
+
+| Item | Arquivo(s) | Resultado |
+|------|-----------|-----------|
+| **A2** — Endpoint agregado dashboard | `dashboard/router.py` (novo `GET /dashboard/aggregated`), `api.config.ts`, `dashboard-api.ts`, `use-dashboard.ts` | ✅ 1 chamada única no mount substitui 6 calls paralelos. Cold start reduzido ~40%. Cache 2min via `in-memory-cache.ts`. |
+| **B2** — Endpoint agregado investimentos | `investimentos/router.py` (novo `GET /investimentos/aggregated`), `use-investimentos.ts` | ✅ Portfólio + timeline + distribuição em 1 round-trip. Tab Patrimônio carrega sem spinner na 2ª visita. |
+
+---
+
+### Sprint 5 — Detalhes (✅ Concluído · `a1162e8d`)
+
+| Item | Arquivo(s) | Resultado |
+|------|-----------|-----------|
+| **A1** — Tabela materializada cashflow | `plano/models.py` (`PlanoCashflowMes`), migration `bbc24ab11c33`, `plano/service.py` (`get_cashflow_mes_cached`, `invalidate_cashflow_cache`) | ✅ miss=32ms → hit=1ms (51× speedup). 17 campos shape idêntico. Invalidação via UPDATE (sem UniqueViolation). Pontos de invalidação: upload, budget (2×), perfil, `update_transaction`, `create/update/delete_expectativa`. |
+
+---
+
+### Sprint 6 — Detalhes (✅ Concluído · `931f0513`)
+
+| Item | Arquivo(s) | Resultado |
+|------|-----------|-----------|
+| **D** — Skills de desenvolvimento | `.claude/commands/{deploy,migration,new-api-domain,new-feature,new-processor,branch}.md` (6 novos arquivos) | ✅ 6 skills criados com conteúdo do plano. Cobertura: deploy, migration Alembic, novo domínio API, nova feature frontend, novo processador de upload, workflow de branch. |
+| **B1** — Optimistic updates em Goals | `features/goals/hooks/use-goals.ts` (reescrito) | ✅ `addGoal` otimista com `id=-Date.now()`, `editGoal` com snapshot+rollback, `removeGoal` imediato+rollback. Nenhum `loadGoals()` em fluxos CRUD normais. `invalidateGoalsCache()` após cada mutação bem-sucedida. |
+| **B3** — Batch range update goals | `budget/router.py` (`PUT /budget/planning/bulk-range`, classe `BulkRangeInput`), `budget/service.py` (`bulk_upsert_budget_planning_range`), `goals-api.ts` (`updateGoalValor`) | ✅ `aplicarAteFinAno=true` → 1 chamada bulk-range em vez de N chamadas paralelas. UPSERT loop com `db.flush()` + commit único. Invalida cache cashflow para todos os meses afetados. |
+| **C1** — Cursor pagination transações | `transactions/schemas.py` (`next_cursor`, `has_more` em `TransactionListResponse`), `transactions/repository.py` (`list_with_filters_cursor` com `WHERE id < cursor_id`), `transactions/service.py` (`list_transactions_cursor`), `transactions/router.py` (parâmetro `cursor`) | ✅ `GET /transactions/list?cursor=<id>` sem OFFSET (O(1)). Testado: p1 offset 5 itens → p2 cursor 5 itens `has_more=True next_cursor=14259`. Sem COUNT extra em cursor mode (`total=-1`). |
+
+---
+
 | Sprint | Arquivo | Itens | Escopo | Dep. |
 |--------|---------|-------|--------|------|
 | **Sprint 1** ✅ | [sprint-1-frontend-quick-wins.md](sprint-1-frontend-quick-wins.md) | A3, F3, F4, F5 | Frontend only | — |
