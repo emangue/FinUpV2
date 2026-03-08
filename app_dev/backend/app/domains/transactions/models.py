@@ -2,7 +2,7 @@
 Domínio Transactions - Model
 Contém apenas o modelo JournalEntry isolado
 """
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Index
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -65,6 +65,19 @@ class JournalEntry(Base):
     
     # Relationships
     upload_history = relationship("UploadHistory", back_populates="transactions")
+
+    __table_args__ = (
+        # Cobre: WHERE user_id = ? AND MesFatura = ?  (dashboard por mês)
+        # Cobre: WHERE user_id = ? AND MesFatura IN (...)  (chart-data, F1)
+        Index("idx_je_user_mesfatura", "user_id", "MesFatura"),
+
+        # Cobre: GROUP BY MesFatura, CategoriaGeral com filtro user_id
+        # Permite index-only scan no F1 (chart-data)
+        Index("idx_je_user_mesfatura_cat_valor", "user_id", "MesFatura", "CategoriaGeral", "Valor"),
+
+        # Cobre: WHERE user_id = ? AND IgnorarDashboard = 0 AND MesFatura = ?
+        Index("idx_je_user_ignorar_mesfatura", "user_id", "IgnorarDashboard", "MesFatura"),
+    )
 
 
 class BaseParcelas(Base):

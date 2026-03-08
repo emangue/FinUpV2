@@ -509,16 +509,28 @@ class PlanoService:
                     "acumulado": round(acumulado_aportes, 2),
                 })
         else:
+            # Curva laranja — fórmula: renda - gastos_rec*(1-%eco) + Ce - De
+            # O slider de economia reduz APENAS os gastos recorrentes.
+            # Créditos e débitos extraordinários passam integralmente.
             for i, m in enumerate(cashflow["meses"][:meses]):
-                renda_mes = m.get("renda_usada") or 0.0
-                gastos_base = m.get("gastos_usados") or (m["gastos_realizados"] or m["gastos_recorrentes"])
-                extras = m.get("gastos_extras_esperados", 0) or 0
                 if m.get("use_realizado"):
-                    gastos = gastos_base + extras
+                    # Meses passados: usar valores realizados diretamente
+                    renda_real  = m.get("renda_realizada") or 0.0
+                    gastos_real = m.get("gastos_realizados") or 0.0
+                    invest_real = m.get("investimentos_realizados") or 0.0
+                    saldo_mes   = renda_real - gastos_real - invest_real
                 else:
-                    gastos = (gastos_base * fator) + extras
-                aporte_mes = m.get("aporte_usado") or m["aporte_planejado"]
-                saldo_mes = renda_mes - gastos - aporte_mes
+                    # Meses futuros: slider reduz APENAS gastos recorrentes
+                    renda_base      = m.get("renda_esperada") or 0.0
+                    gastos_rec      = m.get("gastos_recorrentes") or 0.0
+                    creditos_extras = m.get("extras_creditos") or 0.0
+                    debitos_extras  = m.get("extras_debitos") or 0.0
+                    saldo_mes = (
+                        renda_base
+                        - gastos_rec * fator
+                        + creditos_extras
+                        - debitos_extras
+                    )
                 acumulado += saldo_mes
                 serie.append({
                     "mes": i + 1,

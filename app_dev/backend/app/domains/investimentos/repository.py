@@ -459,9 +459,14 @@ class InvestimentoRepository:
             percentual = float((patrimonio_liquido / total_ativos) * 100)
         
         return {
-            'total_investido': total_ativos,  # Soma de Ativos
-            'valor_atual': total_passivos,     # Soma de Passivos (negativos)
-            'rendimento_total': patrimonio_liquido,  # Patrimônio Líquido
+            # Novos nomes descritivos (canônicos)
+            'total_ativos': total_ativos,
+            'total_passivos': total_passivos,
+            'patrimonio_liquido': patrimonio_liquido,
+            # Nomes deprecated — manter por 1 ciclo para backward-compat com consumers existentes
+            'total_investido': total_ativos,       # deprecated
+            'valor_atual': total_passivos,          # deprecated
+            'rendimento_total': patrimonio_liquido, # deprecated
             'rendimento_percentual': percentual,
             'quantidade_produtos': quantidade_total,
             'produtos_ativos': quantidade_total  # Produtos com histórico no último mês
