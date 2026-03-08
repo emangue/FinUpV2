@@ -7,8 +7,9 @@ CHANGELOG 13/02/2026:
 - ✅ Removidos endpoints /geral/* (consolidados em /planning)
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 
 from app.core.database import get_db
 from app.shared.dependencies import get_current_user_id
@@ -239,6 +240,44 @@ def bulk_upsert_budget_planning(
         data["mes_referencia"], 
         data["budgets"]
     )
+
+
+class BulkRangeInput(BaseModel):
+    goal_grupo: str
+    valor: float
+    mes_inicio: str   # 'YYYY-MM'
+    mes_fim: str      # 'YYYY-MM'
+
+
+@router.put("/budget/planning/bulk-range", summary="Aplica valor para range de meses (aplicarAteFinAno)")
+def bulk_range_update(
+    data: BulkRangeInput,
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
+):
+    """
+    Aplica o mesmo valor para todos os meses entre mes_inicio e mes_fim (inclusive).
+    Executa em 1 transação no backend — substitui N chamadas para aplicarAteFinAno.
+
+    Body:
+    - goal_grupo: str — nome do grupo (ex: "Alimentação")
+    - valor: float — novo valor planejado
+    - mes_inicio: str — YYYY-MM
+    - mes_fim: str — YYYY-MM
+
+    Returns:
+    - updated: int — número de meses atualizados
+    - meses: list[str]
+    """
+    service = BudgetService(db)
+    meses, count = service.bulk_upsert_budget_planning_range(
+        user_id=user_id,
+        grupo=data.goal_grupo,
+        valor=data.valor,
+        mes_inicio=data.mes_inicio,
+        mes_fim=data.mes_fim,
+    )
+    return {"updated": count, "meses": meses}
 
 
 @router.get("/budget/planning/grupos-disponiveis", response_model=List[str], summary="Listar grupos disponíveis")

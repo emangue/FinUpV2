@@ -62,6 +62,9 @@ class TransactionListResponse(BaseModel):
     total: int
     page: int
     limit: int
+    # Cursor pagination (opcional — apenas quando cursor mode)
+    next_cursor: Optional[str] = None
+    has_more: bool = False
 
 class TransactionFilters(BaseModel):
     """Schema de filtros de transação"""

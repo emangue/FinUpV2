@@ -379,7 +379,69 @@ class BudgetService:
             pass  # Não bloquear a operação se a invalidação falhar
 
         return resultado
-    
+
+    def bulk_upsert_budget_planning_range(
+        self,
+        user_id: int,
+        grupo: str,
+        valor: float,
+        mes_inicio: str,
+        mes_fim: str,
+    ) -> tuple:
+        """
+        Aplica o mesmo valor_planejado para todos os meses entre mes_inicio e mes_fim (inclusive).
+        Executa em 1 transação — substitui N chamadas para aplicarAteFinAno.
+
+        Returns:
+            (meses: list[str], count: int)
+        """
+        from datetime import datetime
+        # Gera lista de meses YYYY-MM entre inicio e fim
+        inicio = datetime.strptime(mes_inicio, "%Y-%m")
+        fim = datetime.strptime(mes_fim, "%Y-%m")
+        if inicio > fim:
+            raise ValueError(f"mes_inicio ({mes_inicio}) deve ser <= mes_fim ({mes_fim})")
+
+        meses = []
+        ano, mes = inicio.year, inicio.month
+        while True:
+            meses.append(f"{ano}-{mes:02d}")
+            if ano == fim.year and mes == fim.month:
+                break
+            mes += 1
+            if mes > 12:
+                mes, ano = 1, ano + 1
+
+        from .models import BudgetPlanning
+        for mes_ref in meses:
+            existente = self.db.query(BudgetPlanning).filter(
+                BudgetPlanning.user_id == user_id,
+                BudgetPlanning.grupo == grupo,
+                BudgetPlanning.mes_referencia == mes_ref,
+            ).first()
+            if existente:
+                existente.valor_planejado = valor
+                self.db.flush()
+            else:
+                self.db.add(BudgetPlanning(
+                    user_id=user_id,
+                    grupo=grupo,
+                    mes_referencia=mes_ref,
+                    valor_planejado=valor,
+                ))
+                self.db.flush()
+
+        self.db.commit()
+
+        # Invalida cache de cashflow para todos os meses afetados
+        try:
+            from app.domains.plano.service import invalidate_cashflow_cache
+            invalidate_cashflow_cache(self.db, user_id, mes_referencia=meses)
+        except Exception:
+            pass
+
+        return meses, len(meses)
+
     def _calcular_valor_realizado_grupo(
         self, user_id: int, grupo: str, mes_referencia: str, categoria_geral: str = 'Despesa'
     ) -> float:

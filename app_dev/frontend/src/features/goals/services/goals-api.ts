@@ -275,7 +275,7 @@ export async function toggleGoalAtivo(goalId: number, ativo: boolean): Promise<v
  * @param grupo Nome do grupo (necessário para propagar para outros meses)
  * @param novoValor Novo valor de orçamento
  * @param prazo Mês de referência (YYYY-MM)
- * @param aplicarAteFinAno Se true, aplica para todos os meses seguintes até dezembro
+ * @param aplicarAteFinAno Se true, aplica para todos os meses seguintes até dezembro (1 chamada via bulk-range)
  */
 export async function updateGoalValor(
   goalId: number,
@@ -286,54 +286,31 @@ export async function updateGoalValor(
 ): Promise<void> {
   try {
     if (aplicarAteFinAno) {
-      // Calcular meses de prazo até dezembro do ano atual
-      const [ano, mesInicial] = prazo.split('-').map(Number)
-      const mesesParaAtualizar: string[] = []
-      
-      for (let mes = mesInicial; mes <= 12; mes++) {
-        const mesFormatado = mes.toString().padStart(2, '0')
-        mesesParaAtualizar.push(`${ano}-${mesFormatado}`)
-      }
-      
-      // Fazer múltiplas chamadas (uma por mês)
-      // Mês 1: usa id (registro que estamos editando) - backend exige grupo em todos
-      // Meses 2..N: usa grupo (cada mês tem seu próprio registro)
-      const promises = mesesParaAtualizar.map((mesRef, idx) => {
-        const isFirstMonth = idx === 0
-        return fetchWithAuth(`${BASE_URL}/budget/planning/bulk-upsert`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            mes_referencia: mesRef,
-            budgets: [{
-              grupo,
-              ...(isFirstMonth ? { id: goalId } : {}),
-              valor_planejado: novoValor
-            }]
-          })
-        })
+      // 1 chamada para o range inteiro (substitui N chamadas paralelas)
+      const anoAtual = prazo.split('-')[0]
+      const response = await fetchWithAuth(`${BASE_URL}/budget/planning/bulk-range`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          goal_grupo: grupo,
+          valor: novoValor,
+          mes_inicio: prazo,
+          mes_fim: `${anoAtual}-12`,
+        }),
       })
-      
-      await Promise.all(promises)
+      if (!response.ok) {
+        throw new Error(`Erro ao atualizar valores por range: ${response.statusText}`)
+      }
     } else {
       // Atualizar apenas o mês atual (backend exige grupo)
       const response = await fetchWithAuth(`${BASE_URL}/budget/planning/bulk-upsert`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           mes_referencia: prazo,
-          budgets: [{
-            id: goalId,
-            grupo,
-            valor_planejado: novoValor
-          }]
-        })
+          budgets: [{ id: goalId, grupo, valor_planejado: novoValor }],
+        }),
       })
-      
       if (!response.ok) {
         throw new Error(`Erro ao atualizar valor da meta: ${response.statusText}`)
       }
