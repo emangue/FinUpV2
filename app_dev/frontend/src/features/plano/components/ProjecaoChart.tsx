@@ -5,7 +5,7 @@
  * Três linhas: Real | Plano | Plano com redução (slider)
  * Legenda mínima (cores distintas)
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   LineChart,
   Line,
@@ -40,8 +40,11 @@ export function ProjecaoChart({ ano }: { ano: number }) {
   const [data, setData] = useState<ProjecaoResponse | null>(null);
   const [baseData, setBaseData] = useState<ProjecaoResponse | null>(null);
   const [cashflow, setCashflow] = useState<Awaited<ReturnType<typeof getCashflow>> | null>(null);
-  const [reducaoPct, setReducaoPct] = useState(0);
-  const [loading, setLoading] = useState(true);
+  // G1: sliderValue = estado visual imediato; debouncedPct = dispara fetch após parar
+  const [sliderValue, setSliderValue] = useState(0);
+  const [debouncedPct, setDebouncedPct] = useState(0);
+  const projCache = useRef<Map<number, ProjecaoResponse>>(new Map());
+  const [loadingBase, setLoadingBase] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Overlay: parâmetros fixos (validados pelo usuário)
@@ -64,26 +67,40 @@ export function ProjecaoChart({ ano }: { ano: number }) {
     } catch {}
   }, []);
 
-  // Sempre buscar base (0%) e com redução quando slider > 0. sem_patrimonio: só poupança do ano, não patrimônio.
+  // G1: debounce — sliderValue muda imediatamente (UI suave), debouncedPct dispara fetch após 400ms
   useEffect(() => {
-    setLoading(true);
+    const timer = setTimeout(() => setDebouncedPct(sliderValue), 400);
+    return () => clearTimeout(timer);
+  }, [sliderValue]);
+
+  // G3 Effect 1: dados base + cashflow — só re-executa quando ANO muda
+  useEffect(() => {
+    setLoadingBase(true);
     setError(null);
-    const fetches = [
-      getProjecao(ano, 12, 0, true),
-      getCashflow(ano),
-      ...(reducaoPct > 0 ? [getProjecao(ano, 12, reducaoPct, true)] : []),
-    ];
-    Promise.all(fetches)
-      .then((results) => {
-        setBaseData(results[0] as ProjecaoResponse);
-        setCashflow(results[1] as Awaited<ReturnType<typeof getCashflow>>);
-        setData(reducaoPct > 0 ? (results[2] as ProjecaoResponse) : null);
+    projCache.current.clear();
+    Promise.all([getProjecao(ano, 12, 0, true), getCashflow(ano)])
+      .then(([base, cf]) => {
+        setBaseData(base);
+        setCashflow(cf);
       })
       .catch((e) => setError(e?.message || 'Erro'))
-      .finally(() => setLoading(false));
-  }, [ano, reducaoPct]);
+      .finally(() => setLoadingBase(false));
+  }, [ano]);
 
-  if (loading && !baseData) {
+  // G3 Effect 2: curva com redução — só executa quando percentual muda (debounced)
+  useEffect(() => {
+    if (!debouncedPct) { setData(null); return; }
+    if (projCache.current.has(debouncedPct)) {
+      setData(projCache.current.get(debouncedPct)!);
+      return;
+    }
+    getProjecao(ano, 12, debouncedPct, true).then((d) => {
+      projCache.current.set(debouncedPct, d);
+      setData(d);
+    });
+  }, [debouncedPct, ano]);
+
+  if (loadingBase && !baseData) {
     return (
       <div className="rounded-2xl bg-white border border-gray-100 p-4 h-64 flex items-center justify-center">
         <div className="animate-spin h-8 w-8 border-2 border-indigo-600 border-t-transparent rounded-full" />
@@ -99,10 +116,10 @@ export function ProjecaoChart({ ano }: { ano: number }) {
     );
   }
 
-  // Plano = base (0%). Plano com redução = data (quando slider > 0).
+  // Plano = base (0%). Plano com redução = data (quando debouncedPct > 0).
   const patrimonio = baseData?.patrimonio_inicial ?? 0;
   const seriePlano = baseData?.serie ?? [];
-  const serieReducao = reducaoPct > 0 ? (data?.serie ?? []) : [];
+  const serieReducao = debouncedPct > 0 ? (data?.serie ?? []) : [];
   const mesesCf = cashflow?.meses ?? [];
 
   // Série Real: patrimônio + soma acumulada de investimentos_realizados (transações CategoriaGeral=Investimentos).
@@ -122,7 +139,7 @@ export function ProjecaoChart({ ano }: { ano: number }) {
   // Terceira linha (quando economia > 0): Real até último realizado + Plano com economia nos meses futuros.
   // Backend já aplica "redução só em meses não realizados" — Jan realizado não gera economia.
   const serieRealMaisEconomia =
-    reducaoPct > 0 && serieReducao.length > 0
+    debouncedPct > 0 && serieReducao.length > 0
       ? seriePlano.map((_, i) => {
           if (lastRealIdx >= 0 && i <= lastRealIdx && serieReal[i] != null) return serieReal[i];
           if (realAteMes != null && lastRealIdx >= 0 && ytdReducao != null) {
@@ -166,7 +183,7 @@ export function ProjecaoChart({ ano }: { ano: number }) {
     realMaisPlano: lastRealIdx >= 0 && realMaisPlano.length > 0 ? realMaisPlano[i] : undefined,
     realMaisPlanoSolido: lastRealIdx >= 0 ? realMaisPlanoSolido[i] ?? undefined : undefined,
     realMaisPlanoTracejado: lastRealIdx >= 0 ? realMaisPlanoTracejado[i] ?? undefined : undefined,
-    realMaisEconomia: reducaoPct > 0 ? serieRealMaisEconomia[i] : undefined,
+    realMaisEconomia: debouncedPct > 0 ? serieRealMaisEconomia[i] : undefined,
   }));
 
   return (
@@ -185,11 +202,11 @@ export function ProjecaoChart({ ano }: { ano: number }) {
             min={0}
             max={50}
             step={5}
-            value={reducaoPct}
-            onChange={(e) => setReducaoPct(Number(e.target.value))}
+            value={sliderValue}
+            onChange={(e) => setSliderValue(Number(e.target.value))}
             className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
           />
-          <span className="text-sm font-medium text-indigo-600 w-12">{reducaoPct}%</span>
+          <span className="text-sm font-medium text-indigo-600 w-12">{sliderValue}%</span>
         </div>
       </div>
       <div className="p-4 h-64 relative">
@@ -241,7 +258,7 @@ export function ProjecaoChart({ ano }: { ano: number }) {
                   isAnimationActive={false}
                 />
               )}
-              {reducaoPct > 0 && (
+              {debouncedPct > 0 && (
                 <Line
                   type="monotone"
                   dataKey="realMaisEconomia"
@@ -266,16 +283,16 @@ export function ProjecaoChart({ ano }: { ano: number }) {
               <p className="text-xs text-gray-600">
                 FY Real+Plano: {fmtK(fyRealMaisPlano ?? 0)} / FY Plano: {fmtK(fyPlano)}
               </p>
-              {reducaoPct > 0 && serieRealMaisEconomia.length > 0 && (
+              {debouncedPct > 0 && serieRealMaisEconomia.length > 0 && (
                 <p className="text-xs text-gray-600">
-                  FY Real + Plano {reducaoPct}% economia: {fmtK(serieRealMaisEconomia[serieRealMaisEconomia.length - 1] ?? 0)}
+                  FY Real + Plano {debouncedPct}% economia: {fmtK(serieRealMaisEconomia[serieRealMaisEconomia.length - 1] ?? 0)}
                 </p>
               )}
             </>
           ) : (
             <p className="text-xs text-gray-600">
-              {reducaoPct > 0 && serieReducao.length > 0 ? (
-                <>Base: {fmtK(fyPlano)} · Com {reducaoPct}% economia: {fmtK(serieReducao[serieReducao.length - 1]?.acumulado ?? 0)}</>
+              {debouncedPct > 0 && serieReducao.length > 0 ? (
+                <>Base: {fmtK(fyPlano)} · Com {debouncedPct}% economia: {fmtK(serieReducao[serieReducao.length - 1]?.acumulado ?? 0)}</>
               ) : (
                 <>Fim do ano: {fmtK(fyPlano)}</>
               )}

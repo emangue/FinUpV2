@@ -4,6 +4,10 @@
  */
 import { fetchWithAuth } from '@/core/utils/api-client';
 import { API_CONFIG } from '@/core/config/api.config';
+import { getCached, setCached, getInFlight, setInFlight } from '@/core/utils/in-memory-cache';
+
+const TTL_2MIN = 2 * 60 * 1000;
+const TTL_5MIN = 5 * 60 * 1000;
 
 const BASE = `${API_CONFIG.BACKEND_URL}/api/v1/plano`;
 
@@ -32,9 +36,17 @@ export async function getRenda(): Promise<RendaResponse> {
 }
 
 export async function getResumoPlano(ano: number, mes: number): Promise<ResumoPlanoResponse> {
-  const res = await fetchWithAuth(`${BASE}/resumo?ano=${ano}&mes=${mes}`);
-  if (!res.ok) throw new Error('Erro ao carregar resumo');
-  return res.json();
+  const key = `plano:resumo:${ano}:${mes}`;
+  const cached = getCached<ResumoPlanoResponse>(key);
+  if (cached) return cached;
+  let inFlight = getInFlight<ResumoPlanoResponse>(key);
+  if (!inFlight) {
+    inFlight = fetchWithAuth(`${BASE}/resumo?ano=${ano}&mes=${mes}`)
+      .then(res => { if (!res.ok) throw new Error('Erro ao carregar resumo'); return res.json(); })
+      .then(data => { setCached(key, data, TTL_2MIN); return data; });
+    setInFlight(key, inFlight);
+  }
+  return inFlight;
 }
 
 export async function postRenda(renda_mensal_liquida: number): Promise<{ success: boolean; renda: number }> {
@@ -48,9 +60,17 @@ export async function postRenda(renda_mensal_liquida: number): Promise<{ success
 }
 
 export async function getOrcamento(ano: number, mes: number): Promise<OrcamentoItem[]> {
-  const res = await fetchWithAuth(`${BASE}/orcamento?ano=${ano}&mes=${mes}`);
-  if (!res.ok) throw new Error('Erro ao carregar orçamento');
-  return res.json();
+  const key = `plano:orcamento:${ano}:${mes}`;
+  const cached = getCached<OrcamentoItem[]>(key);
+  if (cached) return cached;
+  let inFlight = getInFlight<OrcamentoItem[]>(key);
+  if (!inFlight) {
+    inFlight = fetchWithAuth(`${BASE}/orcamento?ano=${ano}&mes=${mes}`)
+      .then(res => { if (!res.ok) throw new Error('Erro ao carregar orçamento'); return res.json(); })
+      .then(data => { setCached(key, data, TTL_2MIN); return data; });
+    setInFlight(key, inFlight);
+  }
+  return inFlight;
 }
 
 export interface ImpactoLongoPrazoResponse {
@@ -65,9 +85,17 @@ export async function getImpactoLongoPrazo(
   ano: number,
   mes: number
 ): Promise<ImpactoLongoPrazoResponse> {
-  const res = await fetchWithAuth(`${BASE}/impacto-longo-prazo?ano=${ano}&mes=${mes}`);
-  if (!res.ok) throw new Error('Erro ao carregar impacto');
-  return res.json();
+  const key = `plano:impacto:${ano}:${mes}`;
+  const cached = getCached<ImpactoLongoPrazoResponse>(key);
+  if (cached) return cached;
+  let inFlight = getInFlight<ImpactoLongoPrazoResponse>(key);
+  if (!inFlight) {
+    inFlight = fetchWithAuth(`${BASE}/impacto-longo-prazo?ano=${ano}&mes=${mes}`)
+      .then(res => { if (!res.ok) throw new Error('Erro ao carregar impacto'); return res.json(); })
+      .then(data => { setCached(key, data, TTL_5MIN); return data; });
+    setInFlight(key, inFlight);
+  }
+  return inFlight;
 }
 
 // ─── Cashflow e Projeção (Fase 2) ───────────────────────────────────────────
@@ -101,9 +129,17 @@ export interface CashflowResponse {
 }
 
 export async function getCashflow(ano: number): Promise<CashflowResponse> {
-  const res = await fetchWithAuth(`${BASE}/cashflow?ano=${ano}`);
-  if (!res.ok) throw new Error('Erro ao carregar cashflow');
-  return res.json();
+  const key = `plano:cashflow:${ano}`;
+  const cached = getCached<CashflowResponse>(key);
+  if (cached) return cached;
+  let inFlight = getInFlight<CashflowResponse>(key);
+  if (!inFlight) {
+    inFlight = fetchWithAuth(`${BASE}/cashflow?ano=${ano}`)
+      .then(res => { if (!res.ok) throw new Error('Erro ao carregar cashflow'); return res.json(); })
+      .then(data => { setCached(key, data, TTL_2MIN); return data; });
+    setInFlight(key, inFlight);
+  }
+  return inFlight;
 }
 
 export interface CashflowDetalheMesResponse {
@@ -162,9 +198,17 @@ export async function getProjecao(
   if (meses != null) params.set('meses', String(meses));
   if (reducao_pct != null) params.set('reducao_pct', String(reducao_pct));
   if (sem_patrimonio) params.set('sem_patrimonio', '1');
-  const res = await fetchWithAuth(`${BASE}/projecao?${params}`);
-  if (!res.ok) throw new Error('Erro ao carregar projeção');
-  return res.json();
+  const key = `plano:projecao:${ano}:${meses ?? ''}:${reducao_pct ?? 0}:${sem_patrimonio ? '1' : '0'}`;
+  const cached = getCached<ProjecaoResponse>(key);
+  if (cached) return cached;
+  let inFlight = getInFlight<ProjecaoResponse>(key);
+  if (!inFlight) {
+    inFlight = fetchWithAuth(`${BASE}/projecao?${params}`)
+      .then(res => { if (!res.ok) throw new Error('Erro ao carregar projeção'); return res.json(); })
+      .then(data => { setCached(key, data, TTL_5MIN); return data; });
+    setInFlight(key, inFlight);
+  }
+  return inFlight;
 }
 
 export interface ProjecaoLongaItem {

@@ -8,12 +8,48 @@
 
 ---
 
+## Status de Implementação
+
+> Última atualização: 2026-03-08
+
+| Sprint | Status | Itens | Commit |
+|--------|--------|-------|--------|
+| **Sprint 1** | ✅ Concluído | A3, F3, F4, F5 | `32a40c07` |
+| **Sprint 2** | ✅ Concluído | B4, F2, G1, G2, G3 | pendente commit |
+| **Sprint 3** | ⬜ Pendente | I1, E1, F1, F6 | — |
+| **Sprint 4** | ⬜ Pendente | A2, B2 | — |
+| **Sprint 5** | ⬜ Pendente | A1 | — |
+| **Sprint 6** | ⬜ Pendente | B1, B3, D, C1 | — |
+
+### Sprint 1 — Detalhes (✅ Concluído)
+
+| Item | Arquivo(s) | Resultado |
+|------|-----------|-----------|
+| **A3** — Fix scroll do mês | `page.tsx`, `month-scroll-picker.tsx` | ✅ Picker não aparece no mês errado. Skeleton durante null. Lista centrada em `selectedMonth`. Scroll `instant` no mount. |
+| **F3** — Prefetch OrcamentoTab adjacentes | `page.tsx` | ✅ `fetchIncomeSources`, `fetchExpenseSources`, `fetchOrcamentoInvestimentos` disparados para prev/next no effect de meses adjacentes. |
+| **F4** — Prefetch lastMonthWithData patrimônio | `page.tsx` | ✅ `_lastMonthPatrimonioPromise` inicia no mount em paralelo com transactions. Cache via `_inflight` dedup no `fetchLastMonthWithData`. |
+| **F5** — Fallback parcial sliding window | `dashboard-api.ts` | ✅ Já estava implementado corretamente (sliding window com `_pointCache`). Sem alterações necessárias. |
+
+### Sprint 2 — Detalhes (✅ Concluído)
+
+| Item | Arquivo(s) | Resultado |
+|------|-----------|-----------|
+| **B4** — `in-memory-cache.ts` | `core/utils/in-memory-cache.ts` (novo) | ✅ Criado com `getCached`, `setCached`, `getInFlight`, `setInFlight`, `invalidateCache`. |
+| **B4** — Cache `use-banks.ts` | `features/banks/hooks/use-banks.ts` | ✅ Cache 5min. `invalidateCache('banks:')` em create/update/delete. |
+| **B4** — Cache `use-categories.ts` | `features/categories/hooks/use-categories.ts` | ✅ Cache 5min. `invalidateCache('categories:')` em mutações. |
+| **F2** — Cache PatrimonioTab | `features/investimentos/services/investimentos-api.ts` | ✅ Cache 5min em `getPatrimonioTimeline` e `getDistribuicaoPorTipo`. Troca de tab sem re-fetch. |
+| **G2** — Cache Plano | `features/plano/api.ts` | ✅ Cache 2min em `getResumoPlano`, `getOrcamento`, `getCashflow`. Cache 5min em `getProjecao`, `getImpactoLongoPrazo`. |
+| **G1** — Debounce slider ProjecaoChart | `features/plano/components/ProjecaoChart.tsx` | ✅ `sliderValue` (UI imediata) + `debouncedPct` (fetch após 400ms). `projCache` ref por percentual. |
+| **G3** — Effects separados ProjecaoChart | `features/plano/components/ProjecaoChart.tsx` | ✅ Effect 1 `[ano]` → base+cashflow. Effect 2 `[debouncedPct, ano]` → curva de redução. |
+
+---
+
 ## Sub-planos por Sprint
 
 | Sprint | Arquivo | Itens | Escopo | Dep. |
 |--------|---------|-------|--------|------|
-| **Sprint 1** | [sprint-1-frontend-quick-wins.md](sprint-1-frontend-quick-wins.md) | A3, F3, F4, F5 | Frontend only | — |
-| **Sprint 2** | [sprint-2-frontend-cache-layer.md](sprint-2-frontend-cache-layer.md) | B4, F2, G1, G2, G3 | Frontend only | — |
+| **Sprint 1** ✅ | [sprint-1-frontend-quick-wins.md](sprint-1-frontend-quick-wins.md) | A3, F3, F4, F5 | Frontend only | — |
+| **Sprint 2** ✅ | [sprint-2-frontend-cache-layer.md](sprint-2-frontend-cache-layer.md) | B4, F2, G1, G2, G3 | Frontend only | — |
 | **Sprint 3** | [sprint-3-backend-bugs-e-queries.md](sprint-3-backend-bugs-e-queries.md) | I1, E1, F1, F6 | Backend only | — |
 | **Sprint 4** | [sprint-4-endpoints-agregados.md](sprint-4-endpoints-agregados.md) | A2, B2 | Full-stack | Sprint 2 (B4) |
 | **Sprint 5** | [sprint-5-tabela-materializada-cashflow.md](sprint-5-tabela-materializada-cashflow.md) | A1 | Backend + migration | — |
@@ -26,38 +62,38 @@
 ## Índice completo (referência)
 
 ### Grupo A — Alta prioridade
-- [A1 — Tabela materializada cashflow](#a1--tabela-materializada-cashflow) → Sprint 5
-- [A2 — Endpoint agregado dashboard](#a2--endpoint-agregado-dashboard) → Sprint 4
-- [A3 — Fix scroll do mês](#a3--fix-scroll-do-mês) → Sprint 1
+- ✅ [A3 — Fix scroll do mês](#a3--fix-scroll-do-mês) → Sprint 1
+- ⬜ [A1 — Tabela materializada cashflow](#a1--tabela-materializada-cashflow) → Sprint 5
+- ⬜ [A2 — Endpoint agregado dashboard](#a2--endpoint-agregado-dashboard) → Sprint 4
 
 ### Grupo E — Bugs de lógica
-- [E1 — Fix projeção de economia (tela Plano)](#e1--fix-projeção-de-economia-tela-plano) → Sprint 3
+- ⬜ [E1 — Fix projeção de economia (tela Plano)](#e1--fix-projeção-de-economia-tela-plano) → Sprint 3
 
 ### Grupo F — Dashboard: melhorias
-- [F1 — chart-data: 12 queries → 1](#f1--chart-data-12-queries--1) → Sprint 3
-- [F2 — Cache em PatrimonioTab](#f2--cache-em-patrimoniotab) → Sprint 2
-- [F3 — Prefetch OrcamentoTab em meses adjacentes](#f3--prefetch-orcamentotab-em-meses-adjacentes) → Sprint 1
-- [F4 — Prefetch lastMonthWithData patrimônio](#f4--prefetch-lastmonthwithdata-patrimônio) → Sprint 1
-- [F5 — Fallback parcial no sliding window N4a](#f5--fallback-parcial-no-sliding-window-n4a) → Sprint 1
-- [F6 — Renomear campos confusos em get_portfolio_resumo](#f6--renomear-campos-confusos-em-get_portfolio_resumo) → Sprint 3
+- ✅ [F2 — Cache em PatrimonioTab](#f2--cache-em-patrimoniotab) → Sprint 2
+- ✅ [F3 — Prefetch OrcamentoTab em meses adjacentes](#f3--prefetch-orcamentotab-em-meses-adjacentes) → Sprint 1
+- ✅ [F4 — Prefetch lastMonthWithData patrimônio](#f4--prefetch-lastmonthwithdata-patrimônio) → Sprint 1
+- ✅ [F5 — Fallback parcial no sliding window N4a](#f5--fallback-parcial-no-sliding-window-n4a) → Sprint 1 (já estava implementado)
+- ⬜ [F1 — chart-data: 12 queries → 1](#f1--chart-data-12-queries--1) → Sprint 3
+- ⬜ [F6 — Renomear campos confusos em get_portfolio_resumo](#f6--renomear-campos-confusos-em-get_portfolio_resumo) → Sprint 3
 
 ### Grupo G — Plano: melhorias
-- [G1 — Debounce no slider da ProjecaoChart](#g1--debounce-no-slider-da-projecaochart) → Sprint 2
-- [G2 — Cache para endpoints do Plano](#g2--cache-para-endpoints-do-plano) → Sprint 2
-- [G3 — Separar effect de base e slider na ProjecaoChart](#g3--separar-effect-de-base-e-slider-na-projecaochart) → Sprint 2
+- ✅ [G1 — Debounce no slider da ProjecaoChart](#g1--debounce-no-slider-da-projecaochart) → Sprint 2
+- ✅ [G2 — Cache para endpoints do Plano](#g2--cache-para-endpoints-do-plano) → Sprint 2
+- ✅ [G3 — Separar effect de base e slider na ProjecaoChart](#g3--separar-effect-de-base-e-slider-na-projecaochart) → Sprint 2
 
 ### Grupo B — Média prioridade
-- [B1 — Optimistic updates em Goals](#b1--optimistic-updates-em-goals) → Sprint 6
-- [B2 — Endpoint agregado investimentos](#b2--endpoint-agregado-investimentos) → Sprint 4
-- [B3 — Batch range update goals](#b3--batch-range-update-goals) → Sprint 6
-- [B4 — Cache nos módulos descobertos](#b4--cache-nos-módulos-descobertos) → Sprint 2
-- B5 — Deduplicação global: **resolvido automaticamente pelo B4**
+- ✅ [B4 — Cache nos módulos descobertos](#b4--cache-nos-módulos-descobertos) → Sprint 2
+- ✅ B5 — Deduplicação global: **resolvido automaticamente pelo B4**
+- ⬜ [B1 — Optimistic updates em Goals](#b1--optimistic-updates-em-goals) → Sprint 6
+- ⬜ [B2 — Endpoint agregado investimentos](#b2--endpoint-agregado-investimentos) → Sprint 4
+- ⬜ [B3 — Batch range update goals](#b3--batch-range-update-goals) → Sprint 6
 
 ### Grupo C — Baixa prioridade
-- [C1 — Cursor pagination em transações](#c1--cursor-pagination-em-transações) → Sprint 6
+- ⬜ [C1 — Cursor pagination em transações](#c1--cursor-pagination-em-transações) → Sprint 6
 
 ### Grupo D — Skills de desenvolvimento
-- [D — Skills de desenvolvimento](#d--skills-de-desenvolvimento) → Sprint 6
+- ⬜ [D — Skills de desenvolvimento](#d--skills-de-desenvolvimento) → Sprint 6
 
 ---
 

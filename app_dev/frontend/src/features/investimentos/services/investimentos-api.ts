@@ -6,6 +6,9 @@
  */
 
 import { apiGet, apiPost, apiPatch, apiPut, apiDelete, API_ENDPOINTS } from '@/core/config/api.config'
+import { getCached, setCached, getInFlight, setInFlight } from '@/core/utils/in-memory-cache'
+
+const TTL_5MIN = 5 * 60 * 1000
 import type {
   InvestimentoPortfolio,
   PortfolioResumo,
@@ -109,7 +112,15 @@ export async function getDistribuicaoPorTipo(
   const params = new URLSearchParams()
   if (filters?.classe_ativo) params.append('classe_ativo', filters.classe_ativo)
   const url = `${BASE_URL}/distribuicao-tipo${params.toString() ? `?${params.toString()}` : ''}`
-  return apiGet<DistribuicaoTipo[]>(url)
+  const key = `investimentos:distribuicao:${filters?.classe_ativo ?? 'all'}`
+  const cached = getCached<DistribuicaoTipo[]>(key)
+  if (cached) return cached
+  let inFlight = getInFlight<DistribuicaoTipo[]>(key)
+  if (!inFlight) {
+    inFlight = apiGet<DistribuicaoTipo[]>(url).then(data => { setCached(key, data, TTL_5MIN); return data })
+    setInFlight(key, inFlight)
+  }
+  return inFlight
 }
 
 /**
@@ -147,9 +158,16 @@ export async function getPatrimonioTimeline(
     ano_inicio: String(filters.ano_inicio),
     ano_fim: String(filters.ano_fim),
   })
-
   const url = `${BASE_URL}/timeline/patrimonio?${params.toString()}`
-  return apiGet<PatrimonioMensal[]>(url)
+  const key = `investimentos:timeline:patrimonio:${filters.ano_inicio}:${filters.ano_fim}`
+  const cached = getCached<PatrimonioMensal[]>(key)
+  if (cached) return cached
+  let inFlight = getInFlight<PatrimonioMensal[]>(key)
+  if (!inFlight) {
+    inFlight = apiGet<PatrimonioMensal[]>(url).then(data => { setCached(key, data, TTL_5MIN); return data })
+    setInFlight(key, inFlight)
+  }
+  return inFlight
 }
 
 /**
