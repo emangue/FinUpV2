@@ -346,6 +346,26 @@ import { useRequireAuth } from '@/core/hooks/use-require-auth'  // guard de rota
 
 ---
 
+## Design de Componentes — Skill executive-ui
+
+Antes de criar qualquer componente visual novo ou redesenhar uma tela existente, acionar a skill `/executive-ui`.
+
+**Quando acionar obrigatoriamente:**
+- Criação de nova página ou layout (`page.tsx`)
+- Criação de componente em `organisms/` ou `molecules/`
+- Usuário envia print/screenshot com pedido de melhora ou replicação
+- Pedidos com: "refaz", "melhora o layout", "mais profissional", "versão clean", "redesign"
+
+**O que a skill entrega antes do código:**
+- `study-log.md` — análise do que existe e decisões tomadas
+- `design-guide.md` — tokens de paleta, tipografia e componentes escolhidos
+- `[Componente].jsx` — código funcional com CSS Variables e Google Fonts
+
+**Regra:** Nunca escrever componente visual complexo sem passar pela executive-ui primeiro.
+Os tokens definidos no `design-guide.md` devem ser migrados para `globals.css` ao integrar ao projeto.
+
+---
+
 ## O Que É OK Fazer
 
 - ✅ Criar nova feature em `src/features/{nome}/` seguindo o padrão de 5 arquivos
