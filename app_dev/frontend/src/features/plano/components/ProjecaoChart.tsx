@@ -5,7 +5,7 @@
  * Três linhas: Real | Plano | Plano com redução (slider)
  * Legenda mínima (cores distintas)
  */
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import {
   LineChart,
   Line,
@@ -37,13 +37,11 @@ function fmt(v: number): string {
 }
 
 export function ProjecaoChart({ ano }: { ano: number }) {
-  const [data, setData] = useState<ProjecaoResponse | null>(null);
   const [baseData, setBaseData] = useState<ProjecaoResponse | null>(null);
   const [cashflow, setCashflow] = useState<Awaited<ReturnType<typeof getCashflow>> | null>(null);
   // G1: sliderValue = estado visual imediato; debouncedPct = dispara fetch após parar
   const [sliderValue, setSliderValue] = useState(0);
   const [debouncedPct, setDebouncedPct] = useState(0);
-  const projCache = useRef<Map<number, ProjecaoResponse>>(new Map());
   const [loadingBase, setLoadingBase] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -77,7 +75,6 @@ export function ProjecaoChart({ ano }: { ano: number }) {
   useEffect(() => {
     setLoadingBase(true);
     setError(null);
-    projCache.current.clear();
     Promise.all([getProjecao(ano, 12, 0, true), getCashflow(ano)])
       .then(([base, cf]) => {
         setBaseData(base);
@@ -86,19 +83,6 @@ export function ProjecaoChart({ ano }: { ano: number }) {
       .catch((e) => setError(e?.message || 'Erro'))
       .finally(() => setLoadingBase(false));
   }, [ano]);
-
-  // G3 Effect 2: curva com redução — só executa quando percentual muda (debounced)
-  useEffect(() => {
-    if (!debouncedPct) { setData(null); return; }
-    if (projCache.current.has(debouncedPct)) {
-      setData(projCache.current.get(debouncedPct)!);
-      return;
-    }
-    getProjecao(ano, 12, debouncedPct, true).then((d) => {
-      projCache.current.set(debouncedPct, d);
-      setData(d);
-    });
-  }, [debouncedPct, ano]);
 
   if (loadingBase && !baseData) {
     return (
@@ -119,7 +103,6 @@ export function ProjecaoChart({ ano }: { ano: number }) {
   // Plano = base (0%). Plano com redução = data (quando debouncedPct > 0).
   const patrimonio = baseData?.patrimonio_inicial ?? 0;
   const seriePlano = baseData?.serie ?? [];
-  const serieReducao = debouncedPct > 0 ? (data?.serie ?? []) : [];
   const mesesCf = cashflow?.meses ?? [];
 
   // Série Real: patrimônio + soma acumulada de investimentos_realizados (transações CategoriaGeral=Investimentos).
@@ -134,20 +117,33 @@ export function ProjecaoChart({ ano }: { ano: number }) {
 
   const lastRealIdx = serieReal.findLastIndex((v) => v != null);
   const realAteMes = lastRealIdx >= 0 ? serieReal[lastRealIdx] : null;
-  const ytdReducao = lastRealIdx >= 0 ? serieReducao[lastRealIdx]?.acumulado : null;
 
-  // Terceira linha (quando economia > 0): Real até último realizado + Plano com economia nos meses futuros.
-  // Backend já aplica "redução só em meses não realizados" — Jan realizado não gera economia.
-  const serieRealMaisEconomia =
-    debouncedPct > 0 && serieReducao.length > 0
-      ? seriePlano.map((_, i) => {
-          if (lastRealIdx >= 0 && i <= lastRealIdx && serieReal[i] != null) return serieReal[i];
-          if (realAteMes != null && lastRealIdx >= 0 && ytdReducao != null) {
-            return realAteMes + ((serieReducao[i]?.acumulado ?? 0) - ytdReducao);
-          }
-          return serieReducao[i]?.acumulado ?? undefined;
-        })
-      : [];
+  // Curva laranja = curva verde + savings cumulativos nos meses futuros.
+  // NUNCA usando o backend com debouncedPct: aquele usa fórmulas estruturalmente
+  // diferentes (renda-gastos-invest vs patrimônio+investimentos), o que introduz
+  // desvios não relacionados à economia de gastos.
+  const serieRealMaisEconomia: (number | undefined)[] = (() => {
+    if (debouncedPct <= 0) return [];
+    // Base: curva verde (realMaisPlano) ou azul (seriePlano) se não houver dados realizados
+    const hasReal = realAteMes != null && lastRealIdx >= 0;
+    const ytdPl = hasReal ? (seriePlano[lastRealIdx]?.acumulado ?? null) : null;
+    const base = hasReal && ytdPl != null
+      ? seriePlano.map((s, i) =>
+          i <= lastRealIdx && serieReal[i] != null
+            ? (serieReal[i] as number)
+            : (realAteMes as number) + ((s.acumulado ?? 0) - ytdPl)
+        )
+      : seriePlano.map((s) => s.acumulado ?? 0);
+    // Adicionar savings cumulativos SOMENTE a partir do primeiro mês não realizado
+    const startSavingsIdx = hasReal ? lastRealIdx + 1 : 0;
+    let cumSavings = 0;
+    return base.map((baseValue, i) => {
+      if (i >= startSavingsIdx) {
+        cumSavings += (mesesCf[i]?.gastos_recorrentes ?? 0) * (debouncedPct / 100);
+      }
+      return (baseValue as number) + cumSavings;
+    });
+  })();
 
   const mesRealLabel = lastRealIdx >= 0 ? seriePlano[lastRealIdx]?.mes_referencia?.replace('-', '/').slice(-7) : null;
   const ytdPlano = lastRealIdx >= 0 ? seriePlano[lastRealIdx]?.acumulado ?? null : null;
@@ -156,6 +152,22 @@ export function ProjecaoChart({ ano }: { ano: number }) {
     realAteMes != null && lastRealIdx >= 0 && ytdPlano != null
       ? realAteMes + (fyPlano - ytdPlano)
       : null;
+
+  // Breakdowns de economia (usados no rodapé explicativo)
+  const fyRealMaisEconomiaFinal = debouncedPct > 0 && serieRealMaisEconomia.length > 0
+    ? (serieRealMaisEconomia[serieRealMaisEconomia.length - 1] ?? 0)
+    : 0;
+  const mesesFuturos = seriePlano.length - (lastRealIdx + 1); // meses ainda não realizados
+
+  // Ganho calculado diretamente dos gastos_recorrentes futuros do cashflow:
+  // ganho = soma de (gastos_recorrentes_mes × pct%) para cada mês não realizado.
+  // Isso é preciso — não compara curvas com fórmulas diferentes (azul vs laranja).
+  const ganhoEconomia = debouncedPct > 0
+    ? mesesCf
+        .slice(lastRealIdx + 1)
+        .reduce((sum, m) => sum + (m.gastos_recorrentes ?? 0) * (debouncedPct / 100), 0)
+    : 0;
+  const ganhoPorMes = mesesFuturos > 0 ? ganhoEconomia / mesesFuturos : 0;
 
   // Curva verde FY Real+Plano: sólida nos realizados, tracejada na projeção futura
   const realMaisPlanoSolido = lastRealIdx >= 0 ? serieReal.map((v, i) => (i <= lastRealIdx ? v : null)) : [];
@@ -284,15 +296,22 @@ export function ProjecaoChart({ ano }: { ano: number }) {
                 FY Real+Plano: {fmtK(fyRealMaisPlano ?? 0)} / FY Plano: {fmtK(fyPlano)}
               </p>
               {debouncedPct > 0 && serieRealMaisEconomia.length > 0 && (
-                <p className="text-xs text-gray-600">
-                  FY Real + Plano {debouncedPct}% economia: {fmtK(serieRealMaisEconomia[serieRealMaisEconomia.length - 1] ?? 0)}
-                </p>
+                <>
+                  <p className="text-xs text-gray-600">
+                    FY Real + Plano {debouncedPct}% economia: {fmtK(fyRealMaisEconomiaFinal)}
+                  </p>
+                  {mesesFuturos > 0 && (
+                    <p className="text-xs text-emerald-600 font-medium">
+                      → +{fmtK(ganhoEconomia)} no ano (+{fmtK(ganhoPorMes)}/mês em {mesesFuturos} {mesesFuturos === 1 ? 'mês' : 'meses'} restantes)
+                    </p>
+                  )}
+                </>
               )}
             </>
           ) : (
             <p className="text-xs text-gray-600">
-              {debouncedPct > 0 && serieReducao.length > 0 ? (
-                <>Base: {fmtK(fyPlano)} · Com {debouncedPct}% economia: {fmtK(serieReducao[serieReducao.length - 1]?.acumulado ?? 0)}</>
+              {debouncedPct > 0 && serieRealMaisEconomia.length > 0 ? (
+                <>Base: {fmtK(fyPlano)} · Com {debouncedPct}% economia: {fmtK(fyRealMaisEconomiaFinal)}</>
               ) : (
                 <>Fim do ano: {fmtK(fyPlano)}</>
               )}
