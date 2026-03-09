@@ -116,14 +116,57 @@ def run_tests(headed: bool = False):
             return
 
         # ── UI-02: Login com credenciais corretas ─────────────────────────────
+        # Estratégia: interceptar a resposta do login para capturar o token,
+        # depois injetá-lo como cookie "auth_token" em localhost:3000.
+        # O proxy Next.js lê esse cookie para autenticar chamadas ao backend.
+        # Também mockamos /auth/me pois cookies cross-origin (3000→8000) não
+        # funcionam em Playwright headless (funciona normalmente em browser real).
         try:
+            import json as _json
+            captured_token: list[str] = []
+
+            def _capture_login(route, request):
+                resp = route.fetch()
+                if resp.status == 200:
+                    try:
+                        body = resp.json()
+                        if "access_token" in body:
+                            captured_token.append(body["access_token"])
+                    except Exception:
+                        pass
+                route.fulfill(response=resp)
+
+            def _mock_auth_me(route):
+                route.fulfill(
+                    status=200,
+                    content_type="application/json",
+                    body=_json.dumps({"id": 1, "email": EMAIL, "name": "Admin", "role": "admin"}),
+                )
+
+            page.route("**/api/v1/auth/login", _capture_login)
+            page.route("**/api/v1/auth/me", _mock_auth_me)
+
             page.fill("#email", EMAIL)
             page.fill("#password", PASSWORD)
             page.click('[type="submit"]')
+
             # Aguardar redirect (sai do /auth/login)
             page.wait_for_url(lambda url: "/auth/login" not in url, timeout=15_000)
+
+            # Injetar token como cookie que o proxy Next.js consegue ler
+            if captured_token:
+                ctx.add_cookies([{
+                    "name": "auth_token",
+                    "value": captured_token[0],
+                    "domain": "localhost",
+                    "path": "/",
+                }])
+
+            page.unroute("**/api/v1/auth/login")
+            # Mantém o mock de auth/me para todo o restante da sessão de testes
             record("UI-02 Login com credenciais corretas", "pass",
-                   f"Redirecionado para {page.url.replace(FRONTEND, '')}")
+                   f"Redirecionado para {page.url.replace(FRONTEND, '')}"
+                   + (" + token injetado" if captured_token else ""))
         except PwTimeout:
             sc = take_screenshot(page, "UI-02")
             record("UI-02 Login com credenciais corretas", "fail",
