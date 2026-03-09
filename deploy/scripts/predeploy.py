@@ -157,14 +157,42 @@ COMMIT_MSG  = run("git log --format='%s' -1")                or ""
 OUT = PROJECT_ROOT / "deploy" / "history" / \
       f"TEST_PRE_DEPLOY_{DATE}_{COMMIT}.md"
 
+# ── Versão em produção (SSH) ─────────────────────────────────────────────────
+SSH_HOST = os.environ.get("SSH_HOST", "minha-vps-hostinger")
+SSH_PATH = os.environ.get("SSH_PROJECT_PATH", "/var/www/finup")
+
+def fetch_prod_version() -> dict:
+    """Busca commit/branch atual rodando em produção via SSH."""
+    base = f'ssh -o ConnectTimeout=10 -o BatchMode=yes {SSH_HOST}'
+    prod_commit = run(f'{base} "cd {SSH_PATH} && git log --oneline -1 | awk \"{{print $1}}\""', timeout=15)
+    prod_branch = run(f'{base} "cd {SSH_PATH} && git branch --show-current"', timeout=15)
+    prod_msg    = run(f'{base} "cd {SSH_PATH} && git log --format=\'%s\' -1"', timeout=15)
+    prod_date   = run(f'{base} "cd {SSH_PATH} && git log --format=\'%ci\' -1 | cut -d\" \" -f1"', timeout=15)
+    return {
+        "commit": prod_commit or "—",
+        "branch": prod_branch or "—",
+        "msg":    prod_msg    or "—",
+        "date":   prod_date   or "—",
+        "ok":     bool(prod_commit),
+    }
+
+PROD = fetch_prod_version()
+
 # ─────────────────────────────────────────────────────────────────────────────
 # BANNER
 # ─────────────────────────────────────────────────────────────────────────────
 print(f"\n{BL}{CY}╔═══════════════════════════════════════════════════════╗{RS}")
 print(f"{BL}{CY}║          🚀 FinUp — Checklist Pré-Deploy               ║{RS}")
 print(f"{BL}{CY}╚═══════════════════════════════════════════════════════╝{RS}")
-print(f"  Branch : {BL}{BRANCH}{RS}")
-print(f"  Commit : {BL}{COMMIT}{RS} — {COMMIT_MSG}")
+print(f"  {BL}LOCAL  (a fazer deploy){RS}")
+print(f"    Branch : {BL}{BRANCH}{RS}")
+print(f"    Commit : {BL}{COMMIT}{RS} — {COMMIT_MSG}")
+prod_icon = f"{GN}✅" if PROD["ok"] else f"{YL}⚠️ "
+print(f"  {BL}PRODUÇÃO atual ({SSH_HOST}){RS}  {prod_icon}{RS}")
+print(f"    Branch : {PROD['branch']}")
+print(f"    Commit : {PROD['commit']} — {PROD['msg']} ({PROD['date']})")
+if not PROD["ok"]:
+    print(f"    {YL}⚠️  Sem acesso SSH — versão de produção não detectada{RS}")
 print(f"  Data   : {BL}{DATE} {TIME}{RS}")
 print(f"  Output : {CY}{OUT.relative_to(PROJECT_ROOT)}{RS}\n")
 
@@ -364,9 +392,13 @@ md = f"""# ✅ Checklist Pré-Deploy — FinUp
 | Campo                | Valor                                                         |
 |----------------------|---------------------------------------------------------------|
 | **Data**             | {DATE}                                                        |
-| **Branch**           | `{BRANCH}`                                                    |
-| **Commit (HEAD)**    | `{COMMIT}`                                                    |
+| **Branch local**     | `{BRANCH}`                                                    |
+| **Commit local**     | `{COMMIT}`                                                    |
 | **Descrição commit** | {COMMIT_MSG}                                                  |
+| **Branch em PROD**   | `{PROD['branch']}`                                            |
+| **Commit em PROD**   | `{PROD['commit']}` ({PROD['date']})                           |
+| **Descrição PROD**   | {PROD['msg']}                                                 |
+| **Rollback**         | `ssh {SSH_HOST} "cd {SSH_PATH} && git checkout {PROD['commit']}"` |
 | **Testador(a)**      | _____________                                                 |
 | **Ambiente**         | Local Docker (dev)                                            |
 | **Backend URL**      | {BACKEND}                                                     |
