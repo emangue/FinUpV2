@@ -169,22 +169,23 @@ def run_tests(headed: bool = False):
             browser.close()
             return
 
-        # ── UI-02: Login com credenciais corretas ─────────────────────────────
-        # O cookie auth_token já está no contexto do browser (injetado acima).
-        # O mock de /auth/me garante que o React AuthContext veja isAuthenticated=true.
-        # Aqui apenas validamos que o formulário de login redireciona corretamente.
+        # ── UI-02: Acesso autenticado a página protegida ──────────────────────
+        # Verificamos que o cookie auth_token injetado permite acesso a páginas
+        # protegidas sem redirecionamento para /auth/login.
+        # O teste de login via formulário (UI-01 + B3 automático) já cobre o fluxo
+        # de login; aqui validamos que a sessão funciona para navegação protegida.
         try:
-            page.fill("#email", EMAIL)
-            page.fill("#password", PASSWORD)
-            page.click('[type="submit"]')
-            # Aguardar redirect (sai do /auth/login)
-            page.wait_for_url(lambda url: "/auth/login" not in url, timeout=15_000)
-            record("UI-02 Login com credenciais corretas", "pass",
-                   f"Redirecionado para {page.url.replace(FRONTEND, '')}")
+            page.goto(f"{FRONTEND}/mobile/dashboard", wait_until="domcontentloaded")
+            wait_for_no_spinner(page)
+            if "/auth/login" in page.url:
+                raise PwTimeout("Redirecionou para /auth/login — cookie não funciona")
+            page.wait_for_selector("main, h1, h2, button", timeout=10_000)
+            record("UI-02 Acesso autenticado (cookie)", "pass",
+                   f"URL: {page.url.replace(FRONTEND, '')}")
         except PwTimeout:
             sc = take_screenshot(page, "UI-02")
-            record("UI-02 Login com credenciais corretas", "fail",
-                   "Timeout: sem redirecionamento após login", sc)
+            record("UI-02 Acesso autenticado (cookie)", "fail",
+                   "Redirecionou para login — auth cookie ineficaz", sc)
             browser.close()
             return
 
