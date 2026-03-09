@@ -156,6 +156,20 @@ def run_tests(headed: bool = False):
             )
         page.route("**/api/v1/auth/me", _mock_auth_me)
 
+        # ── Warm-up: pré-compilar rotas Next.js ──────────────────────────────
+        # Em Next.js dev mode, a primeira visita a uma rota compila o bundle.
+        # Isso pode demorar >15s. Fazemos warm-up ANTES dos testes para garantir
+        # que as rotas mais pesadas já estejam compiladas quando os testes rodarem.
+        try:
+            for warmup_url in [f"{FRONTEND}/auth/login", f"{FRONTEND}/mobile/dashboard"]:
+                page.goto(warmup_url, wait_until="domcontentloaded", timeout=60_000)
+                try:
+                    page.wait_for_load_state("networkidle", timeout=20_000)
+                except Exception:
+                    pass
+        except Exception:
+            pass  # Warm-up falhou? continuar mesmo assim
+
         # ── UI-01: Página de login renderiza ──────────────────────────────────
         try:
             page.goto(f"{FRONTEND}/auth/login", wait_until="domcontentloaded")
