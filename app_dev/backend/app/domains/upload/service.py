@@ -31,6 +31,7 @@ from .processors.marker import TransactionMarker
 from .processors.classifier import CascadeClassifier
 from app.domains.exclusoes.models import TransacaoExclusao
 from app.domains.compatibility.service import CompatibilityService
+from app.domains.transactions.models import JournalEntry
 from app.shared.utils import normalizar
 
 logger = logging.getLogger(__name__)
@@ -1223,6 +1224,64 @@ class UploadService:
         logger.info(f"🗑️ Upload {upload_history_id} deletado: {deleted_count} transações removidas")
         
         return {"transacoes_deletadas": deleted_count}
+    
+    def update_upload_periodo(
+        self,
+        upload_history_id: int,
+        user_id: int,
+        ano: int,
+        mes: int
+    ) -> dict:
+        """
+        Ajusta período (ano/mês) de todas as transações de um upload.
+        Atualiza MesFatura, Ano e Mes em journal_entries e mes_fatura em upload_history.
+        Sincroniza budget_planning após a alteração.
+        """
+        history = self.db.query(UploadHistory).filter(
+            UploadHistory.id == upload_history_id,
+            UploadHistory.user_id == user_id
+        ).first()
+        
+        if not history:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"errorCode": "UPL_014", "error": "Upload não encontrado"}
+            )
+        
+        mes_fatura = f"{ano}{mes:02d}"
+        
+        # Atualizar journal_entries
+        updated = self.db.query(JournalEntry).filter(
+            JournalEntry.upload_history_id == upload_history_id,
+            JournalEntry.user_id == user_id
+        ).update(
+            {
+                JournalEntry.MesFatura: mes_fatura,
+                JournalEntry.Ano: ano,
+                JournalEntry.Mes: mes,
+            },
+            synchronize_session=False
+        )
+        
+        # Atualizar upload_history
+        self.repository.update_upload_history(upload_history_id, mes_fatura=mes_fatura)
+        
+        self.db.commit()
+        
+        # Sincronizar budget_planning para os novos grupos/meses
+        try:
+            self._fase6_sync_budget_planning(user_id, upload_history_id)
+        except Exception as e:
+            logger.warning(f"⚠️ Erro na sincronização de budget após ajuste de período: {str(e)}")
+        
+        logger.info(f"📅 Período do upload {upload_history_id} ajustado para {mes_fatura} ({updated} transações)")
+        
+        return {
+            "transacoes_atualizadas": updated,
+            "mes_fatura": mes_fatura,
+            "ano": ano,
+            "mes": mes,
+        }
     
     def recreate_preview_from_history(
         self,
