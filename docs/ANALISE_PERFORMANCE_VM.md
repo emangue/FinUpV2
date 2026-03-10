@@ -149,6 +149,133 @@ VM está saudável. O problema de lentidão reportado é situacional, não estru
 | 🟢 Baixa | Adicionar swap (4 GB) como segurança | Proteção contra OOM se os dois apps crescerem |
 | 🟢 Baixa | `EXPLAIN ANALYZE` nas queries de dashboard | Confirmar se há full table scan |
 
+---
+
+## 9. Medição Real de Performance — Playwright no Site de Produção
+
+> Coletado em 10/03/2026 às 20:47 via Playwright (Chromium headless, viewport 390x844 mobile)  
+> Site: https://meufinup.com.br | Script: `scripts/testing/perf_measure.py`
+
+### 9.1 Tempos de carregamento por tela
+
+| Tela | Tempo | Avaliação | Causa principal |
+|---|---|---|---|
+| Dashboard (mobile) | **~20s** ❌ | Timeout | Múltiplas APIs lentas simultâneas |
+| Investimentos | **10.285ms** ❌ | Muito lento | Tela carrega mas sem dados de API rápidos |
+| Budget/Plano | **5.839ms** ❌ | Lento | `/api/v1/plano/cashflow` demora 4.4s |
+| Transações | **1.889ms** ⚠️ | Aceitável | `/transactions/list` ~788ms |
+| Upload | **1.440ms** ⚠️ | Aceitável | APIs rápidas (~480ms máx) |
+
+**Média geral: 4.863ms** — bem acima do ideal de < 1s.
+
+---
+
+### 9.2 As APIs culpadas — ranking de lentidão
+
+#### 🔴 Dashboard (20+ segundos de carregamento)
+
+```
+7019ms  GET  /api/v1/onboarding/progress          ← chamado 2x (!!)
+6322ms  GET  /api/v1/onboarding/progress          ← duplicata da mesma chamada
+5182ms  GET  /api/v1/plano/cashflow/mes?ano=2026&mes=2&modo_plano=true
+4771ms  GET  /api/v1/budget/planning?mes_referencia=2026-02
+4767ms  GET  /api/v1/dashboard/budget-vs-actual?year=2026&month=1
+```
+
+**Problema crítico:** `/api/v1/onboarding/progress` é chamado **2 vezes** (provavelmente por dois componentes independentes) e cada chamada demora mais de 6s. Essas duas chamadas sozinhas bloqueiam o carregamento do dashboard.
+
+#### 🔴 Budget/Plano (5.8s)
+
+```
+4382ms  GET  /api/v1/plano/cashflow?ano=2026      ← chamado 2x (!!)
+2188ms  GET  /api/v1/plano/cashflow?ano=2026      ← duplicata
+2187ms  GET  /api/v1/plano/projecao?ano=2026&meses=12
+1400ms  GET  /api/v1/budget/planning?mes_referencia=2026-03
+ 884ms  GET  /api/v1/plano/aporte-investimento?ano=2026&mes=3
+```
+
+**Mesmo padrão:** `/plano/cashflow` chamado 2x. Query pesada sem cache.
+
+#### 🔴 Investimentos (10.3s)
+
+```
+185ms  GET  /api/v1/onboarding/progress
+179ms  GET  /api/v1/auth/me
+ 80ms  GET  /api/v1/dashboard/last-month-with-data
+```
+
+Curioso: as APIs capturadas são rápidas. O tempo de 10s provavelmente é renderização pesada no cliente (cálculos de portfólio, simulador), não APIs lentas. Requer investigação adicional com DevTools.
+
+#### ✅ Transações (1.9s — aceitável)
+
+```
+788ms  GET  /api/v1/transactions/list?limit=100&page=1  ← chamado 2x
+594ms  GET  /api/v1/transactions/resumo?
+```
+
+Mesma lista chamada 2x, mas tempo total ainda aceitável.
+
+#### ✅ Troca de modo Mês/YTD/Ano (300–370ms — excelente)
+
+```
+Mês  →  370ms  ✅
+YTD  →  363ms  ✅
+Ano  →  337ms  ✅
+```
+
+Filtros de modo **funcionam bem** — o React reutiliza dados já carregados. A experiência ao trocar de modo é fluida.
+
+---
+
+### 9.3 Padrão identificado: chamadas de API duplicadas
+
+O maior problema **não é a VM, não é o hardware** — é que **os mesmos endpoints são chamados 2x por cada carregamento de tela**:
+
+| Endpoint duplicado | Tempo duplicado | Tela afetada |
+|---|---|---|
+| `/api/v1/onboarding/progress` | 7s + 6.3s = **13.3s** | Dashboard |
+| `/api/v1/plano/cashflow` | 4.4s + 2.2s = **6.6s** | Budget/Plano |
+| `/api/v1/transactions/list` | 788ms + 692ms = **1.5s** | Transações |
+
+**Por que isso acontece:** Provavelmente dois componentes React distintos (ex: layout + página) fazem o mesmo `useEffect` ou `fetch` sem compartilhamento de estado. A solução é:
+1. **Curto prazo:** Cache no Redis com TTL curto (os dados voltariam em <50ms na 2ª chamada)
+2. **Longo prazo:** React Query / SWR para deduplicar chamadas idênticas no frontend
+
+---
+
+### 9.4 Veredicto final revisado
+
+```
+O travamento é 100% do app, não do ambiente.
+A VM é saudável. O problema são queries lentas + chamadas duplicadas.
+```
+
+| Causa | Status | Prova |
+|---|---|---|
+| VM com hardware fraco | ❌ Descartado | 15.6 GB RAM, 4 vCPUs, 0.44 load avg |
+| Next.js dev mode | ❌ Descartado | Roda `node server.js` (produção) |
+| CHOKIDAR polling | ❌ Descartado | Variável não existe em produção |
+| `/onboarding/progress` lento (7s) | ✅ **CONFIRMADO** | Medido: 7s por chamada |
+| `/plano/cashflow` lento (4.4s) | ✅ **CONFIRMADO** | Medido: 4.4s por chamada |
+| Chamadas de API duplicadas | ✅ **CONFIRMADO** | Mesmo endpoint 2x por tela |
+| Redis sem cache | ✅ **CONFIRMADO** | Toda query vai ao PostgreSQL |
+| Investimentos com renderização pesada | 🔍 Suspeito | APIs rápidas mas tela demora 10s |
+
+---
+
+### 9.5 Plano de ação atualizado (prioridade real)
+
+| # | Ação | Impacto estimado | Esforço |
+|---|---|---|---|
+| 1 | Investigar e otimizar `/api/v1/onboarding/progress` (7s → <200ms) | Dashboard: 20s → ~6s | Médio |
+| 2 | Investigar e otimizar `/api/v1/plano/cashflow` (4.4s → <500ms) | Budget: 5.8s → ~1.5s | Médio |
+| 3 | Redis cache em endpoints pesados (TTL 5min) | Elimina duplicatas 2ª chamada | Baixo |
+| 4 | Deduplicar chamadas no frontend (React Query/SWR ou contexto compartilhado) | Elimina 30-50% das chamadas | Alto |
+| 5 | `EXPLAIN ANALYZE` nas queries de `/onboarding/progress` e `/plano/cashflow` | Identifica índices faltando | Baixo |
+| 6 | Investigar os 10s de Investimentos com DevTools (Performance tab) | Identifica se é JS ou API | Baixo |
+
+> **Próximo passo imediato:** `EXPLAIN ANALYZE` no PostgreSQL das duas queries mais lentas — provavelmente faltam índices em `journal_entries` (Ano, Mes, user_id).
+
 
 
 ---
