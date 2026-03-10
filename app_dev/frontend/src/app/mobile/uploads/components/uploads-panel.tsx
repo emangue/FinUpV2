@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { FileText, ChevronRight, Trash2 } from 'lucide-react';
+import { FileText, ChevronRight, Trash2, Calendar } from 'lucide-react';
 import { fetchWithAuth } from '@/core/utils/api-client';
 import { API_CONFIG } from '@/core/config/api.config';
 import {
@@ -15,6 +15,21 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { months } from '@/features/upload/mocks/mockUploadData';
 
 interface UploadHistoryItem {
   id: number;
@@ -48,6 +63,11 @@ export function UploadsPanel({ limit = 10 }: UploadsPanelProps) {
   const [uploadToDelete, setUploadToDelete] = useState<UploadHistoryItem | null>(null);
   const [rollbackPreview, setRollbackPreview] = useState<{ transacoes_count: number; parcelas_count: number; tem_vinculos_investimento: boolean } | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [periodDialogOpen, setPeriodDialogOpen] = useState(false);
+  const [uploadToPeriod, setUploadToPeriod] = useState<UploadHistoryItem | null>(null);
+  const [periodAno, setPeriodAno] = useState<number>(new Date().getFullYear());
+  const [periodMes, setPeriodMes] = useState<number>(new Date().getMonth() + 1);
+  const [updatingPeriod, setUpdatingPeriod] = useState(false);
 
   useEffect(() => {
     loadUploads();
@@ -114,6 +134,55 @@ export function UploadsPanel({ limit = 10 }: UploadsPanelProps) {
       alert(err instanceof Error ? err.message : 'Erro ao excluir upload');
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handlePeriodClick = (upload: UploadHistoryItem) => {
+    setUploadToPeriod(upload);
+    if (upload.mes_fatura) {
+      let ano: number, mes: number;
+      if (upload.mes_fatura.includes('-')) {
+        const [y, m] = upload.mes_fatura.split('-');
+        ano = parseInt(y || '2025', 10);
+        mes = parseInt(m || '1', 10);
+      } else if (upload.mes_fatura.length >= 6) {
+        ano = parseInt(upload.mes_fatura.slice(0, 4), 10);
+        mes = parseInt(upload.mes_fatura.slice(4, 6), 10);
+      } else {
+        const now = new Date();
+        ano = now.getFullYear();
+        mes = now.getMonth() + 1;
+      }
+      setPeriodAno(ano);
+      setPeriodMes(mes);
+    } else {
+      const now = new Date();
+      setPeriodAno(now.getFullYear());
+      setPeriodMes(now.getMonth() + 1);
+    }
+    setPeriodDialogOpen(true);
+  };
+
+  const handleConfirmPeriod = async () => {
+    if (!uploadToPeriod) return;
+    try {
+      setUpdatingPeriod(true);
+      const url = `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/upload/history/${uploadToPeriod.id}/periodo?ano=${periodAno}&mes=${periodMes}`;
+      const response = await fetchWithAuth(url, { method: 'PATCH' });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        const msg = err?.detail?.error || (typeof err?.detail === 'string' ? err.detail : null) || 'Erro ao ajustar período';
+        throw new Error(msg);
+      }
+      setPeriodDialogOpen(false);
+      setUploadToPeriod(null);
+      loadUploads();
+      alert(`Período ajustado para ${months[periodMes - 1]} ${periodAno}`);
+    } catch (err) {
+      console.error('Erro ao ajustar período:', err);
+      alert(err instanceof Error ? err.message : 'Erro ao ajustar período');
+    } finally {
+      setUpdatingPeriod(false);
     }
   };
 
@@ -247,6 +316,15 @@ export function UploadsPanel({ limit = 10 }: UploadsPanelProps) {
 
               <div className="flex items-center gap-2 shrink-0">
                 <button
+                  onClick={() => handlePeriodClick(upload)}
+                  disabled={updatingPeriod}
+                  className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50"
+                  title="Ajustar ano e mês do período"
+                  aria-label="Ajustar período"
+                >
+                  <Calendar className="w-4 h-4" />
+                </button>
+                <button
                   onClick={() => handleDeleteClick(upload)}
                   disabled={deleting}
                   className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
@@ -277,6 +355,70 @@ export function UploadsPanel({ limit = 10 }: UploadsPanelProps) {
           </div>
         ))}
       </div>
+
+      <Dialog open={periodDialogOpen} onOpenChange={setPeriodDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Ajustar período</DialogTitle>
+            <DialogDescription>
+              Altere o ano e mês de todas as transações deste upload.
+              {uploadToPeriod && (
+                <span className="block mt-2 font-medium text-foreground">
+                  {uploadToPeriod.nome_arquivo} • {uploadToPeriod.transacoes_importadas} transações
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Mês</label>
+                <Select value={String(periodMes)} onValueChange={(v) => setPeriodMes(parseInt(v, 10))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {months.map((nome, i) => (
+                      <SelectItem key={i} value={String(i + 1)}>{nome}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Ano</label>
+                <Select value={String(periodAno)} onValueChange={(v) => setPeriodAno(parseInt(v, 10))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[2022, 2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030].map((y) => (
+                      <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setPeriodDialogOpen(false)}
+              disabled={updatingPeriod}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmPeriod}
+              disabled={updatingPeriod}
+              className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+            >
+              {updatingPeriod ? 'Ajustando...' : 'Aplicar'}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
