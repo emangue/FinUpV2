@@ -983,34 +983,50 @@ class UploadService:
                     self.db.commit()
                     logger.info(f"🗑️ Revisão: {deleted_parcelas} parcelas órfãs removidas de base_parcelas")
             
-            # ========== FASE 5: ATUALIZAR BASE_PARCELAS ==========
-            logger.info("🔄 Fase 5: Atualização de Base Parcelas")
-            try:
-                resultado_parcelas = self._fase5_update_base_parcelas(user_id, history.id)
-                logger.info(f"  ✅ Parcelas processadas: {resultado_parcelas['total_processadas']} | Atualizadas: {resultado_parcelas['atualizadas']} | Novas: {resultado_parcelas['novas']} | Finalizadas: {resultado_parcelas['finalizadas']}")
-            except Exception as e:
-                # NÃO bloquear confirmação se atualização falhar
-                logger.warning(f"  ⚠️ Erro na atualização de parcelas: {str(e)}")
-            
-            # ========== FASE 6: SINCRONIZAR BUDGET_PLANNING ==========
-            # Garante que grupos com transações tenham linha no budget (mesmo com plano zero)
-            # para que o valor realizado apareça na tela de Metas
-            logger.info("🔄 Fase 6: Sincronização Budget Planning")
-            try:
-                resultado_budget = self._fase6_sync_budget_planning(user_id, history.id)
-                logger.info(f"  ✅ Budget: {resultado_budget['criados']} linhas criadas para grupos com realizado")
-            except Exception as e:
-                logger.warning(f"  ⚠️ Erro na sincronização de budget: {str(e)}")
+            # ========== FASES 5, 6, 7 EM BACKGROUND ==========
+            # Evita 502 (timeout Nginx) em uploads grandes — retorna resposta imediata ao usuário
+            # e executa base_parcelas, budget_planning e base_padroes em thread separada
+            import threading
+            _user_id = user_id
+            _history_id = history.id
 
-            # ========== FASE 7: REGENERAR BASE PADRÕES ==========
-            # Executa APÓS commit das transações → padrões refletem os dados recém inseridos
-            logger.info("🔄 Fase 7: Regeneração de Base Padrões")
-            try:
-                from app.domains.upload.processors.pattern_generator import regenerar_base_padroes_completa
-                resultado_padroes = regenerar_base_padroes_completa(self.db, user_id)
-                logger.info(f"  ✅ Padrões: {resultado_padroes['total_padroes_gerados']} gerados, {resultado_padroes['criados']} criados, {resultado_padroes['atualizados']} atualizados")
-            except Exception as e:
-                logger.warning(f"  ⚠️ Erro na regeneração de padrões: {str(e)}")
+            def _run_post_confirm_phases():
+                db_bg = None
+                try:
+                    from app.core.database import SessionLocal
+                    db_bg = SessionLocal()
+                    svc = UploadService(db_bg)
+                    try:
+                        logger.info("🔄 [BG] Fase 5: Atualização de Base Parcelas")
+                        resultado_parcelas = svc._fase5_update_base_parcelas(_user_id, _history_id)
+                        logger.info(f"  ✅ [BG] Parcelas: {resultado_parcelas.get('total_processadas', 0)} processadas")
+                    except Exception as e:
+                        logger.warning(f"  ⚠️ [BG] Erro Fase 5: {str(e)}")
+                    try:
+                        logger.info("🔄 [BG] Fase 6: Sincronização Budget Planning")
+                        resultado_budget = svc._fase6_sync_budget_planning(_user_id, _history_id)
+                        logger.info(f"  ✅ [BG] Budget: {resultado_budget.get('criados', 0)} linhas criadas")
+                    except Exception as e:
+                        logger.warning(f"  ⚠️ [BG] Erro Fase 6: {str(e)}")
+                    try:
+                        from app.domains.upload.processors.pattern_generator import regenerar_base_padroes_completa
+                        logger.info("🔄 [BG] Fase 7: Regeneração de Base Padrões")
+                        resultado_padroes = regenerar_base_padroes_completa(db_bg, _user_id)
+                        logger.info(f"  ✅ [BG] Padrões: {resultado_padroes.get('total_padroes_gerados', 0)} gerados")
+                    except Exception as e:
+                        logger.warning(f"  ⚠️ [BG] Erro Fase 7: {str(e)}")
+                except Exception as e:
+                    logger.warning(f"  ⚠️ [BG] Erro ao iniciar sessão: {str(e)}")
+                finally:
+                    if db_bg:
+                        try:
+                            db_bg.close()
+                        except Exception:
+                            pass
+
+            t = threading.Thread(target=_run_post_confirm_phases, daemon=True)
+            t.start()
+            logger.info("📤 Resposta enviada ao usuário; fases 5/6/7 rodando em background")
 
             # Limpar dados de preview
             deleted = self.repository.delete_by_session_id(session_id, user_id)
