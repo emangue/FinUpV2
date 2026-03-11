@@ -546,17 +546,109 @@ healthcheck:
 
 ### Impacto esperado após P1 + P2
 
-| Tela | Antes | Depois (estimado) |
-|---|---|---|
-| Dashboard | >20s | ~3–5s |
-| Budget/Plano | 5.8s | ~0.5s |
-| Transações | 1.9s | 1.0–1.5s |
-| Investimentos | 10s | 10s (P4 a fazer) |
-| Filtros Mês/YTD/Ano | 350ms | 350ms (já OK) |
+| Cenário | Medido | Depois de P1 (estimado) | Depois de P1+P2 |
+|---|---|---|---|
+| Dashboard abertura inicial | ~7s | ~2–3s | ~2–3s |
+| Troca pelo bottom nav (qualquer tela) | 6–8s | ~1–2s | ~1–2s |
+| Chips de mês Jan/Fev/Mar | 330ms (já OK) | 330ms | 330ms |
+| Budget/Plano abertura | 5.8s | 5.8s | **~0.5s** |
+| Transações abertura | 8s (inclui onboarding) | ~2s | ~2s |
+| Investimentos | 8–10s | 8–10s (P4 a investigar) | — |
 
 ---
 
-*Análise definitiva consolidada. Diagnóstico baseado em EXPLAIN ANALYZE (PostgreSQL prod), benchmarks psycopg2 dentro do container, inspeção de código-fonte e medição Playwright.*
+## 5. Medição de Navegação — Chips de Mês e Bottom Nav
+
+> Coletado em 10/03/2026 via Playwright (Chromium headless, iPhone 14 Pro 390×844)  
+> Script: `/tmp/perf_nav.py` | Site: https://meufinup.com.br
+
+### 5.1 Chips de mês no header (Jan / Fev / Mar / Abr)
+
+| Chip clicado | Tempo | APIs disparadas | Observação |
+|---|---|---|---|
+| Jan (mês ativo inicial) | **6.371s** ❌ | 13 APIs | Capturou APIs do carregamento inicial da página |
+| Fev | **343ms** ✅ | 0 | Sem request — dados já em memória |
+| Mar | **335ms** ✅ | 0 | Sem request |
+| Abr | **332ms** ✅ | 0 | Sem request |
+| Mai | **330ms** ✅ | 0 | Sem request |
+
+**Conclusão: os chips de mês são rápidos — 330ms, zero chamadas de API.**
+
+O que parece ser lentidão ao trocar de mês **não é a troca em si** — é o **carregamento inicial** da tela que demora 6–7s. Depois que a tela carregou, trocar entre Jan/Fev/Mar é instantâneo porque o app usa os dados já carregados no estado React (não refaz requests). O usuário vê a tela "travada" no primeiro acesso e interpreta como lentidão nos chips.
+
+APIs capturadas no clique de Jan (= carregamento inicial da página):
+```
+5680ms  GET  /api/v1/plano/cashflow/mes?ano=2026&mes=1&modo_plano=true
+4684ms  GET  /api/v1/budget/planning?mes_referencia=2026-01
+4226ms  GET  /api/v1/dashboard/metrics?year=2026&month=1
+3410ms  GET  /api/v1/dashboard/orcamento-investimentos?year=2026&month=2
+3409ms  GET  /api/v1/dashboard/orcamento-investimentos?year=2025&month=12
+2284ms  GET  /api/v1/plano/aporte-investimento?ano=2026&mes=1
+2284ms  GET  /api/v1/dashboard/budget-vs-actual?year=2026&month=2
+2283ms  GET  /api/v1/dashboard/credit-cards?year=2026&month=1
+```
+
+São as mesmas APIs de sempre — o dashboard dispara 8+ requests na carga inicial, todos individualmente lentos por conta dos round-trips HTTP. Não há API duplicada aqui (diferente do onboarding), mas a soma de 8 requests em paralelo com 2–5s cada cria a percepção de "tela travada".
+
+---
+
+### 5.2 Bottom nav — troca de tela pelo menu inferior
+
+| Destino | Tempo | APIs disparadas | Causa principal |
+|---|---|---|---|
+| Transações | **8.192s** ❌ | 21 APIs | `/onboarding/progress` em 6.7s |
+| Budget/Plano | **332ms** ✅ | 0 | Já estava em cache (página não remontou) |
+| Investimentos | **8.434s** ❌ | 3 APIs | Re-render pesado no cliente |
+| Dashboard | **7.460s** ❌ | 22 APIs | `/onboarding/progress` chamado **3×** |
+
+#### 🔴 Por que o bottom nav é lento: onboarding/progress em toda navegação
+
+Quando o usuário clica em "Transações" no menu inferior, o Next.js App Router navega para `/mobile/transactions`. O `OnboardingGuard` vive no `layout.tsx` e **re-executa o `useEffect` com fetch a cada mudança de rota**. Resultado: cada tela nova espera o `/onboarding/progress` terminar antes de renderizar o conteúdo.
+
+APIs capturadas ao navegar para Transações:
+```
+6700ms  GET  /api/v1/onboarding/progress          ← OnboardingGuard re-fetch
+4469ms  GET  /api/v1/transactions/resumo?
+4073ms  GET  /api/v1/transactions/list?limit=100&page=1
+3680ms  GET  /api/v1/transactions/list?limit=100&page=1   ← duplicata!
+3574ms  GET  /api/v1/transactions/resumo?                  ← duplicata!
+```
+
+O usuário espera 8s para ver a tela de Transações — **6.7s desse tempo são do `/onboarding/progress`**, que não tem nenhuma relação com transações.
+
+#### 🔴 Dashboard via bottom nav: onboarding chamado 3× simultâneo
+
+APIs capturadas ao navegar de volta para Dashboard:
+```
+5795ms  GET  /api/v1/onboarding/progress    ← OnboardingGuard (layout)
+5278ms  GET  /api/v1/onboarding/progress    ← NudgeBanners (página)
+4874ms  GET  /api/v1/onboarding/progress    ← DemoModeBanner (página)
+5680ms  GET  /api/v1/plano/cashflow/mes?ano=2026&mes=2&modo_plano=true
+4656ms  GET  /api/v1/dashboard/metrics?year=2026&month=2
+4654ms  GET  /api/v1/dashboard/orcamento-investimentos?year=2026&month=3
+4460ms  GET  /api/v1/budget/planning?mes_referencia=2026-02
+4456ms  GET  /api/v1/dashboard/chart-data?year=2026&month=2
+```
+
+Os 3 fetches simultâneos do `/onboarding/progress` confirmam exatamente o diagnóstico da §3.4: `OnboardingGuard` + `NudgeBanners` + `DemoModeBanner` montam ao mesmo tempo e cada um dispara seu próprio request.
+
+---
+
+### 5.3 Mapa de causa × sintoma (consolidado)
+
+| O que o usuário vê | Causa real | Seção da análise |
+|---|---|---|
+| Dashboard trava ~7s na abertura | 3 fetches simultâneos do `/onboarding/progress` (5–7s cada) | §3.4, §5.2 |
+| Chips Jan/Fev/Mar parecem lentos | É o carregamento inicial da página (8 APIs em paralelo). Os chips em si são 330ms | §5.1 |
+| Trocar de tela pelo menu inferior leva 6–8s | `OnboardingGuard` refaz o fetch a cada navegação (6.7s por tela) | §5.2 |
+| Budget/Plano às vezes abre rápido | Quando já estava em cache de navegação recente (Next.js App Router mantém estado) | §5.2 |
+| Investimentos lento mesmo com APIs rápidas | Renderização JavaScript pesada no cliente (§3.6), independente do onboarding | §3.6 |
+
+**A correção de P1 (OnboardingContext — uma única chamada compartilhada, sem re-fetch por rota) resolve os itens 1, 3 da tabela acima e reduz drasticamente o tempo de toda navegação no bottom nav.**
+
+---
+
+*Análise definitiva consolidada. Diagnóstico baseado em EXPLAIN ANALYZE (PostgreSQL prod), benchmarks psycopg2 dentro do container, inspeção de código-fonte, medição Playwright de telas e medição Playwright de navegação (chips + bottom nav).*
 
 ---
 
