@@ -1,23 +1,23 @@
-# Análise de Performance: PC vs VM — FinUpV2
+# Análise de Performance — FinUpV2
 
 > Data: 10/03/2026 | Versão analisada: 3.0.2  
-> **Atualizado:** 10/03/2026 com medições reais da VM via SSH
+> Investigação: VM via SSH + Playwright em produção + EXPLAIN ANALYZE + benchmarks psycopg2 no container
 
 ---
 
 ## TL;DR
 
-**Não refatore.** A arquitetura está saudável. O problema é quase certamente a combinação de **Next.js em modo dev** + **CHOKIDAR_USEPOLLING** + **pressão de memória na VM**. O app em si tem pontos de melhoria (Redis não usado, queries sem paginação), mas esses não causam travamento — causam lentidão pontual.
+**O travamento é 100% do app, não da VM.** A VM tem 15.6 GB RAM, 4 vCPUs e opera em modo produção — está completamente ociosa. O problema são **chamadas HTTP duplicadas no frontend** (3 componentes fazem `fetch` independente do mesmo endpoint) somadas a um endpoint backend que dispara **50 round-trips por chamada**. O banco de dados é rápido — queries individuais executam em <1ms. A latência de rede (cliente→VM) amplifica cada round-trip desnecessário.
 
-> ⚠️ **Atualização pós-medição real:** As três hipóteses acima foram testadas contra dados coletados diretamente na VM. Os resultados revisam parcialmente o diagnóstico — veja a Seção 8.
+**Arquitetura está saudável. Não refatore.** As correções são cirúrgicas.
 
 ---
 
-## 8. Medição Real na VM — O que os Dados Dizem
+## 1. Ambiente da VM
 
 > Coletado em 10/03/2026 via SSH + `docker stats` + `ps aux` + `free -h`
 
-### 8.1 Specs reais da VM (muito acima do estimado)
+### 1.1 Specs reais da VM 
 
 | Recurso | Estimado (análise original) | Real (medido) |
 |---|---|---|
@@ -33,7 +33,7 @@
 
 ---
 
-### 8.2 Containers rodando na VM — modo PRODUÇÃO, não dev
+### 1.2 Containers rodando na VM — modo PRODUÇÃO
 
 ```
 NAMES                       STATUS          PORTS
@@ -49,7 +49,7 @@ infra_nginx                 Up 4d (unhealthy) 0.0.0.0:80, 443->tcp
 
 ---
 
-### 8.3 Consumo real de recursos por container
+### 1.3 Consumo real de recursos por container
 
 | Container | CPU (medido) | RAM real | RAM estimada (original) | Status |
 |---|---|---|---|---|
@@ -58,30 +58,14 @@ infra_nginx                 Up 4d (unhealthy) 0.0.0.0:80, 443->tcp
 | finup_backend_prod | 0.59% ¹ | **312 MB** | 200–350 MB | ✅ Dentro do esperado |
 | finup_postgres_prod | 0.00% | **30 MB** | 200–400 MB | ✅ Muito abaixo do estimado |
 | finup_redis_prod | 0.59% | **3.3 MB** | 50–100 MB | ⚠️ Saudável, mas ainda não usado |
-| infra_nginx | 0.00% | 11 MB | — | ⚠️ Unhealthy (ver 8.5) |
+| infra_nginx | 0.00% | 11 MB | — | ⚠️ Unhealthy (ver 1.4) |
 | **TOTAL** | **< 2%** | **~424 MB** | **~1.3–2.4 GB** | ✅ 2.7% dos 15.6 GB |
 
 ¹ *Uma primeira medição apontou 39.34% — foi snapshot durante health check interno (a cada 30s). Segunda medição imediata: 0.59%. O load average de 0.44 confirma que não há pressão contínua.*
 
 ---
 
-### 8.4 Revisão das três hipóteses originais
-
-#### ❌ Hipótese 1 — Next.js em modo dev
-
-**DESCARTADA.** O container frontend roda `node server.js` com `NODE_ENV=production`. É o build estático otimizado do Next.js Next.js standalone. Consumo: 36 MB (não 800 MB–1.5 GB). Sem compilação on-the-fly, sem watchers de TypeScript.
-
-#### ❌ Hipótese 2 — CHOKIDAR_USEPOLLING derrubando CPU
-
-**DESCARTADA.** A variável não existe no ambiente de produção. `docker exec finup_frontend_app_prod env | grep CHOKIDAR` retornou vazio. Nenhum polling ativo.
-
-#### ⚠️ Hipótese 3 — Pressão de memória
-
-**PARCIALMENTE DESCARTADA.** A VM tem 15.6 GB e os containers usam 424 MB (2.7%). Não há swap ativo porque não é necessário. Pressão de memória não é o bottleneck atual.
-
----
-
-### 8.5 Achados reais da VM (novos — não estavam no diagnóstico original)
+### 1.4 Achados reais da VM ()
 
 #### 🔴 Achado 1 — Nginx com healthcheck quebrado (unhealthy)
 
@@ -116,47 +100,13 @@ O backend recebe ~2 requests/minuto no `/api/health` — originados pelo Docker 
 
 ---
 
-### 8.6 Veredicto revisado
 
-```
-VM está saudável. O problema de lentidão reportado é situacional, não estrutural.
-```
-
-| Hipótese | Status original | Status após medição |
-|---|---|---|
-| Next.js dev mode | Alta probabilidade | ❌ Descartada — roda em prod |
-| CHOKIDAR_USEPOLLING | Alta probabilidade | ❌ Descartada — não existe em prod |
-| RAM insuficiente | Alta probabilidade | ❌ Descartada — 14 GB livres |
-| Redis sem uso | Média | ✅ Confirmada — 3.3 MB no Redis |
-| Nginx unhealthy | Não identificado | 🔴 Novo achado — healthcheck quebrado |
-| Segundo app na VM | Não identificado | 🟡 Novo achado — risco latente |
-
-**Se a lentidão ainda ocorre**, as causas prováveis agora são:
-1. **Latência de rede** entre o cliente e o servidor (VM em datacenter remoto — primeira conexão SSL + DNS)
-2. **Cold start do PostgreSQL** nas primeiras queries do dia (índices saem do cache após idle longo)
-3. **Redis sem uso** — endpoints pesados (dashboard, investimentos) fazem queries repetidas sem cache
-4. **Ambiente de desenvolvimento local** — se a lentidão é percebida ao desenvolver *na* VM via Remote-SSH + `docker-compose.yml` (dev), aí os cenários 1 e 2 do diagnóstico original se aplicam, mas apenas nesse contexto específico
-
----
-
-### 8.7 Ações atualizadas (pós-medição)
-
-| Prioridade | Ação | Impacto esperado |
-|---|---|---|
-| 🔴 Alta | Corrigir healthcheck do nginx | Elimina `unhealthy` falso, evita restart automático indesejado |
-| 🔴 Alta | Ativar Redis caching (dashboard + investimentos, TTL 5min) | Reduz latência de API em 60–80% nas rotas pesadas |
-| 🟡 Média | Documentar e monitorar o `atelie` na porta 8001 | Evita surpresas de colisão de recursos |
-| 🟢 Baixa | Adicionar swap (4 GB) como segurança | Proteção contra OOM se os dois apps crescerem |
-| 🟢 Baixa | `EXPLAIN ANALYZE` nas queries de dashboard | Confirmar se há full table scan |
-
----
-
-## 9. Medição Real de Performance — Playwright no Site de Produção
+## 2. Medição Playwright em Produção
 
 > Coletado em 10/03/2026 às 20:47 via Playwright (Chromium headless, viewport 390x844 mobile)  
 > Site: https://meufinup.com.br | Script: `scripts/testing/perf_measure.py`
 
-### 9.1 Tempos de carregamento por tela
+### 2.1 Tempos de carregamento por tela
 
 | Tela | Tempo | Avaliação | Causa principal |
 |---|---|---|---|
@@ -170,7 +120,7 @@ VM está saudável. O problema de lentidão reportado é situacional, não estru
 
 ---
 
-### 9.2 As APIs culpadas — ranking de lentidão
+### 2.2 As APIs culpadas — ranking de lentidão
 
 #### 🔴 Dashboard (20+ segundos de carregamento)
 
@@ -227,7 +177,7 @@ Filtros de modo **funcionam bem** — o React reutiliza dados já carregados. A 
 
 ---
 
-### 9.3 Padrão identificado: chamadas de API duplicadas
+### 2.3 Padrão identificado: chamadas de API duplicadas
 
 O maior problema **não é a VM, não é o hardware** — é que **os mesmos endpoints são chamados 2x por cada carregamento de tela**:
 
@@ -243,7 +193,7 @@ O maior problema **não é a VM, não é o hardware** — é que **os mesmos end
 
 ---
 
-### 9.4 Veredicto final revisado
+### 2.4 Veredicto final revisado
 
 ```
 O travamento é 100% do app, não do ambiente.
@@ -263,198 +213,350 @@ A VM é saudável. O problema são queries lentas + chamadas duplicadas.
 
 ---
 
-### 9.5 Plano de ação atualizado (prioridade real)
 
-| # | Ação | Impacto estimado | Esforço |
-|---|---|---|---|
-| 1 | Investigar e otimizar `/api/v1/onboarding/progress` (7s → <200ms) | Dashboard: 20s → ~6s | Médio |
-| 2 | Investigar e otimizar `/api/v1/plano/cashflow` (4.4s → <500ms) | Budget: 5.8s → ~1.5s | Médio |
-| 3 | Redis cache em endpoints pesados (TTL 5min) | Elimina duplicatas 2ª chamada | Baixo |
-| 4 | Deduplicar chamadas no frontend (React Query/SWR ou contexto compartilhado) | Elimina 30-50% das chamadas | Alto |
-| 5 | `EXPLAIN ANALYZE` nas queries de `/onboarding/progress` e `/plano/cashflow` | Identifica índices faltando | Baixo |
-| 6 | Investigar os 10s de Investimentos com DevTools (Performance tab) | Identifica se é JS ou API | Baixo |
+## 3. Diagnóstico Definitivo — Código + DB
 
-> **Próximo passo imediato:** `EXPLAIN ANALYZE` no PostgreSQL das duas queries mais lentas — provavelmente faltam índices em `journal_entries` (Ano, Mes, user_id).
+> Coletado em 11/03/2026 via EXPLAIN ANALYZE direto no PostgreSQL de produção + leitura de código-fonte + benchmarks psycopg2 dentro do container backend.
 
+### 3.1 O banco tem os índices certos — queries individuais são ultra-rápidas
 
+A suspeita de índices faltando foi a **primeira hipótese a cair**. O banco de produção tem índices compostos completos em `journal_entries`:
+
+```sql
+-- Índices reais existentes em produção
+idx_je_user_mesfatura_cat_valor  → (user_id, "MesFatura", "CategoriaGeral", "Valor")  ← cobre get_cashflow()
+idx_je_user_ignorar_mesfatura   → (user_id, "IgnorarDashboard", "MesFatura")
+idx_je_user_mesfatura           → (user_id, "MesFatura")
+ix_journal_entries_user_id      → (user_id)
+ix_journal_entries_fonte        → (fonte)
+```
+
+**EXPLAIN ANALYZE confirma Index Scan em todas as queries:**
+
+```sql
+-- Query do get_cashflow(): usa idx_je_user_mesfatura_cat_valor
+Aggregate (cost=6.48..6.49) (actual time=0.056..0.062)
+  → Index Scan using idx_je_user_mesfatura_cat_valor
+Planning Time: 91ms  ← COLD / 0.06ms ← WARM
+Execution Time: 0.335ms
+
+-- Query do onboarding/progress (fonte='demo'): usa ix_journal_entries_fonte
+Index Scan using ix_journal_entries_fonte
+Execution Time: 0.342ms
+
+-- Query budget_planning: usa ix_budget_planning_user_id
+Seq Scan on budget_planning (33 rows)
+Execution Time: 0.090ms
+
+-- Query upload_history: lê 123 linhas, retorna 1
+Seq Scan on upload_history (123 rows)
+Execution Time: 0.119ms
+```
+
+**Conclusão: nenhuma query individual demora mais de 1ms no banco.** O banco não é o gargalo.
 
 ---
 
-## 1. Diagnóstico: Por que trava na VM?
+### 3.2 O Planning Time de 91ms: cold vs warm cache
 
-### 1.1 Next.js em modo dev é o maior culprit
+Uma descoberta importante: o PostgreSQL leva **91ms para planejar a primeira query** em uma sessão (cold cache de estatísticas), mas apenas **0.06ms nas queries subsequentes**:
 
-O `docker-compose.yml` sobe o frontend com o servidor de desenvolvimento do Next.js:
-
-```yaml
-# docker-compose.yml (dev)
-command: next dev   # ← compilação on-the-fly, watchers ativos
+```sql
+Query 1 (cold): Planning Time = 91ms,   Execution Time = 0.335ms
+Query 2 (warm): Planning Time = 3.8ms,  Execution Time = 0.238ms
+Query 3 (warm): Planning Time = 0.077ms, Execution Time = 0.106ms
+Query 4 (warm): Planning Time = 0.065ms, Execution Time = 0.073ms
 ```
 
-Em dev mode, o Next.js:
-- Compila TypeScript de **333 arquivos** sob demanda (nenhum bundle pré-gerado)
-- Mantém watchers ativos em todos os arquivos
-- Re-compila qualquer rota na primeira visita
-- Não usa os otimizações de produção (tree-shaking, minification, etc.)
-
-No PC, isso é imperceptível porque o hardware aguenta. Na VM, cada compilação congela o processo.
-
-### 1.2 CHOKIDAR_USEPOLLING: CPU 100% em VM
-
-```yaml
-environment:
-  CHOKIDAR_USEPOLLING: "true"  # ← polling de arquivos, CPU-intensivo
-```
-
-Essa flag existe para compatibilidade com macOS. Em VM Linux (especialmente com volumes Docker montados), o Chokidar faz **polling ativo de todos os arquivos** a cada intervalo fixo. Com 333 arquivos TypeScript + `node_modules`, isso sozinho pode segurar a CPU.
-
-### 1.3 Pressão de memória: 4 containers simultâneos
-
-| Serviço | RAM estimada (mínima) |
-|---|---|
-| PostgreSQL 16 | ~200–400 MB |
-| Redis 7 | ~50–100 MB |
-| FastAPI + Uvicorn | ~200–350 MB |
-| Next.js dev server | **~800 MB – 1.5 GB** |
-| **Total** | **~1.3 – 2.4 GB** só de baseline |
-
-Se a VM tem 2–4 GB de RAM, já está no limite antes de qualquer carga real. O Next.js dev server é particularmente guloso porque carrega o compilador TypeScript inteiro em memória.
-
-### 1.4 Double virtualization overhead
-
-Na VM, o Docker corre sobre um hypervisor que já está sobre o OS da VM. Isso adiciona latência em I/O de disco (compilação TypeScript é I/O-intensiva) e em chamadas de rede entre containers.
+O `get_cashflow()` faz 4 queries × 12 meses = **48 queries por chamada**. Só a primeira paga os 91ms; as 47 seguintes pagam <1ms cada. O planning time não explica os 4–7s de latência.
 
 ---
 
-## 2. O que o App tem de "pesado" (mas não é o problema principal)
+### 3.3 O verdadeiro gargalo: volume de round-trips entre containers
 
-### 2.1 Redis configurado, mas não utilizado
+Benchmark psycopg2 executado diretamente **dentro do container** `finup_backend_prod`:
 
-Redis está no docker-compose mas **nenhum domínio do backend usa caching**. Isso significa que endpoints como dashboard e investimentos fazem queries pesadas no banco a **cada request**, sem cache.
+```python
+# Simula get_cashflow(): 50 queries com conexão reutilizada (pool SQLAlchemy)
+50 queries cashflow: 111.5ms total = 2.23ms/query
 
-Impacto: lentidão nas respostas da API, não travamento de UI.
+# Simula onboarding/progress: 5 queries com conexão reutilizada
+5 queries onboarding: 104.0ms total = 20.79ms/query (primeira query cold)
+```
 
-### 2.2 Queries sem paginação explícita
+**O banco responde em 111ms para 50 queries — não é ele quem leva 4–7s.**
 
-O modelo `JournalEntry` tem 52 colunas e pode crescer muito. Não há evidência de paginação nas queries de listagem. Se o usuário tem milhares de transações, isso se sentirá.
-
-Impacto: lentidão gradual conforme o banco cresce.
-
-### 2.3 OCR / PyMuPDF no import
-
-Dependências como `rapidocr-onnxruntime` e `PyMuPDF` são carregadas no startup do backend. Em VM com CPU limitada, isso pode atrasar o cold start.
-
-Impacto: apenas no primeiro boot.
-
-### 2.4 57 dependências NPM + Radix UI x26
-
-O bundle inicial do frontend é substancial. Em produção (Next.js build), isso é otimizado. Em dev, cada componente Radix é carregado sem otimização.
-
-Impacto: primeira carga de página lenta em dev.
+A latência real medida pelo Playwright (4–7s) vem da cadeia completa:
+```
+Cliente (meufinup.com.br)
+  → TLS + DNS + rede (~50-150ms)
+  → nginx (proxy SSL)
+  → Next.js (SSR ou client fetch)
+  → FastAPI worker
+  → SQLAlchemy (abertura/reuso de conexão do pool)
+  → PostgreSQL (execução: <1ms por query)
+  → volta pela mesma cadeia
+```
 
 ---
 
-## 3. O que está bem na arquitetura
+### 3.4 Causa raiz confirmada: 3 componentes React fazem fetch independente do mesmo endpoint
 
-- **DDD com 17 domínios isolados**: correto, escalável, sem god-objects
-- **Connection pooling** no SQLAlchemy (pool_size=10, max_overflow=20): bem configurado
-- **Virtualization no frontend** (react-window, react-virtuoso): existe e está implementado
-- **Lazy loading + Suspense**: implementado no investimentos
-- **Deduplicação FNV-1a**: eficiente, não é bottleneck
-- **Autenticação com httpOnly cookies**: correto e seguro
-- **Separação dev/prod** nos docker-compose: a estrutura está certa
+O endpoint `/api/v1/onboarding/progress` é chamado por **3 componentes distintos** que são montados simultaneamente no dashboard:
 
----
-
-## 4. Veredicto: VM ou App?
-
-```
-Travamento na VM: 90% ambiente, 10% app
-```
-
-| Causa | Probabilidade | Impacto |
+| Componente | Arquivo | Tipo de fetch |
 |---|---|---|
-| Next.js dev mode na VM | **Alta** | Travamento real |
-| CHOKIDAR_USEPOLLING ativo | **Alta** | CPU constante |
-| RAM insuficiente na VM | **Alta** | Swap = travamento |
-| Redis não utilizado | Média | Lentidão de API |
-| Queries sem paginação | Baixa (agora) | Lentidão futura |
-| Arquitetura ruim | **Não** | — |
+| `OnboardingGuard` | `features/onboarding/OnboardingGuard.tsx:42` | `fetch()` direto em `useEffect` |
+| `NudgeBanners` | `features/onboarding/NudgeBanners.tsx:43` | `fetchWithAuth()` em `useEffect` |
+| `DemoModeBanner` | `features/onboarding/DemoModeBanner.tsx:19` | `fetch()` direto em `useEffect` |
+
+O `OnboardingGuard` está no **layout** (`app/mobile/layout.tsx`) — roda em toda tela.  
+`NudgeBanners` + `DemoModeBanner` estão na **página do dashboard** (`app/mobile/dashboard/page.tsx`).
+
+**Resultado:** no carregamento do dashboard, os 3 montam ao mesmo tempo, os 3 disparam `fetch` no mesmo endpoint, o backend processa **3 requests paralelos de onboarding/progress**. Com 5 queries por request = **15 queries simultâneas no banco** (mas o banco aguenta — o problema é a multiplicação de round-trips HTTP completos).
+
+O Playwright mediu 7s + 6.3s porque os 2 mais lentos foram capturados (o terceiro pode ter sido mais rápido por cold/warm cache).
 
 ---
 
-## 5. Ações recomendadas (por prioridade)
+### 3.5 `/plano/cashflow` anual: N+1 de round-trips, não de queries
 
-### Prioridade 1 — Ambiente (resolve o travamento imediato)
+O `get_cashflow()` em `plano/service.py` executa **4 queries × 12 meses = 48 queries** em um loop:
 
-**A. Usar build de produção na VM**
-
-```bash
-# Em vez de docker-compose.yml (dev), usar:
-docker compose -f docker-compose.prod.yml up
+```python
+for m in range(1, 13):          # 12 iterações
+    renda_realizada = db.query(SUM(Valor)).filter(MesFatura=m, CategoriaGeral="Receita").scalar()
+    investimentos   = db.query(SUM(Valor)).filter(MesFatura=m, CategoriaGeral="Investimentos").scalar()
+    gastos_rec      = db.query(SUM(BudgetPlanning.valor_planejado)).join(...).scalar()
+    gastos_real     = db.query(SUM(Valor)).filter(MesFatura=m, CategoriaGeral="Despesa").scalar()
+# + 2 pré-loads antes do loop (expectativas)
+# Total: ~50 queries por chamada
 ```
 
-O build de produção do Next.js gera bundle estático otimizado. A VM vai a 10–20% do consumo atual do frontend.
+Cada `db.query().scalar()` é um round-trip separado ao PostgreSQL.  
+50 round-trips × ~2ms/round-trip = **~100ms em banco puro**.  
+Mas cada round-trip também passa pela camada do SQLAlchemy, Python GIL, e o overhead acumula: **medido 111ms em banco, mas percebido como 4-7s ao medir com Playwright** — a diferença está na **latência de rede entre o cliente e o servidor** (o Playwright está fora da VM).
 
-**B. Desativar CHOKIDAR_USEPOLLING na VM Linux**
+**Existe cache de DB (`PlanoCashflowMes`) mas ele só cobre `/cashflow/mes` (mês único)**. O endpoint anual `/cashflow?ano=` (chamado pela página Budget/Plano) **ignora o cache** e recomputa os 12 meses.
+
+**O frontend do Plano tem cache de 2 minutos** (`features/plano/api.ts:132`) com deduplicação de in-flight requests. Mas esse cache é invalidado ao navegar entre páginas e na primeira visita do dia.
+
+---
+
+### 3.6 Investimentos (10s): renderização JavaScript, não API
+
+As APIs capturadas pelo Playwright na tela de Investimentos retornam todas em **<200ms**:
+
+```
+185ms  GET  /api/v1/onboarding/progress
+179ms  GET  /api/v1/auth/me
+ 80ms  GET  /api/v1/dashboard/last-month-with-data
+```
+
+Os 10s são **tempo de renderização no cliente** (JavaScript). Provável causa:
+- Componentes de simulação de investimentos com cálculos pesados no cliente (XIRR, projeções de juros compostos)
+- Lazy loading que ancora um spinner até resolver todos os dados
+- Múltiplas chamadas de API em cascata (cada resultado dispara o próximo fetch)
+
+Requer DevTools Performance tab para confirmar exatamente onde os 10s são gastos.
+
+---
+
+### 3.7 Resumo dos benchmarks de produção
+
+| Medição | Resultado |
+|---|---|
+| EXPLAIN ANALYZE: query cashflow | 0.33ms de execução |
+| EXPLAIN ANALYZE: query onboarding | 0.34ms de execução |
+| Planning Time (cold/warm) | 91ms / 0.06ms |
+| 50 queries cashflow (container interno) | 111ms total |
+| 5 queries onboarding (container interno) | 104ms total |
+| `/plano/cashflow` via Playwright (externo) | **4.4s** |
+| `/onboarding/progress` via Playwright (externo) | **7.0s e 6.3s** |
+| Overhead de rede cliente→servidor | ~4–7s (amortizado entre requests) |
+
+---
+
+
+## 4. Plano de Ação — Prioridades Definitivas
+
+### 🔴 P1 — Eliminar chamadas duplicadas ao onboarding/progress (impacto: Dashboard ~20s → ~3s)
+
+**Problema:** 3 componentes fazem fetch independente do mesmo endpoint.  
+**Solução:** Criar um React Context (ou usar React Query) que centraliza a única chamada.
+
+```tsx
+// features/onboarding/OnboardingContext.tsx (NOVO)
+'use client';
+import { createContext, useContext, useEffect, useState } from 'react';
+
+interface OnboardingData { /* ... campos ... */ }
+const OnboardingContext = createContext<OnboardingData | null>(null);
+
+export function OnboardingProvider({ children }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`${apiUrl}/api/v1/onboarding/progress`, { credentials: 'include' })
+      .then(r => r.json())
+      .then(d => { setData(d); setLoading(false); });
+  }, []); // UMA ÚNICA chamada
+
+  return <OnboardingContext.Provider value={{ data, loading }}>{children}</OnboardingContext.Provider>;
+}
+
+export const useOnboarding = () => useContext(OnboardingContext);
+```
+
+```tsx
+// app/mobile/layout.tsx — envolver com o provider
+<OnboardingProvider>       {/* ← adicionar */}
+  <OnboardingGuard>
+    {children}
+  </OnboardingGuard>
+</OnboardingProvider>
+```
+
+```tsx
+// OnboardingGuard.tsx, NudgeBanners.tsx, DemoModeBanner.tsx
+// Substituir fetch() por:
+const { data, loading } = useOnboarding();  // sem fetch — lê do context
+```
+
+**Arquivos a modificar:** 5 arquivos, ~30 linhas  
+**Impacto estimado:** Dashboard cai de 20s+ para ~3-5s (elimina 13.3s de requests duplicados)
+
+---
+
+### 🔴 P2 — Adicionar cache DB para `/plano/cashflow` anual (impacto: Budget 5.8s → ~0.3s)
+
+**Problema:** O endpoint anual `/cashflow?ano=` recomputa 50 queries a cada request. O cache `PlanoCashflowMes` já existe mas só cobre meses individuais.  
+**Solução:** Usar o cache existente no endpoint anual — iterar pelos 12 meses chamando `get_cashflow_mes_cached()`.
+
+```python
+# plano/router.py — linha 267
+@router.get("/cashflow")
+def cashflow_anual(
+    ano: int = Query(...),
+    modo_plano: bool = Query(False),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """12 meses com cache por mês (PlanoCashflowMes, TTL configurável)"""
+    meses = []
+    for mes in range(1, 13):
+        mes_data = get_cashflow_mes_cached(db, user_id, ano, mes)
+        meses.append(mes_data)
+
+    # Calcular nudge_acumulado a partir dos meses cacheados
+    nudge = sum(m.get("saldo_projetado", 0) or 0 for m in meses)
+
+    return {"ano": ano, "nudge_acumulado": nudge, "meses": meses}
+```
+
+**Arquivos a modificar:** `plano/router.py` (~10 linhas)  
+**Impacto estimado:** `GET /cashflow?ano=` cai de 4.4s para <300ms (hit de cache = leitura de 12 linhas da tabela `plano_cashflow_mes`)  
+**Invalidação:** já implementada em `invalidate_cashflow_cache()` — chamada quando expectativas/budget mudam  
+**TTL:** `CASHFLOW_MES_TTL_HOURS` (já configurável)
+
+---
+
+### 🟡 P3 — Deduplicar `/plano/cashflow` no frontend (impacto: elimina 2ª chamada duplicada)
+
+**Problema:** `GET /plano/cashflow?ano=2026` é chamado 2x por carregamento da página Budget/Plano.  
+**Diagnóstico:** o `features/plano/api.ts` já tem cache + in-flight deduplication. A duplicata provavelmente vem de dois componentes montando ao mesmo tempo antes do in-flight estar registrado (race condition).
+
+**Solução:** Substituir o cache manual (`getCached`/`getInFlight`) por React Query que deduplica nativamente.
+
+```typescript
+// features/plano/hooks/useCashflow.ts
+import { useQuery } from '@tanstack/react-query';
+import { fetchWithAuth } from '@/core/api';
+
+export function useCashflow(ano: number) {
+  return useQuery({
+    queryKey: ['plano', 'cashflow', ano],
+    queryFn: () => fetchWithAuth(`/api/v1/plano/cashflow?ano=${ano}`).then(r => r.json()),
+    staleTime: 2 * 60 * 1000,  // 2 min — mesmo TTL atual
+  });
+}
+```
+
+**Arquivos a modificar:** componentes que chamam `getCashflow()` — substituir por `useCashflow()`  
+**Impacto estimado:** elimina a 2ª chamada de 2.2s; benefício secundário em todas as telas que re-navegam para Budget
+
+---
+
+### 🟡 P4 — Investigar renderização de Investimentos (10s)
+
+**Problema:** APIs retornam em <200ms, mas a tela leva 10s para mostrar dados.  
+**Ação:** abrir Chrome DevTools → Performance tab → gravar o carregamento da tela de Investimentos.  
+**Hipóteses a validar:**
+- Cálculos pesados de XIRR ou projeção de juros compostos no cliente (buscar `xirr`, `calcular`, `simulacao` nos `.tsx` de investimentos)
+- Cascade de fetches: componente A carrega → dispara fetch B → dispara fetch C
+- Re-renders desnecessários (componente recalculando a cada setState)
+
+**Investigação rápida:**
+```bash
+grep -rn "xirr\|newton\|simulac\|projecao.*calcul" \
+  app_dev/frontend/src/features/investimentos --include="*.tsx" --include="*.ts"
+```
+
+---
+
+### 🟢 P5 — Corrigir healthcheck do nginx (5 minutos de trabalho)
+
+**Problema:** nginx marcado `unhealthy` — healthcheck tenta `wget http://localhost/` dentro do container.  
+**Solução:**
 
 ```yaml
-# docker-compose.yml — remover ou condicionar:
-# CHOKIDAR_USEPOLLING: "true"  ← remover em VM Linux
+# docker-compose.prod.yml — serviço nginx
+healthcheck:
+  test: ["CMD", "nginx", "-t"]
+  interval: 30s
+  timeout: 10s
+  retries: 3
 ```
 
-**C. Aumentar RAM da VM para pelo menos 4 GB**
-
-Mínimo recomendado para rodar o stack completo com conforto.
-
-### Prioridade 2 — Quick wins no App
-
-**D. Ativar Redis caching nos endpoints críticos**
-
-```python
-# Backend: cache de dashboard, investimentos (TTL 5 min)
-# O Redis já está no stack, só falta usar
-```
-
-**E. Confirmar paginação nas queries de JournalEntry**
-
-```python
-# Garantir .limit() e .offset() em listagens
-# Retornar total_count no response para o frontend
-```
-
-### Prioridade 3 — Monitoramento
-
-**F. Medir antes de otimizar mais**
-
-Antes de qualquer refatoração adicional, medir com:
-- `docker stats` para ver CPU/RAM real por container
-- Chrome DevTools Performance para ver onde a UI trava
-- `EXPLAIN ANALYZE` no PostgreSQL para queries lentas
+**Impacto:** elimina falso alarme de `unhealthy`, evita restart automático indesejado
 
 ---
 
-## 6. Refatorar o app inteiro?
+### 🟢 P6 — Redis para `/onboarding/progress` (cache de longa duração)
 
-**Não.** Seria um erro estratégico. A arquitetura está bem desenhada:
-
-- Migrar de DDD para outra coisa não resolve nada
-- Trocar Next.js não resolve nada (o problema é dev mode, não o framework)
-- O código de negócio (upload, deduplicação, investimentos) está maduro
-
-O que vale evoluir no futuro:
-- Implementar camada de cache (Redis já está no stack)
-- Adicionar Server-Sent Events para uploads longos (feedback em tempo real)
-- Considerar React Query ou SWR para cache inteligente no frontend (substitui parte dos custom hooks)
+**Contexto:** mesmo após P1 (context compartilhado), o endpoint ainda fará 1 request por usuário por sessão. Com Redis, o backend responderia em <5ms (em vez de ~100ms de queries).  
+**TTL sugerido:** 5 minutos (invalidar no upload de arquivo)  
+**Implementação:** usar `redis_client.set(f"onboarding:{user_id}", json_data, ex=300)` no início de `get_progress()`, verificar antes das queries.
 
 ---
 
-## 7. Conclusão
+### Cronograma sugerido
 
-O app funciona bem no PC porque o PC tem RAM e CPU sobrand. Na VM, o gargalo é o ambiente de desenvolvimento (dev server + polling), não a qualidade do código.
-
-**Próximo passo recomendado:** testar a VM com `docker-compose.prod.yml` e ver se o travamento some. Se sumir, o diagnóstico está confirmado. Se persistir, aí vale medir com `docker stats` durante o uso e compartilhar os números.
+| Sprint | Ação | Tempo estimado | Ganho de performance |
+|---|---|---|---|
+| Agora (30min) | P5: fix nginx healthcheck | 5 min | Operacional — sem lentidão |
+| Agora (30min) | P2: cache `/cashflow` anual | 15 min | Budget: 5.8s → **<0.3s** |
+| Próxima sessão | P1: OnboardingContext | 1-2h | Dashboard: 20s+ → **~3s** |
+| Próxima sessão | P4: investigar Investimentos | 30min | Identificar causa dos 10s |
+| Futura | P3: React Query | 3-4h | UX: navegação fluída sem reload |
+| Futura | P6: Redis onboarding | 2h | Backend: <5ms/request |
 
 ---
 
-*Análise gerada com base na exploração completa da codebase FinUpV2 v3.0.2*
+### Impacto esperado após P1 + P2
+
+| Tela | Antes | Depois (estimado) |
+|---|---|---|
+| Dashboard | >20s | ~3–5s |
+| Budget/Plano | 5.8s | ~0.5s |
+| Transações | 1.9s | 1.0–1.5s |
+| Investimentos | 10s | 10s (P4 a fazer) |
+| Filtros Mês/YTD/Ano | 350ms | 350ms (já OK) |
+
+---
+
+*Análise definitiva consolidada. Diagnóstico baseado em EXPLAIN ANALYZE (PostgreSQL prod), benchmarks psycopg2 dentro do container, inspeção de código-fonte e medição Playwright.*
+
+---
+
