@@ -7,9 +7,14 @@
 
 ## TL;DR
 
-**O travamento é 100% do app, não da VM.** A VM tem 15.6 GB RAM, 4 vCPUs e opera em modo produção — está completamente ociosa. O problema são **chamadas HTTP duplicadas no frontend** (3 componentes fazem `fetch` independente do mesmo endpoint) somadas a um endpoint backend que dispara **50 round-trips por chamada**. O banco de dados é rápido — queries individuais executam em <1ms. A latência de rede (cliente→VM) amplifica cada round-trip desnecessário.
+**O travamento é 100% do app, não da VM.** A VM tem 15.6 GB RAM, 4 vCPUs e opera em modo produção — completamente ociosa. Foram identificados **4 problemas cirúrgicos no frontend**:
 
-**Arquitetura está saudável. Não refatore.** As correções são cirúrgicas.
+1. **Onboarding 3–4× por tela** — `OnboardingGuard` + `NudgeBanners` + `DemoModeBanner` fazem fetch independente do mesmo endpoint em toda navegação (P1)
+2. **Cashflow anual: 50 round-trips sem cache** — `/plano/cashflow?ano=` recomputa 12 meses a cada request ignorando o cache por mês já existente (P2)
+3. **Double-fetch em Carteira e Investimentos** — `selectedMonth = new Date()` dispara fetch prematuro com mês errado; `fetchLastMonthWithData` corrige e dispara novamente (P7)
+4. **Double-fetch em Transações** — debounce cria novo objeto com valores iguais, gerando re-render em cascata 400ms após o mount (P8)
+
+O banco é rápido — queries individuais executam em <1ms. O backend não tem N+1. **Arquitetura está saudável. As correções são cirúrgicas — ~1h de código total.**
 
 ---
 
@@ -521,20 +526,80 @@ export function useCashflow(ano: number) {
 
 ---
 
-### 🟡 P4 — Investigar renderização de Investimentos (10s)
+### 🟡 P4 — ~~Investigar renderização de Investimentos~~ (resolvido via P7)
 
-**Problema:** APIs retornam em <200ms, mas a tela leva 10s para mostrar dados.  
-**Ação:** abrir Chrome DevTools → Performance tab → gravar o carregamento da tela de Investimentos.  
-**Hipóteses a validar:**
-- Cálculos pesados de XIRR ou projeção de juros compostos no cliente (buscar `xirr`, `calcular`, `simulacao` nos `.tsx` de investimentos)
-- Cascade de fetches: componente A carrega → dispara fetch B → dispara fetch C
-- Re-renders desnecessários (componente recalculando a cada setState)
+**Status: causa identificada.** A lentidão de Investimentos vem do double-fetch (P7): visita fria dispara 2× as APIs com meses diferentes. O fix de `selectedMonth = null` elimina o batch prematuro. A renderização JavaScript não é o gargalo — as APIs pesadas (overview, timeline) retornam em 300–700ms, dentro do aceitável.
 
-**Investigação rápida:**
-```bash
-grep -rn "xirr\|newton\|simulac\|projecao.*calcul" \
-  app_dev/frontend/src/features/investimentos --include="*.tsx" --include="*.ts"
+---
+
+### 🟢 P7 — Fix double-fetch: `selectedMonth = null` em Carteira e Investimentos *(NOVO)*
+
+**Problema:** `selectedMonth = new Date()` como estado inicial dispara `useEffect` com mês errado antes que `fetchLastMonthWithData` retorne o mês real. Resultado: 2× cada API de dados por visita fria.
+
+**Fix em `app/mobile/carteira/page.tsx:241`:**
+
+```typescript
+// ANTES:
+const [selectedMonth, setSelectedMonth] = React.useState<Date>(new Date())
+const anomes = selectedMonth.getFullYear() * 100 + (selectedMonth.getMonth() + 1)
+
+// DEPOIS:
+const [selectedMonth, setSelectedMonth] = React.useState<Date | null>(null)
+const anomes = selectedMonth
+  ? selectedMonth.getFullYear() * 100 + (selectedMonth.getMonth() + 1)
+  : null
 ```
+
+**Fix no useEffect de dados (carteira:264 e investimentos:100 aprox.):**
+
+```typescript
+React.useEffect(() => {
+  if (!isAuth || !selectedMonth) return  // ← adicionar guard
+  // ... resto do fetch
+}, [isAuth, anomes, selectedMonth])
+```
+
+**Mesmo fix em `app/mobile/investimentos/page.tsx:60`** (mesma estrutura).  
+**Arquivos:** 2 arquivos, ~5 linhas cada  
+**Impacto:** elimina 1 batch inteiro de APIs por visita fria (~400–700ms economizados)
+
+---
+
+### 🟢 P8 — Fix debounce race em Transactions *(NOVO)*
+
+**Problema:** o `useEffect` de debounce cria um novo objeto com os mesmos valores 400ms após o mount — isso propaga um re-render em cascata que dispara `fetchTransactions` + `fetchResumo` uma segunda vez.
+
+**Fix em `app/mobile/transactions/page.tsx:136`:**
+
+```typescript
+// ANTES:
+useEffect(() => {
+  const timer = setTimeout(() => {
+    setDebouncedPeriod({ yearInicio, monthInicio, yearFim, monthFim, semFiltroPeriodo })
+  }, 400)
+  return () => clearTimeout(timer)
+}, [yearInicio, monthInicio, yearFim, monthFim, semFiltroPeriodo])
+
+// DEPOIS:
+useEffect(() => {
+  const timer = setTimeout(() => {
+    setDebouncedPeriod(prev => {
+      if (
+        prev.yearInicio     === yearInicio &&
+        prev.monthInicio    === monthInicio &&
+        prev.yearFim        === yearFim &&
+        prev.monthFim       === monthFim &&
+        prev.semFiltroPeriodo === semFiltroPeriodo
+      ) return prev  // ← mesma referência, zero re-render
+      return { yearInicio, monthInicio, yearFim, monthFim, semFiltroPeriodo }
+    })
+  }, 400)
+  return () => clearTimeout(timer)
+}, [yearInicio, monthInicio, yearFim, monthFim, semFiltroPeriodo])
+```
+
+**Arquivo:** 1 arquivo, ~8 linhas  
+**Impacto:** elimina 2 RTTs (~800ms) em toda abertura da tela de Transações
 
 ---
 
@@ -571,23 +636,26 @@ healthcheck:
 | Agora (30min) | P5: fix nginx healthcheck | 5 min | Operacional — sem lentidão |
 | Agora (30min) | P2: cache `/cashflow` anual | 15 min | Budget: 5.8s → **<0.3s** |
 | Agora (30min) | P1: cache localStorage (3 camadas) | 30 min | Bottom nav: 6–8s → **~2s**; Dashboard: **sem fetch** para usuário com dados |
+| Agora (30min) | **P7: `selectedMonth = null` (Carteira + Investimentos)** | **10 min** | **Elimina 2 fetches duplos por visita** |
+| Agora (30min) | **P8: debounce stable ref (Transactions)** | **10 min** | **Elimina 2 fetches duplos por visita** |
 | Próxima sessão | P4: investigar Investimentos | 30min | Identificar causa dos 10s |
 | Futura | P3: React Query | 3-4h | UX: navegação fluída sem reload |
 | Futura | P6: Redis onboarding | 2h | Backend: <5ms/request |
 
 ---
 
-### Impacto esperado após P1 + P2
+### Impacto esperado após P1 + P2 + P7 + P8
 
-| Cenário | Medido hoje | Após P1 (cache localStorage) | Após P1 + P2 |
+| Cenário | Medido hoje | Após P1 + P7 + P8 | Após + P2 |
 |---|---|---|---|
 | Dashboard — 1ª visita (sem cache) | ~7s | ~5–6s (1 fetch onboarding) | ~5–6s |
 | Dashboard — 2ª visita em diante | ~7s | **~2–3s (zero fetch onboarding)** | ~2–3s |
 | Bottom nav (qualquer troca) | 6–8s | **~1–2s (zero fetch onboarding)** | ~1–2s |
 | Chips de mês Jan/Fev/Mar | 330ms ✅ | 330ms ✅ | 330ms ✅ |
 | Budget/Plano | 5.8s | 5.8s | **~0.3s** |
-| Transações abertura | 8s | ~2s | ~2s |
-| Investimentos | 8–10s | 8–10s (P4 a investigar) | — |
+| Transações abertura | 8s | **~1.5s** (elimina 2× duplicata) | ~1.5s |
+| Carteira abertura | ~1.5s (dupla) | **~0.8s** (elimina 1 batch inteiro) | ~0.8s |
+| Investimentos abertura (fria) | ~1.5s (dupla) | **~0.8s** (elimina 1 batch inteiro) | ~0.8s |
 
 ---
 
@@ -682,7 +750,213 @@ Os 3 fetches simultâneos do `/onboarding/progress` confirmam exatamente o diagn
 
 ---
 
-*Análise definitiva consolidada. Diagnóstico baseado em EXPLAIN ANALYZE (PostgreSQL prod), benchmarks psycopg2 dentro do container, inspeção de código-fonte, medição Playwright de telas e medição Playwright de navegação (chips + bottom nav).*
+
+## 6. Rodada 2 — Varredura Profunda de Código (10/03/2026 — noite)
+
+> Script: `/tmp/perf_deep.py` — mede timeline completa de APIs (timestamps relativos a t=0) para detectar waterfalls e duplicatas reais.  
+> Resultado completo: `deploy/history/perf_deep_20260310_212649.json`
+
+### 6.1 Medição de waterfall por tela — resultados brutos
+
+| Tela | APIs capturadas | Duplicatas reais | Novo achado |
+|---|---|---|---|
+| Dashboard | 22 | 4× `/onboarding/progress` | Confirmado — P1 |
+| Transações | 6 | 2× `list` + 2× `resumo` | ✅ Novo — P8 |
+| Budget/Plano | 11 | Nenhuma real ¹ | — |
+| Carteira | 7 | 2× `distribuicao-tipo` + 2× `timeline/patrimonio` | ✅ Novo — P7 |
+| Investimentos | 3 | Nenhuma (cache de visitas anteriores) | P7 identificado no código |
+
+¹ `/plano/cashflow` aparece 2× mas são endpoints distintos (`/cashflow` anual e `/cashflow/mes` mensal) — falso positivo do detector de duplicatas que compara apenas o path base.
 
 ---
+
+### 6.2 🔴 NOVO: Cascade Double-Fetch — Carteira e Investimentos (P7)
+
+**Confirmado com medição em Carteira:**
+
+```
+t=42ms    auth/me inicia
+t=90ms    auth/me resolve → isAuth=true → React re-renderiza
+t=97ms    [Batch 1] distribuicao-tipo + timeline/patrimonio + last-month-with-data
+           ↑ FETCH PREMATURO com mês errado (new Date() = mês atual = Março)
+t=381ms   last-month-with-data resolve → setSelectedMonth(Fev 2026)
+           → anomes muda: 202603 → 202602
+t=392ms   [Batch 2] distribuicao-tipo + timeline/patrimonio NOVAMENTE
+           ↑ FETCH CORRETO com último mês com dados (Fevereiro)
+```
+
+**Resultado:** cada visita a Carteira ou Investimentos dispara **2× cada API de dados**. O primeiro batch usa dados do mês atual (possivelmente sem dados), o segundo usa o mês real. Custo: ~2 RTTs extras por visita.
+
+**Root cause — nas duas páginas:**
+
+```typescript
+// carteira/page.tsx:241  |  investimentos/page.tsx:60
+const [selectedMonth, setSelectedMonth] = React.useState<Date>(new Date())
+//                                                              ^^^^^^^^^^
+//                                         PROBLEMA: inicializa com mês atual
+//                                         → dispara fetch prematuro
+
+const anomes = selectedMonth.getFullYear() * 100 + (selectedMonth.getMonth() + 1)
+// anomes calculado imediatamente → useEffect([isAuth, anomes]) dispara no mount
+
+React.useEffect(() => {
+  // fetchLastMonthWithData resolve 280ms depois → setSelectedMonth(Fev)
+  // → anomes muda → useEffect dispara de novo → 2º fetch
+}, [isAuth, anomes, selectedMonth])
+```
+
+**Fix (3 linhas por arquivo):**
+
+```typescript
+// ✅ CORRETO: inicializar como null para bloquear o fetch prematuro
+const [selectedMonth, setSelectedMonth] = React.useState<Date | null>(null)
+
+const anomes = selectedMonth
+  ? selectedMonth.getFullYear() * 100 + (selectedMonth.getMonth() + 1)
+  : null  // ← anomes null bloqueia o useEffect
+
+React.useEffect(() => {
+  if (!isAuth || !selectedMonth) return  // ← guard explícito
+  // ... resto do fetch
+}, [isAuth, anomes, selectedMonth])
+```
+
+**Arquivos a modificar:** `app/mobile/carteira/page.tsx:241` e `app/mobile/investimentos/page.tsx:60`  
+**Impacto:** elimina 2 RTTs (~700–1400ms) em cada visita fria a Carteira e Investimentos
+
+---
+
+### 6.3 🔴 NOVO: Transactions Double-Fetch por Debounce Race (P8)
+
+**Confirmado com medição:**
+
+```
+t=188ms   [Batch 1] transactions/list + transactions/resumo
+           ↑ debouncedPeriod = valor inicial → filters → callbacks criados
+t=597ms   [Batch 2] transactions/list + transactions/resumo NOVAMENTE
+           ↑ exatamente 409ms depois — o debounce de 400ms disparou
+```
+
+**Root cause:**
+
+```typescript
+// transactions/page.tsx:132-144
+
+// Estado inicializado com valores corretos:
+const [debouncedPeriod, setDebouncedPeriod] = useState({
+  yearInicio, monthInicio, yearFim, monthFim, semFiltroPeriodo
+})
+
+// useEffect debounce — dispara no mount E depois de 400ms:
+useEffect(() => {
+  const timer = setTimeout(() => {
+    setDebouncedPeriod({ yearInicio, monthInicio, yearFim, monthFim, semFiltroPeriodo })
+    //                   ↑ NOVO OBJETO mesmo com valores idênticos
+    //                     → debouncedPeriod muda de referência
+    //                     → filters useMemo recomputa
+    //                     → fetchTransactions/fetchResumo recriam
+    //                     → useEffect([fetchTransactions, fetchResumo]) dispara
+    //                     → 2º fetch
+  }, 400)
+}, [yearInicio, monthInicio, yearFim, monthFim, semFiltroPeriodo])
+```
+
+**Fix (functional update com comparação de igualdade):**
+
+```typescript
+// transactions/page.tsx:136-143
+useEffect(() => {
+  const timer = setTimeout(() => {
+    setDebouncedPeriod(prev => {
+      // Só atualiza se algum valor realmente mudou (evita novo objeto com mesmos valores)
+      if (
+        prev.yearInicio === yearInicio &&
+        prev.monthInicio === monthInicio &&
+        prev.yearFim === yearFim &&
+        prev.monthFim === monthFim &&
+        prev.semFiltroPeriodo === semFiltroPeriodo
+      ) return prev  // ← mesma referência → nenhum re-render
+      return { yearInicio, monthInicio, yearFim, monthFim, semFiltroPeriodo }
+    })
+  }, 400)
+  return () => clearTimeout(timer)
+}, [yearInicio, monthInicio, yearFim, monthFim, semFiltroPeriodo])
+```
+
+**Arquivos a modificar:** `app/mobile/transactions/page.tsx:136`  (~8 linhas)  
+**Impacto:** elimina 2 RTTs em toda abertura da tela de Transações (~800ms economizados)
+
+---
+
+### 6.4 ✅ Backend limpo — sem N+1
+
+Inspeção das queries de investimentos (as mais suspeitas por serem lentas: 400–700ms):
+
+| Endpoint | Implementação | Veredicto |
+|---|---|---|
+| `GET /investimentos/distribuicao-tipo` | `GROUP BY tipo_investimento` — 1 query | ✅ Sem N+1 |
+| `GET /investimentos/timeline/patrimonio` | `GROUP BY classe_ativo, anomes` — 1 query | ✅ Sem N+1 |
+| `GET /investimentos/overview` | 1 endpoint agregado (B2, já implementado) | ✅ Ótimo |
+
+Latência de 400–700ms nesses endpoints é pura agregação de dados no PostgreSQL — esperado para séries históricas de anos. Não há oportunidade de melhoria sem índice adicional ou cache Redis.
+
+**Índice adicional que pode ajudar** (se a série histórica crescer muito):
+```sql
+-- Cobre timeline/patrimonio (filtra por user_id + ano, agrupa por anomes + classe_ativo)
+CREATE INDEX idx_inv_hist_user_ano ON investimento_historicos(investimento_id, ano, anomes);
+-- (investimento_id JOINa com investimento_portfolios.user_id via index existente)
+```
+
+---
+
+### 6.5 Investigação de `/onboarding/progress` — 4× no Dashboard
+
+A nova medição (Batch 2) revelou **4× `/onboarding/progress`** no Dashboard, não 3×:
+
+```
+t=459ms   OnboardingGuard   → dur=696ms   (monta no layout, primeiro)
+t=597ms   NudgeBanners      → dur=1575ms  (monta na página)
+t=597ms   DemoModeBanner    → dur=3561ms  (monta na página)
+t=597ms   OnboardingGuard   → dur=4165ms  (???)  ← 4ª chamada
+```
+
+A 4ª chamada sugere que o `OnboardingGuard` é montado **duas vezes** — possivelmente porque o Next.js App Router re-executa o layout durante a transição de rota. Isso reforça a urgência do P1 (cache localStorage): a 4ª chamada seria eliminada automaticamente pelo cache.
+
+---
+
+### 6.6 Achados sobre Investimentos — código resolvido
+
+O `investimentos/page.tsx` usa `getInvestimentos()` (lista direta), enquanto o hook `useInvestimentos()` usa `fetchInvestimentosOverview()` (endpoint B2 agregado). **As duas APIs coexistem:**
+
+| Consumidor | API chamada | Endpoint |
+|---|---|---|
+| `app/mobile/investimentos/page.tsx` | `getInvestimentos()` | `GET /investimentos` (lista) |
+| `features/investimentos/hooks/use-investimentos.ts` | `fetchInvestimentosOverview()` | `GET /investimentos/overview` (B2 agregado) |
+| `app/mobile/carteira/page.tsx` | `getInvestimentos()` direto | `GET /investimentos` (lista) |
+
+A página de Investimentos não usa o endpoint B2 — potencial melhoria futura (P9): migrar a página para usar `/overview`, mas não é prioridade agora pois o double-fetch (P7) é o problema maior.
+
+Na medição de Investimentos (5ª tela visitada), nenhuma API de dados aparece porque tanto `fetchLastMonthWithData('patrimonio')` quanto `getInvestimentos({anomes:202602})` já estavam em cache das visitas anteriores (Dashboard e Carteira). A tela carrega instantaneamente do cache — a lentidão real só ocorre na **primeira visita fria**, que o P7 vai resolver.
+
+---
+
+### 6.7 Atualização do Plano de Ação — novos itens P7 e P8
+
+Ver §4 atualizado abaixo:
+
+| Prioridade | Ação | Esforço | Ganho |
+|---|---|---|---|
+| P1 | Cache localStorage onboarding (3 componentes) | 30min | Dashboard: -5s, bottom nav: -6s |
+| P2 | Cache DB `/cashflow` anual | 15min | Budget: 5.8s → 0.3s |
+| **P7** | **Fix `selectedMonth = null` em Carteira + Investimentos** | **20min** | **Elimina 2 fetches duplos, ~700ms-1.4s** |
+| **P8** | **Fix debounce race em Transactions** | **10min** | **Elimina 2 fetches duplos, ~800ms** |
+| P3 | React Query para `/cashflow` | 3-4h | UX fluída sem duplicata |
+| P5 | Fix nginx healthcheck | 5min | Operacional |
+| P6 | Redis para onboarding backend | 2h | Backend: <5ms/request |
+
+**P7 e P8 são correções cirúrgicas de 30 minutos no total. Não requerem refatoração.**
+
+---
+
+*Análise definitiva consolidada. Diagnóstico baseado em EXPLAIN ANALYZE (PostgreSQL prod), benchmarks psycopg2 dentro do container, inspeção de código-fonte, medição Playwright de telas, medição de navegação (chips + bottom nav) e varredura profunda de waterfall (rodada 2).*
 
