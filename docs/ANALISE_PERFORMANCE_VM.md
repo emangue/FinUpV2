@@ -380,52 +380,85 @@ Requer DevTools Performance tab para confirmar exatamente onde os 10s são gasto
 
 ## 4. Plano de Ação — Prioridades Definitivas
 
-### 🔴 P1 — Eliminar chamadas duplicadas ao onboarding/progress (impacto: Dashboard ~20s → ~3s)
+### 🔴 P1 — Eliminar o fetch de `/onboarding/progress` para usuários com onboarding completo
 
-**Problema:** 3 componentes fazem fetch independente do mesmo endpoint.  
-**Solução:** Criar um React Context (ou usar React Query) que centraliza a única chamada.
+**Observação crítica:** os 3 componentes (`OnboardingGuard`, `NudgeBanners`, `DemoModeBanner`) existem para tratar **casos de borda de usuários novos** — redirecionar quem não fez onboarding, mostrar nudges para quem não tem plano/investimento, avisar quem está em modo demo. Para um usuário normal (com dados reais, plano criado, sem demo), todos os três **renderizam nada** após receber a resposta da API. O fetch inteiro é desperdiçado.
 
-```tsx
-// features/onboarding/OnboardingContext.tsx (NOVO)
-'use client';
-import { createContext, useContext, useEffect, useState } from 'react';
+**O `OnboardingGuard` já tem a lógica certa para o `pulado`:**
+```typescript
+const pulado = localStorage.getItem('onboarding_pulado') === 'true';
+if (pulado) { setChecking(false); return; }  // ← pula o fetch
+```
+Mas quando a API retorna `onboarding_completo: true`, **não persiste esse resultado** — na próxima navegação repete o fetch do zero. O mesmo padrão se aplica aos outros dois componentes.
 
-interface OnboardingData { /* ... campos ... */ }
-const OnboardingContext = createContext<OnboardingData | null>(null);
+**Solução — 3 camadas, do mais simples ao mais robusto:**
 
-export function OnboardingProvider({ children }) {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+#### Camada 1 (5 min): `OnboardingGuard` — cachear resultado no localStorage
 
-  useEffect(() => {
-    fetch(`${apiUrl}/api/v1/onboarding/progress`, { credentials: 'include' })
-      .then(r => r.json())
-      .then(d => { setData(d); setLoading(false); });
-  }, []); // UMA ÚNICA chamada
-
-  return <OnboardingContext.Provider value={{ data, loading }}>{children}</OnboardingContext.Provider>;
-}
-
-export const useOnboarding = () => useContext(OnboardingContext);
+```typescript
+// OnboardingGuard.tsx — após receber resposta da API
+.then((data) => {
+  if (data?.onboarding_completo) {
+    localStorage.setItem('onboarding_completo', 'true');  // ← ADICIONAR
+    setChecking(false);
+    return;
+  }
+  router.replace('/mobile/onboarding/welcome');
+})
 ```
 
-```tsx
-// app/mobile/layout.tsx — envolver com o provider
-<OnboardingProvider>       {/* ← adicionar */}
-  <OnboardingGuard>
-    {children}
-  </OnboardingGuard>
-</OnboardingProvider>
+```typescript
+// OnboardingGuard.tsx — antes do fetch, checar cache
+const pulado = localStorage.getItem(ONBOARDING_PULADO_KEY) === 'true';
+const completo = localStorage.getItem('onboarding_completo') === 'true';  // ← ADICIONAR
+if (pulado || completo) { setChecking(false); return; }  // ← sem fetch
 ```
 
-```tsx
-// OnboardingGuard.tsx, NudgeBanners.tsx, DemoModeBanner.tsx
-// Substituir fetch() por:
-const { data, loading } = useOnboarding();  // sem fetch — lê do context
+**Efeito:** na primeira visita após login, o `OnboardingGuard` faz o fetch uma vez. Em todas as navegações seguintes (bottom nav, refresh de estado), pula o fetch completamente. Para a maioria dos usuários reais, o fetch não acontece depois da primeira sessão.
+
+#### Camada 2 (10 min): `NudgeBanners` — checar localStorage antes do fetch
+
+```typescript
+// NudgeBanners.tsx — checar se todos os nudges foram dispensados antes de buscar
+useEffect(() => {
+  const tipos = ['sem_upload', 'sem_plano', 'sem_investimento', 'upload_30_dias'];
+  const todosDispensados = tipos.every(
+    t => localStorage.getItem(`nudge_dismissed_${t}`) === 'true'
+  );
+  if (todosDispensados) return;  // ← sem fetch, zero API call
+
+  fetchWithAuth(`${apiUrl}/api/v1/onboarding/progress`)
+    .then((r) => (r.ok ? r.json() : null))
+    .then(setProgress)
+    .catch(() => setProgress(null));
+}, []);
 ```
 
-**Arquivos a modificar:** 5 arquivos, ~30 linhas  
-**Impacto estimado:** Dashboard cai de 20s+ para ~3-5s (elimina 13.3s de requests duplicados)
+**Efeito:** usuários que dispensaram todos os nudges (ou que têm tudo completo e o app nunca mostrou nudge) não fazem fetch algum.
+
+#### Camada 3 (15 min): `DemoModeBanner` — cachear ausência de demo
+
+```typescript
+// DemoModeBanner.tsx
+useEffect(() => {
+  // Uma vez confirmado que não tem demo, não precisa checar de novo
+  if (sessionStorage.getItem('sem_demo') === 'true') return;  // ← sem fetch
+
+  fetch(`${apiUrl}/api/v1/onboarding/progress`, { credentials: 'include' })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((d) => {
+      if (!d?.tem_demo) sessionStorage.setItem('sem_demo', 'true');  // ← cachear
+      setData(d);
+    });
+}, []);
+```
+
+**Efeito:** após a primeira visita confirmar `tem_demo: false`, o componente nunca mais faz fetch na mesma sessão.
+
+**Arquivos a modificar:** 3 arquivos, ~15 linhas no total  
+**Impacto estimado:** para usuários com onboarding completo, `/onboarding/progress` é chamado **0 vezes por navegação** (zero requests) em vez de 3× por tela. Dashboard e bottom nav ficam limitados pelas outras APIs (~2–4s), não mais pelos 5–7s do onboarding.
+
+> **Nota:** O Context compartilhado (ideia original do P1) ainda é válido como camada adicional de proteção para novos usuários — mas as 3 camadas de cache acima resolvem o caso 99% dos usuários reais sem precisar refatorar a arquitetura de componentes.
 
 ---
 
@@ -537,7 +570,7 @@ healthcheck:
 |---|---|---|---|
 | Agora (30min) | P5: fix nginx healthcheck | 5 min | Operacional — sem lentidão |
 | Agora (30min) | P2: cache `/cashflow` anual | 15 min | Budget: 5.8s → **<0.3s** |
-| Próxima sessão | P1: OnboardingContext | 1-2h | Dashboard: 20s+ → **~3s** |
+| Agora (30min) | P1: cache localStorage (3 camadas) | 30 min | Bottom nav: 6–8s → **~2s**; Dashboard: **sem fetch** para usuário com dados |
 | Próxima sessão | P4: investigar Investimentos | 30min | Identificar causa dos 10s |
 | Futura | P3: React Query | 3-4h | UX: navegação fluída sem reload |
 | Futura | P6: Redis onboarding | 2h | Backend: <5ms/request |
@@ -546,13 +579,14 @@ healthcheck:
 
 ### Impacto esperado após P1 + P2
 
-| Cenário | Medido | Depois de P1 (estimado) | Depois de P1+P2 |
+| Cenário | Medido hoje | Após P1 (cache localStorage) | Após P1 + P2 |
 |---|---|---|---|
-| Dashboard abertura inicial | ~7s | ~2–3s | ~2–3s |
-| Troca pelo bottom nav (qualquer tela) | 6–8s | ~1–2s | ~1–2s |
-| Chips de mês Jan/Fev/Mar | 330ms (já OK) | 330ms | 330ms |
-| Budget/Plano abertura | 5.8s | 5.8s | **~0.5s** |
-| Transações abertura | 8s (inclui onboarding) | ~2s | ~2s |
+| Dashboard — 1ª visita (sem cache) | ~7s | ~5–6s (1 fetch onboarding) | ~5–6s |
+| Dashboard — 2ª visita em diante | ~7s | **~2–3s (zero fetch onboarding)** | ~2–3s |
+| Bottom nav (qualquer troca) | 6–8s | **~1–2s (zero fetch onboarding)** | ~1–2s |
+| Chips de mês Jan/Fev/Mar | 330ms ✅ | 330ms ✅ | 330ms ✅ |
+| Budget/Plano | 5.8s | 5.8s | **~0.3s** |
+| Transações abertura | 8s | ~2s | ~2s |
 | Investimentos | 8–10s | 8–10s (P4 a investigar) | — |
 
 ---
