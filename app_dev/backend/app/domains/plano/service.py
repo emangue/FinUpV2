@@ -5,6 +5,7 @@ from datetime import date, datetime, timezone, timedelta
 from typing import Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from .models import UserFinancialProfile, PlanoMetaCategoria, BaseExpectativa, ExpectativaMes, PlanoCashflowMes
 from .schemas import AporteExtraDetalhe, AporteMesDetalhe, AporteInvestimentoResponse
@@ -1364,21 +1365,26 @@ def get_cashflow_mes_cached(
     # Campos persistidos (sem os prefixados com _)
     stored = {k: v for k, v in computed.items() if not k.startswith("_")}
 
-    if existing:
-        # UPDATE: linha já existe (válida, inválida ou expirada) → apenas atualiza
-        for key, value in stored.items():
-            setattr(existing, key, value)
-        existing.computed_at = datetime.now(timezone.utc)
-        existing.invalidated = False
-    else:
-        # INSERT: primeira vez para esse (user_id, ano, mes)
-        db.add(PlanoCashflowMes(
-            user_id=user_id,
-            ano=ano,
-            mes=mes,
-            mes_referencia=f"{ano}-{mes:02d}",
-            **stored,
-        ))
+    # Upsert atômico (PostgreSQL ON CONFLICT DO UPDATE) para evitar race condition
+    # quando múltiplas requests chegam simultaneamente com existing=None
+    upsert_values = {
+        **stored,
+        "user_id": user_id,
+        "ano": ano,
+        "mes": mes,
+        "mes_referencia": f"{ano}-{mes:02d}",
+        "computed_at": datetime.now(timezone.utc),
+        "invalidated": False,
+    }
+    stmt = pg_insert(PlanoCashflowMes).values(**upsert_values)
+    update_cols = {c: stmt.excluded[c] for c in stored.keys()}
+    update_cols["computed_at"] = stmt.excluded.computed_at
+    update_cols["invalidated"] = stmt.excluded.invalidated
+    stmt = stmt.on_conflict_do_update(
+        constraint="uq_plano_cashflow_mes",
+        set_=update_cols,
+    )
+    db.execute(stmt)
     db.commit()
 
     # Retornar no shape completo (inclui campos extras não persistidos)
