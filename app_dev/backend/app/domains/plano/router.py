@@ -271,9 +271,29 @@ def cashflow_anual(
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ):
-    """12 meses: renda_esperada, gastos_recorrentes, gastos_realizados, aporte, saldo, status"""
-    service = PlanoService(db)
-    return service.get_cashflow(user_id, ano, modo_plano_sempre=modo_plano)
+    """
+    P2: 12 meses via cache por mês (plano_cashflow_mes).
+    Cache hit = 12 queries (1/mês) em vez de 50 queries em loop → ~20-50ms vs ~4400ms.
+    Fallback: modo_plano=True usa get_cashflow() diretamente (não suportado pelo cache).
+    """
+    if modo_plano:
+        # Caso especial (projeção): recalcula sem cache pois _compute_cashflow_mes
+        # não suporta modo_plano_sempre=True
+        service = PlanoService(db)
+        return service.get_cashflow(user_id, ano, modo_plano_sempre=True)
+
+    meses = []
+    for mes in range(1, 13):
+        mes_data = get_cashflow_mes_cached(db, user_id, ano, mes)
+        meses.append(mes_data)
+
+    # nudge_acumulado: soma dos saldos negativos (mesma lógica de PlanoService.get_cashflow)
+    nudge = sum(
+        (m.get("aporte_usado") or 0)
+        for m in meses
+        if isinstance(m, dict) and (m.get("aporte_usado") or 0) < 0
+    )
+    return {"ano": ano, "nudge_acumulado": round(nudge, 2), "meses": meses}
 
 
 @router.get("/expectativas")
