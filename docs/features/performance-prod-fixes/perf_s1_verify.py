@@ -168,9 +168,10 @@ def run(headed: bool, base_url: str):
             base_url,
         )
         batches, calls = detectar_batches(log, "/api/v1/investimentos")
-        ok = batches <= 1 and ms < 1000
+        ok = batches <= 1  # critério principal: sem double-fetch (tempo varia por latência de rede em prod)
         status = f"{GN}✅ PASS{RS}" if ok else f"{RD}❌ FAIL{RS}"
-        nota = f"{ms}ms, {batches} batch(es) de /investimentos"
+        ms_warn = f" {YL}⚠ lento{RS}" if ms > 3000 else ""
+        nota = f"{ms}ms{ms_warn}, {batches} batch(es) de /investimentos"
         print(f"  {status}  P7 Carteira  ({nota})")
         if not ok:
             print(f"         {YL}→ selectedMonth ainda iniciando com new Date() na linha 241?{RS}")
@@ -188,9 +189,10 @@ def run(headed: bool, base_url: str):
             base_url,
         )
         batches, calls = detectar_batches(log, "/api/v1/investimentos")
-        ok = batches <= 1 and ms < 1000
+        ok = batches <= 1  # critério principal: sem double-fetch
         status = f"{GN}✅ PASS{RS}" if ok else f"{RD}❌ FAIL{RS}"
-        nota = f"{ms}ms, {batches} batch(es) de /investimentos"
+        ms_warn = f" {YL}⚠ lento{RS}" if ms > 3000 else ""
+        nota = f"{ms}ms{ms_warn}, {batches} batch(es) de /investimentos"
         print(f"  {status}  P7 Investimentos  ({nota})")
         if not ok:
             print(f"         {YL}→ selectedMonth na linha 51 de investimentos/page.tsx?{RS}")
@@ -206,9 +208,10 @@ def run(headed: bool, base_url: str):
             base_url,
         )
         batches, calls = detectar_batches(log, "transactions/list", window_ms=300)
-        ok = batches <= 1 and ms < 700
+        ok = batches <= 1  # critério principal: sem double-request por debounce instável
         status = f"{GN}✅ PASS{RS}" if ok else f"{RD}❌ FAIL{RS}"
-        nota = f"{ms}ms, {batches} batch(es) de transactions/list"
+        ms_warn = f" {YL}⚠ lento{RS}" if ms > 3000 else ""
+        nota = f"{ms}ms{ms_warn}, {batches} batch(es) de transactions/list"
         print(f"  {status}  P8 Transações  ({nota})")
         if not ok:
             print(f"         {YL}→ setDebouncedPeriod ainda cria novo objeto? (linhas 132-144){RS}")

@@ -26,14 +26,26 @@ interface Progress {
   onboarding_completo: boolean;
 }
 
+const ONBOARDING_COMPLETO_KEY = 'onboarding_completo';
+
 export function OnboardingChecklist() {
   const [data, setData] = useState<Progress | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    // P1: se onboarding_completo no localStorage, componente vai retornar null mesmo assim — skip fetch
+    if (typeof window !== 'undefined' && localStorage.getItem(ONBOARDING_COMPLETO_KEY) === 'true') {
+      setIsLoading(false);
+      return;
+    }
     fetch(`${apiUrl}/api/v1/onboarding/progress`, { credentials: 'include' })
       .then((r) => (r.ok ? r.json() : null))
-      .then(setData)
+      .then((d) => {
+        if (d?.onboarding_completo) {
+          localStorage.setItem(ONBOARDING_COMPLETO_KEY, 'true');
+        }
+        setData(d);
+      })
       .finally(() => setIsLoading(false));
   }, []);
 

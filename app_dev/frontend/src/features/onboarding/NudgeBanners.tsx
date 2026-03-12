@@ -43,7 +43,9 @@ export function NudgeBanners() {
 
   useEffect(() => {
     // P1: se todos os nudges já foram dispensados, não buscar a API
+    // P1: se onboarding completo (todos os passos feitos), não há nudges a mostrar
     if (typeof window !== 'undefined') {
+      if (localStorage.getItem('onboarding_completo') === 'true') return;
       const todosDispensados = NUDGE_TYPES.every(
         (tipo) => localStorage.getItem(`${NUDGE_PREFIX}${tipo}`) === 'true'
       );
