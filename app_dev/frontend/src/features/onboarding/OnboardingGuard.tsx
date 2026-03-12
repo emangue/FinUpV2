@@ -10,6 +10,8 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 
 const ONBOARDING_PULADO_KEY = 'onboarding_pulado';
+// P1: cache permanente — onboarding completo não se desfaz
+const ONBOARDING_COMPLETO_KEY = 'onboarding_completo';
 const apiUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
 
 export function OnboardingGuard({ children }: { children: React.ReactNode }) {
@@ -34,7 +36,9 @@ export function OnboardingGuard({ children }: { children: React.ReactNode }) {
     }
 
     const pulado = localStorage.getItem(ONBOARDING_PULADO_KEY) === 'true';
-    if (pulado) {
+    // P1: cache hit — evita fetch em toda navegação para usuários com onboarding completo
+    const completo = localStorage.getItem(ONBOARDING_COMPLETO_KEY) === 'true';
+    if (pulado || completo) {
       setChecking(false);
       return;
     }
@@ -43,6 +47,8 @@ export function OnboardingGuard({ children }: { children: React.ReactNode }) {
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (data?.onboarding_completo) {
+          // P1: cachear para evitar refetch em rotas futuras
+          localStorage.setItem(ONBOARDING_COMPLETO_KEY, 'true');
           setChecking(false);
           return;
         }
