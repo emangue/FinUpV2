@@ -26,7 +26,7 @@ import urllib.request
 from pathlib import Path
 
 # ── Carregar .env.local ───────────────────────────────────────────────────────
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent  # docs/features/performance-prod-fixes/ → 4 níveis → raiz do projeto
 ENV_LOCAL = PROJECT_ROOT / ".env.local"
 if ENV_LOCAL.exists():
     for line in ENV_LOCAL.read_text().splitlines():
