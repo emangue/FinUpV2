@@ -115,6 +115,13 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
+    healthcheck:
+      # P5: usar curl para verificar se o Next.js responde (não wget — conexão recusada no loopback)
+      test: ["CMD-SHELL", "curl -sf http://localhost:3000/ -o /dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     networks:
       - finup-net
 

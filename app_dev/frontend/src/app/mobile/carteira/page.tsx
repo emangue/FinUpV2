@@ -238,7 +238,8 @@ function CarteiraContent() {
   const router = useRouter()
   const isAuth = useRequireAuth()
 
-  const [selectedMonth, setSelectedMonth] = React.useState<Date>(new Date())
+  // P7: null evita fetch prematuro antes de fetchLastMonthWithData resolver
+  const [selectedMonth, setSelectedMonth] = React.useState<Date | null>(null)
   const [investimentos, setInvestimentos] = React.useState<InvestimentoPortfolio[]>([])
   const [distribuicao, setDistribuicao] = React.useState<DistribuicaoTipo[]>([])
   const [patrimonioData, setPatrimonioData] = React.useState<PatrimonioMensal | null>(null)
@@ -247,7 +248,9 @@ function CarteiraContent() {
   const [searchOpen, setSearchOpen] = React.useState(false)
   const [searchTerm, setSearchTerm] = React.useState('')
 
-  const anomes = selectedMonth.getFullYear() * 100 + (selectedMonth.getMonth() + 1)
+  const anomes = selectedMonth
+    ? selectedMonth.getFullYear() * 100 + (selectedMonth.getMonth() + 1)
+    : null
 
   // Default para último mês com dados
   React.useEffect(() => {
@@ -262,7 +265,7 @@ function CarteiraContent() {
 
   // Carregar dados
   React.useEffect(() => {
-    if (!isAuth) return
+    if (!isAuth || !selectedMonth) return  // P7: aguarda selectedMonth ser definido pelo fetchLastMonthWithData
     setLoading(true)
 
     const currentYear = selectedMonth.getFullYear()
@@ -402,7 +405,7 @@ function CarteiraContent() {
         {/* Month picker */}
         <div className="pb-4">
           <MonthScrollPicker
-            selectedMonth={selectedMonth}
+            selectedMonth={selectedMonth ?? new Date()}
             onMonthChange={setSelectedMonth}
           />
         </div>

@@ -136,7 +136,18 @@ function TransactionsMobileContent() {
   useEffect(() => {
     if (periodFilterRef.current) clearTimeout(periodFilterRef.current)
     periodFilterRef.current = setTimeout(() => {
-      setDebouncedPeriod({ yearInicio, monthInicio, yearFim, monthFim, semFiltroPeriodo })
+      setDebouncedPeriod(prev => {
+        // P8: retorna mesma referência quando valores não mudaram → React não re-renderiza
+        // → filters (useMemo) não recomputa → fetchTransactions não é recriada → sem 2º fetch
+        if (
+          prev.yearInicio       === yearInicio &&
+          prev.monthInicio      === monthInicio &&
+          prev.yearFim          === yearFim &&
+          prev.monthFim         === monthFim &&
+          prev.semFiltroPeriodo === semFiltroPeriodo
+        ) return prev
+        return { yearInicio, monthInicio, yearFim, monthFim, semFiltroPeriodo }
+      })
     }, 400)
     return () => {
       if (periodFilterRef.current) clearTimeout(periodFilterRef.current)
