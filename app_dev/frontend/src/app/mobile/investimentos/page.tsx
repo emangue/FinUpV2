@@ -18,7 +18,8 @@ import { InvestmentCard } from '@/features/investimentos/components/mobile/inves
 import { CreateInvestmentSheet } from '@/features/investimentos/components/mobile/create-investment-sheet'
 import { EditValorMesSheet } from '@/features/investimentos/components/mobile/edit-valor-mes-sheet'
 import {
-  getInvestimentos,
+  fetchInvestimentosOverview,
+  invalidateInvestimentosOverviewCache,
   copiarMesAnterior,
 } from '@/features/investimentos/services/investimentos-api'
 import { fetchLastMonthWithData } from '@/features/dashboard/services/dashboard-api'
@@ -87,12 +88,13 @@ function InvestimentosMobileContent() {
   const ano = selectedMonth ? selectedMonth.getFullYear() : null
 
   // Sempre busca todos (filtros aplicados no client)
+  // P9: usa endpoint agregado /overview (1 request em vez do endpoint de lista)
   const loadInvestimentos = React.useCallback(() => {
     if (!isAuth || anomes == null) return  // P7: aguarda selectedMonth (anomes null = mês não definido ainda)
     setLoading(true)
     setError(null)
-    getInvestimentos({ ativo: true, anomes, limit: 200 })
-      .then(setInvestimentos)
+    fetchInvestimentosOverview({ ativo: true, anomes })
+      .then((overview) => setInvestimentos(overview.lista ?? []))
       .catch((err) => setError(err?.message || 'Erro ao carregar investimentos'))
       .finally(() => setLoading(false))
   }, [isAuth, anomes])
@@ -140,7 +142,10 @@ function InvestimentosMobileContent() {
     setCopying(true)
     try {
       const { copiados } = await copiarMesAnterior(anomes)
-      if (copiados > 0) loadInvestimentos()
+      if (copiados > 0) {
+        invalidateInvestimentosOverviewCache()  // P9: garante cache limpo antes de recarregar
+        loadInvestimentos()
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao copiar')
     } finally {

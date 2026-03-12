@@ -15,7 +15,8 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
-import { getProjecao, getCashflow, type ProjecaoResponse } from '../api';
+import { getProjecao, type ProjecaoResponse } from '../api';
+import { useCashflowAnual } from '../hooks/use-cashflow-anual';
 
 /** Formato em milhares (k). Se |v| < 100: "ok" */
 function fmtK(v: number): string {
@@ -38,7 +39,9 @@ function fmt(v: number): string {
 
 export function ProjecaoChart({ ano }: { ano: number }) {
   const [baseData, setBaseData] = useState<ProjecaoResponse | null>(null);
-  const [cashflow, setCashflow] = useState<Awaited<ReturnType<typeof getCashflow>> | null>(null);
+  // P3: React Query — se TabelaReciboAnual e ProjecaoChart montarem juntos com o
+  // mesmo `ano`, apenas 1 request HTTP é disparado (deduplicação por queryKey).
+  const { data: cashflow } = useCashflowAnual(ano);
   // G1: sliderValue = estado visual imediato; debouncedPct = dispara fetch após parar
   const [sliderValue, setSliderValue] = useState(0);
   const [debouncedPct, setDebouncedPct] = useState(0);
@@ -71,14 +74,13 @@ export function ProjecaoChart({ ano }: { ano: number }) {
     return () => clearTimeout(timer);
   }, [sliderValue]);
 
-  // G3 Effect 1: dados base + cashflow — só re-executa quando ANO muda
+  // G3 Effect 1: dados base (projeção) — cashflow vem do React Query acima (useCashflowAnual)
   useEffect(() => {
     setLoadingBase(true);
     setError(null);
-    Promise.all([getProjecao(ano, 12, 0, true), getCashflow(ano)])
-      .then(([base, cf]) => {
+    getProjecao(ano, 12, 0, true)
+      .then((base) => {
         setBaseData(base);
-        setCashflow(cf);
       })
       .catch((e) => setError(e?.message || 'Erro'))
       .finally(() => setLoadingBase(false));

@@ -964,6 +964,14 @@ class UploadService:
                 data_confirmacao=now
             )
             logger.info(f"📝 Histórico atualizado: {transacoes_criadas} importadas, {total_duplicatas} duplicadas")
+
+            # Invalidar cache Redis de onboarding (P6)
+            # Após 1º upload, onboarding_completo pode ter mudado → força recomputação
+            try:
+                from app.core.redis_client import redis_delete
+                redis_delete(f"onboarding:progress:{user_id}")
+            except Exception as exc:
+                logger.debug("⚠️ Não foi possível invalidar cache onboarding no Redis: %s", exc)
             
             # ========== REVISÃO: LIMPAR BASE_PARCELAS ÓRFÃS ==========
             # Parcelas que existiam no upload antigo mas foram removidas na revisão

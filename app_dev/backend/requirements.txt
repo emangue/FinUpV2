@@ -35,3 +35,6 @@ email-validator>=2.0.0
 
 # Rate Limiting
 slowapi==0.1.9
+
+# Cache
+redis>=5.0.0            # Redis client (P6: cache onboarding/progress, TTL=5min)
