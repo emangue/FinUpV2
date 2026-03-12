@@ -139,6 +139,7 @@ function InvestimentosMobileContent() {
   }
 
   const handleCopiarMesAnterior = async () => {
+    if (!anomes) return  // guard: não executa se mês ainda não foi definido
     setCopying(true)
     try {
       const { copiados } = await copiarMesAnterior(anomes)
