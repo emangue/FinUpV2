@@ -275,7 +275,7 @@ function CarteiraContent() {
     const anoInicio = currentMonth === 1 ? currentYear - 1 : currentYear
 
     Promise.all([
-      getInvestimentos({ ativo: true, anomes, limit: 200 }),
+      getInvestimentos({ ativo: true, anomes: anomes ?? undefined, limit: 200 }),
       getDistribuicaoPorTipo().catch(() => []),
       getPatrimonioTimeline({ ano_inicio: anoInicio, ano_fim: currentYear }).catch(() => []),
     ])
