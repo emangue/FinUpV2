@@ -110,14 +110,15 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
+      - HOSTNAME=0.0.0.0  # P5: força Next.js a escutar em 0.0.0.0 (inclui loopback para healthcheck)
     ports:
       - "3003:3000"  # Nginx aponta para 3003 → meufinup.com.br
     depends_on:
       - backend
     restart: unless-stopped
     healthcheck:
-      # P5: usar curl para verificar se o Next.js responde (não wget — conexão recusada no loopback)
-      test: ["CMD-SHELL", "curl -sf http://localhost:3000/ -o /dev/null || exit 1"]
+      # P5: wget disponível no Alpine; HOSTNAME=0.0.0.0 garante loopback acessível
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/ > /dev/null 2>&1 || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
