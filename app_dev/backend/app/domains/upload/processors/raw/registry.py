@@ -18,6 +18,7 @@ from .pdf.itau_extrato_pdf import process_itau_extrato_pdf
 from .pdf.itau_fatura_pdf import process_itau_fatura_pdf
 from .pdf.mercadopago_extrato_pdf import process_mercadopago_extrato_pdf
 from .pdf.btg_fatura_pdf import process_btg_fatura_pdf
+from .pdf.btg_extrato_pdf import process_btg_extrato_pdf
 from .excel.btg_fatura_xlsx import process_btg_fatura_xlsx
 from .pdf.mercadopago_fatura_pdf import process_mercadopago_fatura_pdf
 
@@ -43,10 +44,14 @@ PROCESSORS: dict[Tuple[str, str, str], ProcessorFunc] = {
     ('itau', 'extrato', 'excel'): process_itau_extrato,
     ('itau', 'extrato', 'pdf'): _wrap_extrato_pdf(process_itau_extrato_pdf),
     ('itau', 'fatura', 'pdf'): process_itau_fatura_pdf,
-    # BTG Pactual
+    # BTG Pactual - Extrato XLS
     ('btg', 'extrato', 'excel'): process_btg_extrato,
     ('btg pactual', 'extrato', 'excel'): process_btg_extrato,
     ('btg-pactual', 'extrato', 'excel'): process_btg_extrato,  # Variação com hífen
+    # BTG Pactual - Extrato PDF
+    ('btg', 'extrato', 'pdf'): process_btg_extrato_pdf,
+    ('btg pactual', 'extrato', 'pdf'): process_btg_extrato_pdf,
+    ('btg-pactual', 'extrato', 'pdf'): process_btg_extrato_pdf,
     # BTG Pactual - Fatura
     ('btg', 'fatura', 'excel'): process_btg_fatura_xlsx,
     ('btg pactual', 'fatura', 'excel'): process_btg_fatura_xlsx,
