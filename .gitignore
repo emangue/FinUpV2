@@ -168,3 +168,4 @@ temp/pids/*.pid
 temp/export_*.sql
 temp/.test_token*
 export-to-main-project/*/node_modules/
+.venv
