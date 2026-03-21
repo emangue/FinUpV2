@@ -1,7 +1,7 @@
 """
 Utilitários para hash FNV-1a 64-bit
 
-Versão: 3.0.0
+Versão: 3.1.0
 Data: 21/03/2026
 Status: stable
 
@@ -15,10 +15,16 @@ Histórico:
           Adiciona canonical mapping para migração de dados históricos
           BREAKING CHANGE: requer recálculo de todos os IdTransacao existentes
           Testes: scripts/testing/test_idtransacao_v5.py (23/23)
+- 3.1.0: IdTransacao v5.1 — adiciona param `parcela` opcional
+          Corrige falso-positivo em compras parceladas (parcelas 2/N, 3/N, etc.)
+          com mesma data original e mesmo valor → colisão de hash na v5.
+          Backward compat: parcela=None → chave idêntica ao v5 (sem mudança).
+          Testes: tests/test_hasher_parcelas.py (8/8)
 """
 
 import re
 import unicodedata
+from typing import Optional
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -110,16 +116,23 @@ def fnv1a_64_hash(text):
     return str(h)
 
 
-def generate_id_transacao(data: str, banco: str, tipo_documento: str,
-                          valor: float, user_id: int, sequencia: int = 1) -> str:
+def generate_id_transacao(
+    data: str,
+    banco: str,
+    tipo_documento: str,
+    valor: float,
+    user_id: int,
+    sequencia: int = 1,
+    parcela: Optional[str] = None,
+) -> str:
     """
-    Gera IdTransacao v5 usando hash FNV-1a 64-bit.
+    Gera IdTransacao v5.1 usando hash FNV-1a 64-bit.
 
-    ESTRATÉGIA v5 (BREAKING CHANGE vs v4.2.1):
-    - Chave: user_id | banco_canonical | tipo | data | valor
-    - Remove dependência do nome/descrição da transação
-    - Imune a variações de texto entre exports do mesmo banco
-    - Sequência diferencia múltiplas transações com mesma chave no arquivo
+    ESTRATÉGIA v5.1 (fix falso-positivo parcelas):
+    - Chave sem parcela : user_id | banco_canonical | tipo | data | valor
+    - Chave com parcela : user_id | banco_canonical | tipo | data | valor | parcela
+    - Parcela no formato "atual/total" (ex: "2/6", "3/12")
+    - parcela=None → chave idêntica ao v5 (backward compat total)
 
     Args:
         data          : Data no formato DD/MM/AAAA
@@ -128,30 +141,32 @@ def generate_id_transacao(data: str, banco: str, tipo_documento: str,
         valor         : Valor EXATO (com sinal — negativo para despesas)
         user_id       : ID do usuário (isolamento entre usuários)
         sequencia     : Posição no arquivo (1=primeira ocorrência, 2=segunda, ...)
+        parcela       : Parcela atual/total (ex: "1/6", "2/12"). None para não-parceladas.
 
     Returns:
         str: IdTransacao — hash FNV-1a 64-bit em decimal
 
     Exemplos:
+        # Parcela 1/6 e 2/6 da mesma compra → hashes DIFERENTES ✅ (fix v5.1)
+        >>> generate_id_transacao('19/01/2026', 'itau', 'fatura', -1011.21, 1, parcela='1/6')
+        >>> generate_id_transacao('19/01/2026', 'itau', 'fatura', -1011.21, 1, parcela='2/6')
+
         # Mesma transação BTG, duas descrições diferentes → mesmo hash ✅
         >>> generate_id_transacao('29/12/2025', 'BTG Pactual', 'extrato', 10520.01, 1)
         >>> generate_id_transacao('29/12/2025', 'BTG',         'extrato', 10520.01, 1)
-        # Ambos retornam o mesmo valor (canonical 'BTG')
 
         # Dois saques de R$100 no mesmo dia → hashes diferentes por sequência ✅
         >>> generate_id_transacao('15/01/2026', 'Itaú', 'extrato', -100.00, 1, sequencia=1)
         >>> generate_id_transacao('15/01/2026', 'Itaú', 'extrato', -100.00, 1, sequencia=2)
-
-    BREAKING CHANGE vs v4.2.1:
-        Parâmetro 'estabelecimento' removido.
-        Parâmetros 'banco' e 'tipo_documento' adicionados.
-        Todos os IdTransacao existentes devem ser recalculados (migração).
     """
     banco_norm = get_canonical_banco(banco)       # 'BTG Pactual' → 'BTG'
     tipo_norm  = _normalize_str(tipo_documento)   # 'extrato' → 'EXTRATO'
     valor_str  = f"{float(valor):.2f}"            # -10520.01 → '-10520.01'
 
-    chave = f"{user_id}|{banco_norm}|{tipo_norm}|{data}|{valor_str}"
+    if parcela:
+        chave = f"{user_id}|{banco_norm}|{tipo_norm}|{data}|{valor_str}|{parcela}"
+    else:
+        chave = f"{user_id}|{banco_norm}|{tipo_norm}|{data}|{valor_str}"
 
     hash_atual = fnv1a_64_hash(chave)
 
