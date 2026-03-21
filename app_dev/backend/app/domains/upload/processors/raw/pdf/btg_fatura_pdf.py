@@ -111,12 +111,12 @@ def process_btg_fatura_pdf(
     else:
         logger.warning("Total da fatura não encontrado no PDF")
 
-    # Extrair pagamentos (seção 'Pagamentos feitos pelo cliente')
-    pagamentos_raw = _extract_payment_transactions(texto_completo, ano_fatura, num_mes_fatura)
+    # Pagamentos feitos pelo cliente são excluídos intencionalmente:
+    # o débito já aparece no extrato bancário da conta corrente → incluir seria duplicar.
+    # _extract_payment_transactions(texto_completo, ano_fatura, num_mes_fatura)  ← ignorado
 
-    # Extrair transações por seção de cartão
+    # Extrair transações por seção de cartão (despesas/compras apenas)
     transacoes_raw = _extract_all_transactions(texto_completo, ano_fatura, num_mes_fatura)
-    transacoes_raw.extend(pagamentos_raw)
 
     transactions: List[RawTransaction] = []
     for data_str, descricao, valor, final_cartao_pdf, tipo_compra in transacoes_raw:
@@ -299,7 +299,7 @@ def _extract_transactions_from_block(
 
         match_conv = regex_conversao.search(linha_strip)
         if match_conv and pending_intl:
-            valor = _convert_valor_br(match_conv.group(1))
+            valor = -_convert_valor_br(match_conv.group(1))  # BTG PDF: positivo → inverte para despesa negativa
             transacoes.append((
                 pending_intl["data"],
                 pending_intl["desc"],
@@ -321,7 +321,7 @@ def _extract_transactions_from_block(
                 match_nac.group(3).strip(), match_nac.group(4),
             )
             data_iso = _build_date(dd, mes_str, ano_fatura, mes_fatura)
-            valor = _convert_valor_br(valor_str)
+            valor = -_convert_valor_br(valor_str)  # BTG PDF: positivo → inverte para despesa negativa
             tipo = _classify_tipo(desc)
             transacoes.append((data_iso, desc, valor, final_cartao, tipo))
             logger.debug(f"  Nacional: {data_iso} {desc} R$ {valor}")

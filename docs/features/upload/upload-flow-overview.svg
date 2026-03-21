@@ -1,0 +1,334 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1200" height="900" viewBox="0 0 1200 900" xmlns="http://www.w3.org/2000/svg" font-family="'Segoe UI', system-ui, sans-serif">
+
+  <!-- Background -->
+  <rect width="1200" height="900" fill="#0f1117"/>
+
+  <!-- Title -->
+  <text x="600" y="40" text-anchor="middle" fill="#e2e8f0" font-size="22" font-weight="700" letter-spacing="1">PROCESSO DE UPLOAD — VISÃO GERAL</text>
+  <line x1="200" y1="52" x2="1000" y2="52" stroke="#334155" stroke-width="1"/>
+
+  <!-- ═══════════════════════════════ FRONTEND ═══════════════════════════════ -->
+  <rect x="20" y="70" width="360" height="220" rx="10" fill="#1e293b" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="200" y="92" text-anchor="middle" fill="#3b82f6" font-size="13" font-weight="700" letter-spacing="2">FRONTEND</text>
+
+  <!-- upload/page -->
+  <rect x="35" y="105" width="150" height="50" rx="6" fill="#1d3461" stroke="#3b82f6" stroke-width="1"/>
+  <text x="110" y="125" text-anchor="middle" fill="#93c5fd" font-size="10" font-weight="600">upload/page.tsx</text>
+  <text x="110" y="141" text-anchor="middle" fill="#64748b" font-size="9">histórico de uploads</text>
+
+  <!-- upload-dialog -->
+  <rect x="200" y="105" width="165" height="75" rx="6" fill="#1d3461" stroke="#3b82f6" stroke-width="1"/>
+  <text x="282" y="123" text-anchor="middle" fill="#93c5fd" font-size="10" font-weight="600">upload-dialog.tsx</text>
+  <text x="282" y="139" text-anchor="middle" fill="#64748b" font-size="9">• banco  • tipo doc</text>
+  <text x="282" y="153" text-anchor="middle" fill="#64748b" font-size="9">• mês fatura  • cartão</text>
+  <text x="282" y="167" text-anchor="middle" fill="#64748b" font-size="9">validação pré-upload</text>
+
+  <!-- file-input -->
+  <rect x="35" y="170" width="150" height="50" rx="6" fill="#1d3461" stroke="#3b82f6" stroke-width="1"/>
+  <text x="110" y="190" text-anchor="middle" fill="#93c5fd" font-size="10" font-weight="600">file-input.tsx</text>
+  <text x="110" y="206" text-anchor="middle" fill="#64748b" font-size="9">drag &amp; drop</text>
+  <text x="110" y="218" text-anchor="middle" fill="#64748b" font-size="9">.csv .xls .xlsx .pdf .ofx</text>
+
+  <!-- use-upload + api service -->
+  <rect x="35" y="235" width="330" height="42" rx="6" fill="#172554" stroke="#2563eb" stroke-width="1" stroke-dasharray="4,2"/>
+  <text x="200" y="252" text-anchor="middle" fill="#60a5fa" font-size="10" font-weight="600">use-upload.ts  +  upload-api.ts</text>
+  <text x="200" y="268" text-anchor="middle" fill="#475569" font-size="9">gerencia estado, progresso, erro → chama endpoints</text>
+
+  <!-- ═══════════════════════════════ ARROWS Frontend → Endpoints ═══════════ -->
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#64748b"/>
+    </marker>
+    <marker id="arr-blue" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#3b82f6"/>
+    </marker>
+    <marker id="arr-green" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#22c55e"/>
+    </marker>
+    <marker id="arr-amber" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#f59e0b"/>
+    </marker>
+    <marker id="arr-red" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#ef4444"/>
+    </marker>
+  </defs>
+
+  <!-- Arrow from frontend to API section -->
+  <line x1="380" y1="180" x2="420" y2="180" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arr-blue)"/>
+
+  <!-- ═══════════════════════════════ API ENDPOINTS ════════════════════════════ -->
+  <rect x="420" y="70" width="340" height="220" rx="10" fill="#1e293b" stroke="#8b5cf6" stroke-width="1.5"/>
+  <text x="590" y="92" text-anchor="middle" fill="#8b5cf6" font-size="13" font-weight="700" letter-spacing="2">API ENDPOINTS</text>
+
+  <!-- /detect -->
+  <rect x="435" y="105" width="145" height="55" rx="6" fill="#2d1b69" stroke="#8b5cf6" stroke-width="1"/>
+  <text x="507" y="123" text-anchor="middle" fill="#a78bfa" font-size="10" font-weight="700">POST /upload/detect</text>
+  <text x="507" y="138" text-anchor="middle" fill="#64748b" font-size="9">fingerprint do arquivo</text>
+  <text x="507" y="151" text-anchor="middle" fill="#64748b" font-size="9">detecta banco + tipo</text>
+
+  <!-- /preview -->
+  <rect x="595" y="105" width="150" height="70" rx="6" fill="#2d1b69" stroke="#8b5cf6" stroke-width="1"/>
+  <text x="670" y="123" text-anchor="middle" fill="#a78bfa" font-size="10" font-weight="700">POST /upload/preview</text>
+  <text x="670" y="138" text-anchor="middle" fill="#64748b" font-size="9">processamento completo</text>
+  <text x="670" y="152" text-anchor="middle" fill="#64748b" font-size="9">4 fases → preview_transacoes</text>
+  <text x="670" y="166" text-anchor="middle" fill="#64748b" font-size="9">retorna sessionId</text>
+
+  <!-- /batch -->
+  <rect x="435" y="175" width="145" height="55" rx="6" fill="#2d1b69" stroke="#8b5cf6" stroke-width="1"/>
+  <text x="507" y="193" text-anchor="middle" fill="#a78bfa" font-size="10" font-weight="700">POST /upload/batch</text>
+  <text x="507" y="208" text-anchor="middle" fill="#64748b" font-size="9">N arquivos, mesmo banco</text>
+  <text x="507" y="221" text-anchor="middle" fill="#64748b" font-size="9">1 session_id compartilhado</text>
+
+  <!-- /confirm -->
+  <rect x="595" y="190" width="150" height="55" rx="6" fill="#2d1b69" stroke="#8b5cf6" stroke-width="1"/>
+  <text x="670" y="208" text-anchor="middle" fill="#a78bfa" font-size="10" font-weight="700">POST /upload/confirm</text>
+  <text x="670" y="223" text-anchor="middle" fill="#64748b" font-size="9">insere journal_entries</text>
+  <text x="670" y="238" text-anchor="middle" fill="#64748b" font-size="9">deleta preview</text>
+
+  <!-- import-planilha -->
+  <rect x="435" y="245" width="310" height="35" rx="6" fill="#1e1b4b" stroke="#6366f1" stroke-width="1" stroke-dasharray="4,2"/>
+  <text x="590" y="259" text-anchor="middle" fill="#818cf8" font-size="10" font-weight="600">POST /upload/import-planilha  —  planilha genérica CSV/XLSX</text>
+  <text x="590" y="272" text-anchor="middle" fill="#475569" font-size="9">auto-detecta colunas Data / Descrição / Valor → mesmo pipeline 4 fases</text>
+
+  <!-- Arrow to 4 phases -->
+  <line x1="590" y1="290" x2="590" y2="320" stroke="#8b5cf6" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ═══════════════════════════════ 4 FASES ════════════════════════════════ -->
+  <rect x="60" y="320" width="1100" height="340" rx="10" fill="#111827" stroke="#334155" stroke-width="1"/>
+  <text x="610" y="343" text-anchor="middle" fill="#94a3b8" font-size="13" font-weight="700" letter-spacing="3">PIPELINE — 4 FASES  (service.py)</text>
+
+  <!-- FASE 1 -->
+  <rect x="80" y="358" width="245" height="280" rx="8" fill="#1a2332" stroke="#22c55e" stroke-width="1.5"/>
+  <rect x="80" y="358" width="245" height="28" rx="8" fill="#14532d"/>
+  <rect x="80" y="374" width="245" height="12" fill="#14532d"/>
+  <text x="202" y="376" text-anchor="middle" fill="#4ade80" font-size="11" font-weight="700">FASE 1 — RAW PROCESSING</text>
+
+  <text x="95" y="402" fill="#64748b" font-size="9">detecta formato (ext)</text>
+  <text x="95" y="418" fill="#64748b" font-size="9">↓ get_processor(banco, tipo, fmt)</text>
+
+  <!-- processor box -->
+  <rect x="88" y="426" width="228" height="100" rx="5" fill="#0f2419" stroke="#166534" stroke-width="1"/>
+  <text x="202" y="441" text-anchor="middle" fill="#86efac" font-size="9" font-weight="600">REGISTRY (banco × tipo × formato)</text>
+  <text x="95" y="456" fill="#475569" font-size="8.5">itau × fatura × csv    → itau_fatura.py</text>
+  <text x="95" y="469" fill="#475569" font-size="8.5">itau × extrato × excel → itau_extrato.py</text>
+  <text x="95" y="482" fill="#475569" font-size="8.5">btg  × extrato × pdf   → btg_extrato_pdf.py</text>
+  <text x="95" y="495" fill="#475569" font-size="8.5">btg  × fatura  × pdf   → btg_fatura_pdf.py</text>
+  <text x="95" y="508" fill="#475569" font-size="8.5">mercpago × fatura × pdf → mp_fatura_pdf.py</text>
+  <text x="95" y="521" fill="#475569" font-size="8.5">+ 3 outros processors...</text>
+
+  <text x="95" y="540" fill="#64748b" font-size="9">↓ RawTransaction</text>
+  <text x="95" y="554" fill="#64748b" font-size="9">↓ BalanceValidation (extratos)</text>
+  <text x="95" y="568" fill="#64748b" font-size="9">↓ exclusion rules (transacoes_exclusao)</text>
+
+  <rect x="88" y="576" width="228" height="22" rx="4" fill="#052e16" stroke="#15803d" stroke-width="1"/>
+  <text x="202" y="590" text-anchor="middle" fill="#4ade80" font-size="9" font-weight="600">SALVA → preview_transacoes</text>
+
+  <text x="95" y="618" fill="#475569" font-size="8">campos: data, lancamento, valor,</text>
+  <text x="95" y="630" fill="#475569" font-size="8">banco, tipo_doc, mes_fatura...</text>
+
+  <!-- FASE 2 -->
+  <rect x="345" y="358" width="230" height="280" rx="8" fill="#1a2332" stroke="#f59e0b" stroke-width="1.5"/>
+  <rect x="345" y="358" width="230" height="28" rx="8" fill="#451a03"/>
+  <rect x="345" y="374" width="230" height="12" fill="#451a03"/>
+  <text x="460" y="376" text-anchor="middle" fill="#fbbf24" font-size="11" font-weight="700">FASE 2 — ID MARKING</text>
+
+  <text x="358" y="402" fill="#64748b" font-size="9">marker.py → mark_transaction()</text>
+
+  <rect x="353" y="410" width="213" height="65" rx="5" fill="#1c1008" stroke="#92400e" stroke-width="1"/>
+  <text x="460" y="426" text-anchor="middle" fill="#fcd34d" font-size="9" font-weight="600">IdTransacao  (FNV-1a 64-bit)</text>
+  <text x="358" y="441" fill="#475569" font-size="8.5">hash de: data + estabelec. + valor</text>
+  <text x="358" y="454" fill="#475569" font-size="8.5">normaliz: sem acento, UPPERCASE</text>
+  <text x="358" y="467" fill="#fbbf24" font-size="8.5" font-weight="600">✓ invariante PDF/CSV</text>
+
+  <rect x="353" y="484" width="213" height="65" rx="5" fill="#1c1008" stroke="#92400e" stroke-width="1"/>
+  <text x="460" y="500" text-anchor="middle" fill="#fcd34d" font-size="9" font-weight="600">IdParcela  (MD5)</text>
+  <text x="358" y="515" fill="#475569" font-size="8.5">hash de: IdTransacao + X/Y info</text>
+  <text x="358" y="528" fill="#475569" font-size="8.5">detecta "LOJA (3/12)" ou "LOJA 3/12"</text>
+  <text x="358" y="541" fill="#475569" font-size="8.5">EstabelecimentoBase, ParcelaAtual</text>
+
+  <text x="358" y="562" fill="#64748b" font-size="9">também define:</text>
+  <text x="358" y="576" fill="#475569" font-size="8.5">ValorPositivo, TipoTransacao</text>
+  <text x="358" y="589" fill="#475569" font-size="8.5">Ano, Mes</text>
+
+  <rect x="353" y="600" width="213" height="22" rx="4" fill="#1c1008" stroke="#92400e" stroke-width="1"/>
+  <text x="460" y="614" text-anchor="middle" fill="#fbbf24" font-size="9" font-weight="600">UPDATE preview_transacoes</text>
+
+  <!-- FASE 3 -->
+  <rect x="595" y="358" width="250" height="280" rx="8" fill="#1a2332" stroke="#a855f7" stroke-width="1.5"/>
+  <rect x="595" y="358" width="250" height="28" rx="8" fill="#3b0764"/>
+  <rect x="595" y="374" width="250" height="12" fill="#3b0764"/>
+  <text x="720" y="376" text-anchor="middle" fill="#d8b4fe" font-size="11" font-weight="700">FASE 3 — CLASSIFICATION</text>
+
+  <text x="608" y="402" fill="#64748b" font-size="9">classifier.py — CascadeClassifier</text>
+  <text x="608" y="416" fill="#475569" font-size="8.5">pre-carrega tudo no __init__ (4 queries)</text>
+
+  <!-- levels -->
+  <rect x="603" y="424" width="233" height="26" rx="4" fill="#1e0a3c" stroke="#7c3aed" stroke-width="1"/>
+  <text x="620" y="438" fill="#c084fc" font-size="9" font-weight="600">Nível 1</text>
+  <text x="665" y="438" fill="#64748b" font-size="9">Base Parcelas → match id_parcela</text>
+
+  <rect x="603" y="454" width="233" height="26" rx="4" fill="#1e0a3c" stroke="#7c3aed" stroke-width="1"/>
+  <text x="620" y="468" fill="#c084fc" font-size="9" font-weight="600">Nível 2</text>
+  <text x="665" y="468" fill="#64748b" font-size="9">Base Padrões → padrão estabelecim.</text>
+
+  <rect x="603" y="484" width="233" height="26" rx="4" fill="#1e0a3c" stroke="#7c3aed" stroke-width="1"/>
+  <text x="620" y="498" fill="#c084fc" font-size="9" font-weight="600">Nível 3</text>
+  <text x="665" y="498" fill="#64748b" font-size="9">Journal Entries → fuzzy histórico</text>
+
+  <rect x="603" y="514" width="233" height="26" rx="4" fill="#1e0a3c" stroke="#7c3aed" stroke-width="1"/>
+  <text x="620" y="528" fill="#c084fc" font-size="9" font-weight="600">Nível 4</text>
+  <text x="665" y="528" fill="#64748b" font-size="9">Regras Genéricas</text>
+
+  <rect x="603" y="544" width="233" height="26" rx="4" fill="#0a0714" stroke="#4c1d95" stroke-width="1"/>
+  <text x="620" y="558" fill="#7c3aed" font-size="9" font-weight="600">Nível 5</text>
+  <text x="665" y="558" fill="#64748b" font-size="9">"Não Classificado"</text>
+
+  <text x="608" y="585" fill="#64748b" font-size="9">popula:</text>
+  <text x="608" y="598" fill="#475569" font-size="8.5">GRUPO, SUBGRUPO, TipoGasto</text>
+  <text x="608" y="611" fill="#475569" font-size="8.5">CategoriaGeral, origem_classif</text>
+  <text x="608" y="624" fill="#475569" font-size="8.5">MarcacaoIA, excluir</text>
+
+  <rect x="603" y="600" width="233" height="22" rx="4" fill="#1e0a3c" stroke="#7c3aed" stroke-width="1"/>
+  <text x="720" y="614" text-anchor="middle" fill="#d8b4fe" font-size="9" font-weight="600">UPDATE preview_transacoes</text>
+
+  <!-- FASE 4 -->
+  <rect x="865" y="358" width="270" height="280" rx="8" fill="#1a2332" stroke="#ef4444" stroke-width="1.5"/>
+  <rect x="865" y="358" width="270" height="28" rx="8" fill="#450a0a"/>
+  <rect x="865" y="374" width="270" height="12" fill="#450a0a"/>
+  <text x="1000" y="376" text-anchor="middle" fill="#fca5a5" font-size="11" font-weight="700">FASE 4 — DEDUPLICATION</text>
+
+  <text x="878" y="402" fill="#64748b" font-size="9">coleta todos IdTransacao do preview</text>
+
+  <rect x="873" y="410" width="253" height="50" rx="5" fill="#1a0505" stroke="#991b1b" stroke-width="1"/>
+  <text x="1000" y="426" text-anchor="middle" fill="#f87171" font-size="9" font-weight="600">SERVER-SIDE DEDUP</text>
+  <text x="878" y="441" fill="#475569" font-size="8.5">SELECT WHERE IdTransacao IN [lista]</text>
+  <text x="878" y="454" fill="#475569" font-size="8.5">AND user_id = X  (journal_entries)</text>
+
+  <rect x="873" y="470" width="253" height="50" rx="5" fill="#1a0505" stroke="#991b1b" stroke-width="1"/>
+  <text x="1000" y="486" text-anchor="middle" fill="#f87171" font-size="9" font-weight="600">LOCAL DEDUP (batch)</text>
+  <text x="878" y="501" fill="#475569" font-size="8.5">mesmo IdTransacao no lote</text>
+  <text x="878" y="514" fill="#475569" font-size="8.5">→ última ocorrência vence</text>
+
+  <!-- result boxes -->
+  <rect x="873" y="530" width="120" height="38" rx="4" fill="#052e16" stroke="#166534" stroke-width="1"/>
+  <text x="933" y="546" text-anchor="middle" fill="#4ade80" font-size="9" font-weight="600">NÃO duplicado</text>
+  <text x="933" y="560" text-anchor="middle" fill="#475569" font-size="8.5">is_duplicate = False</text>
+
+  <rect x="1003" y="530" width="120" height="38" rx="4" fill="#450a0a" stroke="#991b1b" stroke-width="1"/>
+  <text x="1063" y="546" text-anchor="middle" fill="#f87171" font-size="9" font-weight="600">DUPLICADO</text>
+  <text x="1063" y="560" text-anchor="middle" fill="#475569" font-size="8.5">is_duplicate = True</text>
+
+  <text x="878" y="585" fill="#64748b" font-size="9">duplicate_reason = ID original + data</text>
+
+  <rect x="873" y="600" width="253" height="22" rx="4" fill="#1a0505" stroke="#991b1b" stroke-width="1"/>
+  <text x="1000" y="614" text-anchor="middle" fill="#fca5a5" font-size="9" font-weight="600">UPDATE preview_transacoes → sessionId ao frontend</text>
+
+  <!-- Phase connectors (arrows between phases) -->
+  <line x1="325" y1="498" x2="345" y2="498" stroke="#334155" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="575" y1="498" x2="595" y2="498" stroke="#334155" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="845" y1="498" x2="865" y2="498" stroke="#334155" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ═══════════════════════════════ PREVIEW → CONFIRM ═══════════════════════ -->
+  <rect x="20" y="675" width="540" height="200" rx="10" fill="#1e293b" stroke="#0ea5e9" stroke-width="1.5"/>
+  <text x="290" y="697" text-anchor="middle" fill="#0ea5e9" font-size="13" font-weight="700" letter-spacing="2">PREVIEW  →  CONFIRMAÇÃO</text>
+
+  <!-- tabs -->
+  <rect x="35" y="710" width="155" height="50" rx="5" fill="#0c2233" stroke="#0ea5e9" stroke-width="1"/>
+  <text x="112" y="728" text-anchor="middle" fill="#38bdf8" font-size="10" font-weight="600">Para Importar</text>
+  <text x="112" y="743" text-anchor="middle" fill="#475569" font-size="8.5">is_duplicate=F, excluir=0</text>
+
+  <rect x="200" y="710" width="150" height="50" rx="5" fill="#2d0a0a" stroke="#ef4444" stroke-width="1"/>
+  <text x="275" y="728" text-anchor="middle" fill="#f87171" font-size="10" font-weight="600">Duplicadas</text>
+  <text x="275" y="743" text-anchor="middle" fill="#475569" font-size="8.5">is_duplicate=True</text>
+
+  <rect x="360" y="710" width="150" height="50" rx="5" fill="#1a1a0a" stroke="#ca8a04" stroke-width="1"/>
+  <text x="435" y="728" text-anchor="middle" fill="#facc15" font-size="10" font-weight="600">Excluídas</text>
+  <text x="435" y="743" text-anchor="middle" fill="#475569" font-size="8.5">excluir=1</text>
+
+  <!-- user actions -->
+  <rect x="35" y="770" width="476" height="35" rx="5" fill="#172554" stroke="#2563eb" stroke-width="1" stroke-dasharray="3,2"/>
+  <text x="273" y="784" text-anchor="middle" fill="#60a5fa" font-size="9" font-weight="600">Usuário pode editar: GRUPO / SUBGRUPO  |  marcar excluir  |  criar regra exclusão</text>
+  <text x="273" y="797" text-anchor="middle" fill="#475569" font-size="8.5">PATCH /upload/preview/{session_id}/{id}</text>
+
+  <!-- confirm button -->
+  <rect x="35" y="815" width="476" height="45" rx="6" fill="#052e16" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="273" y="835" text-anchor="middle" fill="#4ade80" font-size="11" font-weight="700">CONFIRMAR  →  POST /upload/confirm/{session_id}</text>
+  <text x="273" y="851" text-anchor="middle" fill="#64748b" font-size="8.5">filtra: is_duplicate=False AND excluir=0  →  insere journal_entries  →  deleta preview</text>
+
+  <!-- ═══════════════════════════════ TABELAS DB ════════════════════════════════ -->
+  <rect x="580" y="675" width="600" height="200" rx="10" fill="#1e293b" stroke="#10b981" stroke-width="1.5"/>
+  <text x="880" y="697" text-anchor="middle" fill="#10b981" font-size="13" font-weight="700" letter-spacing="2">BANCO DE DADOS — TABELAS</text>
+
+  <!-- journal_entries -->
+  <rect x="595" y="710" width="170" height="155" rx="6" fill="#022c22" stroke="#10b981" stroke-width="1.5"/>
+  <text x="680" y="728" text-anchor="middle" fill="#34d399" font-size="10" font-weight="700">journal_entries</text>
+  <text x="680" y="742" text-anchor="middle" fill="#064e3b" font-size="8">── destino final ──</text>
+  <text x="603" y="756" fill="#475569" font-size="8">Data, Estabelecimento, Valor</text>
+  <text x="603" y="769" fill="#475569" font-size="8">IdTransacao (unique), IdParcela</text>
+  <text x="603" y="782" fill="#475569" font-size="8">GRUPO, SUBGRUPO, TipoGasto</text>
+  <text x="603" y="795" fill="#475569" font-size="8">banco_origem, tipodocumento</text>
+  <text x="603" y="808" fill="#475569" font-size="8">MesFatura, Ano, Mes, NomeCartao</text>
+  <text x="603" y="821" fill="#475569" font-size="8">origem_classificacao</text>
+  <text x="603" y="834" fill="#475569" font-size="8">upload_history_id (FK)</text>
+  <text x="603" y="847" fill="#475569" font-size="8">IgnorarDashboard</text>
+
+  <!-- upload_history -->
+  <rect x="778" y="710" width="165" height="155" rx="6" fill="#082f49" stroke="#0ea5e9" stroke-width="1"/>
+  <text x="860" y="728" text-anchor="middle" fill="#38bdf8" font-size="10" font-weight="700">upload_history</text>
+  <text x="786" y="742" fill="#475569" font-size="8">session_id (unique)</text>
+  <text x="786" y="755" fill="#475569" font-size="8">banco, tipo_doc, mes_fatura</text>
+  <text x="786" y="768" fill="#475569" font-size="8">status (processing/success/error)</text>
+  <text x="786" y="781" fill="#475569" font-size="8">total_registros</text>
+  <text x="786" y="794" fill="#475569" font-size="8">transacoes_importadas</text>
+  <text x="786" y="807" fill="#475569" font-size="8">transacoes_duplicadas</text>
+  <text x="786" y="820" fill="#475569" font-size="8">balance_validation (JSON)</text>
+  <text x="786" y="833" fill="#475569" font-size="8">data_upload, data_confirmacao</text>
+
+  <!-- base_parcelas -->
+  <rect x="956" y="710" width="115" height="90" rx="6" fill="#1c1008" stroke="#f59e0b" stroke-width="1"/>
+  <text x="1013" y="728" text-anchor="middle" fill="#fbbf24" font-size="10" font-weight="700">base_parcelas</text>
+  <text x="963" y="742" fill="#475569" font-size="8">id_parcela</text>
+  <text x="963" y="755" fill="#475569" font-size="8">qtd_pagas, qtd_parcelas</text>
+  <text x="963" y="768" fill="#475569" font-size="8">status (ativa/finalizado)</text>
+  <text x="963" y="781" fill="#475569" font-size="8">grupo_sugerido</text>
+  <text x="963" y="794" fill="#475569" font-size="8">upload_history_id (FK)</text>
+
+  <!-- base_padroes -->
+  <rect x="956" y="813" width="115" height="55" rx="6" fill="#1e0a3c" stroke="#a855f7" stroke-width="1"/>
+  <text x="1013" y="831" text-anchor="middle" fill="#d8b4fe" font-size="10" font-weight="700">base_padroes</text>
+  <text x="963" y="845" fill="#475569" font-size="8">padrão estabelecimento</text>
+  <text x="963" y="858" fill="#475569" font-size="8">grupo/subgrupo sugerido</text>
+  <text x="963" y="871" fill="#fbbf24" font-size="8">↺ regenerado no confirm</text>
+
+  <!-- preview_transacoes small box -->
+  <rect x="956" y="710" width="115" height="0" rx="0" fill="none"/>
+
+  <!-- Arrows DB -->
+  <line x1="511" y1="838" x2="595" y2="780" stroke="#10b981" stroke-width="1.5" marker-end="url(#arr-green)"/>
+  <line x1="511" y1="835" x2="778" y2="760" stroke="#0ea5e9" stroke-width="1.2" marker-end="url(#arr-blue)"/>
+  <line x1="511" y1="835" x2="956" y2="748" stroke="#f59e0b" stroke-width="1" marker-end="url(#arr-amber)"/>
+  <line x1="511" y1="835" x2="956" y2="848" stroke="#a855f7" stroke-width="1" marker-end="url(#arr)"/>
+
+  <!-- Arrow phase4 to preview section -->
+  <line x1="600" y1="660" x2="290" y2="675" stroke="#64748b" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arr)"/>
+
+  <!-- Legend -->
+  <rect x="20" y="880" width="1140" height="1" fill="#1e293b"/>
+  <text x="30" y="895" fill="#475569" font-size="9">Cores:  </text>
+  <rect x="75" y="885" width="12" height="8" rx="2" fill="#3b82f6"/>
+  <text x="92" y="894" fill="#475569" font-size="9">Frontend  </text>
+  <rect x="150" y="885" width="12" height="8" rx="2" fill="#8b5cf6"/>
+  <text x="167" y="894" fill="#475569" font-size="9">API Endpoints  </text>
+  <rect x="255" y="885" width="12" height="8" rx="2" fill="#22c55e"/>
+  <text x="272" y="894" fill="#475569" font-size="9">Fase 1 Raw  </text>
+  <rect x="335" y="885" width="12" height="8" rx="2" fill="#f59e0b"/>
+  <text x="352" y="894" fill="#475569" font-size="9">Fase 2 IDs  </text>
+  <rect x="405" y="885" width="12" height="8" rx="2" fill="#a855f7"/>
+  <text x="422" y="894" fill="#475569" font-size="9">Fase 3 Classific.  </text>
+  <rect x="510" y="885" width="12" height="8" rx="2" fill="#ef4444"/>
+  <text x="527" y="894" fill="#475569" font-size="9">Fase 4 Dedup  </text>
+  <rect x="600" y="885" width="12" height="8" rx="2" fill="#10b981"/>
+  <text x="617" y="894" fill="#475569" font-size="9">Database</text>
+
+</svg>

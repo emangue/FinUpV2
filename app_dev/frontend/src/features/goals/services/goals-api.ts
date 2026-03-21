@@ -76,10 +76,52 @@ export async function fetchGruposDisponiveis(): Promise<string[]> {
 /**
  * Lista todas as metas do usuário (budget_geral)
  * CORRETO: Retorna interface Goal exata do backend
+ * @param selectedMonth - mês de referência (modo Mês)
+ * @param ytdMonth - se informado, usa modo YTD: soma Jan..ytdMonth do ano de selectedMonth
  */
-export async function fetchGoals(selectedMonth?: Date): Promise<Goal[]> {
+export async function fetchGoals(selectedMonth?: Date, ytdMonth?: number): Promise<Goal[]> {
   const currentDate = selectedMonth || new Date()
   const year = currentDate.getFullYear()
+
+  if (ytdMonth) {
+    const key = `goals:ytd:${year}-${ytdMonth}`
+    const cached = _getGoalsCache<Goal[]>(key)
+    if (cached) return cached
+    return _withGoalsInflight(key, async () => {
+      try {
+        const response = await fetchWithAuth(`${BASE_URL}/budget/planning?year=${year}&ytd_month=${ytdMonth}`)
+        if (!response.ok) return []
+        const data = await response.json()
+        const budgets = data?.budgets ?? []
+        const result: Goal[] = budgets.map((b: any) => {
+          const cat = b.categoria_geral || 'Despesa'
+          const planType = cat === 'Investimentos' ? 'investimentos' : 'gastos'
+          return {
+            id: b.id ?? null,
+            grupo: b.grupo,
+            mes_referencia: data.mes_referencia || `${year}-${String(ytdMonth).padStart(2,'0')}`,
+            valor_planejado: b.valor_planejado ?? 0,
+            valor_planejado_com_extras: b.valor_planejado_com_extras ?? b.valor_planejado ?? 0,
+            valor_realizado: b.valor_realizado ?? 0,
+            percentual: b.percentual ?? 0,
+            ativo: b.ativo ?? 1,
+            valor_medio_3_meses: b.valor_medio_3_meses ?? 0,
+            categoria_geral: cat,
+            planType,
+            cor: b.cor ?? undefined,
+            user_id: 0,
+            created_at: '',
+            updated_at: ''
+          }
+        })
+        return _setGoalsCache(key, result)
+      } catch (error) {
+        console.error('Erro ao buscar metas YTD:', error)
+        return []
+      }
+    })
+  }
+
   const month = String(currentDate.getMonth() + 1).padStart(2, '0')
   const mes_referencia = `${year}-${month}`
   const key = `goals:${mes_referencia}`
@@ -124,6 +166,49 @@ export async function fetchGoals(selectedMonth?: Date): Promise<Goal[]> {
       return _setGoalsCache(key, result)
     } catch (error) {
       console.error('Erro ao buscar metas:', error)
+      return []
+    }
+  })
+}
+
+/**
+ * Busca metas no modo Ano: realizado Jan..Dez + planejado 12 meses completos.
+ * Diferente do YTD (Jan..ytdMonth), o Ano soma todos os 12 meses de plano.
+ */
+export async function fetchGoalsAno(year: number): Promise<Goal[]> {
+  const key = `goals:ano:${year}`
+  const cached = _getGoalsCache<Goal[]>(key)
+  if (cached) return cached
+  return _withGoalsInflight(key, async () => {
+    try {
+      const response = await fetchWithAuth(`${BASE_URL}/budget/planning?year=${year}`)
+      if (!response.ok) return []
+      const data = await response.json()
+      const budgets = data?.budgets ?? []
+      const result: Goal[] = budgets.map((b: any) => {
+        const cat = b.categoria_geral || 'Despesa'
+        const planType = cat === 'Investimentos' ? 'investimentos' : 'gastos'
+        return {
+          id: b.id ?? null,
+          grupo: b.grupo,
+          mes_referencia: data.mes_referencia || `${year}-12`,
+          valor_planejado: b.valor_planejado ?? 0,
+          valor_planejado_com_extras: b.valor_planejado_com_extras ?? b.valor_planejado ?? 0,
+          valor_realizado: b.valor_realizado ?? 0,
+          percentual: b.percentual ?? 0,
+          ativo: b.ativo ?? 1,
+          valor_medio_3_meses: b.valor_medio_3_meses ?? 0,
+          categoria_geral: cat,
+          planType,
+          cor: b.cor ?? undefined,
+          user_id: 0,
+          created_at: '',
+          updated_at: ''
+        }
+      })
+      return _setGoalsCache(key, result)
+    } catch (error) {
+      console.error('Erro ao buscar metas Ano:', error)
       return []
     }
   })

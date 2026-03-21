@@ -24,10 +24,9 @@ import {
   FormatSelector, 
   FileInput, 
   TabBar,
-  FileDetectionCard,
 } from '@/features/upload/components';
 import { useBanks, useCreditCards, useUpload } from '@/features/upload/hooks';
-import { fetchCompatibility, createCard, PasswordRequiredError, detectFile, importPlanilhaFile, type DetectionResult } from '@/features/upload/services/upload-api';
+import { fetchCompatibility, createCard, PasswordRequiredError } from '@/features/upload/services/upload-api';
 import type { BankCompatibilityMap } from '@/features/upload/services/upload-api';
 import type { FormatAvailability } from '@/features/upload/components/format-selector';
 import { useAuth } from '@/contexts/AuthContext';
@@ -89,9 +88,6 @@ export default function UploadPage() {
   const [fileName, setFileName] = useState('Nenhum...');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [password, setPassword] = useState('');  // Senha do PDF protegido
-  const [detection, setDetection] = useState<DetectionResult | null>(null);
-  const [detecting, setDetecting] = useState(false);
-  const [importingPlanilha, setImportingPlanilha] = useState(false);
 
   // Estado do dialog: adicionar cartão
   const [showAddCard, setShowAddCard] = useState(false);
@@ -118,11 +114,11 @@ export default function UploadPage() {
     }
   }, [authReady]);
 
-  const handleFileChange = async (file: File | null) => {
-    setDetection(null);
+  const handleFileChange = (file: File | null) => {
     if (file) {
       setFileName(file.name);
       setSelectedFile(file);
+      // Inferir formato pela extensão (sem chamada de rede)
       const ext = file.name.split('.').pop()?.toLowerCase();
       if (ext === 'xlsx' || ext === 'xls' || ext === 'xlsm') {
         setSelectedFormat('excel');
@@ -133,41 +129,9 @@ export default function UploadPage() {
       } else if (ext === 'ofx') {
         setSelectedFormat('ofx');
       }
-      setDetecting(true);
-      try {
-        const res = await detectFile(file);
-        setDetection(res);
-        if (res.banco !== 'generico' && banks.length > 0) {
-          const bancoNorm = res.banco.toLowerCase().replace(/ú/u, 'u');
-          const match = banks.find((b) => {
-            const name = (b.id || b.name || '').toLowerCase().replace(/ú/u, 'u');
-            return name.includes(bancoNorm) || bancoNorm.includes(name);
-          });
-          if (match) setSelectedBank(match.name);
-        }
-        // Fallback: quando backend retorna generico, inferir do filename (ex: fatura-itau.csv)
-        if (res.banco === 'generico' && banks.length > 0) {
-          const fn = file.name.toLowerCase().replace(/ú/u, 'u');
-          const match = banks.find((b) => {
-            const name = (b.id || b.name || '').toLowerCase().replace(/ú/u, 'u');
-            return fn.includes(name);
-          });
-          if (match) setSelectedBank(match.name);
-        }
-        if (res.periodo_inicio && activeTab === 'fatura') {
-          const [y, m] = res.periodo_inicio.split('-');
-          if (y && m) {
-            setSelectedYear(parseInt(y, 10));
-            setSelectedMonth(months[parseInt(m, 10) - 1] || selectedMonth);
-          }
-        }
-      } catch (err) {
-        setDetection(null);
-        console.warn('[Upload] Detecção falhou:', err);
-        toast.error('Não foi possível detectar o arquivo. Selecione banco e período manualmente.');
-      } finally {
-        setDetecting(false);
-      }
+    } else {
+      setFileName('Nenhum...');
+      setSelectedFile(null);
     }
   };
 
@@ -295,20 +259,6 @@ export default function UploadPage() {
       }
       console.error('❌ [MOBILE-UPLOAD] Erro no upload:', error);
       alert('Erro ao fazer upload. Por favor, tente novamente.');
-    }
-  };
-
-  const handleImportPlanilha = async () => {
-    if (!selectedFile) return;
-    try {
-      setImportingPlanilha(true);
-      const result = await importPlanilhaFile(selectedFile);
-      toast.success(`${result.totalRegistros} transações importadas`);
-      router.push(`/mobile/preview/${result.sessionId}`);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao importar planilha');
-    } finally {
-      setImportingPlanilha(false);
     }
   };
 
@@ -527,26 +477,6 @@ export default function UploadPage() {
             fileName={fileName}
             onChange={handleFileChange}
           />
-          {detecting && (
-            <div className="mb-4 text-sm text-gray-500 flex items-center gap-2">
-              <span className="animate-pulse">Detectando banco e período...</span>
-            </div>
-          )}
-          {detection && !detecting && (
-            <div className="mb-6">
-              <FileDetectionCard
-                detection={detection}
-                onProceed={() => setDetection(null)}
-                onCancel={() => {
-                  setSelectedFile(null);
-                  setFileName('Nenhum...');
-                  setDetection(null);
-                }}
-                loading={uploading || importingPlanilha}
-                onImportPlanilha={detection?.banco === 'generico' && detection?.tipo === 'planilha' ? handleImportPlanilha : undefined}
-              />
-            </div>
-          )}
           
           {/* Instituição Financeira */}
           {loadingBanks ? (

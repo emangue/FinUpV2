@@ -27,7 +27,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { fetchIncomeSources, fetchCreditCards, fetchOrcamentoInvestimentos, fetchPlanoCashflowMes, fetchAporteInvestimentoDetalhado } from '../services/dashboard-api'
 import type { PlanoCashflowMes, AporteInvestimentoResponse, CreditCardExpense } from '../services/dashboard-api'
 import type { IncomeSource } from '../types'
-import { fetchGoals } from '@/features/goals/services/goals-api'
+import { fetchGoals, fetchGoalsAno } from '@/features/goals/services/goals-api'
 import type { Goal } from '@/features/goals/types'
 import { getGoalColor } from '@/features/goals/lib/colors'
 
@@ -98,9 +98,13 @@ export function OrcamentoTab({
         const selectedMonth = new Date(year, (month ?? 1) - 1, 1)
         const mesRef = month ?? 1
         const isAnoOuYtd = month == null
+        // Distinguir Ano (ytdMonthProp=undefined) de YTD (ytdMonthProp=número)
+        const isAno = isAnoOuYtd && ytdMonthProp == null
+        const isYtd = isAnoOuYtd && ytdMonthProp != null
         const results = await Promise.allSettled([
           fetchIncomeSources(year, month ?? undefined),
-          fetchGoals(selectedMonth),
+          // Ano → plano 12 meses completos; YTD → plano Jan..ytdMonth; Mês → plano do mês
+          isAno ? fetchGoalsAno(year) : fetchGoals(selectedMonth, isYtd ? ytdMonthProp : undefined),
           fetchCreditCards(year, month ?? undefined),
           isAnoOuYtd ? fetchOrcamentoInvestimentos(year, undefined, ytdMonthProp) : Promise.resolve(null),
           !isAnoOuYtd ? fetchPlanoCashflowMes(year, mesRef) : Promise.resolve(null),

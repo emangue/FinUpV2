@@ -1,0 +1,422 @@
+{
+  "timestamp": "2026-03-10T21:12:03.837889",
+  "site": "https://meufinup.com.br",
+  "chips_mes": [
+    {
+      "chip": "Jan",
+      "ms": 6371,
+      "era_ativo": true,
+      "apis": [
+        {
+          "url": "/api/v1/plano/cashflow/mes?ano=2026&mes=1&modo_plano=true",
+          "ms": 5680,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/budget/planning?mes_referencia=2026-01",
+          "ms": 4684,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/dashboard/metrics?year=2026&month=1",
+          "ms": 4226,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/dashboard/orcamento-investimentos?year=2026&month=2",
+          "ms": 3410,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/dashboard/orcamento-investimentos?year=2025&month=12",
+          "ms": 3409,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/plano/aporte-investimento?ano=2026&mes=1",
+          "ms": 2284,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/dashboard/budget-vs-actual?year=2026&month=2",
+          "ms": 2284,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/dashboard/credit-cards?year=2026&month=1",
+          "ms": 2283,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/dashboard/budget-vs-actual?year=2025&month=12",
+          "ms": 2283,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/dashboard/income-sources?year=2025&month=12",
+          "ms": 2282,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/onboarding/progress",
+          "ms": 0,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/onboarding/progress",
+          "ms": 0,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/onboarding/progress",
+          "ms": 0,
+          "status": 200,
+          "method": "GET"
+        }
+      ]
+    },
+    {
+      "chip": "Fev",
+      "ms": 343,
+      "era_ativo": true,
+      "apis": []
+    },
+    {
+      "chip": "Mar",
+      "ms": 335,
+      "era_ativo": true,
+      "apis": []
+    },
+    {
+      "chip": "Abr",
+      "ms": 332,
+      "era_ativo": true,
+      "apis": []
+    },
+    {
+      "chip": "Mai",
+      "ms": 330,
+      "era_ativo": true,
+      "apis": []
+    }
+  ],
+  "bottom_nav": [
+    {
+      "destino": "Transações",
+      "ms": 8192,
+      "url": "/mobile/transactions",
+      "via": "click",
+      "apis": [
+        {
+          "url": "/api/v1/onboarding/progress",
+          "ms": 6700,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/transactions/resumo?",
+          "ms": 4469,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/transactions/list?limit=100&page=1",
+          "ms": 4073,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/transactions/list?limit=100&page=1",
+          "ms": 3680,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/transactions/resumo?",
+          "ms": 3574,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/dashboard/credit-cards?year=2026&month=3",
+          "ms": 0,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/dashboard/chart-data?year=2026&month=2",
+          "ms": 0,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/dashboard/income-sources?year=2026&month=3",
+          "ms": 0,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/onboarding/progress",
+          "ms": 0,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/dashboard/chart-data?year=2026&month=3",
+          "ms": 0,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/plano/aporte-investimento?ano=2026&mes=3",
+          "ms": 0,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/dashboard/income-sources?year=2026&month=2",
+          "ms": 0,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/dashboard/budget-vs-actual?year=2026&month=2",
+          "ms": 0,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/dashboard/orcamento-investimentos?year=2026&month=2",
+          "ms": 0,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/dashboard/chart-data?year=2026&month=4",
+          "ms": 0,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/dashboard/metrics?year=2026&month=3",
+          "ms": 0,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/budget/planning?mes_referencia=2026-03",
+          "ms": 0,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/onboarding/progress",
+          "ms": 0,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/onboarding/progress",
+          "ms": 0,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/onboarding/progress",
+          "ms": 0,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/plano/cashflow/mes?ano=2026&mes=3&modo_plano=true",
+          "ms": 0,
+          "status": 200,
+          "method": "GET"
+        }
+      ]
+    },
+    {
+      "destino": "Budget/Plano",
+      "ms": 332,
+      "url": "/mobile/transactions",
+      "via": "click",
+      "apis": []
+    },
+    {
+      "destino": "Investimentos",
+      "ms": 8434,
+      "via": "url_direta",
+      "apis": [
+        {
+          "url": "/api/v1/auth/me",
+          "ms": 954,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/dashboard/last-month-with-data?source=patrimonio",
+          "ms": 787,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/onboarding/progress",
+          "ms": 614,
+          "status": 200,
+          "method": "GET"
+        }
+      ]
+    },
+    {
+      "destino": "Dashboard",
+      "ms": 7460,
+      "via": "url_direta",
+      "apis": [
+        {
+          "url": "/api/v1/onboarding/progress",
+          "ms": 5795,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/plano/cashflow/mes?ano=2026&mes=2&modo_plano=true",
+          "ms": 5680,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/onboarding/progress",
+          "ms": 5278,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/onboarding/progress",
+          "ms": 4874,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/dashboard/metrics?year=2026&month=2",
+          "ms": 4656,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/dashboard/orcamento-investimentos?year=2026&month=3",
+          "ms": 4654,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/budget/planning?mes_referencia=2026-02",
+          "ms": 4460,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/dashboard/chart-data?year=2026&month=2",
+          "ms": 4456,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/dashboard/budget-vs-actual?year=2026&month=1",
+          "ms": 4456,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/dashboard/income-sources?year=2026&month=3",
+          "ms": 4456,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/dashboard/budget-vs-actual?year=2026&month=3",
+          "ms": 4456,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/dashboard/orcamento-investimentos?year=2026&month=1",
+          "ms": 4454,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/dashboard/chart-data?year=2026&month=3",
+          "ms": 4454,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/dashboard/chart-data?year=2026&month=1",
+          "ms": 3680,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/plano/aporte-investimento?ano=2026&mes=2",
+          "ms": 3220,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/dashboard/income-sources?year=2026&month=1",
+          "ms": 3218,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/onboarding/progress",
+          "ms": 2596,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/dashboard/credit-cards?year=2026&month=2",
+          "ms": 2580,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/dashboard/income-sources?year=2026&month=2",
+          "ms": 2579,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/dashboard/last-month-with-data?source=patrimonio",
+          "ms": 861,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/auth/me",
+          "ms": 768,
+          "status": 200,
+          "method": "GET"
+        },
+        {
+          "url": "/api/v1/dashboard/last-month-with-data?source=transactions",
+          "ms": 570,
+          "status": 200,
+          "method": "GET"
+        }
+      ]
+    }
+  ]
+}

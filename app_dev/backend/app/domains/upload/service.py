@@ -535,6 +535,15 @@ class UploadService:
                 raw_transactions = result
                 balance_validation = None
             
+            # ========== NORMALIZAR banco e tipo_documento (fonte única = form) ==========
+            # REGRA CRÍTICA: raw.banco deve ser SEMPRE o valor do form, nunca o que o
+            # processador inferiu (ex: btg_extrato.py recebe nome_arquivo como banco,
+            # mercadopago_extrato_pdf.py hardcoda 'MercadoPago' sem espaço, etc).
+            # Isso garante que PDF e XLSX do mesmo banco gerem o mesmo IdTransacao v5.
+            for raw in raw_transactions:
+                raw.banco = banco                        # ex: 'Mercado Pago', 'BTG Pactual'
+                raw.tipo_documento = tipo_documento      # ex: 'extrato', 'fatura'
+
             # ========== GERAR MesFatura CORRETAMENTE ==========
             # EXTRATO: MesFatura = YYYYMM da Data da transação
             # FATURA: MesFatura = input do Form (YYYY-MM) convertido para YYYYMM

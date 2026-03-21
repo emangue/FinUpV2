@@ -1,7 +1,14 @@
 """
-Transaction Marker - Fase 2 (v5.0.0)
+Transaction Marker - Fase 2 (v5.1.0)
 Marca transações com IDs únicos (IdTransacao, IdParcela)
 Integra hasher.py e normalizer.py
+
+v5.1.0 (2026-03-21):
+- FIX BUG-1: chave_unica agora inclui parcela_param → evita colapso intra-arquivo
+- FIX BUG-2: generate_id_transacao recebe parcela=parcela_param → IdTransacao único por parcela
+- FIX BUG-3: IdParcela usa banco|tipo|data|valor|total|user_id (fingerprint robusto)
+             Remove dependência de nome de estabelecimento (frágil entre PDF/CSV)
+- Backward compat: transações sem parcela → comportamento idêntico ao v5.0.0
 
 v5.0.0 (2026-02-25):
 - Normalização invariante à renderização PDF/CSV
@@ -15,6 +22,7 @@ v4.2.3 (2026-01-16):
 - Normalização completa: espaços + uppercase + parcela (se fatura)
 """
 
+import hashlib
 import logging
 import re
 from dataclasses import dataclass
@@ -262,7 +270,6 @@ class TransactionMarker:
             
             # 2. Valor positivo
             valor_positivo = abs(raw.valor)
-            valor_arredondado = arredondar_2_decimais(valor_positivo)
             
             # 2b. Determinar TipoTransacao baseado em cartão e valor
             tipo_transacao = self._determinar_tipo_transacao(raw.nome_cartao, raw.valor)
@@ -288,42 +295,67 @@ class TransactionMarker:
                 # Extrato: Ano e Mes da Data da transação
                 ano, mes = self._extrair_ano_mes(raw.data)
             
-            # v5: remove tudo que não é [A-Z0-9] da base — invariante à renderização PDF/CSV
+            # estab_normalizado: ainda usado para IdParcela e EstabelecimentoBase
             if info_parcela and is_fatura:
-                # Parcelada: normaliza base + recompõe (p/t)
                 base_norm = re.sub(r'[^A-Z0-9]', '', estabelecimento_base.upper())
                 estab_normalizado = f"{base_norm} ({parcela_atual}/{total_parcelas})"
             else:
-                # Sem parcela (ou extrato): remove tudo que não é [A-Z0-9]
                 estab_normalizado = re.sub(r'[^A-Z0-9]', '', raw.lancamento.upper())
 
-            estab_hash = estab_normalizado
+            # IdTransacao v5.1: chave baseada em banco+tipo+data+valor (sem nome da transação)
+            # raw.banco e raw.tipo_documento são garantidos pelo service.py (Fase 2a)
             valor_hash = arredondar_2_decimais(raw.valor)  # VALOR EXATO (com sinal)
-            
-            chave_unica = f"{raw.data}|{estab_hash}|{valor_hash:.2f}"
-            sequencia = self._get_sequence_for_duplicate(chave_unica)
-            
-            # 4. Gerar IdTransacao (v4.2.1 - com user_id + formato normalizado apenas para faturas)
-            id_transacao = generate_id_transacao(
-                data=raw.data,
-                estabelecimento=estab_normalizado,  # Normalizado apenas se fatura
-                valor=raw.valor,  # VALOR EXATO (com sinal)
-                user_id=self.user_id,  # Isola por usuário
-                sequencia=sequencia
-            )
-            
-            # 5. Gerar IdParcela se tem parcela
-            # FÓRMULA OBRIGATÓRIA: estab|valor|total|user_id (user_id SEMPRE no hash!)
-            id_parcela = None
-            if info_parcela and total_parcelas:
-                import hashlib
-                # v5: mesma normalização do estab_hash (remove [^A-Z0-9])
-                estab_normalizado_parcela = re.sub(r'[^A-Z0-9]', '', estabelecimento_base.upper())
-                chave = f"{estab_normalizado_parcela}|{valor_arredondado:.2f}|{total_parcelas}|{self.user_id}"
+
+            if info_parcela and is_fatura:
+                # --- BLOCO PARCELADO (apenas faturas com info de parcela) ---
+                parcela_param = f"{parcela_atual}/{total_parcelas}"  # ex: "2/6"
+
+                # FIX BUG-1: chave_unica inclui parcela → evita colapso intra-arquivo
+                chave_unica = (
+                    f"{raw.banco}|{raw.tipo_documento}|{raw.data}"
+                    f"|{valor_hash:.2f}|{parcela_param}"
+                )
+                sequencia = self._get_sequence_for_duplicate(chave_unica)
+
+                # FIX BUG-2: passa parcela_param → cada parcela gera IdTransacao único
+                id_transacao = generate_id_transacao(
+                    data=raw.data,
+                    banco=raw.banco,
+                    tipo_documento=raw.tipo_documento,
+                    valor=valor_hash,
+                    user_id=self.user_id,
+                    sequencia=sequencia,
+                    parcela=parcela_param,   # ← FIX v5.1
+                )
+
+                # FIX BUG-3: IdParcela usa fingerprint banco|tipo|data|valor|total|user_id
+                # Robusto entre PDF e CSV — sem dependência de texto de estabelecimento
+                chave_parcela = (
+                    f"{raw.banco}|{raw.tipo_documento}|{raw.data}"
+                    f"|{valor_hash:.2f}|{total_parcelas}|{self.user_id}"
+                )
                 assert self.user_id is not None, "user_id OBRIGATÓRIO no hash IdParcela"
-                id_parcela = hashlib.md5(chave.encode()).hexdigest()[:16]
-                logger.debug(f"IdParcela: {id_parcela} para {estab_normalizado_parcela} {parcela_atual}/{total_parcelas} (user_id={self.user_id})")
-                logger.debug(f"  Chave IdParcela: '{chave}'")
+                id_parcela = hashlib.md5(chave_parcela.encode()).hexdigest()[:16]
+                logger.debug(f"IdParcela v5.1: {id_parcela} para {estabelecimento_base} "
+                             f"{parcela_atual}/{total_parcelas} (user_id={self.user_id})")
+                logger.debug(f"  Chave IdParcela: '{chave_parcela}'")
+            else:
+                # --- BLOCO SEM PARCELA (extrato ou fatura sem info de parcela) ---
+                # Comportamento idêntico ao v5.0.0 (backward compat garantida)
+                chave_unica = f"{raw.banco}|{raw.tipo_documento}|{raw.data}|{valor_hash:.2f}"
+                sequencia = self._get_sequence_for_duplicate(chave_unica)
+
+                # 4. Gerar IdTransacao v5 (sem parcela — chave idêntica ao v5)
+                id_transacao = generate_id_transacao(
+                    data=raw.data,
+                    banco=raw.banco,
+                    tipo_documento=raw.tipo_documento,
+                    valor=raw.valor,
+                    user_id=self.user_id,
+                    sequencia=sequencia,
+                    # parcela=None (default) — chave idêntica ao v5
+                )
+                id_parcela = None
             
             # 7. Criar MarkedTransaction
             marked = MarkedTransaction(

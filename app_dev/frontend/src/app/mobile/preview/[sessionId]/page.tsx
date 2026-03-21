@@ -90,13 +90,13 @@ export default function PreviewPage({ params }: PreviewPageProps) {
     };
   });
 
-  // AGRUPAR transações por description + grupo + subgrupo
-  // Só agrupa se tiver mesmo nome E mesma classificação (ou ambos não classificados)
+  // AGRUPAR transações por description + grupo + subgrupo + isDuplicate
+  // Duplicatas formam grupos SEPARADOS das transações novas
   const groupedMap = new Map<string, typeof individualTransactions>();
   
   individualTransactions.forEach(tx => {
-    // Chave única: description + grupo + subgrupo
-    const key = `${tx.description}|${tx.grupo || ''}|${tx.subgrupo || ''}`;
+    // Chave única: description + grupo + subgrupo + isDuplicate (separa duplicatas de novas)
+    const key = `${tx.description}|${tx.grupo || ''}|${tx.subgrupo || ''}|${tx.isDuplicate ? '1' : '0'}`;
     if (!groupedMap.has(key)) {
       groupedMap.set(key, []);
     }
@@ -123,7 +123,8 @@ export default function PreviewPage({ params }: PreviewPageProps) {
           grupo: firstItem.grupo || '',
           subgrupo: firstItem.subgrupo || '',
           source: firstItem.source,
-          isDuplicate: false,
+          // isDuplicate verdadeiro apenas se TODOS os itens do grupo são duplicatas
+          isDuplicate: items.every(i => i.isDuplicate === true),
           occurrences: items.length,
           items: items, // Itens individuais dentro do grupo
         };

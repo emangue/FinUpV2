@@ -22,7 +22,8 @@ function regroupTransactions(transactions: Transaction[]): Transaction[] {
 
   const groupedMap = new Map<string, Transaction[]>();
   flat.forEach((tx) => {
-    const key = `${tx.description}|${tx.grupo || ''}|${tx.subgrupo || ''}`;
+    // Incluir isDuplicate na chave: duplicatas formam grupos separados das novas
+    const key = `${tx.description}|${tx.grupo || ''}|${tx.subgrupo || ''}|${tx.isDuplicate ? '1' : '0'}`;
     if (!groupedMap.has(key)) groupedMap.set(key, []);
     groupedMap.get(key)!.push(tx);
   });
@@ -44,7 +45,7 @@ function regroupTransactions(transactions: Transaction[]): Transaction[] {
         grupo: firstItem.grupo || '',
         subgrupo: firstItem.subgrupo || '',
         source: firstItem.source,
-        isDuplicate: false,
+        isDuplicate: items.every(i => i.isDuplicate === true),
         occurrences: items.length,
         items,
       };

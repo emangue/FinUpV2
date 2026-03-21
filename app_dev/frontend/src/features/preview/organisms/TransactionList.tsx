@@ -15,6 +15,10 @@ interface TransactionListProps {
 
 export default function TransactionList({ transactions, activeTab, onEdit, onBatchUpdate, onGroupAdded, onDelete, existingGroups = [] }: TransactionListProps) {
   const filteredTransactions = transactions.filter((tx) => {
+    // Aba duplicadas: mostrar apenas já importadas
+    if (activeTab === 'duplicadas') return tx.isDuplicate === true;
+    // Todas as outras abas: NUNCA mostrar duplicatas
+    if (tx.isDuplicate) return false;
     if (activeTab === 'all') return true;
     if (activeTab === 'classificadas') return tx.grupo && tx.subgrupo;
     if (activeTab === 'not_classified') return !tx.grupo || !tx.subgrupo;
