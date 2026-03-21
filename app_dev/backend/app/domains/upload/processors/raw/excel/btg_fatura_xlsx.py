@@ -129,6 +129,12 @@ def process_btg_fatura_xlsx(
         if not descricao:
             continue
 
+        # Ignorar linha de pagamento de fatura anterior:
+        # o débito já consta no extrato bancário da conta corrente → incluir seria duplicar.
+        if _is_pagamento_fatura(descricao):
+            logger.debug(f"Pagamento de fatura ignorado: '{descricao}'")
+            continue
+
         # Valor já em BRL (internacionais já convertidos pelo BTG)
         try:
             valor = float(valor_val)
@@ -235,6 +241,16 @@ def _parse_date_str(date_str: str) -> str:
             continue
     logger.warning(f"Não foi possível parsear data: {date_str!r}")
     return date_str
+
+
+def _is_pagamento_fatura(descricao: str) -> bool:
+    """Retorna True se a linha é um pagamento de fatura anterior.
+    
+    O BTG inclui 'Pagamento de fatura' como uma linha na aba Titular do XLSX.
+    Esse débito já aparece no extrato bancário da conta corrente; importar aqui
+    seria contar a mesma saída de dinheiro duas vezes.
+    """
+    return "pagamento de fatura" in descricao.lower()
 
 
 def _extract_mes_fatura(nome_arquivo: str) -> str:

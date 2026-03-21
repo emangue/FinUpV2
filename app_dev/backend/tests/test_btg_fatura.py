@@ -253,6 +253,14 @@ class TestEstruturaXLSX202603:
         invalidas = [t.data for t in txs if not pattern.match(str(t.data))]
         assert not invalidas, f"Datas fora do formato YYYY-MM-DD: {invalidas[:5]}"
 
+    def test_sem_pagamento_fatura(self, resultado_xlsx_202603):
+        """'Pagamento de fatura' deve ser filtrado — duplicaria o débito do extrato bancário."""
+        txs, _ = resultado_xlsx_202603
+        pagamentos = [t.lancamento for t in txs if "pagamento de fatura" in t.lancamento.lower()]
+        assert not pagamentos, (
+            f"'Pagamento de fatura' não deve ser importado (duplica extrato): {pagamentos}"
+        )
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 3. Estrutura das transações — PDF
@@ -321,6 +329,14 @@ class TestEstruturaPDF202603:
         pattern = re.compile(r"^\d{4}-\d{2}-\d{2}$")
         invalidas = [t.data for t in txs if not pattern.match(str(t.data))]
         assert not invalidas
+
+    def test_sem_pagamento_fatura(self, resultado_pdf_202603):
+        """'Pagamento de fatura' deve ser filtrado — duplicaria o débito do extrato bancário."""
+        txs, _ = resultado_pdf_202603
+        pagamentos = [t.lancamento for t in txs if "pagamento de fatura" in t.lancamento.lower()]
+        assert not pagamentos, (
+            f"'Pagamento de fatura' não deve ser importado (duplica extrato): {pagamentos}"
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -392,31 +408,30 @@ class TestBalanceValidation202603:
         assert balance.saldo_final is not None
         assert balance.saldo_final > 0.0
 
-    def test_xlsx_soma_vs_total_calculado(self, resultado_xlsx_202603):
-        """mar/2026: Total declarado inclui saldo anterior de fev/2026 (carry-over BTG).
-        O processador extrai corretamente só as transações do mês corrente.
-        A diferença ~R$646,76 é o pagamento anterior — is_valid=False é esperado aqui.
-        Verificamos apenas que a soma foi calculada e que o carry-over tem sinal correto."""
+    def test_xlsx_soma_vs_total_valida(self, resultado_xlsx_202603):
+        """mar/2026: após filtrar 'Pagamento de fatura', soma deve bater com o total."""
         _, balance = resultado_xlsx_202603
-        assert balance.soma_transacoes is not None
-        assert balance.soma_transacoes > 0.0
-        if balance.saldo_final is not None and balance.diferenca is not None:
-            assert balance.diferenca >= 0, "Carry-over não pode ser negativo"
-            assert balance.diferenca < balance.saldo_final, "Carry-over não pode exceder o total"
+        if balance.saldo_final is None:
+            pytest.skip("Total não encontrado no XLSX")
+        assert balance.is_valid is True, (
+            f"Soma R${balance.soma_transacoes:.2f} ≠ "
+            f"Total R${balance.saldo_final:.2f} (diff R${balance.diferenca:.2f})"
+        )
 
     def test_pdf_total_declarado_encontrado(self, resultado_pdf_202603):
         _, balance = resultado_pdf_202603
         assert balance.saldo_final is not None
         assert balance.saldo_final > 0.0
 
-    def test_pdf_soma_vs_total_calculado(self, resultado_pdf_202603):
-        """mar/2026: mesmo comportamento do XLSX — carry-over incluso no total declarado."""
+    def test_pdf_soma_vs_total_valida(self, resultado_pdf_202603):
+        """mar/2026: após filtrar 'Pagamento de fatura', soma deve bater com o total."""
         _, balance = resultado_pdf_202603
-        assert balance.soma_transacoes is not None
-        assert balance.soma_transacoes > 0.0
-        if balance.saldo_final is not None and balance.diferenca is not None:
-            assert balance.diferenca >= 0, "Carry-over não pode ser negativo"
-            assert balance.diferenca < balance.saldo_final, "Carry-over não pode exceder o total"
+        if balance.saldo_final is None:
+            pytest.skip("Total não encontrado no PDF")
+        assert balance.is_valid is True, (
+            f"Soma R${balance.soma_transacoes:.2f} ≠ "
+            f"Total R${balance.saldo_final:.2f} (diff R${balance.diferenca:.2f})"
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────

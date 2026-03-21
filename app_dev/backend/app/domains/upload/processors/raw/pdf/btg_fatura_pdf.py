@@ -111,12 +111,12 @@ def process_btg_fatura_pdf(
     else:
         logger.warning("Total da fatura não encontrado no PDF")
 
-    # Extrair pagamentos (seção 'Pagamentos feitos pelo cliente')
-    pagamentos_raw = _extract_payment_transactions(texto_completo, ano_fatura, num_mes_fatura)
+    # Pagamentos feitos pelo cliente são excluídos intencionalmente:
+    # o débito já aparece no extrato bancário da conta corrente → incluir seria duplicar.
+    # _extract_payment_transactions(texto_completo, ano_fatura, num_mes_fatura)  ← ignorado
 
-    # Extrair transações por seção de cartão
+    # Extrair transações por seção de cartão (despesas/compras apenas)
     transacoes_raw = _extract_all_transactions(texto_completo, ano_fatura, num_mes_fatura)
-    transacoes_raw.extend(pagamentos_raw)
 
     transactions: List[RawTransaction] = []
     for data_str, descricao, valor, final_cartao_pdf, tipo_compra in transacoes_raw:
