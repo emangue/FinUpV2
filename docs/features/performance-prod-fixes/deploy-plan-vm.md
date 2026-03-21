@@ -1,9 +1,10 @@
 # 🚀 Plano de Deploy — Performance Prod Fixes (Sprints 1–4)
 
 **Branch:** `perf/performance-prod-fixes`  
-**HEAD local:** `c76b9847`  
-**VM atual:** `021a0708` (sem nenhum sprint desta branch)  
-**Data:** 2026  
+**HEAD local (final):** `953a63da`  
+**VM atual:** `953a63da` ✅ sincronizado  
+**Data deploy:** 2026-05-08  
+**Status:** ✅ **DEPLOY CONCLUÍDO E VALIDADO**  
 
 ---
 

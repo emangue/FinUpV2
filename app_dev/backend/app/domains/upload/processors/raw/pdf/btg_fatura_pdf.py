@@ -111,8 +111,12 @@ def process_btg_fatura_pdf(
     else:
         logger.warning("Total da fatura não encontrado no PDF")
 
+    # Extrair pagamentos (seção 'Pagamentos feitos pelo cliente')
+    pagamentos_raw = _extract_payment_transactions(texto_completo, ano_fatura, num_mes_fatura)
+
     # Extrair transações por seção de cartão
     transacoes_raw = _extract_all_transactions(texto_completo, ano_fatura, num_mes_fatura)
+    transacoes_raw.extend(pagamentos_raw)
 
     transactions: List[RawTransaction] = []
     for data_str, descricao, valor, final_cartao_pdf, tipo_compra in transacoes_raw:
@@ -146,6 +150,43 @@ def process_btg_fatura_pdf(
 
 
 # ─── Extração de transações ────────────────────────────────────────────────────
+
+def _extract_payment_transactions(
+    texto: str,
+    ano_fatura: int,
+    mes_fatura: int,
+) -> List[Tuple[str, str, float, str, str]]:
+    """
+    Extrai transações da seção 'Pagamentos feitos pelo cliente'.
+    Formato: 'DD Mon Descrição - R$ valor'
+    Ex:      '30 Jan Pagamento de fatura - R$ 646,76'
+    O valor é negativo (pagamento reduz o saldo devedor), igual ao XLSX.
+    """
+    match_secao = re.search(r'Pagamentos feitos pelo cliente', texto, re.IGNORECASE)
+    if not match_secao:
+        return []
+
+    inicio = match_secao.end()
+    match_prox = re.search(r'Lançamentos do cartão', texto[inicio:], re.IGNORECASE)
+    fim = inicio + match_prox.start() if match_prox else len(texto)
+    bloco = texto[inicio:fim]
+
+    regex_pag = re.compile(
+        r'^(\d{2})\s+(' + _MESES_PATTERN + r')\s+(.+?)\s*-\s*R\$\s*([\d.]+,\d{2})\s*$'
+    )
+
+    resultados: List[Tuple[str, str, float, str, str]] = []
+    for linha in bloco.split('\n'):
+        m = regex_pag.match(linha.strip())
+        if m:
+            dd, mes_str, desc, valor_str = m.group(1), m.group(2), m.group(3).strip(), m.group(4)
+            data_iso = _build_date(dd, mes_str, ano_fatura, mes_fatura)
+            valor = -_convert_valor_br(valor_str)  # negativo: é pagamento
+            resultados.append((data_iso, desc, valor, '', 'Pagamento'))
+            logger.debug(f"  Pagamento: {data_iso} {desc} R$ {valor}")
+
+    return resultados
+
 
 def _extract_all_transactions(
     texto: str,
