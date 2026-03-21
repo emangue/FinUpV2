@@ -299,7 +299,7 @@ def _extract_transactions_from_block(
 
         match_conv = regex_conversao.search(linha_strip)
         if match_conv and pending_intl:
-            valor = _convert_valor_br(match_conv.group(1))
+            valor = -_convert_valor_br(match_conv.group(1))  # BTG PDF: positivo → inverte para despesa negativa
             transacoes.append((
                 pending_intl["data"],
                 pending_intl["desc"],
@@ -321,7 +321,7 @@ def _extract_transactions_from_block(
                 match_nac.group(3).strip(), match_nac.group(4),
             )
             data_iso = _build_date(dd, mes_str, ano_fatura, mes_fatura)
-            valor = _convert_valor_br(valor_str)
+            valor = -_convert_valor_br(valor_str)  # BTG PDF: positivo → inverte para despesa negativa
             tipo = _classify_tipo(desc)
             transacoes.append((data_iso, desc, valor, final_cartao, tipo))
             logger.debug(f"  Nacional: {data_iso} {desc} R$ {valor}")

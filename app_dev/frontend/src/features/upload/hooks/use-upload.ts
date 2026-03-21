@@ -5,7 +5,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { uploadFile } from '../services/upload-api';
+import { uploadFile, PasswordRequiredError } from '../services/upload-api';
 
 export function useUpload() {
   const router = useRouter();
@@ -44,6 +44,11 @@ export function useUpload() {
       // Deixar o componente decidir para onde redirecionar
       return result;
     } catch (err) {
+      if (err instanceof PasswordRequiredError) {
+        // Erro esperado: arquivo protegido por senha. Repassa para o componente tratar.
+        // Não logar como erro para não disparar o overlay do Next.js dev.
+        throw err;
+      }
       setError(err instanceof Error ? err.message : 'Erro ao fazer upload');
       console.error('Erro no upload:', err);
       throw err;

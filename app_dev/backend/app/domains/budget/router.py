@@ -189,6 +189,7 @@ def get_budget_planning(
     mes_referencia: str = Query(None, description="Mês de referência no formato YYYY-MM"),
     year: int = Query(None, description="Ano (alternativa a mes_referencia)"),
     month: int = Query(None, ge=1, le=12, description="Mês 1-12 (alternativa a mes_referencia)"),
+    ytd_month: int = Query(None, ge=1, le=12, description="Modo YTD: mês final (soma Jan até ytd_month)"),
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
@@ -209,6 +210,10 @@ def get_budget_planning(
         ref = mes_referencia
     elif year is not None and month is not None:
         ref = f"{year}-{month:02d}"
+    elif year is not None and ytd_month is not None:
+        # Modo YTD: soma realizado de Jan até ytd_month
+        service = BudgetService(db)
+        return service.get_budget_planning_ytd(user_id, year, ytd_month)
     else:
         raise HTTPException(
             status_code=422,

@@ -98,9 +98,11 @@ export function OrcamentoTab({
         const selectedMonth = new Date(year, (month ?? 1) - 1, 1)
         const mesRef = month ?? 1
         const isAnoOuYtd = month == null
+        // Em modo Ano/YTD: busca goals acumuladas Jan..ytdMonth para paridade com tela de transações
+        const ytdMonthForGoals = isAnoOuYtd ? (ytdMonthProp ?? new Date().getMonth() + 1) : undefined
         const results = await Promise.allSettled([
           fetchIncomeSources(year, month ?? undefined),
-          fetchGoals(selectedMonth),
+          fetchGoals(selectedMonth, ytdMonthForGoals),
           fetchCreditCards(year, month ?? undefined),
           isAnoOuYtd ? fetchOrcamentoInvestimentos(year, undefined, ytdMonthProp) : Promise.resolve(null),
           !isAnoOuYtd ? fetchPlanoCashflowMes(year, mesRef) : Promise.resolve(null),

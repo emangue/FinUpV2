@@ -136,8 +136,10 @@ def process_btg_fatura_xlsx(
             continue
 
         # Valor já em BRL (internacionais já convertidos pelo BTG)
+        # BTG XLSX exporta compras como positivo → inverte para despesa negativa.
+        # Estornos/créditos já vêm negativos no arquivo → ficam positivos após inversão.
         try:
-            valor = float(valor_val)
+            valor = -float(valor_val)
         except (TypeError, ValueError):
             logger.warning(f"Valor inválido: {valor_val!r} — linha ignorada")
             continue
