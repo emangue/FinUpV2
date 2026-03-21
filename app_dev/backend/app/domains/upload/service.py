@@ -286,7 +286,7 @@ class UploadService:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail={
                     "errorCode": "UPL_006",
-                    "error": "Erro ao processar arquivo",
+                    "error": "Não foi possível processar o arquivo. Verifique se o arquivo enviado está íntegro e é do tipo correto para o banco e documento selecionados.",
                     "details": str(e)
                 }
             )
@@ -513,7 +513,7 @@ class UploadService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={
                     "errorCode": "UPL_004",
-                    "error": f"Processador não disponível para {banco} / {tipo_documento} / {formato}"
+                    "error": "Formato não suportado. Verifique se o arquivo e o tipo de documento selecionado estão corretos."
                 }
             )
         
@@ -588,7 +588,7 @@ class UploadService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={
                     "errorCode": "UPL_005",
-                    "error": str(e),
+                    "error": "Não foi possível processar o arquivo. Verifique se o arquivo enviado está íntegro e é do tipo correto para o banco e documento selecionados.",
                 }
             )
         
