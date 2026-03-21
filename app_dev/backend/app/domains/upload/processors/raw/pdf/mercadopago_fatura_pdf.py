@@ -121,6 +121,8 @@ def process_mercadopago_fatura_pdf(
     # ── OCR em cada página de transações ──────────────────────────────────────
     reader = _get_reader()
     transactions: List[RawTransaction] = []
+    pagamento_fatura_valor: Optional[float] = None
+    pagamento_fatura_data: Optional[str] = None
 
     for page_num in range(1, doc.page_count):
         page = doc[page_num]
@@ -133,14 +135,43 @@ def process_mercadopago_fatura_pdf(
 
         logger.debug(f"Pág {page_num + 1}: rodando OCR...")
         rows = _ocr_page_to_rows(reader, page)
-        page_transactions = _parse_rows(
+        page_transactions, pag_valor, pag_data = _parse_rows(
             rows, nome_arquivo, nome_cartao, mes_fatura,
             ano_fatura, num_mes_fatura, data_criacao
         )
         transactions.extend(page_transactions)
+        if pag_valor is not None and pagamento_fatura_valor is None:
+            pagamento_fatura_valor = pag_valor
+            pagamento_fatura_data = pag_data
         logger.debug(f"Pág {page_num + 1}: {len(page_transactions)} transações extraídas")
 
     doc.close()
+
+    # ── Ajuste de saldo anterior ──────────────────────────────────────────────
+    # Se o pagamento real da fatura (linha 'Pagamento da fatura' no PDF) for
+    # maior que a soma das compras do período, a diferença corresponde a um
+    # saldo anterior pago junto — precisa aparecer no fluxo de caixa.
+    soma_compras = round(sum(t.valor for t in transactions), 2)
+    if pagamento_fatura_valor is not None:
+        diferenca = round(pagamento_fatura_valor - soma_compras, 2)
+        if diferenca > 0.01:
+            data_ajuste = pagamento_fatura_data or f"{ano_fatura}-{num_mes_fatura:02d}-01"
+            transactions.append(RawTransaction(
+                banco="Mercado Pago",
+                tipo_documento="fatura",
+                nome_arquivo=nome_arquivo,
+                data_criacao=data_criacao,
+                data=data_ajuste,
+                lancamento="Saldo anterior fatura Mercado Pago",
+                valor=diferenca,
+                nome_cartao=nome_cartao,
+                final_cartao="",
+                mes_fatura=mes_fatura,
+            ))
+            logger.info(
+                f"💡 Saldo anterior adicionado: R$ {diferenca:.2f} "
+                f"(pagamento R$ {pagamento_fatura_valor:.2f} − compras R$ {soma_compras:.2f})"
+            )
 
     # ── Validação ─────────────────────────────────────────────────────────────
     balance.soma_transacoes = round(sum(t.valor for t in transactions), 2)
@@ -242,7 +273,7 @@ def _parse_rows(
     ano_fatura: int,
     num_mes_fatura: int,
     data_criacao: datetime,
-) -> List[RawTransaction]:
+) -> Tuple[List[RawTransaction], Optional[float], Optional[str]]:
     """
     Interpreta as linhas OCR de uma página e extrai transações.
 
@@ -257,6 +288,8 @@ def _parse_rows(
     transactions: List[RawTransaction] = []
     current_final_cartao = ""
     in_payment_section = False  # seção de pagamentos/créditos no topo
+    pagamento_fatura_valor: Optional[float] = None
+    pagamento_fatura_data: Optional[str] = None
 
     for row in rows:
         texts = [text.strip() for _, text, conf in row if conf > 0.3 and text.strip()]
@@ -332,8 +365,14 @@ def _parse_rows(
         if not descricao:
             descricao = "Mercado Pago"
 
-        # ── Ignorar pagamentos de fatura ──────────────────────────────────────
+        # ── Ignorar pagamentos de fatura (capturando valor se for pagamento principal) ──
         if in_payment_section or "Pagamento da fatura" in descricao:
+            if "Pagamento da fatura" in descricao and pagamento_fatura_valor is None and valor:
+                num_mes_pag = int(mm)
+                ano_tx_pag = ano_fatura - 1 if num_mes_pag > num_mes_fatura else ano_fatura
+                pagamento_fatura_valor = valor
+                pagamento_fatura_data = f"{ano_tx_pag}-{mm}-{dd}"
+                logger.debug(f"💰 Pagamento da fatura capturado: R$ {valor:.2f} em {pagamento_fatura_data}")
             logger.debug(f"Pagamento ignorado: {descricao}")
             continue
 
@@ -360,7 +399,7 @@ def _parse_rows(
         ))
         logger.debug(f"  ✓ {data_iso} | {descricao[:40]} | R$ {valor:.2f} | cartão *{current_final_cartao}")
 
-    return transactions
+    return transactions, pagamento_fatura_valor, pagamento_fatura_data
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
