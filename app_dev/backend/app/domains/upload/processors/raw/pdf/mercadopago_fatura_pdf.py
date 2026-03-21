@@ -151,9 +151,9 @@ def process_mercadopago_fatura_pdf(
     # Se o pagamento real da fatura (linha 'Pagamento da fatura' no PDF) for
     # maior que a soma das compras do período, a diferença corresponde a um
     # saldo anterior pago junto — precisa aparecer no fluxo de caixa.
-    soma_compras = round(sum(t.valor for t in transactions), 2)
+    soma_compras_abs = round(sum(abs(t.valor) for t in transactions), 2)
     if pagamento_fatura_valor is not None:
-        diferenca = round(pagamento_fatura_valor - soma_compras, 2)
+        diferenca = round(pagamento_fatura_valor - soma_compras_abs, 2)
         if diferenca > 0.01:
             data_ajuste = pagamento_fatura_data or f"{ano_fatura}-{num_mes_fatura:02d}-01"
             transactions.append(RawTransaction(
@@ -163,18 +163,20 @@ def process_mercadopago_fatura_pdf(
                 data_criacao=data_criacao,
                 data=data_ajuste,
                 lancamento="Saldo anterior fatura Mercado Pago",
-                valor=diferenca,
+                valor=-diferenca,  # negativo: saída de caixa
                 nome_cartao=nome_cartao,
                 final_cartao="",
                 mes_fatura=mes_fatura,
             ))
             logger.info(
                 f"💡 Saldo anterior adicionado: R$ {diferenca:.2f} "
-                f"(pagamento R$ {pagamento_fatura_valor:.2f} − compras R$ {soma_compras:.2f})"
+                f"(pagamento R$ {pagamento_fatura_valor:.2f} − compras R$ {soma_compras_abs:.2f})"
             )
 
     # ── Validação ─────────────────────────────────────────────────────────────
-    balance.soma_transacoes = round(sum(t.valor for t in transactions), 2)
+    # Usa abs() porque saldo_final ("Total a pagar") é positivo no PDF,
+    # mas os valores das transações são negativos (despesas)
+    balance.soma_transacoes = round(sum(abs(t.valor) for t in transactions), 2)
     balance.validate()
 
     logger.info(f"✅ Fatura Mercado Pago PDF: {len(transactions)} transações")
@@ -392,7 +394,7 @@ def _parse_rows(
             data_criacao=data_criacao,
             data=data_iso,
             lancamento=descricao,
-            valor=valor,
+            valor=-valor,  # fatura: positivo no PDF → negativo no banco (despesa)
             nome_cartao=nome_cartao,
             final_cartao=current_final_cartao,
             mes_fatura=mes_fatura,
