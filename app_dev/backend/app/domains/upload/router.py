@@ -11,6 +11,9 @@ from sqlalchemy.orm import Session
 # Validação de upload — segurança contra DoS e arquivos maliciosos
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50MB
 EXTENSOES_PERMITIDAS = {"csv", "xls", "xlsx", "pdf", "ofx", "txt"}
+
+# Bancos que não geram IdTransacao v5 confiável (não identificados)
+_BANCOS_INVALIDOS = {'', 'generico', 'outros', 'outro', 'desconhecido'}
 MIME_TYPES_PERMITIDOS = {
     "text/csv", "text/plain",
     "application/pdf",
@@ -128,6 +131,20 @@ async def upload_preview(
     - sessionId: ID único da sessão de preview
     - totalRegistros: Número de transações processadas
     """
+    # Validação: banco identificável é obrigatório para IdTransacao v5 correto
+    if banco.strip().lower() in _BANCOS_INVALIDOS:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "errorCode": "UPL_010",
+                "error": "Instituição financeira obrigatória",
+                "detail": (
+                    "Selecione a instituição financeira correta. "
+                    "Uploads sem banco identificado não permitem deduplicação."
+                )
+            }
+        )
+
     service = UploadService(db)
     return service.process_and_preview(
         file=file,

@@ -288,27 +288,26 @@ class TransactionMarker:
                 # Extrato: Ano e Mes da Data da transação
                 ano, mes = self._extrair_ano_mes(raw.data)
             
-            # v5: remove tudo que não é [A-Z0-9] da base — invariante à renderização PDF/CSV
+            # estab_normalizado: ainda usado para IdParcela e EstabelecimentoBase
             if info_parcela and is_fatura:
-                # Parcelada: normaliza base + recompõe (p/t)
                 base_norm = re.sub(r'[^A-Z0-9]', '', estabelecimento_base.upper())
                 estab_normalizado = f"{base_norm} ({parcela_atual}/{total_parcelas})"
             else:
-                # Sem parcela (ou extrato): remove tudo que não é [A-Z0-9]
                 estab_normalizado = re.sub(r'[^A-Z0-9]', '', raw.lancamento.upper())
 
-            estab_hash = estab_normalizado
+            # IdTransacao v5: chave baseada em banco+tipo+data+valor (sem nome da transação)
+            # raw.banco e raw.tipo_documento são garantidos pelo service.py (Fase 2a)
             valor_hash = arredondar_2_decimais(raw.valor)  # VALOR EXATO (com sinal)
-            
-            chave_unica = f"{raw.data}|{estab_hash}|{valor_hash:.2f}"
+            chave_unica = f"{raw.banco}|{raw.tipo_documento}|{raw.data}|{valor_hash:.2f}"
             sequencia = self._get_sequence_for_duplicate(chave_unica)
-            
-            # 4. Gerar IdTransacao (v4.2.1 - com user_id + formato normalizado apenas para faturas)
+
+            # 4. Gerar IdTransacao v5
             id_transacao = generate_id_transacao(
                 data=raw.data,
-                estabelecimento=estab_normalizado,  # Normalizado apenas se fatura
-                valor=raw.valor,  # VALOR EXATO (com sinal)
-                user_id=self.user_id,  # Isola por usuário
+                banco=raw.banco,
+                tipo_documento=raw.tipo_documento,
+                valor=raw.valor,
+                user_id=self.user_id,
                 sequencia=sequencia
             )
             
