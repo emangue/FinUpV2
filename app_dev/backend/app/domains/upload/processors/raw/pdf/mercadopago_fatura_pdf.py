@@ -72,6 +72,28 @@ _SKIP_PATTERNS = [
     re.compile(r'BRL\s+[\d.]+'),
 ]
 
+# Mapa meses em português → número (sem acentos para resistência ao OCR)
+_MESES_PT = {
+    "janeiro": 1, "fevereiro": 2, "marco": 3, "abril": 4,
+    "maio": 5, "junho": 6, "julho": 7, "agosto": 8,
+    "setembro": 9, "outubro": 10, "novembro": 11, "dezembro": 12,
+}
+
+
+def _mes_num_da_desc(texto: str) -> Optional[int]:
+    """
+    Extrai o número do mês mencionado num texto em português.
+    Remove acentos antes de comparar (robústez ao OCR).
+    Ex: 'Pagamento da fatura de dezembro/2025' → 12
+    """
+    import unicodedata
+    sem_acento = unicodedata.normalize('NFD', texto.lower())
+    sem_acento = ''.join(c for c in sem_acento if unicodedata.category(c) != 'Mn')
+    for nome, num in _MESES_PT.items():
+        if nome in sem_acento:
+            return num
+    return None
+
 
 def process_mercadopago_fatura_pdf(
     file_path: Path,
@@ -369,12 +391,18 @@ def _parse_rows(
 
         # ── Ignorar pagamentos de fatura (capturando valor se for pagamento principal) ──
         if in_payment_section or "Pagamento da fatura" in descricao:
-            if "Pagamento da fatura" in descricao and pagamento_fatura_valor is None and valor:
-                num_mes_pag = int(mm)
-                ano_tx_pag = ano_fatura - 1 if num_mes_pag > num_mes_fatura else ano_fatura
-                pagamento_fatura_valor = valor
-                pagamento_fatura_data = f"{ano_tx_pag}-{mm}-{dd}"
-                logger.debug(f"💰 Pagamento da fatura capturado: R$ {valor:.2f} em {pagamento_fatura_data}")
+            if "Pagamento da fatura" in descricao and valor:
+                # Só captura se o mês mencionado corresponde ao mês desta fatura
+                # (evita capturar pagamento de mês anterior listado na movimentação)
+                mes_desc = _mes_num_da_desc(descricao)
+                if mes_desc == num_mes_fatura:
+                    num_mes_pag = int(mm)
+                    ano_tx_pag = ano_fatura - 1 if num_mes_pag > num_mes_fatura else ano_fatura
+                    pagamento_fatura_valor = valor
+                    pagamento_fatura_data = f"{ano_tx_pag}-{mm}-{dd}"
+                    logger.info(f"💰 Pagamento da fatura capturado (mês {mes_desc}): R$ {valor:.2f}")
+                else:
+                    logger.debug(f"Pagamento de outro mês ignorado (mês {mes_desc} ≠ {num_mes_fatura}): {descricao}")
             logger.debug(f"Pagamento ignorado: {descricao}")
             continue
 
