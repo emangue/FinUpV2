@@ -228,7 +228,7 @@ export async function uploadFile(formData: {
       if (response.status === 422 && error.detail?.code === 'PASSWORD_REQUIRED') {
         throw new PasswordRequiredError(error.detail.message, error.detail.wrong_password);
       }
-      errorDetail = error.detail?.message || error.detail || errorDetail
+      errorDetail = error.detail?.message || error.detail?.error || (typeof error.detail === 'string' ? error.detail : null) || errorDetail
     } catch (e) {
       if (e instanceof PasswordRequiredError) throw e;
       const errorText = await response.text().catch(() => '');

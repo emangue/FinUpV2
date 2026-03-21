@@ -100,6 +100,9 @@ export default function UploadPage() {
   const [passwordPromptMsg, setPasswordPromptMsg] = useState('');
   const [retryPassword, setRetryPassword] = useState('');
 
+  // Estado de erro de upload (exibido como caixa inline)
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
   // Resetar cartão selecionado quando o banco mudar
   useEffect(() => {
     setSelectedCard('');
@@ -118,6 +121,7 @@ export default function UploadPage() {
     if (file) {
       setFileName(file.name);
       setSelectedFile(file);
+      setUploadError(null); // Limpa erro anterior ao trocar arquivo
       // Inferir formato pela extensão (sem chamada de rede)
       const ext = file.name.split('.').pop()?.toLowerCase();
       if (ext === 'xlsx' || ext === 'xls' || ext === 'xlsm') {
@@ -217,6 +221,7 @@ export default function UploadPage() {
     }
     
     try {
+      setUploadError(null);
       // Buscar dados completos do cartão selecionado
       let cartaoNome: string | undefined;
       let cartaoFinal: string | undefined;
@@ -258,7 +263,7 @@ export default function UploadPage() {
         return;
       }
       console.error('❌ [MOBILE-UPLOAD] Erro no upload:', error);
-      alert('Erro ao fazer upload. Por favor, tente novamente.');
+      setUploadError(error instanceof Error ? error.message : 'Erro ao fazer upload. Por favor, tente novamente.');
     }
   };
 
@@ -304,7 +309,7 @@ export default function UploadPage() {
         return;
       }
       console.error('❌ [MOBILE-UPLOAD] Erro no retry:', error);
-      alert('Erro ao fazer upload. Por favor, tente novamente.');
+      setUploadError(error instanceof Error ? error.message : 'Erro ao fazer upload. Por favor, tente novamente.');
     }
   };
 
@@ -469,7 +474,7 @@ export default function UploadPage() {
           {/* Tabs */}
           <TabBar 
             activeTab={activeTab}
-            onChange={setActiveTab}
+            onChange={(tab) => { setActiveTab(tab); setUploadError(null); }}
           />
 
           {/* Arquivo — PRIMEIRO: usuário escolhe arquivo antes de preencher o resto */}
@@ -560,6 +565,26 @@ export default function UploadPage() {
                   style={{ width: `${progress}%` }}
                 />
               </div>
+            </div>
+          )}
+
+          {/* Caixa de erro de upload */}
+          {uploadError && (
+            <div className="mb-4 flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl p-4">
+              <span className="text-lg leading-none mt-0.5">⚠️</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-red-800 mb-0.5">Erro ao importar</p>
+                <p className="text-sm text-red-700 break-words">{uploadError}</p>
+              </div>
+              <button
+                onClick={() => setUploadError(null)}
+                className="text-red-400 hover:text-red-600 transition-colors flex-shrink-0 mt-0.5"
+                aria-label="Fechar erro"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+              </button>
             </div>
           )}
 

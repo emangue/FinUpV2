@@ -84,6 +84,14 @@ def process_btg_extrato(file_path: Path, banco: str, tipo_documento: str, user_e
     Returns:
         Lista de RawTransaction
     """
+    # Extrato BTG só suporta .xls (exportado pelo portal). Arquivo .xlsx é fatura.
+    if str(file_path).lower().endswith('.xlsx'):
+        raise ValueError(
+            "Arquivo XLSX detectado na aba Extrato. "
+            "O extrato BTG Pactual é exportado em formato XLS (.xls). "
+            "Se quiser importar uma fatura BTG, selecione a aba \"Fatura Cartão\" e tente novamente."
+        )
+
     # Chamar processador interno (para manter compatibilidade com testes)
     transacoes_dict = processar_btg_extrato_interno(file_path, user_id=1)
     

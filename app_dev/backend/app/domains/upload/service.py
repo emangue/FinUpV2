@@ -582,14 +582,13 @@ class UploadService:
             )
 
         except ValueError as e:
-            # Erro de formato de arquivo (header não encontrado, estrutura incorreta)
+            # Erro de formato de arquivo (header não encontrado, estrutura incorreta, tipo errado)
             logger.warning(f"⚠️ Formato de arquivo inválido: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={
                     "errorCode": "UPL_005",
-                    "error": "Formato de arquivo inválido",
-                    "details": str(e)
+                    "error": str(e),
                 }
             )
         
