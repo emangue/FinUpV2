@@ -40,8 +40,10 @@ export interface Transaction {
   grupo?: string;
   subgrupo?: string;
   source: ClassificationSource;
+  isDuplicate?: boolean; // Marcada como já importada (is_duplicate=true no backend)
   occurrences?: number; // Para transações agrupadas
   items?: Transaction[]; // Itens individuais quando agrupado
+  type?: 'receita' | 'despesa'; // Tipo de transação
 }
 
 // ============================================
@@ -66,6 +68,7 @@ export interface PreviewStats {
   total: number;
   classificadas: number;
   naoClassificadas: number;
+  duplicadas: number; // Transações já importadas (excluídas do total)
   baseParcelas: number;
   basePadroes: number;
   journalEntries: number;
@@ -85,7 +88,8 @@ export type TabFilter =
   | 'journal_entries'
   | 'regras_genericas'
   | 'manual'
-  | 'not_classified';
+  | 'not_classified'
+  | 'duplicadas';
 
 export interface TabOption {
   id: TabFilter;

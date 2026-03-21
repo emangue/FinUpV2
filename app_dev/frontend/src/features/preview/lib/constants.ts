@@ -196,6 +196,7 @@ export function calculateStats(transactions: Transaction[]): PreviewStats {
     total: 0,
     classificadas: 0,
     naoClassificadas: 0,
+    duplicadas: 0,
     baseParcelas: 0,
     basePadroes: 0,
     journalEntries: 0,
@@ -204,6 +205,12 @@ export function calculateStats(transactions: Transaction[]): PreviewStats {
   };
 
   const countTransaction = (tx: Transaction) => {
+    // Duplicatas são contadas separado e NÃO entram no total/classificadas
+    if (tx.isDuplicate) {
+      stats.duplicadas++;
+      return;
+    }
+
     stats.total++;
 
     if (tx.grupo && tx.subgrupo) {
@@ -247,7 +254,7 @@ export function calculateStats(transactions: Transaction[]): PreviewStats {
 // ============================================
 
 export function generateTabs(stats: PreviewStats): TabOption[] {
-  return [
+  const tabs: TabOption[] = [
     { id: 'all', label: 'Todas', count: stats.total },
     { id: 'classificadas', label: 'Classificadas', count: stats.classificadas },
     { id: 'base_parcelas', label: 'Base Parcelas', count: stats.baseParcelas },
@@ -262,6 +269,18 @@ export function generateTabs(stats: PreviewStats): TabOption[] {
       variant: 'warning',
     },
   ];
+
+  // Mostrar aba Duplicadas apenas se houver duplicatas
+  if (stats.duplicadas > 0) {
+    tabs.push({
+      id: 'duplicadas',
+      label: 'Já Importadas',
+      count: stats.duplicadas,
+      variant: 'warning',
+    });
+  }
+
+  return tabs;
 }
 
 // ============================================
