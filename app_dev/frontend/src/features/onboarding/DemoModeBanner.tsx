@@ -16,9 +16,18 @@ export function DemoModeBanner() {
   const [data, setData] = useState<{ tem_demo?: boolean } | null>(null);
 
   useEffect(() => {
+    // P1: sessionStorage (não localStorage) — limpa ao trocar de conta/encerrar sessão
+    if (typeof window !== 'undefined' && sessionStorage.getItem('sem_demo') === 'true') return;
+
     fetch(`${apiUrl}/api/v1/onboarding/progress`, { credentials: 'include' })
       .then((r) => (r.ok ? r.json() : null))
-      .then(setData);
+      .then((d) => {
+        if (d && !d.tem_demo) {
+          // Cachear ausência de modo demo nesta sessão
+          sessionStorage.setItem('sem_demo', 'true');
+        }
+        setData(d);
+      });
   }, []);
 
   if (!data?.tem_demo) return null;

@@ -6,8 +6,14 @@ from sqlalchemy import func
 
 from .schemas import OnboardingProgressResponse
 from .demo_seed import DEMO_SEED, GRUPO_FALLBACK
+from app.core.redis_client import redis_get, redis_set, redis_delete
 
 logger = logging.getLogger(__name__)
+
+# TTL do cache Redis para onboarding/progress (5 minutos)
+# 1ª chamada: ~100ms (5 queries PostgreSQL)
+# 2ª+ chamada: <5ms (Redis hit)
+ONBOARDING_CACHE_TTL = 5 * 60  # 300 segundos
 
 
 class OnboardingService:
@@ -18,7 +24,18 @@ class OnboardingService:
         """
         Retorna 4 flags de completude do onboarding.
         primeiro_upload: tem upload com sucesso OU tem transações demo
+
+        Cache Redis (TTL=5min):
+            HIT  → <5ms (evita 5 queries ao PostgreSQL)
+            MISS → ~100ms (5 queries) → salva no Redis
         """
+        cache_key = f"onboarding:progress:{user_id}"
+
+        # Tentar cache Redis primeiro
+        cached = redis_get(cache_key)
+        if cached is not None:
+            return OnboardingProgressResponse(**cached)
+
         from app.domains.upload.history_models import UploadHistory
         from app.domains.budget.models import BudgetPlanning
         from app.domains.investimentos.models import InvestimentoPortfolio
@@ -57,7 +74,7 @@ class OnboardingService:
         )
         ultimo_upload_str = ultimo_upload.isoformat() if ultimo_upload else None
 
-        return OnboardingProgressResponse(
+        result = OnboardingProgressResponse(
             conta_criada=True,
             primeiro_upload=primeiro_upload,
             plano_criado=has_plano,
@@ -66,6 +83,11 @@ class OnboardingService:
             tem_demo=tem_demo,
             ultimo_upload_em=ultimo_upload_str,
         )
+
+        # Salvar no cache Redis (TTL = 5 min)
+        redis_set(cache_key, result.model_dump(), ex=ONBOARDING_CACHE_TTL)
+
+        return result
 
     def criar_dados_demo(self, user_id: int) -> int:
         """

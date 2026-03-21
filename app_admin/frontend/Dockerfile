@@ -12,7 +12,7 @@ ENV NEXT_TELEMETRY_DISABLED 1
 # Variáveis públicas precisam ser disponíveis em build time (baked no bundle)
 ARG NEXT_PUBLIC_BACKEND_URL
 ENV NEXT_PUBLIC_BACKEND_URL=$NEXT_PUBLIC_BACKEND_URL
-RUN npm run build
+RUN node node_modules/next/dist/bin/next build
 
 # ============================================
 # Stage 3: Runner (Next.js standalone)

@@ -1,12 +1,13 @@
 """Service do domínio Plano"""
 import json
 import logging
-from datetime import date
+from datetime import date, datetime, timezone, timedelta
 from typing import Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from .models import UserFinancialProfile, PlanoMetaCategoria, BaseExpectativa, ExpectativaMes
+from .models import UserFinancialProfile, PlanoMetaCategoria, BaseExpectativa, ExpectativaMes, PlanoCashflowMes
 from .schemas import AporteExtraDetalhe, AporteMesDetalhe, AporteInvestimentoResponse
 
 logger = logging.getLogger(__name__)
@@ -252,6 +253,11 @@ class PlanoService:
             profile.crescimento_gastos = crescimento_gastos
         self.db.commit()
         self.db.refresh(profile)
+
+        # Mudanças no perfil afetam todos os meses futuros: invalida ano atual em diante
+        ano_atual = date.today().year
+        invalidate_cashflow_cache(self.db, user_id, ano_partir=ano_atual)
+
         return {
             "renda_mensal_liquida": profile.renda_mensal_liquida,
             "aporte_planejado": profile.aporte_planejado,
@@ -509,16 +515,28 @@ class PlanoService:
                     "acumulado": round(acumulado_aportes, 2),
                 })
         else:
+            # Curva laranja — fórmula: renda - gastos_rec*(1-%eco) + Ce - De
+            # O slider de economia reduz APENAS os gastos recorrentes.
+            # Créditos e débitos extraordinários passam integralmente.
             for i, m in enumerate(cashflow["meses"][:meses]):
-                renda_mes = m.get("renda_usada") or 0.0
-                gastos_base = m.get("gastos_usados") or (m["gastos_realizados"] or m["gastos_recorrentes"])
-                extras = m.get("gastos_extras_esperados", 0) or 0
                 if m.get("use_realizado"):
-                    gastos = gastos_base + extras
+                    # Meses passados: usar valores realizados diretamente
+                    renda_real  = m.get("renda_realizada") or 0.0
+                    gastos_real = m.get("gastos_realizados") or 0.0
+                    invest_real = m.get("investimentos_realizados") or 0.0
+                    saldo_mes   = renda_real - gastos_real - invest_real
                 else:
-                    gastos = (gastos_base * fator) + extras
-                aporte_mes = m.get("aporte_usado") or m["aporte_planejado"]
-                saldo_mes = renda_mes - gastos - aporte_mes
+                    # Meses futuros: slider reduz APENAS gastos recorrentes
+                    renda_base      = m.get("renda_esperada") or 0.0
+                    gastos_rec      = m.get("gastos_recorrentes") or 0.0
+                    creditos_extras = m.get("extras_creditos") or 0.0
+                    debitos_extras  = m.get("extras_debitos") or 0.0
+                    saldo_mes = (
+                        renda_base
+                        - gastos_rec * fator
+                        + creditos_extras
+                        - debitos_extras
+                    )
                 acumulado += saldo_mes
                 serie.append({
                     "mes": i + 1,
@@ -800,6 +818,11 @@ class PlanoService:
                 evoluir=evoluir, evolucao_valor=evolucao_valor, evolucao_tipo=evolucao_tipo
             )
         self.db.commit()
+        # Invalidar cache cashflow para os meses afetados
+        try:
+            invalidate_cashflow_cache(self.db, user_id, mes_referencia=[mes_referencia])
+        except Exception as _inv_exc:
+            logger.warning(f"Falha ao invalidar cashflow cache em create_expectativa: {_inv_exc}")
         self.db.refresh(e)
         return {
             "id": e.id,
@@ -820,11 +843,18 @@ class PlanoService:
         ).first()
         if not e:
             return False
+        mes_ref_deletado = e.mes_referencia  # captura antes de deletar
         self.db.query(ExpectativaMes).filter(
             ExpectativaMes.origem_expectativa_id == expectativa_id,
         ).delete(synchronize_session=False)
         self.db.delete(e)
         self.db.commit()
+        # Invalidar cache cashflow para o mês desta expectativa
+        try:
+            if mes_ref_deletado:
+                invalidate_cashflow_cache(self.db, user_id, mes_referencia=[mes_ref_deletado])
+        except Exception as _inv_exc:
+            logger.warning(f"Falha ao invalidar cashflow cache em delete_expectativa: {_inv_exc}")
         return True
 
     def update_expectativa(
@@ -884,6 +914,11 @@ class PlanoService:
                 evoluir=evoluir, evolucao_valor=evolucao_valor, evolucao_tipo=evolucao_tipo
             )
         self.db.commit()
+        # Invalidar cache cashflow para o mês atualizado
+        try:
+            invalidate_cashflow_cache(self.db, user_id, mes_referencia=[mes_referencia])
+        except Exception as _inv_exc:
+            logger.warning(f"Falha ao invalidar cashflow cache em update_expectativa: {_inv_exc}")
         self.db.refresh(e)
         return {
             "id": e.id,
@@ -1196,3 +1231,181 @@ class PlanoService:
             mes=None,
             meses=meses_list,
         )
+
+
+# ============================================================================
+# A1 — Tabela materializada cashflow (Sprint 5)
+# Funções standalone — podem ser importadas por outros domínios sem instanciar PlanoService
+# ============================================================================
+
+CASHFLOW_MES_TTL_HOURS = 6   # recomputa se mais velho que 6h
+
+
+def invalidate_cashflow_cache(
+    db: Session,
+    user_id: int,
+    mes_referencia: Optional[list] = None,   # ex: ['2026-02', '2026-03']
+    ano_partir: Optional[int] = None,         # invalida ano_partir em diante
+) -> None:
+    """
+    Invalida entradas da tabela materializada plano_cashflow_mes.
+
+    Casos de uso:
+    - mes_referencia=['2026-02']: invalida meses específicos (após editar transação)
+    - ano_partir=2026: invalida o ano inteiro e futuros (após mudar perfil financeiro)
+    - ambos None: invalida tudo do usuário (uso excepcional)
+    """
+    query = db.query(PlanoCashflowMes).filter(
+        PlanoCashflowMes.user_id == user_id
+    )
+
+    if mes_referencia:
+        query = query.filter(PlanoCashflowMes.mes_referencia.in_(mes_referencia))
+    elif ano_partir is not None:
+        query = query.filter(PlanoCashflowMes.ano >= ano_partir)
+
+    query.update({"invalidated": True}, synchronize_session=False)
+    db.commit()
+
+
+def _compute_cashflow_mes(db: Session, user_id: int, ano: int, mes: int) -> dict:
+    """
+    Computa o cashflow de 1 mês usando PlanoService.get_cashflow e extrai
+    os campos armazenáveis na tabela materializada.
+    """
+    service = PlanoService(db)
+    resultado = service.get_cashflow(user_id, ano)
+    mes_ref = f"{ano}-{mes:02d}"
+    mes_data = next(
+        (m for m in resultado.get("meses", []) if m.get("mes_referencia") == mes_ref),
+        None,
+    )
+    if not mes_data:
+        return {}
+    return {
+        "renda_realizada":          mes_data.get("renda_realizada"),
+        "gastos_realizados":        mes_data.get("gastos_realizados"),
+        "investimentos_realizados": mes_data.get("investimentos_realizados"),
+        "renda_esperada":           mes_data.get("renda_esperada"),
+        "gastos_recorrentes":       mes_data.get("gastos_recorrentes"),
+        "extras_creditos":          mes_data.get("extras_creditos"),
+        "extras_debitos":           mes_data.get("extras_debitos"),
+        "renda_usada":              mes_data.get("renda_usada"),
+        "total_gastos":             mes_data.get("total_gastos"),
+        "aporte_planejado":         mes_data.get("aporte_planejado"),
+        "aporte_usado":             mes_data.get("aporte_usado"),
+        "use_realizado":            mes_data.get("use_realizado"),
+        "status_mes":               mes_data.get("status_mes"),
+        # Campos extras passados diretamente (não armazenados, mas incluídos no retorno)
+        "_saldo_projetado":         mes_data.get("saldo_projetado"),
+        "_gastos_usados":           mes_data.get("gastos_usados"),
+        "_gastos_extras_esperados": mes_data.get("gastos_extras_esperados"),
+        "_expectativas":            mes_data.get("expectativas", []),
+    }
+
+
+def _cashflow_mes_to_dict(row: PlanoCashflowMes) -> dict:
+    """Converte ORM → formato de dict retornado pelo endpoint /plano/cashflow/mes."""
+    aporte_usado = row.aporte_usado
+    return {
+        "mes_referencia":          row.mes_referencia,
+        "renda_esperada":          row.renda_esperada,
+        "renda_realizada":         row.renda_realizada,
+        "renda_usada":             row.renda_usada,
+        "gastos_recorrentes":      row.gastos_recorrentes,
+        "extras_creditos":         row.extras_creditos,
+        "extras_debitos":          row.extras_debitos,
+        "gastos_extras_esperados": row.extras_debitos,   # alias backward-compat
+        "gastos_realizados":       row.gastos_realizados,
+        "gastos_usados":           row.total_gastos,     # aproximação conservadora
+        "total_gastos":            row.total_gastos,
+        "aporte_planejado":        row.aporte_planejado,
+        "investimentos_realizados": row.investimentos_realizados,
+        "aporte_usado":            aporte_usado,
+        "saldo_projetado":         aporte_usado,         # alias backward-compat
+        "use_realizado":           row.use_realizado,
+        "status_mes":              row.status_mes,
+        "grupos":                  [],                   # sempre vazio (não armazenado)
+        "expectativas":            [],                   # serve do cache hit (dado fresco no miss)
+    }
+
+
+def get_cashflow_mes_cached(
+    db: Session,
+    user_id: int,
+    ano: int,
+    mes: int,
+) -> dict:
+    """
+    Retorna o cashflow de um único mês com lazy recompute.
+    - Cache hit (fresh):  leitura simples na tabela plano_cashflow_mes (~5ms)
+    - Cache miss / stale: chama get_cashflow (computa 12 meses) e persiste (~300-800ms)
+    """
+    # Busca SEM filtro de invalidated para poder fazer UPDATE em vez de INSERT
+    existing = db.query(PlanoCashflowMes).filter_by(
+        user_id=user_id, ano=ano, mes=mes
+    ).first()
+
+    is_stale = (
+        existing is None
+        or existing.invalidated
+        or (datetime.now(timezone.utc) - existing.computed_at.replace(tzinfo=timezone.utc))
+        > timedelta(hours=CASHFLOW_MES_TTL_HOURS)
+    )
+
+    if not is_stale:
+        return _cashflow_mes_to_dict(existing)
+
+    # ── Cache miss / invalidado / expirado: recomputar ─────────────────────
+    computed = _compute_cashflow_mes(db, user_id, ano, mes)
+    if not computed:
+        # Fallback defensivo: retorna dict vazio com shape correto
+        return {"mes_referencia": f"{ano}-{mes:02d}", "status_mes": "erro"}
+
+    # Campos persistidos (sem os prefixados com _)
+    stored = {k: v for k, v in computed.items() if not k.startswith("_")}
+
+    # Upsert atômico (PostgreSQL ON CONFLICT DO UPDATE) para evitar race condition
+    # quando múltiplas requests chegam simultaneamente com existing=None
+    upsert_values = {
+        **stored,
+        "user_id": user_id,
+        "ano": ano,
+        "mes": mes,
+        "mes_referencia": f"{ano}-{mes:02d}",
+        "computed_at": datetime.now(timezone.utc),
+        "invalidated": False,
+    }
+    stmt = pg_insert(PlanoCashflowMes).values(**upsert_values)
+    update_cols = {c: stmt.excluded[c] for c in stored.keys()}
+    update_cols["computed_at"] = stmt.excluded.computed_at
+    update_cols["invalidated"] = stmt.excluded.invalidated
+    stmt = stmt.on_conflict_do_update(
+        constraint="uq_plano_cashflow_mes",
+        set_=update_cols,
+    )
+    db.execute(stmt)
+    db.commit()
+
+    # Retornar no shape completo (inclui campos extras não persistidos)
+    return {
+        "mes_referencia":          f"{ano}-{mes:02d}",
+        "renda_esperada":          stored.get("renda_esperada"),
+        "renda_realizada":         stored.get("renda_realizada"),
+        "renda_usada":             stored.get("renda_usada"),
+        "gastos_recorrentes":      stored.get("gastos_recorrentes"),
+        "extras_creditos":         stored.get("extras_creditos"),
+        "extras_debitos":          stored.get("extras_debitos"),
+        "gastos_extras_esperados": computed.get("_gastos_extras_esperados"),
+        "gastos_realizados":       stored.get("gastos_realizados"),
+        "gastos_usados":           computed.get("_gastos_usados"),
+        "total_gastos":            stored.get("total_gastos"),
+        "aporte_planejado":        stored.get("aporte_planejado"),
+        "investimentos_realizados": stored.get("investimentos_realizados"),
+        "aporte_usado":            stored.get("aporte_usado"),
+        "saldo_projetado":         computed.get("_saldo_projetado"),
+        "use_realizado":           stored.get("use_realizado"),
+        "status_mes":              stored.get("status_mes"),
+        "grupos":                  [],
+        "expectativas":            computed.get("_expectativas", []),
+    }

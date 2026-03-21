@@ -18,7 +18,8 @@ import { InvestmentCard } from '@/features/investimentos/components/mobile/inves
 import { CreateInvestmentSheet } from '@/features/investimentos/components/mobile/create-investment-sheet'
 import { EditValorMesSheet } from '@/features/investimentos/components/mobile/edit-valor-mes-sheet'
 import {
-  getInvestimentos,
+  fetchInvestimentosOverview,
+  invalidateInvestimentosOverviewCache,
   copiarMesAnterior,
 } from '@/features/investimentos/services/investimentos-api'
 import { fetchLastMonthWithData } from '@/features/dashboard/services/dashboard-api'
@@ -48,7 +49,8 @@ function InvestimentosMobileContent() {
   const isAuth = useRequireAuth()
   const anomesFromUrl = searchParams.get('anomes')
   const tipoFromUrl = searchParams.get('tipo')
-  const [selectedMonth, setSelectedMonth] = React.useState<Date>(new Date())
+  // P7: null evita fetch prematuro antes de fetchLastMonthWithData resolver
+  const [selectedMonth, setSelectedMonth] = React.useState<Date | null>(null)
   const [classeToggle, setClasseToggle] = React.useState<ClasseToggle>('todos')
   const [filterSheetOpen, setFilterSheetOpen] = React.useState(false)
 
@@ -65,7 +67,12 @@ function InvestimentosMobileContent() {
       .then(({ year, month }) => {
         if (!cancelled) setSelectedMonth(new Date(year, month - 1, 1))
       })
-      .catch(() => {})
+      .catch(() => {
+        if (!cancelled) {
+          const now = new Date()
+          setSelectedMonth(new Date(now.getFullYear(), now.getMonth(), 1))
+        }
+      })
     return () => { cancelled = true }
   }, [anomesFromUrl])
   const [investimentos, setInvestimentos] = React.useState<InvestimentoPortfolio[]>([])
@@ -75,16 +82,19 @@ function InvestimentosMobileContent() {
   const [copying, setCopying] = React.useState(false)
   const [editValorInvestment, setEditValorInvestment] = React.useState<InvestimentoPortfolio | null>(null)
 
-  const anomes = selectedMonth.getFullYear() * 100 + (selectedMonth.getMonth() + 1)
-  const ano = selectedMonth.getFullYear()
+  const anomes = selectedMonth
+    ? selectedMonth.getFullYear() * 100 + (selectedMonth.getMonth() + 1)
+    : null
+  const ano = selectedMonth ? selectedMonth.getFullYear() : null
 
   // Sempre busca todos (filtros aplicados no client)
+  // P9: usa endpoint agregado /overview (1 request em vez do endpoint de lista)
   const loadInvestimentos = React.useCallback(() => {
-    if (!isAuth) return
+    if (!isAuth || anomes == null) return  // P7: aguarda selectedMonth (anomes null = mês não definido ainda)
     setLoading(true)
     setError(null)
-    getInvestimentos({ ativo: true, anomes, limit: 200 })
-      .then(setInvestimentos)
+    fetchInvestimentosOverview({ ativo: true, anomes })
+      .then((overview) => setInvestimentos(overview.lista ?? []))
       .catch((err) => setError(err?.message || 'Erro ao carregar investimentos'))
       .finally(() => setLoading(false))
   }, [isAuth, anomes])
@@ -129,10 +139,14 @@ function InvestimentosMobileContent() {
   }
 
   const handleCopiarMesAnterior = async () => {
+    if (!anomes) return  // guard: não executa se mês ainda não foi definido
     setCopying(true)
     try {
       const { copiados } = await copiarMesAnterior(anomes)
-      if (copiados > 0) loadInvestimentos()
+      if (copiados > 0) {
+        invalidateInvestimentosOverviewCache()  // P9: garante cache limpo antes de recarregar
+        loadInvestimentos()
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao copiar')
     } finally {
@@ -228,7 +242,7 @@ function InvestimentosMobileContent() {
         {/* Scroll de meses */}
         <div className="px-2 pb-2">
           <MonthScrollPicker
-            selectedMonth={selectedMonth}
+            selectedMonth={selectedMonth ?? new Date()}
             onMonthChange={setSelectedMonth}
           />
         </div>
@@ -335,7 +349,7 @@ function InvestimentosMobileContent() {
                 <h2 className="text-base font-bold text-gray-900">Meus Investimentos</h2>
                 <p className="text-sm text-gray-500 mt-0.5">
                   {filteredInvestimentos.length} investimento{filteredInvestimentos.length !== 1 ? 's' : ''} em{' '}
-                  {selectedMonth.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+                  {selectedMonth?.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }) ?? '...'}
                 </p>
               </div>
             </div>
@@ -345,7 +359,7 @@ function InvestimentosMobileContent() {
                 <InvestmentCard
                   key={inv.balance_id ?? `inv-${inv.id}-${index}`}
                   investment={inv}
-                  onClick={() => router.push(`/mobile/investimentos/${inv.id}?anomes=${anomes}`)}
+                  onClick={() => router.push(`/mobile/investimentos/${inv.id}?anomes=${anomes ?? 0}`)}
                   onEditValor={() => setEditValorInvestment(inv)}
                 />
               ))}
@@ -358,8 +372,8 @@ function InvestimentosMobileContent() {
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         onSuccess={loadInvestimentos}
-        ano={ano}
-        anomes={anomes}
+        ano={ano ?? new Date().getFullYear()}
+        anomes={anomes ?? 0}
       />
 
       <EditValorMesSheet
@@ -367,8 +381,8 @@ function InvestimentosMobileContent() {
         onClose={() => setEditValorInvestment(null)}
         onSuccess={loadInvestimentos}
         investment={editValorInvestment}
-        anomes={anomes}
-        mesLabel={selectedMonth.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+        anomes={anomes ?? 0}
+        mesLabel={selectedMonth?.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }) ?? '...'}
       />
     </div>
   )

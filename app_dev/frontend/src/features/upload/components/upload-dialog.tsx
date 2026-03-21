@@ -156,7 +156,11 @@ export function UploadDialog({ open, onOpenChange, onUploadSuccess }: UploadDial
       
       // Navegar para página de preview com o sessionId
       router.push(`/upload/preview/${data.sessionId}`)
-      
+
+      // P1: invalidar nudges de upload — usuário acabou de fazer upload
+      localStorage.removeItem('nudge_dismissed_sem_upload')
+      localStorage.removeItem('nudge_dismissed_upload_30_dias')
+
       // Chamar callback de sucesso
       if (onUploadSuccess) {
         onUploadSuccess()

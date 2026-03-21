@@ -11,12 +11,15 @@ Arquivo XLS com estrutura:
 
 === COLUNA LANÇAMENTO ===
 **IMPORTANTE**: A coluna 'lançamento' é formada por:
-    Categoria + " - " + Descrição
+    Categoria + " - " + Transação + " - " + Descrição
 
 Exemplos:
-- "Transferência - Pix recebido"
-- "Salário - Pagamento recebido"
-- "Compras - Mercado Carrefour"
+- "Transferência - Pix recebido - Emanuel Guerra Leandro"
+- "Salário - Portabilidade de salário - Pagamento recebido"
+- "Compras - Compra no débito - Mercado Carrefour"
+
+(Quando a coluna Transação não existir, usa o formato antigo:
+    Categoria + " - " + Descrição)
 
 === ESTRATÉGIA DE PROCESSAMENTO ===
 1. Buscar linha com header "Data e hora"
@@ -39,10 +42,18 @@ Exemplos:
 
 === HISTÓRICO ===
 - V1: Processador original com problemas de extração (apenas 2/10 transações)
-- V2 (atual): Redesenhado após análise completa do formato BTG
+- V2: Redesenhado após análise completa do formato BTG
   - Extração: 10/10 transações ✅
   - Saldo validado: R$ 3.004,50 ✅
   - Filtros de "Saldo Diário" funcionando ✅
+- V3 (15/03/2026): Corrigido bug crítico + suporte multi-página + campo Transação
+  - [T1] Fix filtro nan: str.contains('nan') → regex \\bnan\\b
+    ("Crédito e Financiamento" continha 'nan' como substring → 3 transações perdidas)
+  - [T2] Suporte multi-página: encontra TODOS os headers, concatena blocos
+    (extrato multi-mês exportado pelo JasperReports tem 3 blocos de header)
+  - [T3] Campo Transação incluído no lançamento:
+    Antes: 'Transferência - Emanuel Guerra Leandro'
+    Depois: 'Transferência - Pix recebido - Emanuel Guerra Leandro'
 """
 
 import pandas as pd
@@ -116,22 +127,31 @@ def processar_btg_extrato_interno(file_path: Path, user_id: int) -> List[Dict[st
         with pd.ExcelFile(file_path, engine='xlrd') as xls:
             df_full = pd.read_excel(xls, header=None)
         
-        header_row = None
+        # Encontrar TODAS as posições de header 'Data e hora'
+        # (arquivo multi-mês pode ter 3+ blocos repetidos pelo JasperReports)
+        header_rows = []
         for idx, row in df_full.iterrows():
-            # Converter todos os valores para string para buscar
             row_str = ' '.join([str(val).lower() for val in row if pd.notna(val)])
             if 'data e hora' in row_str:
-                header_row = idx
-                logger.info(f"✅ Header encontrado na linha {header_row}")
-                break
-        
-        if header_row is None:
+                header_rows.append(idx)
+
+        if not header_rows:
             raise ValueError("Header 'Data e hora' não encontrado no arquivo")
-        
-        # 2. Extrair dados após header
-        df = df_full.iloc[header_row + 1:].copy()
-        df.columns = df_full.iloc[header_row].values
-        df = df.reset_index(drop=True)
+
+        logger.info(f"✅ {len(header_rows)} bloco(s) encontrado(s) nas linhas {header_rows}")
+
+        # 2. Para cada bloco, extrair apenas as linhas entre esse header e o próximo
+        # Assim as linhas de cabeçalho/rodapé dos blocos intermediários são ignoradas
+        dfs = []
+        for i, hr in enumerate(header_rows):
+            next_start = header_rows[i + 1] if i + 1 < len(header_rows) else df_full.shape[0]
+            bloco = df_full.iloc[hr + 1 : next_start].copy()
+            bloco.columns = df_full.iloc[hr].values
+            bloco = bloco.reset_index(drop=True)
+            dfs.append(bloco)
+            logger.info(f"   Bloco {i+1}: linhas {hr+1}–{next_start-1} ({len(bloco)} linhas)")
+
+        df = pd.concat(dfs, ignore_index=True)
         
         logger.info(f"📊 Linhas de dados extraídas: {len(df)}")
         
@@ -146,24 +166,27 @@ def processar_btg_extrato_interno(file_path: Path, user_id: int) -> List[Dict[st
         # 4. Identificar colunas importantes
         col_data = None
         col_categoria = None
+        col_transacao = None  # T3: coluna 'Transação' (col D no XLS)
         col_descricao = None
         col_valor = None
-        
+
         for col in df.columns:
             if col is None:
                 continue
             col_str = str(col).lower()
-            
+
             if 'data' in col_str and col_data is None:
                 col_data = col
             elif 'categoria' in col_str and col_categoria is None:
                 col_categoria = col
-            elif 'descrição' in col_str or 'descricao' in col_str:
+            elif ('transa' in col_str) and col_transacao is None:
+                col_transacao = col
+            elif 'descri' in col_str and col_descricao is None:
                 col_descricao = col
             elif 'valor' in col_str and col_valor is None:
                 col_valor = col
-        
-        # Validar que encontrou todas as colunas
+
+        # Validar que encontrou colunas obrigatórias
         if not all([col_data, col_categoria, col_descricao, col_valor]):
             missing = []
             if not col_data: missing.append('data')
@@ -171,35 +194,62 @@ def processar_btg_extrato_interno(file_path: Path, user_id: int) -> List[Dict[st
             if not col_descricao: missing.append('descrição')
             if not col_valor: missing.append('valor')
             raise ValueError(f"Colunas não encontradas: {', '.join(missing)}")
-        
-        logger.info(f"✅ Colunas identificadas: data={col_data}, categoria={col_categoria}, descrição={col_descricao}, valor={col_valor}")
-        
+
+        logger.info(f"✅ Colunas: data={col_data}, categoria={col_categoria}, transacao={col_transacao}, descrição={col_descricao}, valor={col_valor}")
+
         # 5. Selecionar e renomear colunas
-        df_trabalho = df[[col_data, col_categoria, col_descricao, col_valor]].copy()
-        df_trabalho.columns = ['data_hora', 'categoria', 'descricao', 'valor_bruto']
+        colunas_sel = [col_data, col_categoria, col_descricao, col_valor]
+        if col_transacao:
+            colunas_sel = [col_data, col_categoria, col_transacao, col_descricao, col_valor]
+
+        df_trabalho = df[colunas_sel].copy()
+
+        if col_transacao:
+            df_trabalho.columns = ['data_hora', 'categoria', 'transacao', 'descricao', 'valor_bruto']
+        else:
+            df_trabalho.columns = ['data_hora', 'categoria', 'descricao', 'valor_bruto']
         
         # 6. Preencher NaN com string vazia (evitar perda de dados)
         df_trabalho['categoria'] = df_trabalho['categoria'].fillna('').astype(str)
         df_trabalho['descricao'] = df_trabalho['descricao'].fillna('').astype(str)
+        if 'transacao' in df_trabalho.columns:
+            df_trabalho['transacao'] = df_trabalho['transacao'].fillna('').astype(str)
         
         logger.info(f"📝 Transações antes de filtrar Saldo Diário: {len(df_trabalho)}")
         
         # 7. Filtrar "Saldo Diário" ANTES de criar lançamento
-        mask_saldo = df_trabalho['descricao'].str.contains('Saldo Diário', case=False, na=False)
+        # (pode aparecer em qualquer coluna dependendo do bloco)
+        mask_saldo = (
+            df_trabalho['descricao'].str.contains('Saldo Diário', case=False, na=False) |
+            df_trabalho['categoria'].str.contains('Saldo Diário', case=False, na=False)
+        )
         df_trabalho = df_trabalho[~mask_saldo].copy()
         
         logger.info(f"🧹 Transações após filtrar Saldo Diário: {len(df_trabalho)}")
         
-        # 8. Criar lançamento (categoria + " - " + descrição)
-        df_trabalho['lancamento'] = df_trabalho['categoria'] + ' - ' + df_trabalho['descricao']
+        # 8. Criar lançamento: Categoria - Transação - Descrição (T3)
+        # Inclui a coluna Transação quando disponível para melhor classificação
+        if 'transacao' in df_trabalho.columns:
+            df_trabalho['lancamento'] = (
+                df_trabalho['categoria'] + ' - ' +
+                df_trabalho['transacao'] + ' - ' +
+                df_trabalho['descricao']
+            )
+        else:
+            # Fallback para compatibilidade com formato antigo sem coluna Transação
+            df_trabalho['lancamento'] = df_trabalho['categoria'] + ' - ' + df_trabalho['descricao']
         
         # 9. Limpar lançamentos vazios ou inválidos
+        # [T1] FIX CRÍTICO: usar \bnan\b (word boundary) em vez de str.contains('nan')
+        # A categoria 'Crédito e Financiamento' contém 'nan' como substring
+        # (Fina[nan]ciamento), o que causava remoção incorreta de 3 transações.
+        # \bnan\b só casa 'nan' como palavra isolada, não como parte de outra palavra.
         df_trabalho['lancamento'] = df_trabalho['lancamento'].str.strip()
         mask_lancamento_valido = (
-            (df_trabalho['lancamento'] != '') & 
+            (df_trabalho['lancamento'] != '') &
             (df_trabalho['lancamento'] != '-') &
-            (df_trabalho['lancamento'] != 'nan - nan') &
-            (~df_trabalho['lancamento'].str.lower().str.contains('nan'))
+            (~df_trabalho['lancamento'].str.lower().str.match(r'^nan\s*-\s*nan(\s*-\s*nan)?$')) &
+            (~df_trabalho['lancamento'].str.lower().str.contains(r'\bnan\b', regex=True))
         )
         df_trabalho = df_trabalho[mask_lancamento_valido].copy()
         

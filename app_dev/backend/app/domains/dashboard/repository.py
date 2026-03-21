@@ -227,9 +227,9 @@ class DashboardRepository:
         try:
             resumo = self.investimento_repo.get_portfolio_resumo(user_id)
             if resumo:
-                ativos_mes = float(resumo.get("total_investido") or 0)
-                passivos_mes = float(resumo.get("valor_atual") or 0)
-                patrimonio_liquido_mes = float(resumo.get("rendimento_total") or 0)
+                ativos_mes = float(resumo.get("total_ativos") or 0)
+                passivos_mes = float(resumo.get("total_passivos") or 0)
+                patrimonio_liquido_mes = float(resumo.get("patrimonio_liquido") or 0)
 
                 # Calcular vs mês anterior: precisamos do ultimo_mes usado
                 ultimo_anomes = self.db.query(
@@ -298,59 +298,53 @@ class DashboardRepository:
     
     def get_chart_data(self, user_id: int, year: int, month: int) -> List[Dict]:
         """Retorna dados para gráfico de área (receitas vs despesas) - sempre 12 meses de histórico
-        
+
         Retorna os últimos 12 meses até o mês especificado, incluindo ano anterior se necessário.
         Se month=1 (janeiro), retorna fev/ano-1 até jan/ano atual.
+        Executa 1 query com IN + GROUP BY (antes: 12 queries em loop).
         """
         from datetime import datetime
         from dateutil.relativedelta import relativedelta
-        
-        # Determinar o mês de referência (último mês a ser incluído)
+
         reference_date = datetime(year, month if month > 0 else 12, 1)
-        
-        # Calcular os últimos 12 meses
-        months_data = []
-        month_names = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 
-                       'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
-        
-        for i in range(11, -1, -1):  # 11 meses atrás até o mês atual
-            target_date = reference_date - relativedelta(months=i)
-            target_month = target_date.month
-            target_year = target_date.year
-            
-            # Query para o mês específico usando MesFatura
-            mes_fatura = f"{target_year}{target_month:02d}"
-            
-            result = self.db.query(
-                func.sum(
-                    case(
-                        (JournalEntry.CategoriaGeral == 'Receita', JournalEntry.Valor),
-                        else_=0
-                    )
-                ).label('receitas'),
-                func.abs(
-                    func.sum(
-                        case(
-                            (JournalEntry.CategoriaGeral == 'Despesa', JournalEntry.Valor),
-                            else_=0
-                        )
-                    )
-                ).label('despesas')
-            ).filter(
-                JournalEntry.user_id == user_id,
-                JournalEntry.MesFatura == mes_fatura,
-                JournalEntry.IgnorarDashboard == 0
-            ).first()
-            
-            months_data.append({
-                "date": f"{target_year}-{target_month:02d}-01",  # Formato YYYY-MM-01
-                "receitas": float(result.receitas or 0) if result else 0.0,
-                "despesas": float(result.despesas or 0) if result else 0.0,
-                "year": target_year,  # Adicionar ano para referência
-                "month": target_month
-            })
-        
-        return months_data
+
+        # Montar lista dos 12 mes_fatura na ordem correta (mais antigo → mais novo)
+        meses_fatura = []
+        meses_meta = []  # para reconstruir date/year/month depois
+        for i in range(11, -1, -1):
+            d = reference_date - relativedelta(months=i)
+            meses_fatura.append(f"{d.year}{d.month:02d}")
+            meses_meta.append((d.year, d.month))
+
+        # 1 query com IN + GROUP BY em vez de 12 queries separadas
+        rows = self.db.query(
+            JournalEntry.MesFatura,
+            func.sum(case(
+                (JournalEntry.CategoriaGeral == 'Receita', JournalEntry.Valor),
+                else_=0
+            )).label('receitas'),
+            func.abs(func.sum(case(
+                (JournalEntry.CategoriaGeral == 'Despesa', JournalEntry.Valor),
+                else_=0
+            ))).label('despesas')
+        ).filter(
+            JournalEntry.user_id == user_id,
+            JournalEntry.MesFatura.in_(meses_fatura),
+            JournalEntry.IgnorarDashboard == 0
+        ).group_by(JournalEntry.MesFatura).all()
+
+        by_mes = {r.MesFatura: r for r in rows}
+
+        return [
+            {
+                "date": f"{ano}-{mes:02d}-01",
+                "receitas": float(by_mes[mf].receitas or 0) if mf in by_mes else 0.0,
+                "despesas": float(by_mes[mf].despesas or 0) if mf in by_mes else 0.0,
+                "year": ano,
+                "month": mes,
+            }
+            for mf, (ano, mes) in zip(meses_fatura, meses_meta)
+        ]
     
     def get_chart_data_yearly(
         self,

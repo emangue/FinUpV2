@@ -31,6 +31,7 @@ from .processors.marker import TransactionMarker
 from .processors.classifier import CascadeClassifier
 from app.domains.exclusoes.models import TransacaoExclusao
 from app.domains.compatibility.service import CompatibilityService
+from app.domains.transactions.models import JournalEntry
 from app.shared.utils import normalizar
 
 logger = logging.getLogger(__name__)
@@ -936,6 +937,20 @@ class UploadService:
             # Salvar todas as transações
             self.db.commit()
             logger.info(f"✅ {transacoes_criadas} transações salvas no journal_entries")
+
+            # Invalida cache de cashflow para os meses afetados pelo upload
+            try:
+                from app.domains.plano.service import invalidate_cashflow_cache
+                meses_afetados = list({
+                    item.mes_fatura  # já no formato YYYY-MM
+                    for item in previews
+                    if item.mes_fatura
+                })
+                if meses_afetados:
+                    invalidate_cashflow_cache(self.db, user_id, mes_referencia=meses_afetados)
+                    logger.info(f"🗑️ Cache cashflow invalidado para {len(meses_afetados)} meses: {meses_afetados}")
+            except Exception as exc:
+                logger.warning(f"⚠️ Erro ao invalidar cache de cashflow: {exc}")
             
             # Contar duplicatas (para revisão: 0, pois preview já filtrou)
             total_duplicatas = 0 if is_revision else (history.total_registros - transacoes_criadas)
@@ -949,6 +964,14 @@ class UploadService:
                 data_confirmacao=now
             )
             logger.info(f"📝 Histórico atualizado: {transacoes_criadas} importadas, {total_duplicatas} duplicadas")
+
+            # Invalidar cache Redis de onboarding (P6)
+            # Após 1º upload, onboarding_completo pode ter mudado → força recomputação
+            try:
+                from app.core.redis_client import redis_delete
+                redis_delete(f"onboarding:progress:{user_id}")
+            except Exception as exc:
+                logger.debug("⚠️ Não foi possível invalidar cache onboarding no Redis: %s", exc)
             
             # ========== REVISÃO: LIMPAR BASE_PARCELAS ÓRFÃS ==========
             # Parcelas que existiam no upload antigo mas foram removidas na revisão
@@ -968,34 +991,50 @@ class UploadService:
                     self.db.commit()
                     logger.info(f"🗑️ Revisão: {deleted_parcelas} parcelas órfãs removidas de base_parcelas")
             
-            # ========== FASE 5: ATUALIZAR BASE_PARCELAS ==========
-            logger.info("🔄 Fase 5: Atualização de Base Parcelas")
-            try:
-                resultado_parcelas = self._fase5_update_base_parcelas(user_id, history.id)
-                logger.info(f"  ✅ Parcelas processadas: {resultado_parcelas['total_processadas']} | Atualizadas: {resultado_parcelas['atualizadas']} | Novas: {resultado_parcelas['novas']} | Finalizadas: {resultado_parcelas['finalizadas']}")
-            except Exception as e:
-                # NÃO bloquear confirmação se atualização falhar
-                logger.warning(f"  ⚠️ Erro na atualização de parcelas: {str(e)}")
-            
-            # ========== FASE 6: SINCRONIZAR BUDGET_PLANNING ==========
-            # Garante que grupos com transações tenham linha no budget (mesmo com plano zero)
-            # para que o valor realizado apareça na tela de Metas
-            logger.info("🔄 Fase 6: Sincronização Budget Planning")
-            try:
-                resultado_budget = self._fase6_sync_budget_planning(user_id, history.id)
-                logger.info(f"  ✅ Budget: {resultado_budget['criados']} linhas criadas para grupos com realizado")
-            except Exception as e:
-                logger.warning(f"  ⚠️ Erro na sincronização de budget: {str(e)}")
+            # ========== FASES 5, 6, 7 EM BACKGROUND ==========
+            # Evita 502 (timeout Nginx) em uploads grandes — retorna resposta imediata ao usuário
+            # e executa base_parcelas, budget_planning e base_padroes em thread separada
+            import threading
+            _user_id = user_id
+            _history_id = history.id
 
-            # ========== FASE 7: REGENERAR BASE PADRÕES ==========
-            # Executa APÓS commit das transações → padrões refletem os dados recém inseridos
-            logger.info("🔄 Fase 7: Regeneração de Base Padrões")
-            try:
-                from app.domains.upload.processors.pattern_generator import regenerar_base_padroes_completa
-                resultado_padroes = regenerar_base_padroes_completa(self.db, user_id)
-                logger.info(f"  ✅ Padrões: {resultado_padroes['total_padroes_gerados']} gerados, {resultado_padroes['criados']} criados, {resultado_padroes['atualizados']} atualizados")
-            except Exception as e:
-                logger.warning(f"  ⚠️ Erro na regeneração de padrões: {str(e)}")
+            def _run_post_confirm_phases():
+                db_bg = None
+                try:
+                    from app.core.database import SessionLocal
+                    db_bg = SessionLocal()
+                    svc = UploadService(db_bg)
+                    try:
+                        logger.info("🔄 [BG] Fase 5: Atualização de Base Parcelas")
+                        resultado_parcelas = svc._fase5_update_base_parcelas(_user_id, _history_id)
+                        logger.info(f"  ✅ [BG] Parcelas: {resultado_parcelas.get('total_processadas', 0)} processadas")
+                    except Exception as e:
+                        logger.warning(f"  ⚠️ [BG] Erro Fase 5: {str(e)}")
+                    try:
+                        logger.info("🔄 [BG] Fase 6: Sincronização Budget Planning")
+                        resultado_budget = svc._fase6_sync_budget_planning(_user_id, _history_id)
+                        logger.info(f"  ✅ [BG] Budget: {resultado_budget.get('criados', 0)} linhas criadas")
+                    except Exception as e:
+                        logger.warning(f"  ⚠️ [BG] Erro Fase 6: {str(e)}")
+                    try:
+                        from app.domains.upload.processors.pattern_generator import regenerar_base_padroes_completa
+                        logger.info("🔄 [BG] Fase 7: Regeneração de Base Padrões")
+                        resultado_padroes = regenerar_base_padroes_completa(db_bg, _user_id)
+                        logger.info(f"  ✅ [BG] Padrões: {resultado_padroes.get('total_padroes_gerados', 0)} gerados")
+                    except Exception as e:
+                        logger.warning(f"  ⚠️ [BG] Erro Fase 7: {str(e)}")
+                except Exception as e:
+                    logger.warning(f"  ⚠️ [BG] Erro ao iniciar sessão: {str(e)}")
+                finally:
+                    if db_bg:
+                        try:
+                            db_bg.close()
+                        except Exception:
+                            pass
+
+            t = threading.Thread(target=_run_post_confirm_phases, daemon=True)
+            t.start()
+            logger.info("📤 Resposta enviada ao usuário; fases 5/6/7 rodando em background")
 
             # Limpar dados de preview
             deleted = self.repository.delete_by_session_id(session_id, user_id)
@@ -1209,6 +1248,64 @@ class UploadService:
         logger.info(f"🗑️ Upload {upload_history_id} deletado: {deleted_count} transações removidas")
         
         return {"transacoes_deletadas": deleted_count}
+    
+    def update_upload_periodo(
+        self,
+        upload_history_id: int,
+        user_id: int,
+        ano: int,
+        mes: int
+    ) -> dict:
+        """
+        Ajusta período (ano/mês) de todas as transações de um upload.
+        Atualiza MesFatura, Ano e Mes em journal_entries e mes_fatura em upload_history.
+        Sincroniza budget_planning após a alteração.
+        """
+        history = self.db.query(UploadHistory).filter(
+            UploadHistory.id == upload_history_id,
+            UploadHistory.user_id == user_id
+        ).first()
+        
+        if not history:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"errorCode": "UPL_014", "error": "Upload não encontrado"}
+            )
+        
+        mes_fatura = f"{ano}{mes:02d}"
+        
+        # Atualizar journal_entries
+        updated = self.db.query(JournalEntry).filter(
+            JournalEntry.upload_history_id == upload_history_id,
+            JournalEntry.user_id == user_id
+        ).update(
+            {
+                JournalEntry.MesFatura: mes_fatura,
+                JournalEntry.Ano: ano,
+                JournalEntry.Mes: mes,
+            },
+            synchronize_session=False
+        )
+        
+        # Atualizar upload_history
+        self.repository.update_upload_history(upload_history_id, mes_fatura=mes_fatura)
+        
+        self.db.commit()
+        
+        # Sincronizar budget_planning para os novos grupos/meses
+        try:
+            self._fase6_sync_budget_planning(user_id, upload_history_id)
+        except Exception as e:
+            logger.warning(f"⚠️ Erro na sincronização de budget após ajuste de período: {str(e)}")
+        
+        logger.info(f"📅 Período do upload {upload_history_id} ajustado para {mes_fatura} ({updated} transações)")
+        
+        return {
+            "transacoes_atualizadas": updated,
+            "mes_fatura": mes_fatura,
+            "ano": ano,
+            "mes": mes,
+        }
     
     def recreate_preview_from_history(
         self,

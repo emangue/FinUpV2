@@ -104,7 +104,7 @@ export default function ContasPage() {
 
   const { data: systemStats } = useSWR<SystemStats>(
     `${API_URL}/users/stats/summary`,
-    (url) => fetchWithAuth(url).then((r) => (r.ok ? r.json() : Promise.reject(new Error("Erro ao carregar stats"))))
+    (url: string) => fetchWithAuth(url).then((r) => (r.ok ? r.json() : Promise.reject(new Error("Erro ao carregar stats"))))
   )
 
   const handleAdd = () => {

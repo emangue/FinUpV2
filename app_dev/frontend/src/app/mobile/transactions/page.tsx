@@ -23,6 +23,7 @@ import { TransactionDetailBottomSheet } from '@/components/mobile/transaction-de
 import { getGoalColor } from '@/features/goals/lib/colors'
 
 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+const PAGE_SIZE = 100
 
 interface Transaction {
   id: number
@@ -98,6 +99,8 @@ function TransactionsMobileContent() {
   const [estabelecimentoFilter, setEstabelecimentoFilter] = useState('')
 
   const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [hasMore, setHasMore] = useState(false)
+  const [page, setPage] = useState(1)
   const [resumo, setResumo] = useState<Resumo | null>(null)
   const [gastosPorGrupo, setGastosPorGrupo] = useState<GastosPorGrupo[]>([])
   const [gruposOptions, setGruposOptions] = useState<GrupoSubgrupoOption[]>([])
@@ -133,7 +136,18 @@ function TransactionsMobileContent() {
   useEffect(() => {
     if (periodFilterRef.current) clearTimeout(periodFilterRef.current)
     periodFilterRef.current = setTimeout(() => {
-      setDebouncedPeriod({ yearInicio, monthInicio, yearFim, monthFim, semFiltroPeriodo })
+      setDebouncedPeriod(prev => {
+        // P8: retorna mesma referência quando valores não mudaram → React não re-renderiza
+        // → filters (useMemo) não recomputa → fetchTransactions não é recriada → sem 2º fetch
+        if (
+          prev.yearInicio       === yearInicio &&
+          prev.monthInicio      === monthInicio &&
+          prev.yearFim          === yearFim &&
+          prev.monthFim         === monthFim &&
+          prev.semFiltroPeriodo === semFiltroPeriodo
+        ) return prev
+        return { yearInicio, monthInicio, yearFim, monthFim, semFiltroPeriodo }
+      })
     }, 400)
     return () => {
       if (periodFilterRef.current) clearTimeout(periodFilterRef.current)
@@ -164,12 +178,12 @@ function TransactionsMobileContent() {
     return base
   }, [debouncedPeriod, searchDebounced, categoriaGeral, grupoFilter, subgrupoFilter, estabelecimentoFilter])
 
-  const fetchTransactions = useCallback(async () => {
+  const fetchTransactions = useCallback(async (currentPage = 1) => {
     const BASE = `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}/transactions`
     const q = buildQueryParams({
       ...filters,
-      limit: 500,
-      page: 1,
+      limit: PAGE_SIZE,
+      page: currentPage,
     })
     try {
       setLoading(true)
@@ -179,9 +193,16 @@ function TransactionsMobileContent() {
         return
       }
       const data = await res.json()
-      setTransactions(data.transactions || [])
+      const fetched: Transaction[] = data.transactions || []
+      if (currentPage === 1) {
+        setTransactions(fetched)
+      } else {
+        setTransactions((prev) => [...prev, ...fetched])
+      }
+      setHasMore(fetched.length === PAGE_SIZE)
+      setPage(currentPage)
     } catch {
-      setTransactions([])
+      if (currentPage === 1) setTransactions([])
     } finally {
       setLoading(false)
     }
@@ -240,7 +261,7 @@ function TransactionsMobileContent() {
   }, [])
 
   useEffect(() => {
-    fetchTransactions()
+    fetchTransactions(1)
     fetchResumo()
   }, [fetchTransactions, fetchResumo])
 
@@ -793,6 +814,15 @@ function TransactionsMobileContent() {
                 </div>
               )
             })}
+            {hasMore && (
+              <button
+                type="button"
+                onClick={() => fetchTransactions(page + 1)}
+                className="w-full py-3 mt-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-2xl hover:bg-gray-50 transition-colors"
+              >
+                Carregar mais
+              </button>
+            )}
           </div>
         )}
       </div>

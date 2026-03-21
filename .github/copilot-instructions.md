@@ -605,15 +605,16 @@ sudo -u postgres psql -c "ALTER USER user WITH PASSWORD '$NEW_PASS';"
 
 ### 📁 ESTRUTURA DE PASTAS - REGRA OBRIGATÓRIA (ATUALIZADO 22/02/2026)
 
-**REGRA CRÍTICA:** SEMPRE respeitar a estrutura organizada ao criar novos arquivos. A raiz deve ter NO MÁXIMO 9 itens.
+**REGRA CRÍTICA:** SEMPRE respeitar a estrutura organizada ao criar novos arquivos. A raiz deve ter NO MÁXIMO 10 itens.
 
-**✅ ESTRUTURA OFICIAL DA RAIZ (9 itens fixos):**
+**✅ ESTRUTURA OFICIAL DA RAIZ (10 itens fixos):**
 ```
-ProjetoFinancasV5/          ← MÁXIMO 9 itens aqui
+ProjetoFinancasV5/          ← MÁXIMO 10 itens aqui
 ├── 📱 app_dev/             # Aplicação ativa (backend + frontend)
 ├── 🖥️  app_admin/          # Painel admin (frontend separado)
-├── 📚 docs/                # TODA documentação do projeto
-├── 🔧 scripts/             # TODOS os scripts operacionais
+├── 📚 docs/                # Documentação geral do projeto
+├── 🚀 deploy/              # CENTRAL DE DEPLOY (scripts + validações + histórico)
+├── 🔧 scripts/             # Scripts operacionais (docker, manutenção, DB)
 ├── 🗂️  temp/               # Temporários: logs, PIDs (gitignored)
 ├── 📦 _arquivos_historicos/ # Arquivo morto: protos, backups antigos
 ├── 📖 README.md            # Documentação principal
@@ -744,6 +745,7 @@ mv pasta_proto _arquivos_historicos/
 ```
 ✅ app_admin/
 ✅ app_dev/
+✅ deploy/
 ✅ docs/
 ✅ scripts/
 ✅ temp/
@@ -751,11 +753,11 @@ mv pasta_proto _arquivos_historicos/
 ✅ CHANGELOG.md
 ✅ README.md
 ✅ VERSION.md
-Total: 9 itens
+Total: 10 itens
 ```
 
 **🚫 SINAIS DE ALERTA (investigar imediatamente):**
-- `ls -1 | wc -l` > 9 → há algo sobrando
+- `ls -1 | wc -l` > 10 → há algo sobrando
 - Arquivos " 2.md", " 2.py", " 2.tsx" → duplicatas macOS, deletar
 - Pastas `dashboard/`, `node_modules/`, `_backup_*` → mover/remover
 - Arquivos `.db`, `.log`, `.pid` na raiz → mover para `temp/` ou ignorar
@@ -2650,60 +2652,87 @@ def downgrade():
 
 ---
 
-## 🛡️ DEPLOY PROCESS - OBRIGATÓRIO ANTES DE PROD (ATUALIZADO 22/02/2026)
+## 🛡️ DEPLOY PROCESS - OBRIGATÓRIO ANTES DE PROD (ATUALIZADO 2026)
 
-**DOCUMENTAÇÃO COMPLETA:** [`docs/deploy/DEPLOY_PROCESSO_CONSOLIDADO.md`](docs/deploy/DEPLOY_PROCESSO_CONSOLIDADO.md)
+**📁 FONTE ÚNICA DE VERDADE:** [`deploy/`](deploy/) — pasta centralizada com tudo sobre deploy
+
+```
+deploy/
+├── README.md                         ← guia mestre (ler primeiro!)
+├── scripts/
+│   ├── predeploy.sh                  ← 🔑 RODAR ANTES DE TODO DEPLOY
+│   ├── predeploy.py                  ← lógica do checklist (22 testes auto + 13 UI)
+│   ├── deploy_docker_build_local.sh  ← 🔑 DEPLOY PRINCIPAL
+│   ├── deploy_docker_vm.sh           ← deploy alternativo
+│   └── validate_deploy.sh            ← validação pós-deploy
+├── validations/
+│   └── ui_tests.py                   ← testes de UI Playwright (13 testes headless)
+├── docs/
+│   ├── GUIA_DEPLOY.md
+│   └── TROUBLESHOOTING.md
+└── history/
+    ├── screenshots/                  ← capturas de falhas do Playwright
+    └── TEST_PRE_DEPLOY_*.md          ← histórico de checklists gerados
+```
 
 **⚠️ IMPORTANTE - DESENVOLVIMENTO COM DOCKER:**
 - **Local (dev):** Usar Docker 100% (`./scripts/deploy/quick_start_docker.sh`)
-- **Servidor (prod):** Ainda usa deploy tradicional (sem Docker por enquanto)
-- **Futura migração:** Servidor também será migrado para Docker (Fase 3 do plano)
+- **Servidor (prod):** Deploy via `deploy/scripts/deploy_docker_build_local.sh`
 
-### 🚀 Scripts de Deploy (usar estes)
-
-| Script | Quando usar |
-|--------|-------------|
-| **`./scripts/deploy/deploy.sh`** | Padrão – build na VM (requer RAM suficiente) |
-| **`./scripts/deploy/deploy_build_local.sh`** | Quando OOM no build – build local + tar para VM |
-
-**Portas:** Frontend 3003 (meufinup.com.br) | Backend 8000 | **Restart:** pkill + nohup (systemctl não funciona)
-
-### 📋 Checklist pré-deploy (validar antes)
-
-- [ ] `git status -uno` limpo
-- [ ] `git push origin <branch>` feito
-- [ ] Não existe `app_dev/frontend/src/middleware.ts` (apenas `proxy.ts`)
-- [ ] `npm run build` passa localmente (opcional)
-- [ ] SSH `minha-vps-hostinger` funcionando
-
-### 🚀 Workflow de Deploy (um comando)
+### 🔄 Fluxo de Deploy (obrigatório)
 
 ```bash
 # 1. Commit + push
-git add .
-git commit -m "feat: adiciona X"
-git push origin <branch>   # ex: main ou feature/xxx
+git add . && git commit -m "feat: ..." && git push origin <branch>
 
-# 2. Deploy (script faz pull, migrations, build, restart)
-./scripts/deploy/deploy.sh
+# 2. PRÉ-DEPLOY — valida tudo (bloqueantes + API + DB + UI Playwright)
+./deploy/scripts/predeploy.sh
+# Gera: deploy/history/TEST_PRE_DEPLOY_YYYY-MM-DD_[commit].md
 
-# Se OOM no build: ./scripts/deploy/deploy_build_local.sh
+# 3. Se 0 falhas → DEPLOY
+./deploy/scripts/deploy_docker_build_local.sh
+# Se OOM na VM: usar deploy_docker_vm.sh
+
+# 4. Validar produção
+./deploy/scripts/validate_deploy.sh
 ```
 
-### 🚨 Validações que o deploy.sh faz
+### 🔑 Pré-deploy — O que verifica
 
-- Git (status, remote, refs)
-- SSH conecta
-- Build na VM (ou sugere build local se OOM)
-- Restart via pkill + nohup (não systemctl)
+| Categoria | Qtde | O que checa |
+|-----------|------|-------------|
+| 🔒 Bloqueantes | 4 | Docker containers, health, login JWT, git status |
+| 🔌 API Smoke | 11 | Endpoints principais |
+| 🗄️ DB | 7 | Row counts nas tabelas críticas |
+| 🖥️ UI (Playwright) | 13 | Login, dashboard modos Mês/YTD, transações, budget, etc. |
+| 📋 Manuais | ~50 | Checklist no markdown para validação humana |
 
-### 📋 Checklist manual (se script falhar)
+### 📋 Checklist rápido pré-deploy
 
-- [ ] Git: mudanças commitadas e push feito
-- [ ] Migrations: `alembic upgrade head` no servidor
-- [ ] Frontend: sem `middleware.ts`, só `proxy.ts`
-- [ ] Backup: `./scripts/deploy/backup_daily.sh` (opcional)
-- [ ] Health: `curl https://meufinup.com.br/api/health`
+- [ ] `git status -uno` limpo e push feito
+- [ ] `./deploy/scripts/predeploy.sh` executado — 0 falhas bloqueantes
+- [ ] Não existe `app_dev/frontend/src/middleware.ts` (apenas `proxy.ts`)
+- [ ] SSH `minha-vps-hostinger` funcionando
+
+### 🚫 NUNCA Fazer em Produção
+
+- ❌ Deploy sem rodar `predeploy.sh` primeiro
+- ❌ Deploy com mudanças uncommitted
+- ❌ Modificar banco direto (sempre Alembic)
+- ❌ Editar código direto no servidor
+- ❌ Usar systemctl (usar pkill+nohup via scripts)
+
+### 🔧 Playwright — Testes de UI
+
+```bash
+# Rodar isoladamente (sem predeploy completo)
+source app_dev/venv/bin/activate
+python3 deploy/validations/ui_tests.py           # headless
+python3 deploy/validations/ui_tests.py --headed  # com janela (debug)
+python3 deploy/validations/ui_tests.py --json    # só JSON
+```
+
+Credenciais carregadas automaticamente de `.env.local` (gitignored).
 
 ---
 

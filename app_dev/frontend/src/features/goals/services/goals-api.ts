@@ -13,7 +13,30 @@ import { Goal, GoalCreate, GoalUpdate } from '../types'
 
 const BASE_URL = `${API_CONFIG.BACKEND_URL}${API_CONFIG.API_PREFIX}`
 
-/** Grupo com categoria_geral para filtro em cascata */
+// Cache em memória — mesmo padrão do dashboard-api (N1)
+const _goalsCache = new Map<string, { value: unknown; ts: number }>()
+const _goalsInflight = new Map<string, Promise<unknown>>()
+const TTL_2MIN = 2 * 60 * 1000
+
+function _getGoalsCache<T>(key: string): T | undefined {
+  const hit = _goalsCache.get(key)
+  if (hit && Date.now() - hit.ts < TTL_2MIN) return hit.value as T
+  return undefined
+}
+function _setGoalsCache<T>(key: string, value: T): T {
+  _goalsCache.set(key, { value, ts: Date.now() })
+  return value
+}
+function _withGoalsInflight<T>(key: string, fetcher: () => Promise<T>): Promise<T> {
+  if (_goalsInflight.has(key)) return _goalsInflight.get(key) as Promise<T>
+  const p = fetcher().finally(() => _goalsInflight.delete(key))
+  _goalsInflight.set(key, p)
+  return p
+}
+export function invalidateGoalsCache() {
+  _goalsCache.clear()
+  _goalsInflight.clear()
+}
 export interface GrupoComCategoria {
   nome_grupo: string
   categoria_geral: string
@@ -59,45 +82,51 @@ export async function fetchGoals(selectedMonth?: Date): Promise<Goal[]> {
   const year = currentDate.getFullYear()
   const month = String(currentDate.getMonth() + 1).padStart(2, '0')
   const mes_referencia = `${year}-${month}`
-  
-  try {
-    const response = await fetchWithAuth(`${BASE_URL}/budget/planning?mes_referencia=${mes_referencia}`)
-    
-    if (!response.ok) {
+  const key = `goals:${mes_referencia}`
+  const cached = _getGoalsCache<Goal[]>(key)
+  if (cached) return cached
+
+  return _withGoalsInflight(key, async () => {
+    try {
+      const response = await fetchWithAuth(`${BASE_URL}/budget/planning?mes_referencia=${mes_referencia}`)
+
+      if (!response.ok) {
+        return []
+      }
+
+      const data = await response.json()
+
+      // Backend retorna { mes_referencia, budgets: [...] }
+      const budgets = data?.budgets ?? []
+
+      const result: Goal[] = budgets.map((b: any) => {
+        const cat = b.categoria_geral || 'Despesa'
+        const planType = cat === 'Investimentos' ? 'investimentos' : 'gastos'
+        return {
+          id: b.id ?? null,
+          grupo: b.grupo,
+          mes_referencia: data.mes_referencia || mes_referencia,
+          valor_planejado: b.valor_planejado ?? 0,
+          valor_planejado_com_extras: b.valor_planejado_com_extras ?? b.valor_planejado ?? 0,
+          valor_realizado: b.valor_realizado ?? 0,
+          percentual: b.percentual ?? 0,
+          ativo: b.ativo ?? 1,
+          valor_medio_3_meses: b.valor_medio_3_meses ?? 0,
+          categoria_geral: cat,
+          planType,
+          cor: b.cor ?? undefined,
+          user_id: 0,
+          created_at: '',
+          updated_at: ''
+        }
+      })
+
+      return _setGoalsCache(key, result)
+    } catch (error) {
+      console.error('Erro ao buscar metas:', error)
       return []
     }
-    
-    const data = await response.json()
-    
-    // Backend retorna { mes_referencia, budgets: [...] }
-    const budgets = data?.budgets ?? []
-    
-    return budgets.map((b: any) => {
-      const cat = b.categoria_geral || 'Despesa'
-      const planType = cat === 'Investimentos' ? 'investimentos' : 'gastos'
-      return {
-        id: b.id ?? null,
-        grupo: b.grupo,
-        mes_referencia: data.mes_referencia || mes_referencia,
-        valor_planejado: b.valor_planejado ?? 0,
-        valor_planejado_com_extras: b.valor_planejado_com_extras ?? b.valor_planejado ?? 0,
-        valor_realizado: b.valor_realizado ?? 0,
-        percentual: b.percentual ?? 0,
-        ativo: b.ativo ?? 1,
-        valor_medio_3_meses: b.valor_medio_3_meses ?? 0,
-        categoria_geral: cat,
-        planType,
-        cor: b.cor ?? undefined,
-        user_id: 0,
-        created_at: '',
-        updated_at: ''
-      }
-    })
-    
-  } catch (error) {
-    console.error('Erro ao buscar metas:', error)
-    return []
-  }
+  })
 }
 
 /**
@@ -246,7 +275,7 @@ export async function toggleGoalAtivo(goalId: number, ativo: boolean): Promise<v
  * @param grupo Nome do grupo (necessário para propagar para outros meses)
  * @param novoValor Novo valor de orçamento
  * @param prazo Mês de referência (YYYY-MM)
- * @param aplicarAteFinAno Se true, aplica para todos os meses seguintes até dezembro
+ * @param aplicarAteFinAno Se true, aplica para todos os meses seguintes até dezembro (1 chamada via bulk-range)
  */
 export async function updateGoalValor(
   goalId: number,
@@ -257,54 +286,31 @@ export async function updateGoalValor(
 ): Promise<void> {
   try {
     if (aplicarAteFinAno) {
-      // Calcular meses de prazo até dezembro do ano atual
-      const [ano, mesInicial] = prazo.split('-').map(Number)
-      const mesesParaAtualizar: string[] = []
-      
-      for (let mes = mesInicial; mes <= 12; mes++) {
-        const mesFormatado = mes.toString().padStart(2, '0')
-        mesesParaAtualizar.push(`${ano}-${mesFormatado}`)
-      }
-      
-      // Fazer múltiplas chamadas (uma por mês)
-      // Mês 1: usa id (registro que estamos editando) - backend exige grupo em todos
-      // Meses 2..N: usa grupo (cada mês tem seu próprio registro)
-      const promises = mesesParaAtualizar.map((mesRef, idx) => {
-        const isFirstMonth = idx === 0
-        return fetchWithAuth(`${BASE_URL}/budget/planning/bulk-upsert`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            mes_referencia: mesRef,
-            budgets: [{
-              grupo,
-              ...(isFirstMonth ? { id: goalId } : {}),
-              valor_planejado: novoValor
-            }]
-          })
-        })
+      // 1 chamada para o range inteiro (substitui N chamadas paralelas)
+      const anoAtual = prazo.split('-')[0]
+      const response = await fetchWithAuth(`${BASE_URL}/budget/planning/bulk-range`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          goal_grupo: grupo,
+          valor: novoValor,
+          mes_inicio: prazo,
+          mes_fim: `${anoAtual}-12`,
+        }),
       })
-      
-      await Promise.all(promises)
+      if (!response.ok) {
+        throw new Error(`Erro ao atualizar valores por range: ${response.statusText}`)
+      }
     } else {
       // Atualizar apenas o mês atual (backend exige grupo)
       const response = await fetchWithAuth(`${BASE_URL}/budget/planning/bulk-upsert`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           mes_referencia: prazo,
-          budgets: [{
-            id: goalId,
-            grupo,
-            valor_planejado: novoValor
-          }]
-        })
+          budgets: [{ id: goalId, grupo, valor_planejado: novoValor }],
+        }),
       })
-      
       if (!response.ok) {
         throw new Error(`Erro ao atualizar valor da meta: ${response.statusText}`)
       }

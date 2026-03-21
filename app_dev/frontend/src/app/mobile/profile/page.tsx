@@ -198,6 +198,9 @@ export default function ProfileMobilePage() {
     try {
       await fetch(`${apiUrl}/api/v1/auth/logout`, { method: 'POST', credentials: 'include' });
     } finally {
+      // P1: limpar cache de onboarding ao sair
+      localStorage.removeItem('onboarding_completo');
+      sessionStorage.removeItem('sem_demo');
       router.push('/auth/login');
     }
   };

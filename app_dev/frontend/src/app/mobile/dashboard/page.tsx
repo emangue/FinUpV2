@@ -10,7 +10,7 @@
  * - Ano: scroll de anos, gráfico anual (ano inteiro)
  */
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Upload, Settings } from 'lucide-react'
 import { MobileHeader } from '@/components/mobile/mobile-header'
@@ -26,10 +26,23 @@ import { OnboardingChecklist } from '@/features/onboarding/OnboardingChecklist'
 import { DemoModeBanner } from '@/features/onboarding/DemoModeBanner'
 import { NudgeBanners } from '@/features/onboarding/NudgeBanners'
 import { useDashboardMetrics, useChartData, useChartDataYearly } from '@/features/dashboard/hooks/use-dashboard'
-import { fetchLastMonthWithData } from '@/features/dashboard/services/dashboard-api'
+import { fetchLastMonthWithData, prefetchChartData, fetchIncomeSources, fetchExpenseSources, fetchOrcamentoInvestimentos } from '@/features/dashboard/services/dashboard-api'
 import { useRequireAuth } from '@/core/hooks/use-require-auth'
 
 const YEARS_RANGE = 7 // Últimos N anos no scroll/gráfico anual
+
+function MonthScrollPickerSkeleton() {
+  return (
+    <div className="flex gap-2 px-5 py-2 overflow-hidden">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div
+          key={i}
+          className="shrink-0 min-w-[60px] min-h-[44px] rounded-lg bg-muted animate-pulse"
+        />
+      ))}
+    </div>
+  )
+}
 
 export default function DashboardMobilePage() {
   const router = useRouter()
@@ -59,41 +72,72 @@ export default function DashboardMobilePage() {
     return result
   }, [lastMonthWithData?.year])
 
+  // N3: pré-fetch em paralelo com auth/me — elimina 1 RTT sequencial no cold start
+  const _lastMonthPromise = useRef<Promise<{ year: number; month: number }> | null>(null)
+  const _lastMonthPatrimonioPromise = useRef<Promise<{ year: number; month: number }> | null>(null)
+
   // P0-1: bloqueia todos os hooks até selectedMonth resolver (evita re-fire com mês errado)
   const enabled = selectedMonth !== null
 
   // ✅ TODOS OS HOOKS PRIMEIRO (antes de any return)
-  const { metrics, loading: loadingMetrics } = useDashboardMetrics(year, month, ytdMonth, { enabled })
+  const { metrics } = useDashboardMetrics(year, month, ytdMonth, { enabled })
 
   // P0-4: só dispara o hook do período ativo (evita 1 call descartada por abertura)
-  const { chartData: chartDataMonthly, loading: loadingChartMonthly } = useChartData(
+  const { chartData: chartDataMonthly } = useChartData(
     selectedMonth?.getFullYear() ?? new Date().getFullYear(),
     selectedMonth ? selectedMonth.getMonth() + 1 : undefined,
     { enabled: enabled && period === 'month' }
   )
-  const { chartData: chartDataYearly, loading: loadingChartYearly } = useChartDataYearly(
+  const { chartData: chartDataYearly } = useChartDataYearly(
     yearsList,
     period === 'ytd' ? (lastMonthWithData?.month ?? undefined) : undefined,
     { enabled: enabled && period !== 'month' }
   )
 
   const chartData = period === 'month' ? chartDataMonthly : chartDataYearly
-  const loadingChart = period === 'month' ? loadingChartMonthly : loadingChartYearly
 
-  // P0-2+P2-3: income/expense hooks removidos (OrcamentoTab já busca internamente)
-  const isLoading = !enabled || loadingMetrics || loadingChart
+  // N2: mostrar estrutura imediatamente após selectedMonth resolver; sub-componentes carregam em paralelo
+  const isLoading = !enabled
 
-  // Default: último mês com dados
+  // N3: inicia o fetch imediatamente (sem esperar auth) para eliminar 1 RTT sequencial
+  // F4: prefetch patrimônio em paralelo com transactions
+  useEffect(() => {
+    _lastMonthPromise.current = fetchLastMonthWithData('transactions')
+    _lastMonthPatrimonioPromise.current = fetchLastMonthWithData('patrimonio')
+  }, [])
+
+  // Default: último mês com dados (reutiliza promise já em andamento)
   useEffect(() => {
     if (!isAuth) return
-    fetchLastMonthWithData('transactions')
+    const promise = _lastMonthPromise.current ?? fetchLastMonthWithData('transactions')
+    promise
       .then((last) => {
         setSelectedMonth(new Date(last.year, last.month - 1, 1))
         setSelectedYear(last.year)
         setLastMonthWithData(last)
       })
-      .catch(() => {})
+      .catch(() => {
+        const now = new Date()
+        setSelectedMonth(new Date(now.getFullYear(), now.getMonth(), 1))
+      })
   }, [isAuth])
+
+  // N4: pré-busca mês anterior e posterior (popula _pointCache para navegação instantânea)
+  // F3: prefetch OrcamentoTab (income-sources, expense-sources, orcamento-investimentos)
+  useEffect(() => {
+    if (!selectedMonth || period !== 'month') return
+    const prev = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() - 1, 1)
+    const next = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() + 1, 1)
+
+    for (const m of [prev, next]) {
+      const y = m.getFullYear()
+      const mo = m.getMonth() + 1
+      prefetchChartData(y, mo)
+      fetchIncomeSources(y, mo).catch(() => {})
+      fetchExpenseSources(y, mo).catch(() => {})
+      fetchOrcamentoInvestimentos(y, mo, mo).catch(() => {})
+    }
+  }, [selectedMonth, period])
 
   // 🔐 Mostrar loading enquanto verifica autenticação (DEPOIS de todos os hooks)
   if (!isAuth) {
@@ -117,10 +161,17 @@ export default function DashboardMobilePage() {
         <div className="flex items-center gap-2">
           <div className="flex-1 min-w-0">
             {period === 'month' ? (
-              <MonthScrollPicker
-                selectedMonth={selectedMonth ?? new Date()}
-                onMonthChange={setSelectedMonth}
-              />
+              selectedMonth ? (
+                <MonthScrollPicker
+                  selectedMonth={selectedMonth}
+                  onMonthChange={setSelectedMonth}
+                  onMonthHover={(month) => {
+                    if (period === 'month') prefetchChartData(month.getFullYear(), month.getMonth() + 1)
+                  }}
+                />
+              ) : (
+                <MonthScrollPickerSkeleton />
+              )
             ) : (
               <YearScrollPicker
                 years={yearsList}

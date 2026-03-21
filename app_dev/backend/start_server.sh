@@ -1,3 +1,3 @@
 #!/bin/bash
 cd "$(dirname "$0")"
-/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV3/venv/bin/python run.py
+/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/venv/bin/python run.py

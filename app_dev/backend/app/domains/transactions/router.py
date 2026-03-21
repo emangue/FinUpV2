@@ -127,6 +127,8 @@ def get_grupos_com_media(
 def list_transactions(
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=500),
+    # Cursor-based pagination (se informado, tem prioridade sobre page)
+    cursor: Optional[str] = Query(None, description="ID da última transação vista (cursor pagination)"),
     year: Optional[int] = None,
     month: Optional[int] = None,
     year_inicio: Optional[int] = Query(None, description="Sprint F: início do período"),
@@ -146,7 +148,13 @@ def list_transactions(
     db: Session = Depends(get_db)
 ):
     """
-    Lista transações com filtros e paginação
+    Lista transações com filtros e paginação.
+
+    Suporta dois modos de paginação:
+    - **Offset** (padrão): `?page=1&limit=10` — retrocompatível
+    - **Cursor** (novo): `?cursor=<id>&limit=10` — performance O(1), evita drift em inserts
+
+    Quando `cursor` é informado, `page` é ignorado e a resposta inclui `next_cursor`.
     """
     service = TransactionService(db)
     
@@ -167,6 +175,9 @@ def list_transactions(
         cartao=cartao,
         search=search
     )
+
+    if cursor is not None:
+        return service.list_transactions_cursor(user_id, filters, cursor, limit)
     
     return service.list_transactions(user_id, filters, page, limit)
 

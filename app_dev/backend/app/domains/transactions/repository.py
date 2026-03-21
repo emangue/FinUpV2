@@ -153,7 +153,76 @@ class TransactionRepository:
             )
         
         return query.scalar()
-    
+
+    def list_with_filters_cursor(
+        self,
+        user_id: int,
+        filters: TransactionFilters,
+        cursor_id: int,
+        limit: int = 50,
+    ) -> List[JournalEntry]:
+        """
+        Lista transações com cursor-based pagination.
+        cursor_id = id (PK integer) da última transação vista — busca registros
+        com id < cursor_id mantendo a mesma ordenação (MesFatura DESC, id DESC).
+        """
+        query = self.db.query(JournalEntry).filter(
+            JournalEntry.user_id == user_id,
+            JournalEntry.id < cursor_id,
+        )
+
+        # Mesmos filtros de list_with_filters
+        if filters.year_inicio is not None and filters.month_inicio is not None \
+                and filters.year_fim is not None and filters.month_fim is not None:
+            mes_ini = f"{filters.year_inicio}{filters.month_inicio:02d}"
+            mes_fim_str = f"{filters.year_fim}{filters.month_fim:02d}"
+            query = query.filter(
+                JournalEntry.MesFatura >= mes_ini,
+                JournalEntry.MesFatura <= mes_fim_str
+            )
+        elif filters.year and filters.month:
+            mes_fatura = f"{filters.year}{filters.month:02d}"
+            query = query.filter(JournalEntry.MesFatura == mes_fatura)
+        elif filters.year:
+            query = query.filter(JournalEntry.MesFatura.like(f"{filters.year}%"))
+
+        if filters.estabelecimento:
+            query = query.filter(
+                JournalEntry.Estabelecimento.ilike(f"%{filters.estabelecimento}%")
+            )
+        if filters.grupo:
+            query = query.filter(JournalEntry.GRUPO == filters.grupo)
+        if getattr(filters, 'subgrupo_null', None):
+            query = query.filter(
+                or_(JournalEntry.SUBGRUPO.is_(None), JournalEntry.SUBGRUPO == '')
+            )
+        elif filters.subgrupo:
+            query = query.filter(JournalEntry.SUBGRUPO == filters.subgrupo)
+        if filters.tipo:
+            query = query.filter(JournalEntry.TipoTransacao == filters.tipo)
+        if filters.categoria_geral:
+            query = query.filter(JournalEntry.CategoriaGeral == filters.categoria_geral)
+        if filters.tipo_gasto:
+            if isinstance(filters.tipo_gasto, list):
+                query = query.filter(JournalEntry.TipoGasto.in_(filters.tipo_gasto))
+            else:
+                query = query.filter(JournalEntry.TipoGasto == filters.tipo_gasto)
+        if filters.cartao:
+            query = query.filter(JournalEntry.NomeCartao == filters.cartao)
+        if filters.search:
+            query = query.filter(
+                or_(
+                    JournalEntry.Estabelecimento.ilike(f"%{filters.search}%"),
+                    JournalEntry.GRUPO.ilike(f"%{filters.search}%"),
+                    JournalEntry.SUBGRUPO.ilike(f"%{filters.search}%"),
+                    JournalEntry.Data.ilike(f"%{filters.search}%"),
+                )
+            )
+
+        return query.order_by(
+            JournalEntry.MesFatura.desc(), JournalEntry.id.desc()
+        ).limit(limit).all()
+
     def create(self, transaction: JournalEntry) -> JournalEntry:
         """Cria nova transação"""
         self.db.add(transaction)

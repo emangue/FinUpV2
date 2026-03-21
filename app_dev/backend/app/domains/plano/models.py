@@ -3,7 +3,7 @@ Domínio Plano - Models
 user_financial_profile, plano_metas_categoria, base_expectativas
 (plano_compromissos removido — volta ao legado, metas via budget_planning)
 """
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, UniqueConstraint, Index
+from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey, UniqueConstraint, Index
 from sqlalchemy.sql import func
 
 from app.core.database import Base
@@ -96,3 +96,49 @@ class PlanoMetaCategoria(Base):
     ano = Column(Integer, nullable=False)
     mes = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=func.now())
+
+
+class PlanoCashflowMes(Base):
+    """
+    Tabela materializada do cashflow por mês.
+    Evita recomputar 12 meses a cada request de /plano/cashflow/mes.
+    Invalidada por: import de transações, edição de transação, mudança em budget_planning,
+                    mudança em expectativas, atualização de perfil financeiro.
+    """
+    __tablename__ = "plano_cashflow_mes"
+
+    id             = Column(Integer, primary_key=True, index=True)
+    user_id        = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    ano            = Column(Integer, nullable=False)
+    mes            = Column(Integer, nullable=False)        # 1 a 12
+    mes_referencia = Column(String(7), nullable=False)     # 'YYYY-MM'
+
+    # Realizados (de journal_entries)
+    renda_realizada          = Column(Float, nullable=True)
+    gastos_realizados        = Column(Float, nullable=True)
+    investimentos_realizados = Column(Float, nullable=True)
+
+    # Planejados (de budget_planning + expectativas)
+    renda_esperada     = Column(Float, nullable=True)
+    gastos_recorrentes = Column(Float, nullable=True)
+    extras_creditos    = Column(Float, nullable=True)
+    extras_debitos     = Column(Float, nullable=True)
+
+    # Computados (resultado final da lógica de negócio)
+    renda_usada      = Column(Float, nullable=True)
+    total_gastos     = Column(Float, nullable=True)
+    aporte_planejado = Column(Float, nullable=True)
+    aporte_usado     = Column(Float, nullable=True)
+
+    # Flags
+    use_realizado = Column(Boolean, nullable=True)
+    status_mes    = Column(String(20), nullable=True)   # 'ok', 'atencao', 'critico'
+
+    # Controle
+    computed_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    invalidated = Column(Boolean, default=False, nullable=False, server_default="false")
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "ano", "mes", name="uq_plano_cashflow_mes"),
+        Index("idx_plano_cashflow_mes_user_ano", "user_id", "ano"),
+    )

@@ -430,3 +430,23 @@ async def recreate_preview_from_history(
     """
     service = UploadService(db)
     return service.recreate_preview_from_history(history_id, user_id)
+
+
+@router.patch("/history/{history_id}/periodo")
+async def update_upload_periodo(
+    history_id: int,
+    ano: int = Query(..., ge=2020, le=2030, description="Ano (ex: 2025)"),
+    mes: int = Query(..., ge=1, le=12, description="Mês (1 a 12)"),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Ajusta período (ano/mês) de todas as transações de um upload.
+    Usado para corrigir erros sem refazer o upload.
+    
+    **Parâmetros:**
+    - ano: 2024, 2025, 2026, etc
+    - mes: 1 a 12
+    """
+    service = UploadService(db)
+    return service.update_upload_periodo(history_id, user_id, ano, mes)

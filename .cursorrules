@@ -130,12 +130,44 @@ const typography = {
 **NUNCA:** Modificar schema SQL diretamente
 
 ### 7. Deploy
-**SEMPRE:** Usar `./scripts/deploy/deploy.sh` (ou `deploy_build_local.sh` se OOM)  
-**NUNCA:** Deploy sem backup, validação, ou testes  
-**Doc:** `docs/deploy/DEPLOY_PROCESSO_CONSOLIDADO.md`
+**FONTE ÚNICA DE VERDADE:** `deploy/` (pasta na raiz do projeto)
+
+```
+deploy/
+├── README.md                         ← guia mestre
+├── scripts/
+│   ├── predeploy.sh                  ← RODAR ANTES DE TODO DEPLOY
+│   ├── predeploy.py                  ← 22 testes auto + 13 UI (Playwright)
+│   ├── deploy_docker_build_local.sh  ← DEPLOY PRINCIPAL
+│   ├── deploy_docker_vm.sh           ← alternativo
+│   └── validate_deploy.sh
+├── validations/
+│   └── ui_tests.py                   ← testes de UI headless
+├── docs/                             ← GUIA_DEPLOY.md, TROUBLESHOOTING.md
+└── history/                          ← checklists gerados + screenshots
+```
+
+**FLUXO:**
+```bash
+git add . && git commit -m "feat: ..." && git push origin <branch>
+./deploy/scripts/predeploy.sh          # valida: Docker + API + DB + UI Playwright
+./deploy/scripts/deploy_docker_build_local.sh  # só se 0 falhas
+./deploy/scripts/validate_deploy.sh    # smoke test em prod
+```
+
+**NUNCA:** Deploy sem rodar `predeploy.sh` | Deploy com mudanças uncommitted  
+**Doc:** `deploy/README.md` | `deploy/docs/GUIA_DEPLOY.md`
 
 ### 7.1 Deploy e branches (alterações grandes)
-**SEMPRE:** Em alteração grande, criar branch **antes** de subir no servidor (ex.: `deploy/YYYY-MM-DD-nome` ou `feature/nome`). Subir e validar **nessa branch** no servidor. **Só depois** que der certo no servidor: fazer merge dessa branch na `main` e push da main. Assim a main só muda após validação no servidor; rollback = descartar a branch. O `safe_deploy.sh` oferece criar a branch automaticamente quando você está na main.
+**SEMPRE:** Em alteração grande, criar branch **antes** de subir no servidor (ex.: `deploy/YYYY-MM-DD-nome` ou `feature/nome`). Subir e validar **nessa branch** no servidor. **Só depois** que der certo: merge na `main`. Rollback = descartar a branch.
+
+### 7.2 Testes de UI (Playwright)
+```bash
+source app_dev/venv/bin/activate
+python3 deploy/validations/ui_tests.py           # headless (13 testes)
+python3 deploy/validations/ui_tests.py --headed  # com janela (debug)
+```
+Credenciais de `.env.local` (gitignored). Screenshots de falhas em `deploy/history/screenshots/`.
 
 ### 8. Backup
 **SEMPRE:** Rodar `backup_daily.sh` antes de modificações críticas  

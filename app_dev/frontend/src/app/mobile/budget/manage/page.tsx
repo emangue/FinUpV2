@@ -20,7 +20,12 @@ export default function ManageGoalsPage() {
       .then(({ year, month }) => {
         if (!cancelled) setSelectedMonth(new Date(year, month - 1, 1))
       })
-      .catch(() => {})
+      .catch(() => {
+        if (!cancelled) {
+          const now = new Date()
+          setSelectedMonth(new Date(now.getFullYear(), now.getMonth(), 1))
+        }
+      })
     return () => { cancelled = true }
   }, [])
   const { goals, loading, refreshGoals } = useGoals(selectedMonth)

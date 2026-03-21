@@ -238,7 +238,8 @@ function CarteiraContent() {
   const router = useRouter()
   const isAuth = useRequireAuth()
 
-  const [selectedMonth, setSelectedMonth] = React.useState<Date>(new Date())
+  // P7: null evita fetch prematuro antes de fetchLastMonthWithData resolver
+  const [selectedMonth, setSelectedMonth] = React.useState<Date | null>(null)
   const [investimentos, setInvestimentos] = React.useState<InvestimentoPortfolio[]>([])
   const [distribuicao, setDistribuicao] = React.useState<DistribuicaoTipo[]>([])
   const [patrimonioData, setPatrimonioData] = React.useState<PatrimonioMensal | null>(null)
@@ -247,19 +248,24 @@ function CarteiraContent() {
   const [searchOpen, setSearchOpen] = React.useState(false)
   const [searchTerm, setSearchTerm] = React.useState('')
 
-  const anomes = selectedMonth.getFullYear() * 100 + (selectedMonth.getMonth() + 1)
+  const anomes = selectedMonth
+    ? selectedMonth.getFullYear() * 100 + (selectedMonth.getMonth() + 1)
+    : null
 
   // Default para último mês com dados
   React.useEffect(() => {
     if (!isAuth) return
     fetchLastMonthWithData('patrimonio')
       .then(({ year, month }) => setSelectedMonth(new Date(year, month - 1, 1)))
-      .catch(() => {})
+      .catch(() => {
+        const now = new Date()
+        setSelectedMonth(new Date(now.getFullYear(), now.getMonth(), 1))
+      })
   }, [isAuth])
 
   // Carregar dados
   React.useEffect(() => {
-    if (!isAuth) return
+    if (!isAuth || !selectedMonth) return  // P7: aguarda selectedMonth ser definido pelo fetchLastMonthWithData
     setLoading(true)
 
     const currentYear = selectedMonth.getFullYear()
@@ -269,7 +275,7 @@ function CarteiraContent() {
     const anoInicio = currentMonth === 1 ? currentYear - 1 : currentYear
 
     Promise.all([
-      getInvestimentos({ ativo: true, anomes, limit: 200 }),
+      getInvestimentos({ ativo: true, anomes: anomes ?? undefined, limit: 200 }),
       getDistribuicaoPorTipo().catch(() => []),
       getPatrimonioTimeline({ ano_inicio: anoInicio, ano_fim: currentYear }).catch(() => []),
     ])
@@ -399,7 +405,7 @@ function CarteiraContent() {
         {/* Month picker */}
         <div className="pb-4">
           <MonthScrollPicker
-            selectedMonth={selectedMonth}
+            selectedMonth={selectedMonth ?? new Date()}
             onMonthChange={setSelectedMonth}
           />
         </div>

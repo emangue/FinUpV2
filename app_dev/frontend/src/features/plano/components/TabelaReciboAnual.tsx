@@ -8,7 +8,8 @@
  */
 import { useState, useEffect } from 'react';
 import { ChevronDown, ChevronUp, Calculator, X, Plus } from 'lucide-react';
-import { getCashflow, getCashflowDetalheMes, postExpectativa, type CashflowResponse } from '../api';
+import { getCashflowDetalheMes, postExpectativa } from '../api';
+import { useCashflowAnual } from '../hooks/use-cashflow-anual';
 
 /** Formato completo (modal, tooltips) */
 function fmt(v: number | null | undefined): string {
@@ -46,10 +47,13 @@ const MESES_NOME: Record<number, string> = {
 };
 
 export function TabelaReciboAnual({ ano }: { ano: number }) {
-  const [data, setData] = useState<CashflowResponse | null>(null);
+  // P3: React Query — deduplicação automática se TabelaReciboAnual e ProjecaoChart
+  // montarem simultaneamente com o mesmo `ano` (ambos chamam useCashflowAnual(ano)
+  // → 1 único request HTTP em vez de 2).
+  const { data, isLoading: loading, error: queryError, refetch } = useCashflowAnual(ano);
+  const error = queryError?.message ?? null;
+
   const [expanded, setExpanded] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [detalheMes, setDetalheMes] = useState<{ ano: number; mes: number } | null>(null);
   const [detalheData, setDetalheData] = useState<Awaited<ReturnType<typeof getCashflowDetalheMes>> | null>(null);
   const [detalheLoading, setDetalheLoading] = useState(false);
@@ -57,15 +61,6 @@ export function TabelaReciboAnual({ ano }: { ano: number }) {
   const [extraDesc, setExtraDesc] = useState('');
   const [extraValor, setExtraValor] = useState('');
   const [extraSaving, setExtraSaving] = useState(false);
-
-  useEffect(() => {
-    setLoading(true);
-    setError(null);
-    getCashflow(ano)
-      .then(setData)
-      .catch((e) => setError(e?.message || 'Erro'))
-      .finally(() => setLoading(false));
-  }, [ano]);
 
   if (loading) {
     return (
@@ -123,7 +118,7 @@ export function TabelaReciboAnual({ ano }: { ano: number }) {
       setExtraDesc('');
       setExtraValor('');
       setShowAddExtra(false);
-      getCashflow(ano).then(setData);
+      refetch();  // P3: invalida e recarrega via React Query (em vez de getCashflow manual)
     } finally {
       setExtraSaving(false);
     }

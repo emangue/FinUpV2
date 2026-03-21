@@ -22,6 +22,7 @@ from .schemas import (
     TipoGastoComMedia
 )
 from app.shared.utils import determine_categoria_geral
+from app.domains.plano.service import invalidate_cashflow_cache
 
 class TransactionService:
     """
@@ -268,7 +269,45 @@ class TransactionService:
             page=page,
             limit=limit
         )
-    
+
+    def list_transactions_cursor(
+        self,
+        user_id: int,
+        filters: Optional[TransactionFilters],
+        cursor: str,
+        limit: int = 50,
+    ) -> TransactionListResponse:
+        """
+        Lista transações com cursor-based pagination (O(1) vs O(n) do offset).
+        cursor = id (PK integer) da última transação da página anterior.
+        Retorna até `limit + 1` itens para detectar se há mais páginas.
+        """
+        try:
+            cursor_id = int(cursor)
+        except (ValueError, TypeError):
+            raise ValueError(f"Cursor inválido: {cursor!r}. Deve ser o id (inteiro) da última transação.")
+
+        effective_filters = filters if filters else TransactionFilters()
+        # Busca limit+1 para saber se tem próxima página
+        items = self.repository.list_with_filters_cursor(
+            user_id, effective_filters, cursor_id, limit + 1
+        )
+
+        has_more = len(items) > limit
+        if has_more:
+            items = items[:limit]
+
+        next_cursor = str(items[-1].id) if has_more and items else None
+
+        return TransactionListResponse(
+            transactions=[TransactionResponse.from_orm(t) for t in items],
+            total=-1,          # não calculado em cursor mode (sinal para o frontend)
+            page=-1,           # não aplicável em cursor mode
+            limit=limit,
+            next_cursor=next_cursor,
+            has_more=has_more,
+        )
+
     def create_transaction(
         self,
         transaction_data: TransactionCreate
@@ -358,7 +397,15 @@ class TransactionService:
         
         # Salvar transação principal
         updated = self.repository.update(transaction)
-        
+
+        # Invalidar cache de cashflow para o mês desta transação
+        try:
+            if updated.MesFatura:
+                mes_fmt = f"{updated.MesFatura[:4]}-{updated.MesFatura[4:6]}"  # YYYYMM → YYYY-MM
+                invalidate_cashflow_cache(self.repository.db, user_id, mes_referencia=[mes_fmt])
+        except Exception as _inv_exc:
+            logger.warning(f"Falha ao invalidar cashflow cache após update_transaction: {_inv_exc}")
+
         # Propagação: parcelas (IdParcela)
         if propagate_parcela and updated.IdParcela and ("GRUPO" in update_dict or "SUBGRUPO" in update_dict):
             self._propagate_to_parcela(

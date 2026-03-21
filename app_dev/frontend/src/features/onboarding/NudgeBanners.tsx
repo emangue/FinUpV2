@@ -13,6 +13,8 @@ import { fetchWithAuth } from '@/core/utils/api-client';
 
 const apiUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
 const NUDGE_PREFIX = 'nudge_dismissed_';
+// P1: tipos de nudge — usados para verificar se todos foram dispensados
+const NUDGE_TYPES = ['sem_upload', 'sem_plano', 'sem_investimento', 'upload_30_dias'] as const;
 
 interface Progress {
   primeiro_upload: boolean;
@@ -40,6 +42,16 @@ export function NudgeBanners() {
   const [visible, setVisible] = useState<string | null>(null);
 
   useEffect(() => {
+    // P1: se todos os nudges já foram dispensados, não buscar a API
+    // P1: se onboarding completo (todos os passos feitos), não há nudges a mostrar
+    if (typeof window !== 'undefined') {
+      if (localStorage.getItem('onboarding_completo') === 'true') return;
+      const todosDispensados = NUDGE_TYPES.every(
+        (tipo) => localStorage.getItem(`${NUDGE_PREFIX}${tipo}`) === 'true'
+      );
+      if (todosDispensados) return;
+    }
+
     fetchWithAuth(`${apiUrl}/api/v1/onboarding/progress`)
       .then((r) => (r.ok ? r.json() : null))
       .then(setProgress)

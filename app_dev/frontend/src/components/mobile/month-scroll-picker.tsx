@@ -32,6 +32,11 @@ interface MonthScrollPickerProps {
    * Callback quando mês é selecionado
    */
   onMonthChange: (month: Date) => void
+
+  /**
+   * Callback opcional ao fazer hover em um mês — usado para prefetch (N4)
+   */
+  onMonthHover?: (month: Date) => void
   
   /**
    * Quantos meses mostrar antes e depois (padrão: 6)
@@ -47,42 +52,47 @@ interface MonthScrollPickerProps {
 export function MonthScrollPicker({
   selectedMonth,
   onMonthChange,
+  onMonthHover,
   monthsRange = 6,
   className
 }: MonthScrollPickerProps) {
   const scrollContainerRef = React.useRef<HTMLDivElement>(null)
   const selectedMonthRef = React.useRef<HTMLButtonElement>(null)
   
-  // Gerar lista de meses (antes + atual + depois)
+  // Gerar lista de meses centrada no mês selecionado (A3)
   const months = React.useMemo(() => {
     const result: Date[] = []
-    const start = subMonths(startOfMonth(new Date()), monthsRange)
-    
+    const center = startOfMonth(selectedMonth)
+    const start = subMonths(center, monthsRange)
+
     for (let i = 0; i <= monthsRange * 2; i++) {
       result.push(addMonths(start, i))
     }
-    
+
     return result
-  }, [monthsRange])
-  
+  }, [selectedMonth, monthsRange])
+
+  // Instant no mount, smooth nas mudanças do usuário (A3)
+  const isMountedRef = React.useRef(false)
+
   // Scroll para o mês selecionado ao montar ou mudar seleção
   React.useEffect(() => {
     if (selectedMonthRef.current && scrollContainerRef.current) {
       const container = scrollContainerRef.current
       const button = selectedMonthRef.current
-      
+
       // Calcular posição para centralizar
       const containerWidth = container.offsetWidth
       const buttonLeft = button.offsetLeft
       const buttonWidth = button.offsetWidth
-      
+
       const scrollPosition = buttonLeft - (containerWidth / 2) + (buttonWidth / 2)
-      
-      // Scroll suave
+
       container.scrollTo({
         left: scrollPosition,
-        behavior: 'smooth'
+        behavior: isMountedRef.current ? 'smooth' : 'instant',
       })
+      isMountedRef.current = true
     }
   }, [selectedMonth])
   
@@ -124,6 +134,7 @@ export function MonthScrollPicker({
             <button
               key={month.toISOString()}
               ref={isSelected ? selectedMonthRef : null}
+              onMouseEnter={() => onMonthHover?.(month)}
               onClick={() => onMonthChange(month)}
               className={cn(
                 // Base
