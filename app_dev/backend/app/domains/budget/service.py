@@ -353,6 +353,99 @@ class BudgetService:
             "budgets": resultado
         }
 
+    def get_budget_planning_full_year(self, user_id: int, year: int) -> dict:
+        """
+        Retorna budget planning para modo Ano: realizados Jan..Dez + planejado 12 meses.
+        Planejado: soma todos os 12 meses do budget_planning.
+        Realizado: soma naturalmente até os meses com dados (MesFatura existentes).
+        """
+        from .models import BudgetPlanning
+        from app.domains.grupos.models import BaseGruposConfig
+
+        try:
+            grupos_rows = self.db.query(BaseGruposConfig.nome_grupo, BaseGruposConfig.categoria_geral).filter(
+                BaseGruposConfig.user_id == user_id
+            ).all()
+            grupos_config = {nome: cat for nome, cat in grupos_rows}
+        except Exception as e:
+            self.db.rollback()
+            logger.warning("get_budget_planning_full_year: base_grupos_config inacessível: %s", e)
+            grupos_config = {}
+
+        # Todos os 12 meses do ano
+        mes_faturas = [f"{year}{m:02d}" for m in range(1, 13)]
+        meses_ref = [f"{year}-{m:02d}" for m in range(1, 13)]
+
+        realizados_desp = (
+            self.db.query(JournalEntry.GRUPO, func.sum(JournalEntry.Valor).label('total'))
+            .filter(
+                JournalEntry.user_id == user_id,
+                JournalEntry.MesFatura.in_(mes_faturas),
+                JournalEntry.CategoriaGeral == 'Despesa',
+                JournalEntry.IgnorarDashboard == 0,
+                JournalEntry.GRUPO.isnot(None),
+                JournalEntry.GRUPO != ''
+            )
+            .group_by(JournalEntry.GRUPO)
+            .all()
+        )
+        realizados_inv = (
+            self.db.query(JournalEntry.GRUPO, func.sum(JournalEntry.Valor).label('total'))
+            .filter(
+                JournalEntry.user_id == user_id,
+                JournalEntry.MesFatura.in_(mes_faturas),
+                JournalEntry.CategoriaGeral == 'Investimentos',
+                JournalEntry.IgnorarDashboard == 0,
+                JournalEntry.GRUPO.isnot(None),
+                JournalEntry.GRUPO != ''
+            )
+            .group_by(JournalEntry.GRUPO)
+            .all()
+        )
+        realizado_map: dict = {}
+        for grupo, total in realizados_desp:
+            realizado_map[grupo] = abs(float(total or 0))
+        for grupo, total in realizados_inv:
+            realizado_map[grupo] = abs(float(total or 0))
+
+        # Planejado: soma dos 12 meses
+        budgets_rows = self.db.query(BudgetPlanning).filter(
+            BudgetPlanning.user_id == user_id,
+            BudgetPlanning.mes_referencia.in_(meses_ref)
+        ).all()
+        planejado_map: dict = {}
+        grupos_visto: dict = {}
+        for b in budgets_rows:
+            planejado_map[b.grupo] = planejado_map.get(b.grupo, 0.0) + float(b.valor_planejado or 0)
+            if b.grupo not in grupos_visto:
+                grupos_visto[b.grupo] = b
+
+        todos_grupos = set(realizado_map.keys()) | set(planejado_map.keys())
+        resultado = []
+        for grupo in todos_grupos:
+            realizado = realizado_map.get(grupo, 0.0)
+            planejado = planejado_map.get(grupo, 0.0)
+            percentual = (realizado / planejado * 100) if planejado > 0 else 0
+            categoria_geral = grupos_config.get(grupo) or 'Despesa'
+            budget_ref = grupos_visto.get(grupo)
+            resultado.append({
+                "id": budget_ref.id if budget_ref else None,
+                "grupo": grupo,
+                "categoria_geral": categoria_geral,
+                "cor": getattr(budget_ref, 'cor', None) if budget_ref else None,
+                "valor_planejado": planejado,
+                "valor_planejado_com_extras": planejado,
+                "valor_realizado": realizado,
+                "percentual": round(percentual, 2),
+                "ativo": 1,
+                "valor_medio_3_meses": 0.0
+            })
+
+        return {
+            "mes_referencia": f"{year}-12",
+            "budgets": resultado
+        }
+
     def get_budget_planning_by_id(self, user_id: int, budget_id: int) -> dict:
         """
         Busca uma meta de planning por ID com valor_realizado e percentual

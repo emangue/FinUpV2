@@ -172,6 +172,49 @@ export async function fetchGoals(selectedMonth?: Date, ytdMonth?: number): Promi
 }
 
 /**
+ * Busca metas no modo Ano: realizado Jan..Dez + planejado 12 meses completos.
+ * Diferente do YTD (Jan..ytdMonth), o Ano soma todos os 12 meses de plano.
+ */
+export async function fetchGoalsAno(year: number): Promise<Goal[]> {
+  const key = `goals:ano:${year}`
+  const cached = _getGoalsCache<Goal[]>(key)
+  if (cached) return cached
+  return _withGoalsInflight(key, async () => {
+    try {
+      const response = await fetchWithAuth(`${BASE_URL}/budget/planning?year=${year}`)
+      if (!response.ok) return []
+      const data = await response.json()
+      const budgets = data?.budgets ?? []
+      const result: Goal[] = budgets.map((b: any) => {
+        const cat = b.categoria_geral || 'Despesa'
+        const planType = cat === 'Investimentos' ? 'investimentos' : 'gastos'
+        return {
+          id: b.id ?? null,
+          grupo: b.grupo,
+          mes_referencia: data.mes_referencia || `${year}-12`,
+          valor_planejado: b.valor_planejado ?? 0,
+          valor_planejado_com_extras: b.valor_planejado_com_extras ?? b.valor_planejado ?? 0,
+          valor_realizado: b.valor_realizado ?? 0,
+          percentual: b.percentual ?? 0,
+          ativo: b.ativo ?? 1,
+          valor_medio_3_meses: b.valor_medio_3_meses ?? 0,
+          categoria_geral: cat,
+          planType,
+          cor: b.cor ?? undefined,
+          user_id: 0,
+          created_at: '',
+          updated_at: ''
+        }
+      })
+      return _setGoalsCache(key, result)
+    } catch (error) {
+      console.error('Erro ao buscar metas Ano:', error)
+      return []
+    }
+  })
+}
+
+/**
  * Busca uma meta específica por ID
  * Usa GET /budget/planning/{id} - busca direta por ID
  * Fallback: se 404 e mesReferencia informado, busca na lista do mês

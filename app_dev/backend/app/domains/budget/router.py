@@ -211,9 +211,13 @@ def get_budget_planning(
     elif year is not None and month is not None:
         ref = f"{year}-{month:02d}"
     elif year is not None and ytd_month is not None:
-        # Modo YTD: soma realizado de Jan até ytd_month
+        # Modo YTD: soma realizado de Jan até ytd_month + planejado Jan..ytd_month
         service = BudgetService(db)
         return service.get_budget_planning_ytd(user_id, year, ytd_month)
+    elif year is not None:
+        # Modo Ano: realizado Jan..Dez + planejado todos os 12 meses
+        service = BudgetService(db)
+        return service.get_budget_planning_full_year(user_id, year)
     else:
         raise HTTPException(
             status_code=422,
