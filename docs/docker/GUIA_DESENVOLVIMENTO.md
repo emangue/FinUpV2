@@ -3,8 +3,8 @@
 ## ⚡ Quick Start
 
 ```bash
-# 1. Subir tudo
-./scripts/docker/dev.sh up
+# 1. Subir tudo (detecta rebuild automático se necessário)
+./scripts/docker/dev.sh start
 
 # 2. Acessar
 # App Principal:  http://localhost:3000
@@ -15,28 +15,32 @@
 ## 📋 Comandos Úteis
 
 ```bash
-# Ver logs em tempo real
-./scripts/docker/dev.sh logs
+# Ver status com saúde de cada container
+./scripts/docker/dev.sh status
 
-# Ver logs específicos
-./scripts/docker/dev.sh logs-app    # Frontend App
-./scripts/docker/dev.sh logs-admin  # Frontend Admin
-./scripts/docker/dev.sh logs-back   # Backend
+# Ver logs em tempo real
+./scripts/docker/dev.sh logs           # todos
+./scripts/docker/dev.sh logs app       # Frontend App
+./scripts/docker/dev.sh logs admin     # Frontend Admin
+./scripts/docker/dev.sh logs backend   # Backend
 
 # Parar tudo
-./scripts/docker/dev.sh down
+./scripts/docker/dev.sh stop
 
-# Rebuild após mudar dependências
-./scripts/docker/dev.sh build
+# Reiniciar (sem rebuild) - suporta serviço específico
+./scripts/docker/dev.sh restart
+./scripts/docker/dev.sh restart backend
 
-# Ver status
-./scripts/docker/dev.sh ps
+# Rebuild após mudar dependências (requirements.txt / package.json)
+./scripts/docker/dev.sh rebuild backend    # só o backend
+./scripts/docker/dev.sh rebuild app        # só o frontend app
+./scripts/docker/dev.sh rebuild-all        # tudo
 
 # Acessar shell do backend
-./scripts/docker/dev.sh exec-back
+./scripts/docker/dev.sh shell
 
 # Acessar PostgreSQL
-./scripts/docker/dev.sh exec-db
+./scripts/docker/dev.sh db
 ```
 
 ## 🔧 Hot Reload
@@ -62,8 +66,8 @@ docker-compose exec backend alembic revision --autogenerate -m "descrição"
 ### "Port already in use"
 
 ```bash
-# Parar servidores antigos (sem Docker)
-./scripts/deploy/quick_stop.sh
+# Parar containers Docker
+./scripts/docker/dev.sh stop
 
 # Ou matar processos manualmente
 lsof -ti:8000 | xargs kill -9
@@ -81,10 +85,16 @@ open /Applications/Docker.app
 ### Rebuild completo
 
 ```bash
-# Parar, limpar e rebuildar tudo
-./scripts/docker/dev.sh down
-./scripts/docker/dev.sh build
-./scripts/docker/dev.sh up
+# Rebuilda todas as imagens e reinicia tudo
+./scripts/docker/dev.sh rebuild-all
+```
+
+### Módulo não encontrado (ex: @tanstack/react-query)
+
+```bash
+# A imagem foi rebuilda mas o volume anônimo de node_modules está desatualizado
+# Solucionar: usar rebuild (remove volume anônimo automaticamente)
+./scripts/docker/dev.sh rebuild app
 ```
 
 ## 📚 Documentação Completa

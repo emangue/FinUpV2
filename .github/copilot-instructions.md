@@ -775,8 +775,7 @@ Total: 10 itens
 
 #### Arquivos que São Atualizados:
 
-- ✅ `quick_start.sh` - Script de inicialização
-- ✅ `quick_stop.sh` - Script de parada  
+- ✅ `scripts/docker/dev.sh` - Script de dev (start/stop/rebuild)
 - ✅ `backup_daily.sh` - Script de backup
 - ✅ `app_dev/backend/.env` - Variáveis de ambiente
 - ✅ `app_dev/backend/app/core/config.py` - Configuração backend
@@ -796,7 +795,7 @@ python fix_version.py --dry-run      # Simula correções (mostrar ao usuário)
 python fix_version.py --backup       # Aplica com backup
 
 # 4. Reiniciar servidores:
-./quick_stop.sh && sleep 2 && ./quick_start.sh
+./scripts/docker/dev.sh restart
 
 # 5. Validar novamente:
 python check_version.py
@@ -2084,13 +2083,13 @@ app.include_router(users_router, prefix="/api/v1", tags=["Users"])
 **5. Testar após qualquer remoção:**
 ```bash
 # Reiniciar servidores
-./quick_stop.sh && ./quick_start.sh
+./scripts/docker/dev.sh restart
 
 # Verificar backend
 curl http://localhost:8000/api/health
 
 # Verificar logs
-tail -30 backend.log | grep -i error
+./scripts/docker/dev.sh logs backend
 ```
 
 ---
@@ -2136,8 +2135,8 @@ cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev
 source venv/bin/activate
 cd backend && python run.py  # OK!
 
-# ✅ OU usar quick_start.sh (RECOMENDADO)
-./scripts/deploy/quick_start.sh
+# ✅ OU usar Docker (RECOMENDADO)
+./scripts/docker/dev.sh start
 ```
 
 ### 📋 Checklist ao Rodar Scripts Python
@@ -2156,21 +2155,19 @@ cd backend && python run.py  # OK!
 **SEMPRE usar este comando único:**
 
 ```bash
-cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5 && chmod +x scripts/deploy/quick_start.sh && ./scripts/deploy/quick_start.sh
+cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5 && ./scripts/docker/dev.sh start
 ```
 
 **O que faz automaticamente:**
-- ✅ Limpa portas 8000 e 3000
-- ✅ Usa `app_dev/venv` correto automaticamente
-- ✅ Inicia Backend FastAPI (porta 8000)
-- ✅ Inicia Frontend Next.js (porta 3000)
-- ✅ Roda em background com logs em `temp/logs/`
-- ✅ Salva PIDs para controle
+- ✅ Detecta se alguma imagem precisa rebuild (requirements.txt/package.json alterados)
+- ✅ Sobe todos os containers Docker (PostgreSQL, Redis, Backend, Frontend)
+- ✅ Aguarda health checks antes de exibir as URLs
+- ✅ Exibe URLs de acesso confirmadas
 
 **Parar servidores:**
 
 ```bash
-cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5 && ./scripts/deploy/quick_stop.sh
+cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5 && ./scripts/docker/dev.sh stop
 ```
 
 ### URLs de Acesso
@@ -2229,14 +2226,14 @@ python scripts/maintenance/cleanup_usuarios_duplicados.py
 **Comando completo de restart:**
 
 ```bash
-cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5 && ./scripts/deploy/quick_stop.sh && sleep 2 && ./scripts/deploy/quick_start.sh
+cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5 && ./scripts/docker/dev.sh restart
 ```
 
 ### 📋 Monitoramento de Logs
 
 ```bash
 # Backend
-tail -f /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/temp/logs/backend.log
+./scripts/docker/dev.sh logs backend
 
 # Frontend  
 tail -f /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/temp/logs/frontend.log
@@ -2416,132 +2413,12 @@ git commit --no-verify -m "msg"
 
 ---
 
-## 🚀 Iniciar/Parar Servidores (PROCESSO OTIMIZADO)
-
-### ⚡ SEMPRE USAR OS SCRIPTS QUICK
-
-**REGRA OBRIGATÓRIA:** NUNCA rodar servidores manualmente. SEMPRE usar os scripts:
-
-```bash
-# Iniciar tudo
-cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5 && ./quick_start.sh
-
-# Parar tudo
-cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5 && ./quick_stop.sh
-
-# Restart completo
-cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5 && ./quick_stop.sh && ./quick_start.sh
-```
-
-**O que faz automaticamente:**
-- ✅ Limpa portas 8000 e 3000
-- ✅ Ativa venv do Python automaticamente
-- ✅ Navega para diretórios corretos (backend/ e frontend/)
-- ✅ Inicia Backend FastAPI (porta 8000)
-- ✅ Inicia Frontend Next.js (porta 3000)
-- ✅ Roda em background com logs
-- ✅ Salva PIDs para controle
-
-**🚫 NUNCA fazer:**
-```bash
-# ❌ ERRADO - Vai dar erro "ModuleNotFoundError: No module named 'app'"
-cd app_dev && python run.py
-
-# ❌ ERRADO - Vai tentar rodar Flask em vez de FastAPI
-cd app_dev && source venv/bin/activate && python run.py
-
-# ✅ CORRETO - Sempre usar os scripts quick
-./quick_start.sh
-```
-
-**Por quê?**
-- Existem 2 arquivos `run.py`:
-  - `/app_dev/run.py` (Flask - ANTIGO, não usar)
-  - `/app_dev/backend/run.py` (FastAPI - CORRETO)
-- Os scripts quick garantem o caminho certo
-- Evita erros de módulo não encontrado
-
-### URLs de Acesso
-
-- **Frontend:** http://localhost:3000
-- **Backend:** http://localhost:8000
-- **API Docs:** http://localhost:8000/docs
-- **Health:** http://localhost:8000/api/health
-
-**Login padrão:** Configurar via variáveis de ambiente
-
-### 🗄️ BANCOS DE DADOS - LOCAL VS SERVIDOR (CRÍTICO)
-
-**NUNCA confundir os ambientes - são bancos completamente diferentes!**
-
-**Local (Desenvolvimento):**
-- **Tipo:** SQLite
-- **Path:** `/Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev/backend/database/financas_dev.db`
-- **Usuário Admin:** admin@financas.com / [USAR ENV VAR]
-- **Acesso:** Direto via Python/SQLAlchemy
-
-**Servidor (Produção - Hostinger VPS):**
-- **Tipo:** PostgreSQL
-- **Host:** 127.0.0.1:5432
-- **Database:** finup_db
-- **User:** finup_user
-- **Password:** [CONFIGURADO NO SERVIDOR]
-- **Usuário Admin:** admin@financas.com / [USAR ENV VAR]
-- **Connection String:** postgresql://finup_user:[PASSWORD]@127.0.0.1:5432/finup_db
-
-**⚠️ CUIDADOS:**
-- Scripts de migração devem detectar ambiente automaticamente
-- NUNCA fazer queries diretas cross-ambiente
-- Backup do servidor: PostgreSQL dump
-- Backup local: cópia do arquivo .db
-- Senhas admin SINCRONIZADAS entre ambientes
-
-### 🔄 Restart Automático Após Modificações
-
-**OBRIGATÓRIO: Reiniciar servidores automaticamente após:**
-- Modificação em arquivos críticos (models.py, routes.py, schemas)
-- Finalização de mudanças com `version_manager.py finish`
-- Instalação de novas dependências
-- Mudanças em configurações (config.py)
-- Atualizações no schema do banco
-
-**Comando completo de restart:**
-
-```bash
-cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5 && ./quick_stop.sh && ./quick_start.sh
-```
-
-### 📋 Monitoramento de Logs
-
-```bash
-# Backend
-tail -f /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/backend.log
-
-# Frontend
-tail -f /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/frontend.log
-```
-
-### 🚨 Troubleshooting Rápido
-
-**Portas ocupadas:**
-```bash
-lsof -ti:8000 | xargs kill -9 2>/dev/null
-lsof -ti:3000 | xargs kill -9 2>/dev/null
-```
-
-**Banco não inicializado:**
-```bash
-cd /Users/emangue/Documents/ProjetoVSCode/ProjetoFinancasV5/app_dev
-source venv/bin/activate
-python init_db.py
-```
-
 ### Integração com Workflow de Versionamento
 
 **No `version_manager.py finish`, sempre incluir:**
 1. Finalizar mudança e commit
-2. **RESTART AUTOMÁTICO:** `./quick_stop.sh && ./quick_start.sh`
-3. Validar que servidores estão operacionais (verificar logs)
+2. **RESTART AUTOMÁTICO:** `./scripts/docker/dev.sh restart`
+3. Validar que servidores estão operacionais: `./scripts/docker/dev.sh status`
 
 ---
 

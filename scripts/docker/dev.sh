@@ -302,7 +302,10 @@ cmd_rebuild() {
     header "🐳 FinUp — Rebuild: $compose_svc"
     info "Rebuilding imagem..."
     (cd "$ROOT_DIR" && docker-compose build "$compose_svc")
-    info "Recriando container..."
+    info "Recriando container (volumes anônimos renovados)..."
+    # -v remove volumes anônimos (ex: node_modules) para pegar a nova imagem
+    (cd "$ROOT_DIR" && docker-compose stop "$compose_svc" 2>/dev/null || true)
+    (cd "$ROOT_DIR" && docker-compose rm -f -v "$compose_svc" 2>/dev/null || true)
     (cd "$ROOT_DIR" && docker-compose up -d "$compose_svc")
     echo ""
 
@@ -319,6 +322,7 @@ cmd_rebuild() {
             wait_healthy "finup_redis_dev" "Redis" || true
             ;;
         *)
+            sleep 5  # frontends não têm healthcheck, aguardar brevemente
             ok "$compose_svc recriado."
             ;;
     esac
