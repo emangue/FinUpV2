@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1100" height="760" viewBox="0 0 1100 760" xmlns="http://www.w3.org/2000/svg" font-family="'Segoe UI', system-ui, sans-serif">
+
+  <!-- Background -->
+  <rect width="1100" height="760" fill="#0f1117"/>
+
+  <!-- Title -->
+  <text x="550" y="38" text-anchor="middle" fill="#e2e8f0" font-size="20" font-weight="700" letter-spacing="1">DEDUPLICAÇÃO — FLUXO DETALHADO</text>
+  <line x1="100" y1="50" x2="1000" y2="50" stroke="#334155" stroke-width="1"/>
+
+  <defs>
+    <marker id="a" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#64748b"/>
+    </marker>
+    <marker id="ag" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#22c55e"/>
+    </marker>
+    <marker id="ar" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#ef4444"/>
+    </marker>
+    <marker id="ab" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#3b82f6"/>
+    </marker>
+    <marker id="ay" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#f59e0b"/>
+    </marker>
+  </defs>
+
+  <!-- ═══════════════════ DETECÇÃO ANTECIPADA (/detect) ═══════════════════ -->
+  <rect x="30" y="65" width="480" height="140" rx="10" fill="#1e293b" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="270" y="86" text-anchor="middle" fill="#3b82f6" font-size="12" font-weight="700" letter-spacing="1">PASSO 0 — DETECÇÃO ANTECIPADA  (POST /upload/detect)</text>
+
+  <rect x="45" y="97" width="200" height="90" rx="6" fill="#172554" stroke="#2563eb" stroke-width="1"/>
+  <text x="145" y="114" text-anchor="middle" fill="#60a5fa" font-size="10" font-weight="600">fingerprints.py</text>
+  <text x="50" y="130" fill="#475569" font-size="8.5">Analisa amostra do arquivo:</text>
+  <text x="50" y="144" fill="#475569" font-size="8.5">• estrutura / colunas / regex</text>
+  <text x="50" y="158" fill="#475569" font-size="8.5">→ banco, tipo, mes_fatura</text>
+  <text x="50" y="172" fill="#475569" font-size="8.5">→ confianca (0.0 → 1.0)</text>
+
+  <line x1="245" y1="142" x2="270" y2="142" stroke="#2563eb" stroke-width="1" marker-end="url(#ab)"/>
+
+  <rect x="270" y="97" width="225" height="90" rx="6" fill="#172554" stroke="#2563eb" stroke-width="1"/>
+  <text x="382" y="114" text-anchor="middle" fill="#60a5fa" font-size="10" font-weight="600">verificação upload_history</text>
+  <text x="277" y="130" fill="#475569" font-size="8.5">WHERE banco = X AND tipo = Y</text>
+  <text x="277" y="144" fill="#475569" font-size="8.5">  AND mes_fatura = Z</text>
+  <text x="277" y="158" fill="#475569" font-size="8.5">  AND status = 'success'</text>
+  <text x="277" y="172" fill="#f59e0b" font-size="8.5" font-weight="600">→ alerta "fatura já importada" se encontrar</text>
+
+  <!-- ═══════════════════ ID GERADO ═══════════════════ -->
+  <rect x="545" y="65" width="530" height="140" rx="10" fill="#1e293b" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="810" y="86" text-anchor="middle" fill="#f59e0b" font-size="12" font-weight="700" letter-spacing="1">PASSO 1 — GERAÇÃO DO IdTransacao  (marker.py)</text>
+
+  <rect x="560" y="97" width="240" height="100" rx="6" fill="#1c1008" stroke="#92400e" stroke-width="1"/>
+  <text x="680" y="113" text-anchor="middle" fill="#fcd34d" font-size="10" font-weight="600">FNV-1a 64-bit hash</text>
+  <text x="567" y="129" fill="#475569" font-size="8.5">Input: data + estabelecimento + valor</text>
+  <text x="567" y="143" fill="#475569" font-size="8.5">Normalização ANTES do hash:</text>
+  <text x="567" y="157" fill="#64748b" font-size="8.5">  1. remove acentos</text>
+  <text x="567" y="170" fill="#64748b" font-size="8.5">  2. UPPERCASE</text>
+  <text x="567" y="183" fill="#64748b" font-size="8.5">  3. remove chars especiais</text>
+  <text x="567" y="196" fill="#fbbf24" font-size="8.5" font-weight="600">  → mesmo hash PDF e CSV ✓</text>
+
+  <rect x="812" y="97" width="248" height="100" rx="6" fill="#1c1008" stroke="#92400e" stroke-width="1"/>
+  <text x="936" y="113" text-anchor="middle" fill="#fcd34d" font-size="10" font-weight="600">Detecção de Parcelas</text>
+  <text x="818" y="129" fill="#475569" font-size="8.5">regex: "LOJA (3/12)" ou "LOJA 3/12"</text>
+  <text x="818" y="143" fill="#475569" font-size="8.5">→ EstabelecimentoBase (sem X/Y)</text>
+  <text x="818" y="157" fill="#475569" font-size="8.5">→ ParcelaAtual = 3</text>
+  <text x="818" y="170" fill="#475569" font-size="8.5">→ TotalParcelas = 12</text>
+  <text x="818" y="183" fill="#475569" font-size="8.5">→ IdParcela = MD5(IdTransacao + X/Y)</text>
+  <text x="818" y="196" fill="#64748b" font-size="8.5">   (rastreia série completa)</text>
+
+  <!-- ═══════════════════ FASE 4 DEDUP CENTRAL ═══════════════════ -->
+  <rect x="30" y="225" width="1040" height="200" rx="10" fill="#1a0505" stroke="#ef4444" stroke-width="2"/>
+  <text x="550" y="246" text-anchor="middle" fill="#ef4444" font-size="13" font-weight="700" letter-spacing="2">FASE 4 — DEDUPLICAÇÃO  (service.py)</text>
+
+  <!-- Local dedup -->
+  <rect x="45" y="260" width="300" height="150" rx="8" fill="#2d0a0a" stroke="#b91c1c" stroke-width="1.5"/>
+  <text x="195" y="278" text-anchor="middle" fill="#fca5a5" font-size="11" font-weight="700">DEDUP LOCAL (batch)</text>
+  <text x="60" y="296" fill="#475569" font-size="9">Acontece quando há batch de N arquivos</text>
+  <text x="60" y="310" fill="#64748b" font-size="8.5">mesmo banco/tipo, 1 session_id</text>
+  <text x="60" y="332" fill="#94a3b8" font-size="9">Se 2 arquivos têm o mesmo</text>
+  <text x="60" y="346" fill="#94a3b8" font-size="9">IdTransacao no lote:</text>
+  <text x="60" y="362" fill="#f87171" font-size="9" font-weight="600">→ última ocorrência vence</text>
+  <text x="60" y="376" fill="#f87171" font-size="9" font-weight="600">→ as anteriores: is_duplicate=True</text>
+  <text x="60" y="393" fill="#475569" font-size="8">Ex: extrato de out sobreposição com set</text>
+
+  <!-- Server dedup -->
+  <rect x="375" y="260" width="360" height="150" rx="8" fill="#2d0a0a" stroke="#b91c1c" stroke-width="1.5"/>
+  <text x="555" y="278" text-anchor="middle" fill="#fca5a5" font-size="11" font-weight="700">DEDUP SERVER-SIDE</text>
+  <text x="388" y="296" fill="#475569" font-size="9">Fase 4 do pipeline — 1 query com IN</text>
+
+  <rect x="385" y="305" width="340" height="40" rx="4" fill="#0a0000" stroke="#7f1d1d" stroke-width="1"/>
+  <text x="390" y="319" fill="#64748b" font-size="8.5" font-style="italic">SELECT id, Data FROM journal_entries</text>
+  <text x="390" y="333" fill="#64748b" font-size="8.5" font-style="italic">WHERE IdTransacao IN [lista] AND user_id = X</text>
+
+  <text x="388" y="360" fill="#94a3b8" font-size="9">Para cada preview com match:</text>
+  <text x="388" y="375" fill="#f87171" font-size="9" font-weight="600">→ is_duplicate = True</text>
+  <text x="388" y="389" fill="#f87171" font-size="9" font-weight="600">→ duplicate_reason = "ID: XXX | Data original: DD/MM/YYYY"</text>
+  <text x="388" y="403" fill="#475569" font-size="8">origin_classificacao limpo (não exibe na aba "Para Importar")</text>
+
+  <!-- What happens on confirm -->
+  <rect x="762" y="260" width="293" height="150" rx="8" fill="#2d0a0a" stroke="#b91c1c" stroke-width="1.5"/>
+  <text x="908" y="278" text-anchor="middle" fill="#fca5a5" font-size="11" font-weight="700">NO CONFIRM</text>
+  <text x="775" y="296" fill="#475569" font-size="9">confirm_upload() filtra:</text>
+
+  <rect x="770" y="303" width="275" height="30" rx="4" fill="#0a0000" stroke="#7f1d1d" stroke-width="1"/>
+  <text x="907" y="317" text-anchor="middle" fill="#64748b" font-size="8.5" font-style="italic">WHERE is_duplicate = False AND excluir = 0</text>
+  <text x="907" y="329" text-anchor="middle" fill="#64748b" font-size="8.5" font-style="italic">AND session_id = X AND user_id = Y</text>
+
+  <text x="775" y="350" fill="#4ade80" font-size="9" font-weight="600">→ Aprovadas → INSERT journal_entries</text>
+  <text x="775" y="365" fill="#f87171" font-size="9">→ Duplicadas → NÃO inseridas</text>
+  <text x="775" y="380" fill="#f87171" font-size="9">→ Excluídas → NÃO inseridas</text>
+  <text x="775" y="400" fill="#475569" font-size="8">preview_transacoes DELETADA após confirm</text>
+
+  <!-- ═══════════════════ O QUE É IdTransacao ═══════════════════ -->
+  <rect x="30" y="445" width="510" height="290" rx="10" fill="#1e293b" stroke="#a855f7" stroke-width="1.5"/>
+  <text x="285" y="466" text-anchor="middle" fill="#a855f7" font-size="12" font-weight="700" letter-spacing="1">POR QUE O IdTransacao FUNCIONA?</text>
+
+  <text x="45" y="488" fill="#94a3b8" font-size="10">O mesmo lançamento gerado por PDF ou CSV produz o mesmo hash.</text>
+
+  <!-- example -->
+  <rect x="45" y="498" width="478" height="90" rx="6" fill="#0f0d1a" stroke="#6d28d9" stroke-width="1"/>
+  <text x="284" y="515" text-anchor="middle" fill="#c084fc" font-size="9" font-weight="600">EXEMPLO: mesmo lançamento, fontes diferentes</text>
+
+  <text x="55" y="532" fill="#64748b" font-size="8.5">CSV:   "2024-01-15", "AMAZON MARKETPLACE BR", "-189.90"</text>
+  <text x="55" y="546" fill="#64748b" font-size="8.5">PDF:   "15/01/2024", "Amazon Marketplace Br", "R$ 189,90"</text>
+
+  <text x="55" y="562" fill="#94a3b8" font-size="8.5">Após normalização:</text>
+  <text x="55" y="576" fill="#fbbf24" font-size="8.5" font-weight="600">  "20240115" + "AMAZON MARKETPLACE BR" + "18990"</text>
+  <text x="55" y="588" fill="#fbbf24" font-size="8.5" font-weight="600">  → mesmo FNV-1a → mesmo IdTransacao ✓</text>
+
+  <!-- guarantee -->
+  <rect x="45" y="598" width="478" height="30" rx="5" fill="#052e16" stroke="#16a34a" stroke-width="1"/>
+  <text x="284" y="617" text-anchor="middle" fill="#4ade80" font-size="9" font-weight="600">Garantia: nunca importa duplicata entre PDF e CSV do mesmo mês</text>
+
+  <!-- gaps -->
+  <text x="45" y="648" fill="#94a3b8" font-size="10" font-weight="600">O que NÃO previne:</text>
+  <rect x="45" y="655" width="478" height="65" rx="6" fill="#1a0505" stroke="#7f1d1d" stroke-width="1"/>
+  <text x="55" y="671" fill="#f87171" font-size="9">• Banco muda descrição entre meses (ex: "AMAZON" vs "AMAZON.COM.BR")</text>
+  <text x="55" y="686" fill="#f87171" font-size="9">• Lançamentos com mesmo valor/data mas estabelecimentos diferentes</text>
+  <text x="55" y="701" fill="#f87171" font-size="9">• Versões diferentes do mesmo arquivo (re-export com layout diferente)</text>
+  <text x="55" y="716" fill="#475569" font-size="8.5">→ nesses casos o usuário vê na aba "Para Importar" e decide manualmente</text>
+
+  <!-- ═══════════════════ PREVIEW TABS ═══════════════════ -->
+  <rect x="560" y="445" width="510" height="290" rx="10" fill="#1e293b" stroke="#0ea5e9" stroke-width="1.5"/>
+  <text x="815" y="466" text-anchor="middle" fill="#0ea5e9" font-size="12" font-weight="700" letter-spacing="1">COMO O USUÁRIO VÊ O RESULTADO</text>
+
+  <!-- tab 1 -->
+  <rect x="575" y="480" width="468" height="65" rx="6" fill="#022c22" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="680" y="498" fill="#4ade80" font-size="10" font-weight="700">ABA 1 — Para Importar</text>
+  <text x="580" y="514" fill="#475569" font-size="8.5">is_duplicate = False  AND  excluir = 0</text>
+  <text x="580" y="528" fill="#475569" font-size="8.5">Mostra classificação (GRUPO/SUBGRUPO), pode editar antes de confirmar</text>
+
+  <!-- tab 2 -->
+  <rect x="575" y="554" width="468" height="65" rx="6" fill="#2d0a0a" stroke="#b91c1c" stroke-width="1.5"/>
+  <text x="680" y="572" fill="#f87171" font-size="10" font-weight="700">ABA 2 — Duplicadas</text>
+  <text x="580" y="588" fill="#475569" font-size="8.5">is_duplicate = True</text>
+  <text x="580" y="602" fill="#475569" font-size="8.5">Mostra: "ID original + data original" — não serão importadas</text>
+
+  <!-- tab 3 -->
+  <rect x="575" y="628" width="468" height="55" rx="6" fill="#1a1a00" stroke="#ca8a04" stroke-width="1.5"/>
+  <text x="680" y="646" fill="#facc15" font-size="10" font-weight="700">ABA 3 — Excluídas por regra</text>
+  <text x="580" y="662" fill="#475569" font-size="8.5">excluir = 1  (aplicado na Fase 1 via transacoes_exclusao)</text>
+  <text x="580" y="675" fill="#475569" font-size="8.5">Usuário pode desmarcar e incluir na importação</text>
+
+  <!-- flow note -->
+  <rect x="575" y="694" width="468" height="35" rx="6" fill="#172554" stroke="#2563eb" stroke-width="1" stroke-dasharray="3,2"/>
+  <text x="809" y="710" text-anchor="middle" fill="#60a5fa" font-size="9" font-weight="600">Contadores no upload_history:</text>
+  <text x="809" y="724" text-anchor="middle" fill="#475569" font-size="8.5">transacoes_importadas  |  transacoes_duplicadas  |  total_registros</text>
+
+  <!-- Connecting arrows between sections -->
+  <line x1="270" y1="205" x2="270" y2="225" stroke="#64748b" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="810" y1="205" x2="810" y2="225" stroke="#64748b" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="550" y1="425" x2="285" y2="445" stroke="#a855f7" stroke-width="1" stroke-dasharray="4,2" marker-end="url(#a)"/>
+  <line x1="700" y1="425" x2="815" y2="445" stroke="#0ea5e9" stroke-width="1" stroke-dasharray="4,2" marker-end="url(#a)"/>
+
+</svg>

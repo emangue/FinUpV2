@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1100" height="720" viewBox="0 0 1100 720" xmlns="http://www.w3.org/2000/svg" font-family="'Segoe UI', system-ui, sans-serif">
+
+  <rect width="1100" height="720" fill="#0f1117"/>
+
+  <text x="550" y="38" text-anchor="middle" fill="#e2e8f0" font-size="20" font-weight="700" letter-spacing="1">CLASSIFICAÇÃO EM CASCATA — FASE 3</text>
+  <line x1="100" y1="50" x2="1000" y2="50" stroke="#334155" stroke-width="1"/>
+
+  <defs>
+    <marker id="a" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#64748b"/>
+    </marker>
+    <marker id="ag" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#22c55e"/>
+    </marker>
+    <marker id="ar" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#ef4444"/>
+    </marker>
+  </defs>
+
+  <!-- Subtitle / context -->
+  <text x="550" y="68" text-anchor="middle" fill="#64748b" font-size="10">classifier.py — CascadeClassifier — pre-carrega TUDO no __init__ (4 queries ao DB, 0 queries por transação)</text>
+
+  <!-- ═══ INPUT ═══ -->
+  <rect x="400" y="80" width="300" height="50" rx="8" fill="#1e293b" stroke="#334155" stroke-width="1.5"/>
+  <text x="550" y="100" text-anchor="middle" fill="#94a3b8" font-size="11" font-weight="600">preview_transacoes (após Fase 2)</text>
+  <text x="550" y="118" text-anchor="middle" fill="#475569" font-size="9">IdTransacao, IdParcela, EstabelecimentoBase, Valor, Data</text>
+
+  <line x1="550" y1="130" x2="550" y2="155" stroke="#64748b" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <!-- ═══ NÍVEL 1 ═══ -->
+  <rect x="30" y="155" width="1040" height="80" rx="8" fill="#0c1f0c" stroke="#16a34a" stroke-width="2"/>
+  <rect x="30" y="155" width="130" height="80" rx="8" fill="#14532d"/>
+
+  <text x="95" y="185" text-anchor="middle" fill="#4ade80" font-size="14" font-weight="800">NÍVEL 1</text>
+  <text x="95" y="205" text-anchor="middle" fill="#86efac" font-size="10">Base Parcelas</text>
+  <text x="95" y="218" text-anchor="middle" fill="#475569" font-size="8">maior confiança</text>
+
+  <text x="175" y="178" fill="#94a3b8" font-size="10" font-weight="600">Busca por:  IdParcela (exato)</text>
+  <text x="175" y="195" fill="#475569" font-size="9">Tabela: base_parcelas  |  Cache: dict {id_parcela → row} carregado no __init__</text>
+  <text x="175" y="210" fill="#64748b" font-size="8.5">Se encontra → copia GRUPO, SUBGRUPO, TipoGasto, CategoriaGeral da parcela anterior</text>
+  <text x="175" y="225" fill="#86efac" font-size="8.5" font-weight="600">origem_classificacao = 'Base Parcelas'  |  Garante consistência em séries de parcelamento</text>
+
+  <rect x="995" y="165" width="65" height="55" rx="5" fill="#052e16" stroke="#16a34a" stroke-width="1"/>
+  <text x="1027" y="184" text-anchor="middle" fill="#4ade80" font-size="9" font-weight="700">MATCH</text>
+  <text x="1027" y="198" text-anchor="middle" fill="#86efac" font-size="8.5">→ FIM</text>
+  <text x="1027" y="212" text-anchor="middle" fill="#4ade80" font-size="8">classif. ok</text>
+
+  <line x1="550" y1="235" x2="550" y2="260" stroke="#64748b" stroke-width="1" stroke-dasharray="4,2" marker-end="url(#a)"/>
+  <text x="560" y="252" fill="#475569" font-size="8.5">não encontrou →</text>
+
+  <!-- ═══ NÍVEL 2 ═══ -->
+  <rect x="30" y="260" width="1040" height="80" rx="8" fill="#1a1208" stroke="#ca8a04" stroke-width="2"/>
+  <rect x="30" y="260" width="130" height="80" rx="8" fill="#451a03"/>
+
+  <text x="95" y="290" text-anchor="middle" fill="#fbbf24" font-size="14" font-weight="800">NÍVEL 2</text>
+  <text x="95" y="310" text-anchor="middle" fill="#fcd34d" font-size="10">Base Padrões</text>
+  <text x="95" y="323" text-anchor="middle" fill="#475569" font-size="8">aprendido</text>
+
+  <text x="175" y="283" fill="#94a3b8" font-size="10" font-weight="600">Busca por:  padrão_estabelecimento  (substring match, normalizado)</text>
+  <text x="175" y="299" fill="#475569" font-size="9">Tabela: base_padroes  |  Cache: dict {padrao → row} — regenerado a cada confirmação de upload</text>
+  <text x="175" y="314" fill="#64748b" font-size="8.5">Padrões aprendidos automaticamente do histórico confirmado  |  Ex: "AMAZON" → GRUPO: Compras Online</text>
+  <text x="175" y="329" fill="#fcd34d" font-size="8.5" font-weight="600">origem_classificacao = 'Base Padrões'</text>
+
+  <rect x="995" y="270" width="65" height="55" rx="5" fill="#1c1008" stroke="#ca8a04" stroke-width="1"/>
+  <text x="1027" y="289" text-anchor="middle" fill="#fbbf24" font-size="9" font-weight="700">MATCH</text>
+  <text x="1027" y="303" text-anchor="middle" fill="#fcd34d" font-size="8.5">→ FIM</text>
+  <text x="1027" y="317" text-anchor="middle" fill="#fbbf24" font-size="8">classif. ok</text>
+
+  <line x1="550" y1="340" x2="550" y2="365" stroke="#64748b" stroke-width="1" stroke-dasharray="4,2" marker-end="url(#a)"/>
+  <text x="560" y="358" fill="#475569" font-size="8.5">não encontrou →</text>
+
+  <!-- ═══ NÍVEL 3 ═══ -->
+  <rect x="30" y="365" width="1040" height="80" rx="8" fill="#0c0d1f" stroke="#3b82f6" stroke-width="2"/>
+  <rect x="30" y="365" width="130" height="80" rx="8" fill="#172554"/>
+
+  <text x="95" y="393" text-anchor="middle" fill="#60a5fa" font-size="14" font-weight="800">NÍVEL 3</text>
+  <text x="95" y="413" text-anchor="middle" fill="#93c5fd" font-size="10">Journal Entries</text>
+  <text x="95" y="427" text-anchor="middle" fill="#475569" font-size="8">histórico</text>
+
+  <text x="175" y="388" fill="#94a3b8" font-size="10" font-weight="600">Busca por:  fuzzy match no histórico classificado</text>
+  <text x="175" y="404" fill="#475569" font-size="9">Cache: _historico_cache — lista de journal_entries com GRUPO/SUBGRUPO já definidos</text>
+  <text x="175" y="418" fill="#64748b" font-size="8.5">Compara EstabelecimentoBase + valor  |  Score de similaridade  |  Aplica se alta confiança</text>
+  <text x="175" y="432" fill="#93c5fd" font-size="8.5" font-weight="600">origem_classificacao = 'Journal Entries'</text>
+
+  <rect x="995" y="375" width="65" height="55" rx="5" fill="#0c1830" stroke="#2563eb" stroke-width="1"/>
+  <text x="1027" y="394" text-anchor="middle" fill="#60a5fa" font-size="9" font-weight="700">MATCH</text>
+  <text x="1027" y="408" text-anchor="middle" fill="#93c5fd" font-size="8.5">→ FIM</text>
+  <text x="1027" y="422" text-anchor="middle" fill="#60a5fa" font-size="8">classif. ok</text>
+
+  <line x1="550" y1="445" x2="550" y2="470" stroke="#64748b" stroke-width="1" stroke-dasharray="4,2" marker-end="url(#a)"/>
+  <text x="560" y="462" fill="#475569" font-size="8.5">não encontrou →</text>
+
+  <!-- ═══ NÍVEL 4 ═══ -->
+  <rect x="30" y="470" width="1040" height="75" rx="8" fill="#120a1f" stroke="#a855f7" stroke-width="2"/>
+  <rect x="30" y="470" width="130" height="75" rx="8" fill="#3b0764"/>
+
+  <text x="95" y="498" text-anchor="middle" fill="#d8b4fe" font-size="14" font-weight="800">NÍVEL 4</text>
+  <text x="95" y="516" text-anchor="middle" fill="#e9d5ff" font-size="10">Regras Genéricas</text>
+  <text x="95" y="530" text-anchor="middle" fill="#475569" font-size="8">configuradas</text>
+
+  <text x="175" y="493" fill="#94a3b8" font-size="10" font-weight="600">Regras configuradas pelo usuário/sistema</text>
+  <text x="175" y="509" fill="#475569" font-size="9">Tabela: regras_genericas  |  Ordenadas por prioridade</text>
+  <text x="175" y="523" fill="#64748b" font-size="8.5">Match por: tipo_transacao, banco, valor_min/max, substring estabelecimento</text>
+  <text x="175" y="537" fill="#e9d5ff" font-size="8.5" font-weight="600">origem_classificacao = 'Regras Genéricas'</text>
+
+  <rect x="995" y="478" width="65" height="55" rx="5" fill="#1e0a3c" stroke="#7c3aed" stroke-width="1"/>
+  <text x="1027" y="497" text-anchor="middle" fill="#d8b4fe" font-size="9" font-weight="700">MATCH</text>
+  <text x="1027" y="511" text-anchor="middle" fill="#e9d5ff" font-size="8.5">→ FIM</text>
+  <text x="1027" y="525" text-anchor="middle" fill="#d8b4fe" font-size="8">classif. ok</text>
+
+  <line x1="550" y1="545" x2="550" y2="570" stroke="#64748b" stroke-width="1" stroke-dasharray="4,2" marker-end="url(#a)"/>
+  <text x="560" y="562" fill="#475569" font-size="8.5">não encontrou →</text>
+
+  <!-- ═══ NÍVEL 5 ═══ -->
+  <rect x="30" y="570" width="1040" height="65" rx="8" fill="#1a0000" stroke="#7f1d1d" stroke-width="2"/>
+  <rect x="30" y="570" width="130" height="65" rx="8" fill="#450a0a"/>
+
+  <text x="95" y="598" text-anchor="middle" fill="#fca5a5" font-size="14" font-weight="800">NÍVEL 5</text>
+  <text x="95" y="616" text-anchor="middle" fill="#fecaca" font-size="10">Não Classificado</text>
+  <text x="95" y="630" text-anchor="middle" fill="#475569" font-size="8">fallback</text>
+
+  <text x="175" y="598" fill="#94a3b8" font-size="10" font-weight="600">Nenhuma correspondência encontrada</text>
+  <text x="175" y="614" fill="#475569" font-size="9">GRUPO = "Não Classificado"  |  SUBGRUPO = vazio</text>
+  <text x="175" y="628" fill="#f87171" font-size="8.5" font-weight="600">origem_classificacao = 'Não Classificado'  →  usuário corrige manualmente no preview</text>
+
+  <!-- ═══ OUTPUT ═══ -->
+  <line x1="550" y1="635" x2="550" y2="658" stroke="#64748b" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <rect x="300" y="658" width="500" height="50" rx="8" fill="#1e293b" stroke="#10b981" stroke-width="1.5"/>
+  <text x="550" y="678" text-anchor="middle" fill="#34d399" font-size="11" font-weight="600">UPDATE preview_transacoes</text>
+  <text x="550" y="696" text-anchor="middle" fill="#475569" font-size="9">GRUPO, SUBGRUPO, TipoGasto, CategoriaGeral, origem_classificacao, MarcacaoIA, excluir → Fase 4</text>
+
+  <!-- side annotation: caches -->
+  <rect x="30" y="650" width="250" height="60" rx="6" fill="#0f1929" stroke="#1e3a5f" stroke-width="1" stroke-dasharray="4,2"/>
+  <text x="155" y="668" text-anchor="middle" fill="#475569" font-size="9" font-weight="600">Caches carregados no __init__:</text>
+  <text x="40" y="684" fill="#334155" font-size="8.5">_parcelas_cache  → 1 query (base_parcelas)</text>
+  <text x="40" y="697" fill="#334155" font-size="8.5">_padroes_cache   → 1 query (base_padroes)</text>
+  <text x="40" y="710" fill="#334155" font-size="8.5">_historico_cache → 1 query (journal_entries classif.)</text>
+
+  <rect x="820" y="650" width="250" height="60" rx="6" fill="#0f1929" stroke="#1e3a5f" stroke-width="1" stroke-dasharray="4,2"/>
+  <text x="945" y="668" text-anchor="middle" fill="#475569" font-size="9" font-weight="600">MarcacaoIA (campo especial):</text>
+  <text x="830" y="684" fill="#334155" font-size="8.5">Lido da base_marcacoes</text>
+  <text x="830" y="697" fill="#334155" font-size="8.5">Flags manuais do usuário por estabelecimento</text>
+  <text x="830" y="710" fill="#334155" font-size="8.5">Ex: "sempre ignorar dashboard"</text>
+
+</svg>
