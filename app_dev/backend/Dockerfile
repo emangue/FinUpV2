@@ -17,7 +17,9 @@ COPY requirements.txt .
 # Instalar deps em venv
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip uninstall -y opencv-python && \
+    pip install --no-cache-dir opencv-python-headless
 
 # ============================================
 # Stage 2: Runtime - Imagem final otimizada
