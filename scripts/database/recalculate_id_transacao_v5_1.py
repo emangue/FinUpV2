@@ -20,6 +20,7 @@ Referência:
 import argparse
 import hashlib
 import importlib.util
+import os
 import sys
 from pathlib import Path
 
@@ -35,6 +36,11 @@ PROJECT_DIR = SCRIPT_DIR.parent.parent
 BACKEND_DIR = PROJECT_DIR / "app_dev" / "backend"
 HASHER_PATH = BACKEND_DIR / "app" / "shared" / "utils" / "hasher.py"
 
+# Fallback: dentro do container Docker, app está em /app/
+DOCKER_HASHER = Path("/app/app/shared/utils/hasher.py")
+if not HASHER_PATH.exists() and DOCKER_HASHER.exists():
+    HASHER_PATH = DOCKER_HASHER
+
 if not HASHER_PATH.exists():
     print(f"❌ hasher.py não encontrado em: {HASHER_PATH}")
     sys.exit(1)
@@ -46,7 +52,7 @@ spec.loader.exec_module(hasher_mod)
 generate_id_transacao = hasher_mod.generate_id_transacao
 
 # ─── DB ───────────────────────────────────────────────────────────────────────
-DB_URL = "postgresql://finup_user:finup_password_dev_2026@localhost:5432/finup_db"
+DB_URL = os.getenv("DATABASE_URL", "postgresql://finup_user:finup_password_dev_2026@localhost:5432/finup_db")
 
 
 # ─── Fórmula IdParcela v5.1 ───────────────────────────────────────────────────
