@@ -17,9 +17,10 @@ COPY requirements.txt .
 # Instalar deps em venv
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
-RUN pip install --no-cache-dir -r requirements.txt && \
+# --retries 5 / timeout 120s: protege contra ConnectionReset em arquivos grandes (ex: opencv 60MB)
+RUN pip install --no-cache-dir --retries 5 --timeout 120 -r requirements.txt && \
     pip uninstall -y opencv-python && \
-    pip install --no-cache-dir opencv-python-headless
+    pip install --no-cache-dir --retries 5 --timeout 120 opencv-python-headless
 
 # ============================================
 # Stage 2: Runtime - Imagem final otimizada
