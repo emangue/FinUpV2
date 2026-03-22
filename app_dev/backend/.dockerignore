@@ -32,6 +32,8 @@ database/backups_daily/
 # OS
 .DS_Store
 Thumbs.db
+# Duplicatas macOS (cópias acidentais com " 2.py" no nome causam multiple heads no Alembic)
+migrations/versions/* 2.py
 
 # Git
 .git/
